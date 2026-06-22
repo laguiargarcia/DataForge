@@ -1,0 +1,24 @@
+# Holding identity mapping — SOURCE OF TRUTH (A1, LOCKED).
+#
+# Pluggy holding ids change on reconnect; the surrogate `holding_uuid` we assign here
+# does not. On reconnect, repoint the pluggy_holding_id key to the same holding_uuid.
+# Holdings NOT listed here are quarantined in cleansed.investments_unmapped and never
+# auto-resolved — onboard a new holding by adding its pluggy_holding_id below.
+#
+# Institution is NOT mapped here: one Pluggy item = one institution, resolved from the
+# account layers (curated.dim_account) — a single shared item→institution source.
+#
+# Show workspace: these are the SYNTHETIC holding ids emitted by
+# scripts/generate_synthetic_data.py (the no-credentials fetch). All values are fabricated.
+
+# holdings: pluggy_holding_id -> stable surrogate + display alias.
+holdings:
+  "inv-cdb-0001":
+    holding_uuid: synthetic-cdb-a
+    alias: "CDB Synthetic Bank A"
+  "inv-cdb-0002":
+    holding_uuid: synthetic-cdb-b
+    alias: "CDB Synthetic Bank B"
+  "inv-tesouro-0001":
+    holding_uuid: synthetic-tesouro-2030
+    alias: "Tesouro Synthetic 2030"

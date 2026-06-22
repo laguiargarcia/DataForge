@@ -1,0 +1,13 @@
+# merchant_key normalization rules.
+#
+# When Pluggy's `merchant` field is null, merchant_key is derived from the
+# transaction `description`. Each institution formats descriptions differently,
+# so normalization is data-driven: rules are tried in order; the first whose
+# `match` regex hits the description is applied, its `strip` patterns are removed,
+# and whitespace is collapsed. To onboard a new bank, add a rule here — no code change.
+rules:
+  - name: itau-debit-pos
+    match: '^ELCSS '
+    strip:
+      - '^ELCSS '     # Itaú debit-POS channel prefix
+      - '\d{4}$'      # trailing DDMM date code

@@ -1,0 +1,10 @@
+# GetFinance workspace runtime dependencies.
+#
+# These are needed by the GetFinance pipeline scripts (Pluggy fetch) on top of
+# the DataForge core dependencies declared in ../../pyproject.toml.
+# Install AFTER `pip install -e .` from the repo root:
+#
+#   pip install -r workspaces/GetFinance/requirements.txt
+#
+requests>=2.31      # HTTP client for the Pluggy API (scripts/functions/functions.py)
+python-dotenv>=1.0  # loads .env (imported as `dotenv`)

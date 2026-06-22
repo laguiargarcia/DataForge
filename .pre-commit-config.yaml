@@ -1,0 +1,13 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      - id: leakguard
+        name: leakguard (PII + private-path block)
+        entry: python3 scripts/leakguard.py
+        language: system
+        pass_filenames: true
+        always_run: false
