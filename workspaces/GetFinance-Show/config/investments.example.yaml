@@ -1,0 +1,22 @@
+# Holding identity mapping — SOURCE OF TRUTH (A1, LOCKED).
+#
+# TEMPLATE. Copy this file to "investments.yaml" in the same folder and replace the
+# example entries with your own holdings.
+#
+# Pluggy holding ids change on reconnect; the surrogate `holding_uuid` we assign here
+# does not. On reconnect, repoint the pluggy_holding_id key to the same holding_uuid.
+# Holdings NOT listed here are quarantined in cleansed.investments_unmapped and never
+# auto-resolved — onboard a new holding by adding its pluggy_holding_id below.
+#
+# Institution is NOT mapped here: one Pluggy item = one institution, resolved from the
+# `institutions:` map in accounts.yaml (A1 — single shared item→institution source).
+
+# holdings: pluggy_holding_id -> stable surrogate + display alias.
+holdings:
+  "00000000-0000-0000-0000-0000000000a1":
+    holding_uuid: banco-xyz-cdb-2030-01
+    alias: "CDB EXEMPLO BANCO XYZ jan/2030"
+  "00000000-0000-0000-0000-0000000000a2":
+    holding_uuid: tesouro-exemplo-2030
+    alias: "Tesouro EXEMPLO 2030"
+  # New holdings (incl. from new banks) go here, keyed by their pluggy_holding_id.

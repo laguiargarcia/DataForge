@@ -1,0 +1,10 @@
+connections:
+  raw:
+    type: parquet_dir
+    path: data/raw/
+  cleansed:
+    type: delta_dir
+    path: data/cleansed/
+  curated:
+    type: delta_dir
+    path: data/curated/

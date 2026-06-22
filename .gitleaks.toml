@@ -1,0 +1,9 @@
+title = "DataForge leak-scan"
+
+[extend]
+useDefault = true
+
+# gitleaks default rules target secrets/tokens, API keys, etc.
+# CPF/CNPJ patterns are not in the default ruleset, so no allowlist is
+# needed here for the synthetic document numbers in generate_synthetic_data.py.
+# The custom leakguard.py handles CPF/CNPJ with its own ALLOWLIST.

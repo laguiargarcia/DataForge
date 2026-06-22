@@ -1,0 +1,22 @@
+# Institution display names — SOURCE OF TRUTH (D1, LOCKED).
+#
+# Keyed by Brazilian bank (COMPE) code, which is PERMANENT (341 is always Itaú).
+# The bank code is the first segment of bankData.transferNumber (e.g. 341/1620/00012345-2).
+# Set a line ONCE per bank, never on reconnect — Pluggy item/account ids may churn, but the
+# COMPE code does not. Accounts whose code is absent here still flow to dim_account with a
+# logged `unknown-{code}` placeholder name (never dropped); add the line to prettify it.
+#
+# Codes are quoted strings to preserve leading zeros (e.g. "077", "001").
+banks:
+  "001": Banco do Brasil
+  "033": Santander
+  "077": Inter
+  "104": Caixa
+  "212": Original
+  "237": Bradesco
+  "260": Nubank
+  "290": PagBank
+  "336": C6 Bank
+  "341": Itaú
+  # To name a new bank, add a line for its COMPE code, e.g.:
+  # "208": BTG Pactual

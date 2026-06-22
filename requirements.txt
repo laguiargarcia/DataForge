@@ -1,0 +1,15 @@
+platformdirs>=4.0
+pydantic>=2.0
+pyyaml>=6.0
+sqlalchemy>=2.0
+polars>=1.0
+deltalake>=0.18
+typer>=0.12
+rich>=13.0
+openpyxl>=3.1.0
+# PostgreSQL (opcional): pip install psycopg2-binary
+fastapi>=0.115
+uvicorn[standard]>=0.29
+PySide6>=6.7
+croniter>=2.0
+pathspec>=0.12

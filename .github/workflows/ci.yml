@@ -1,0 +1,19 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  leak-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: leakguard (PII + private-path block over all tracked files)
+        run: python3 scripts/leakguard.py $(git ls-files)

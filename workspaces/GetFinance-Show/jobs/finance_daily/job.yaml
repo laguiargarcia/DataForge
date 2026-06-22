@@ -1,0 +1,132 @@
+name: finance_daily
+schedule: "0 6 * * *"
+retry:
+  attempts: 2
+  delay_seconds: 5
+
+# Per-entity fan-out (U9 / df-3t6). One fetch lands raw accounts + transactions +
+# investments; three medallion branches then build the star schema so every fact
+# accumulates on the daily schedule.
+#
+# WHY SERIALIZED, NOT PARALLEL: cleansed and curated layers use Delta tables
+# (Polars + delta-rs). Each table is an independent Delta directory, so there is
+# no shared file lock. The branches are chained for data-dependency correctness;
+# the data volumes are tiny, so true parallel branches would not add value today.
+tasks:
+  - name: fetch
+    script: generate_synthetic_data.py
+    params:
+      target: raw
+    depends_on: []
+
+  # Calendar regenerates the dim_calendar Delta table at data/curated/dim_calendar/ —
+  # its own Delta directory, no shared lock, floats independently of the medallion branches.
+  - name: calendar
+    script: cleansed2curated/dim_calendar.py
+    depends_on: []
+
+  # ── Accounts branch ────────────────────────────────────────────────────────
+  - name: transform_accounts
+    script: raw2cleansed/raw2cleansed_accounts.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fetch]
+
+  - name: dim_accounts
+    script: cleansed2curated/cleansed2curated_accounts.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform_accounts]
+
+  - name: fact_balance
+    script: cleansed2curated/fact_balance_snapshot.py
+    params:
+      source: raw
+      target: curated
+    depends_on: [dim_accounts]
+
+  # ── Bills branch ─────────────────────────────────────────────────────────────
+  # Credit-card statements (one row per billing cycle). fetch now also lands raw/bills.
+  # transform_bills serializes after fact_balance (serialization edge only) to keep
+  # the cleansed/curated writers single-threaded.
+  - name: transform_bills
+    script: raw2cleansed/raw2cleansed_bills.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fact_balance]
+
+  # fact_card_statement real data deps: cleansed.bills (transform_bills) AND curated.dim_account
+  # (dim_accounts) — it inner-joins dim_account on accountId = pluggy_account_id.
+  - name: fact_card_statement
+    script: cleansed2curated/fact_card_statement.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform_bills, dim_accounts]
+
+  # ── Investments branch ──────────────────────────────────────────────────────
+  # depends_on fact_card_statement is a *serialization* edge, not a data dep: its only
+  # purpose is to single-thread transform_investments so it never shares a level
+  # with another cleansed/curated writer.
+  - name: transform_investments
+    script: raw2cleansed/raw2cleansed_investments.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fact_card_statement]
+
+  - name: dim_investments
+    script: cleansed2curated/cleansed2curated_investments.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform_investments]
+
+  - name: fact_investments
+    script: cleansed2curated/fact_investment_position.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [dim_investments]
+
+  # ── Transactions branch ─────────────────────────────────────────────────────
+  # depends_on fact_investments is a serialization edge (single-threads the
+  # cleansed writer). curate's real data deps are both made explicit below.
+  - name: transform
+    script: raw2cleansed/raw2cleansed.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fact_investments]
+
+  - name: curate
+    script: cleansed2curated/cleansed2curated.py
+    params:
+      source: cleansed
+      target: curated
+    # Real data deps: cleansed.transactions (transform) AND curated.dim_account
+    # (dim_accounts) — fact_transaction inner-joins dim_account for account_uuid.
+    depends_on: [transform, dim_accounts]
+
+  # Counterparty dimension (df-pzu): one row per CPF/CNPJ from the frozen cleansed counterparty
+  # columns. Reads cleansed.transactions; serialized after curate to keep the curated writer
+  # single-threaded (its real data dep is transform).
+  - name: dim_counterparty
+    script: cleansed2curated/dim_counterparty.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform, curate]
+
+  # Fatura per due-month (fatura-panel spec). Real data deps: curated.fact_card_statement
+  # (fact_card_statement) + curated.fact_transaction (curate). depends_on dim_counterparty
+  # additionally serializes it as the last curated writer in the chain.
+  - name: fact_fatura_mes
+    script: cleansed2curated/fact_fatura_mes.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [curate, fact_card_statement, dim_counterparty]
