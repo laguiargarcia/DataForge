@@ -130,3 +130,18 @@ tasks:
       source: cleansed
       target: curated
     depends_on: [curate, fact_card_statement, dim_counterparty]
+
+  # ── Report bridge ─────────────────────────────────────────────────────────────
+  # Export curated Delta -> bridge CSVs the workbook reads, then the liquidity CSV.
+  # Runs as part of the job so the bridge refreshes on every run — no manual .py step.
+  # export_bridge reads ALL curated tables: depends on the terminal curated writer
+  # (fact_fatura_mes, transitively after every medallion task) AND the independent
+  # calendar task (depends_on []), which is the only curated table off the chain.
+  - name: export_bridge
+    script: report/export_bridge.py
+    depends_on: [fact_fatura_mes, calendar]
+
+  # build_report reads curated + writes report_liquidity.csv into the bridge dir; runs last.
+  - name: build_report
+    script: report/build_report.py
+    depends_on: [export_bridge]
