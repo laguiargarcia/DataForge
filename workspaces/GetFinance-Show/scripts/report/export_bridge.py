@@ -26,8 +26,16 @@ _inv_d = pl.read_delta(str(CURATED / "fact_investment_position")).get_column("sn
 # _fat_d uses mes_inicio: the open fatura row lands on day 1 of a possibly-FUTURE month,
 # so it can extend cal_max forward — without it that row orphans into a NULL month (df-9fc).
 _fat_d = pl.read_delta(str(CURATED / "fact_fatura_mes")).get_column("mes_inicio")
-cal_min = min(fact["date"].min(), _snap_d.min(), _inv_d.min(), _fat_d.min())
-cal_max = max(fact["date"].max(), _snap_d.max(), _inv_d.max(), _fat_d.max())
+# A workspace can have EMPTY facts (no investments, or no credit-card bills); an empty
+# column's .min()/.max() is None, so drop None before spanning the range (else min() on
+# a None vs date raises TypeError). fact_transaction is the spine — if even it is empty
+# there is nothing to report.
+_mins = [d for d in (fact["date"].min(), _snap_d.min(), _inv_d.min(), _fat_d.min()) if d is not None]
+_maxs = [d for d in (fact["date"].max(), _snap_d.max(), _inv_d.max(), _fat_d.max()) if d is not None]
+if not _mins:
+    raise SystemExit("export_bridge: no dated rows in any curated fact — run the pipeline first.")
+cal_min = min(_mins)
+cal_max = max(_maxs)
 days = pl.date_range(cal_min, cal_max, interval="1d", eager=True)
 cal = (
     pl.DataFrame({"date": days})
