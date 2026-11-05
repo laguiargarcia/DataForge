@@ -187,7 +187,7 @@ def list_scripts(ws: str):
     """Return the workspace's Python scripts as BARE POSIX paths (relative to scripts/), sorted.
 
     scripts/ is the enforced root for all workspace scripts, so paths are emitted relative to
-    the scripts dir (NOT the workspace) — bare like cleansed2curated/fact_fatura_mes.py, matching
+    the scripts dir (NOT the workspace) — bare like cleansed2curated/fact_exemplo.py, matching
     the task.script convention. Recurses scripts/ (scripts are NESTED under layer folders). Skips
     any path with a __pycache__ segment. A missing scripts/ dir is NOT an error — returns
     {"scripts": []}. Reuses _require_workspace for the clean 404 (no path leak, T-01.5.06-02).

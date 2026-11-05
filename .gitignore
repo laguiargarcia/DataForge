@@ -81,6 +81,14 @@ workspaces/*/config/investments.yaml
 workspaces/GetFinance/
 workspaces/GetFinance-Dev/
 
+# Frontend tooling artefacts
+node_modules/
+test-results/
+playwright-report/
+
 # ── Narrow whitelists (MUST stay last; negations override the broad ignores above) ──
 # Ship Show's SYNTHETIC holdings map (required for dim_investment on a fresh clone).
 !workspaces/GetFinance-Show/config/investments.yaml
+# Ship the Show apps' built front (dist/).
+!workspaces/GetFinance-Show/apps/*/dist/
+!workspaces/GetFinance-Show/apps/*/dist/**

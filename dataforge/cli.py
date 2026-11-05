@@ -1,3 +1,4 @@
+import os
 import platform
 import shlex
 import subprocess
@@ -10,7 +11,9 @@ from typing import Optional
 from pydantic import ValidationError
 from rich.console import Console
 from rich import print as rprint
-from dataforge.compat import resolve_workspace, resolve_db, data_dir, db_url
+from rich.markup import escape as rich_escape
+from dataforge.apps import discover_apps
+from dataforge.compat import ALLOWED_HOSTS_ENV, resolve_workspace, resolve_db, data_dir, db_url
 from dataforge.deploy.cli import deploy_app
 
 app = typer.Typer(help="DataForge — workspace local de engenharia de dados")
@@ -511,7 +514,24 @@ def serve(
 ):
     """Inicia o servidor FastAPI via uvicorn."""
     import uvicorn
-    rprint(f"[green]Serving at http://{host}:{port}[/green]")
+    # An environment variable, so the value survives the --reload subprocess.
+    url_host = host
+    if host in ("0.0.0.0", "::"):
+        os.environ[ALLOWED_HOSTS_ENV] = "*"
+        url_host = "127.0.0.1"
+        Console().print(
+            "[yellow]Aviso: os dados ficam acessíveis na rede sem login.[/yellow]",
+            soft_wrap=True,
+        )
+    else:
+        existing = os.environ.get(ALLOWED_HOSTS_ENV)
+        os.environ[ALLOWED_HOSTS_ENV] = f"{existing},{host}" if existing else host
+    rprint(f"[green]Serving at http://{url_host}:{port}[/green]")
+    for info in discover_apps():
+        Console().print(
+            f"  {rich_escape(info.title)}: http://{url_host}:{port}{info.url_path}",
+            soft_wrap=True,
+        )
     uvicorn.run("dataforge.api:app", host=host, port=port, reload=reload)
 
 
