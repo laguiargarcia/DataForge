@@ -18,6 +18,9 @@ python -m venv .venv
 .venv/bin/pip install -e .           # Windows: .venv\Scripts\pip install -e .
 ```
 
+> **Project folder:** for now, its full path must have no spaces and no accented characters.
+> The pipeline's Delta reads fail on such paths.
+
 > **Required — set `DATAFORGE_HOME` before running:**
 >
 > ```bash
@@ -37,6 +40,21 @@ dataforge run GetFinance-Show finance_daily
 
 This produces curated Delta tables under `workspaces/GetFinance-Show/data/` using
 synthetic data — no bank, no Pluggy, no secrets.
+
+### Open the Finanças app
+
+After the run, start the server:
+
+```bash
+dataforge serve
+```
+
+It prints the app URL, by default <http://127.0.0.1:8000/apps/GetFinance-Show/financas/>.
+Open it in a browser. No Node is needed: the compiled app (`dist/`) ships in the repo.
+
+If you change the app sources in `workspaces/GetFinance-Show/apps/financas/src/` or its
+`categorias.json`, run `npm install` and `npm run build` in that folder to regenerate
+`dist/`. Before committing, run `npm run build` and check whether `dist/` changed.
 
 ---
 

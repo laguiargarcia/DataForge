@@ -6,6 +6,9 @@ import platformdirs
 
 _VALID_WORKSPACE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
+ALLOWED_HOSTS_ENV = "DATAFORGE_ALLOWED_HOSTS"
+_LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
 
 def data_dir() -> Path:
     """
@@ -98,6 +101,28 @@ def list_workspaces() -> list[Path]:
     return sorted(p.parent for p in workspaces_dir.glob("*/workspace.yaml"))
 
 
+def allowed_hosts() -> set[str] | None:
+    """
+    Return the host names the API answers to: loopback plus $DATAFORGE_ALLOWED_HOSTS
+    (comma-separated). None means no Host check, when the variable contains `*`.
+    """
+    names = {n.strip().lower() for n in os.environ.get(ALLOWED_HOSTS_ENV, "").split(",")}
+    names.discard("")
+    if "*" in names:
+        return None
+    return _LOOPBACK_HOSTS | names
+
+
 def global_db_url() -> str:
     """Return the SQLite URL for the global DataForge database."""
     return db_url(data_dir() / "dataforge.db")
+
+
+def apps_dir(workspace_path: Path) -> Path:
+    """Return <workspace>/apps (the workspace's web apps). Does not create it."""
+    return workspace_path / "apps"
+
+
+def curated_dir(workspace_path: Path) -> Path:
+    """Return <workspace>/data/curated. Does not create it."""
+    return workspace_path / "data" / "curated"
