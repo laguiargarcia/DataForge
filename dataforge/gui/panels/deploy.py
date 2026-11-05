@@ -144,14 +144,12 @@ class Panel(QWidget):
         btn_row.addWidget(self._status_label)
         btn_row.addStretch()
         self._deploy_btn = QPushButton("Deploy")
-        # Late-bound via lambda: _on_deploy/_on_rollback are added in Tasks 4/5. The lambda
-        # defers the attribute lookup to click time, so __init__ constructs cleanly in this
-        # task (a direct `.connect(self._on_deploy)` would AttributeError here). Lambda connects
-        # are idiomatic in this codebase (see scheduler.py row buttons).
-        self._deploy_btn.clicked.connect(lambda: self._on_deploy())
+        # Bound methods, not `lambda: self._on_deploy()`: a lambda holding self keeps the panel
+        # alive forever, and PySide6 6.12 crashes destroying leftover widgets at exit.
+        self._deploy_btn.clicked.connect(self._on_deploy)
         self._rollback_btn = QPushButton("Rollback")
         self._rollback_btn.setEnabled(False)
-        self._rollback_btn.clicked.connect(lambda: self._on_rollback())
+        self._rollback_btn.clicked.connect(self._on_rollback)
         btn_row.addWidget(self._deploy_btn)
         btn_row.addWidget(self._rollback_btn)
         outer.addLayout(btn_row)
