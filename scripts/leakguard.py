@@ -32,6 +32,7 @@ BLOCK_PREFIXES = (
     ".beads/",
     "tests/workspaces/",                 # pipeline tests read real workspaces
     "tests/test_finance_daily_dag.py",   # same
+    "tests/test_testloop_evals.py",      # tests of the private eval harness
     "docs/",       # D9: docs never committed to public repo
 )
 

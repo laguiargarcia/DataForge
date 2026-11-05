@@ -33,3 +33,25 @@ jobs:
       - name: GUI tests (separate run; GUI first crashes the full suite)
         env: { QT_QPA_PLATFORM: offscreen }
         run: python -m pytest tests/test_gui_*.py -p no:cacheprovider
+  mutation:
+    # Mutation score of each module in testloop.toml must stay at or above its min_score.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Install into .venv (testloop.toml runs .venv/bin/python)
+        run: python -m venv .venv && .venv/bin/pip install -e . pytest==9.2.0 -r scripts/testloop/requirements.txt
+      - name: Mutate and gate each target
+        shell: bash
+        run: |
+          status=0
+          for module in $(.venv/bin/python -c 'import tomllib; print("\n".join(tomllib.load(open("testloop.toml", "rb"))["targets"]))'); do
+            .venv/bin/python scripts/testloop/cli.py mutate "$module" || { status=1; continue; }
+            .venv/bin/python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=1
+          done
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: testloop-results, path: .testloop/, if-no-files-found: ignore }
