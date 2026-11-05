@@ -1,0 +1,8 @@
+python = ".venv/bin/python"
+pytest_args = ["-o", "addopts=", "-p", "no:cacheprovider"]
+check_args = ["--hypothesis-profile=deterministic"]
+env = { QT_QPA_PLATFORM = "offscreen" }
+
+[targets."dataforge/deploy/plan.py"]
+tests = ["tests/test_deploy_plan*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
