@@ -10,6 +10,9 @@ dist/
 .pytest_cache/
 .coverage
 htmlcov/
+.testloop/
+.hypothesis/
+mutants/
 
 # Logs / temp
 *.log
