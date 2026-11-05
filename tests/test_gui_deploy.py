@@ -411,3 +411,29 @@ def test_rollback_safe_after_poisoned_status(monkeypatch):
     panel._on_rollback()            # must not raise; _last_entry is None → info + no post
     assert posted == []
     panel.close()
+
+
+def test_dropped_panel_is_freed(monkeypatch):
+    # A panel kept alive by its own signal connections survives to interpreter exit, where
+    # PySide6 6.12 destroys leftover widgets and crashes.
+    import gc
+    import weakref
+    panel = _make_panel(monkeypatch)
+    ref = weakref.ref(panel)
+    panel.close()
+    del panel
+    gc.collect()
+    assert ref() is None
+
+
+def test_buttons_call_deploy_and_rollback(monkeypatch):
+    from dataforge.gui.panels import deploy as deploy_module
+    calls = []
+    monkeypatch.setattr(deploy_module.Panel, "_on_deploy", lambda self: calls.append("deploy"))
+    monkeypatch.setattr(deploy_module.Panel, "_on_rollback", lambda self: calls.append("rollback"))
+    panel = _make_panel(monkeypatch)
+    panel._rollback_btn.setEnabled(True)
+    panel._deploy_btn.click()
+    panel._rollback_btn.click()
+    assert calls == ["deploy", "rollback"]
+    panel.close()
