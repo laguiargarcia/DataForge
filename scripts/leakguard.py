@@ -4,7 +4,8 @@ private path. Invoked by pre-commit (passes staged filenames as argv) and by CI
 (scans a path set). Defense-in-depth on top of .gitignore (git add -f bypasses it).
 
 Path-block prefixes: workspaces/GetFinance/, workspaces/GetFinance-Dev/, .planning/,
-.beads/, tests/, docs/. The public Show workspace (workspaces/GetFinance-Show/) is
+.beads/, tests/workspaces/, tests/test_finance_daily_dag.py, docs/.
+Engine tests under tests/ use fake data and are public. The public Show workspace (workspaces/GetFinance-Show/) is
 NOT blocked — it is the committed surface.
 
 PII patterns: Brazilian CPF (11-digit), bank agency/account short codes, owner name
@@ -29,7 +30,8 @@ BLOCK_PREFIXES = (
     "workspaces/GetFinance-Dev/",
     ".planning/",
     ".beads/",
-    "tests/",      # D9: tests never committed to public repo
+    "tests/workspaces/",                 # pipeline tests read real workspaces
+    "tests/test_finance_daily_dag.py",   # same
     "docs/",       # D9: docs never committed to public repo
 )
 

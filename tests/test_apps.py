@@ -1,0 +1,83 @@
+import logging
+import re
+from pathlib import Path
+
+import pytest
+from typer.testing import CliRunner
+
+import dataforge
+from dataforge.apps import discover_apps, load_app
+from dataforge.cli import app as cli_app
+
+
+def test_discover_finds_app_with_dist(workspace_dir, make_app):
+    make_app(workspace_dir, "demo", title="Demo")
+    apps = discover_apps()
+    assert [(a.workspace, a.name, a.title) for a in apps] == [("test_ws", "demo", "Demo")]
+    assert apps[0].url_path == "/apps/test_ws/demo/"
+
+
+def test_app_without_dist_is_skipped_with_warning(workspace_dir, make_app, caplog):
+    make_app(workspace_dir, "semdist", dist=False)
+    assert discover_apps() == []
+    assert "semdist" in caplog.text
+
+
+def test_invalid_yaml_is_skipped_with_warning(workspace_dir, make_app, caplog):
+    make_app(workspace_dir, "ruim", raw_yaml="a: [")
+    assert discover_apps() == []
+    assert "ruim" in caplog.text
+
+
+def test_name_must_match_directory(workspace_dir, make_app, caplog):
+    make_app(workspace_dir, "pasta", name="outro")
+    assert discover_apps() == []
+    assert "pasta" in caplog.text
+
+
+@pytest.mark.parametrize("name", ["a\\b", "C:\\fora", "..", "a/b", "a b", "demo\n", "a\x00b", ""])
+def test_load_app_invalid_name_is_silent_and_never_reads(workspace_dir, monkeypatch, caplog, name):
+    def boom(*a, **k):
+        raise AssertionError("app.yaml read for an invalid app name")
+    monkeypatch.setattr(Path, "read_text", boom)
+    caplog.set_level(logging.WARNING, logger="dataforge.apps")
+    assert load_app(workspace_dir, name) is None
+    assert caplog.records == []
+
+
+def test_discover_warns_about_folder_with_invalid_name(workspace_dir, make_app, caplog):
+    make_app(workspace_dir, "minha pasta")
+    assert discover_apps() == []
+    assert "minha pasta" in caplog.text
+
+
+def test_title_defaults_to_name(workspace_dir, make_app):
+    make_app(workspace_dir, "demo", title=None)
+    assert discover_apps()[0].title == "demo"
+
+
+def test_startup_survives_bad_app(workspace_dir, make_app, test_client):
+    make_app(workspace_dir, "ruim", raw_yaml="a: [")
+    with test_client as client:
+        assert client.get("/health").status_code == 200
+
+
+def test_cors_no_longer_allows_other_origins(test_client):
+    r = test_client.get("/health", headers={"Origin": "http://evil.example"})
+    assert r.status_code == 200
+    assert "access-control-allow-origin" not in r.headers
+
+
+def test_core_has_no_finance_terms():
+    pattern = re.compile(r"pluggy|getfinance|financ|fatura|fact_transaction", re.I)
+    hits = [p for p in Path(dataforge.__file__).parent.rglob("*.py")
+            if pattern.search(p.read_text(encoding="utf-8"))]
+    assert hits == []
+
+
+def test_serve_prints_app_urls(workspace_dir, make_app, monkeypatch):
+    make_app(workspace_dir, "demo", title="Demo [v0]")
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    out = CliRunner().invoke(cli_app, ["serve", "--port", "8123"]).output
+    assert "Demo [v0]" in out
+    assert "http://127.0.0.1:8123/apps/test_ws/demo/" in out
