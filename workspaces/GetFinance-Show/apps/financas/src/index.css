@@ -1,0 +1,31 @@
+@layer theme, base, components, utilities;
+
+@import '@fontsource/figtree/latin-400.css';
+@import '@fontsource/figtree/latin-500.css';
+@import '@fontsource/figtree/latin-600.css';
+@import '@fontsource/figtree/latin-700.css';
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+@theme {
+  --color-fundo: #ECEEF6;
+  --color-cartao: #FFFFFF;
+  --color-texto: #1C1E2E;
+  --color-secundario: #565B72;
+  --color-acento: #3F3AB5;
+  --color-faixa: #F2F3FA;
+  --color-linha: #E6E8F2;
+  --color-ativa: #E6E8F7;
+  --font-sans: Figtree, system-ui, sans-serif;
+}
+
+/* Base do artboard (MixDuplo.dc.html). Sem o preflight do Tailwind de propósito:
+   ele muda line-height (1.5) e box-sizing e alteraria o desenho aprovado. */
+@layer base {
+  *, ::before, ::after { border: 0 solid; }
+  body { margin: 0; background: #ECEEF6; }
+  button { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+  button:disabled { cursor: default; }
+  button:focus-visible { outline: 2px solid #3F3AB5; outline-offset: 2px; }
+  .row:not([aria-pressed='true']):hover { background: #F2F3FA; }
+}
