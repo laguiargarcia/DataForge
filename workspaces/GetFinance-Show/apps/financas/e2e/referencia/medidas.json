@@ -1,0 +1,3066 @@
+{
+ "resumo": [
+  {
+   "nome": "div:Finanças junho de 2026 Sobrou este mês +#1",
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "width": 1280,
+    "height": 980
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(236, 238, 246)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "32px 16px 64px"
+   }
+  },
+  {
+   "nome": "header:Finanças junho de 2026#1",
+   "rect": {
+    "x": 80,
+    "y": 32,
+    "width": 1120,
+    "height": 52
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Finanças#1",
+   "rect": {
+    "x": 80,
+    "y": 47,
+    "width": 71,
+    "height": 22
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "18px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:junho de 2026#1",
+   "rect": {
+    "x": 983,
+    "y": 32,
+    "width": 217,
+    "height": 52
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "4px"
+   }
+  },
+  {
+   "nome": "button:Mês anterior#1",
+   "rect": {
+    "x": 987,
+    "y": 36,
+    "width": 44,
+    "height": 44
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "svg:#1",
+   "rect": {
+    "x": 1000,
+    "y": 49,
+    "width": 18,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:junho de 2026#1",
+   "rect": {
+    "x": 1043,
+    "y": 49,
+    "width": 97,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px 8px"
+   }
+  },
+  {
+   "nome": "button:Próximo mês#1",
+   "rect": {
+    "x": 1152,
+    "y": 36,
+    "width": 44,
+    "height": 44
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "svg:#2",
+   "rect": {
+    "x": 1165,
+    "y": 49,
+    "width": 18,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "section:Sobrou este mês +R$ 5.705,02 Entrou R$ 1#1",
+   "rect": {
+    "x": 80,
+    "y": 104,
+    "width": 550,
+    "height": 561
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "36px",
+    "padding": "32px"
+   }
+  },
+  {
+   "nome": "texto:Sobrou este mês#1",
+   "rect": {
+    "x": 112,
+    "y": 136,
+    "width": 120,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:+R$ 5.705,02#1",
+   "rect": {
+    "x": 112,
+    "y": 160,
+    "width": 390.53125,
+    "height": 82
+   },
+   "estilo": {
+    "color": "rgb(63, 58, 181)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "68px",
+    "fontWeight": "600",
+    "letterSpacing": "-2.04px",
+    "lineHeight": "68px",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Entrou#1",
+   "rect": {
+    "x": 112,
+    "y": 255,
+    "width": 51,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 10.555,36#1",
+   "rect": {
+    "x": 163,
+    "y": 255,
+    "width": 93,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Saiu#1",
+   "rect": {
+    "x": 280,
+    "y": 255,
+    "width": 35,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 4.850,34#1",
+   "rect": {
+    "x": 315,
+    "y": 255,
+    "width": 89,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Na conta R$ 5.230,55#1",
+   "rect": {
+    "x": 112,
+    "y": 476,
+    "width": 486,
+    "height": 47
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(242, 243, 250)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "20px",
+    "padding": "14px 18px"
+   }
+  },
+  {
+   "nome": "texto:Na conta#1",
+   "rect": {
+    "x": 130,
+    "y": 490,
+    "width": 63,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 5.230,55#1",
+   "rect": {
+    "x": 494,
+    "y": 490,
+    "width": 86,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Investido R$ 53.212,32#1",
+   "rect": {
+    "x": 112,
+    "y": 531,
+    "width": 486,
+    "height": 47
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(242, 243, 250)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "20px",
+    "padding": "14px 18px"
+   }
+  },
+  {
+   "nome": "texto:Investido#1",
+   "rect": {
+    "x": 130,
+    "y": 545,
+    "width": 62,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 53.212,32#1",
+   "rect": {
+    "x": 488,
+    "y": 545,
+    "width": 92,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Fatura pendente R$ 1.279,19#1",
+   "rect": {
+    "x": 112,
+    "y": 586,
+    "width": 486,
+    "height": 47
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(242, 243, 250)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "20px",
+    "padding": "14px 18px"
+   }
+  },
+  {
+   "nome": "texto:Fatura pendente#1",
+   "rect": {
+    "x": 130,
+    "y": 600,
+    "width": 111,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.279,19#1",
+   "rect": {
+    "x": 499,
+    "y": 600,
+    "width": 81,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "section:Para onde foi Alimentação fora R$ 1.919,#1",
+   "rect": {
+    "x": 650,
+    "y": 104,
+    "width": 550,
+    "height": 561
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "36px",
+    "padding": "24px 16px"
+   }
+  },
+  {
+   "nome": "h2:Para onde foi#1",
+   "rect": {
+    "x": 682,
+    "y": 132,
+    "width": 502,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Para onde foi#1",
+   "rect": {
+    "x": 682,
+    "y": 132,
+    "width": 95,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Alimentação fora R$ 1.919,60#1",
+   "rect": {
+    "x": 666,
+    "y": 165,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Alimentação fora#1",
+   "rect": {
+    "x": 682,
+    "y": 184.5,
+    "width": 124,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.919,60#1",
+   "rect": {
+    "x": 1086,
+    "y": 184.5,
+    "width": 82,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#1",
+   "rect": {
+    "x": 682,
+    "y": 213.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#2",
+   "rect": {
+    "x": 682,
+    "y": 213.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Mercado R$ 1.543,89#1",
+   "rect": {
+    "x": 666,
+    "y": 245,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Mercado#1",
+   "rect": {
+    "x": 682,
+    "y": 264.5,
+    "width": 64,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.543,89#1",
+   "rect": {
+    "x": 1083,
+    "y": 264.5,
+    "width": 85,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#3",
+   "rect": {
+    "x": 682,
+    "y": 293.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#4",
+   "rect": {
+    "x": 682,
+    "y": 293.5,
+    "width": 390.734375,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Saúde R$ 1.259,36#1",
+   "rect": {
+    "x": 666,
+    "y": 325,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Saúde#1",
+   "rect": {
+    "x": 682,
+    "y": 344.5,
+    "width": 45,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.259,36#1",
+   "rect": {
+    "x": 1085,
+    "y": 344.5,
+    "width": 83,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#5",
+   "rect": {
+    "x": 682,
+    "y": 373.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#6",
+   "rect": {
+    "x": 682,
+    "y": 373.5,
+    "width": 318.8125,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Compras R$ 60,69#1",
+   "rect": {
+    "x": 666,
+    "y": 405,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Compras#1",
+   "rect": {
+    "x": 682,
+    "y": 424.5,
+    "width": 66,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 60,69#1",
+   "rect": {
+    "x": 1104,
+    "y": 424.5,
+    "width": 64,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#7",
+   "rect": {
+    "x": 682,
+    "y": 453.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#8",
+   "rect": {
+    "x": 682,
+    "y": 453.5,
+    "width": 15.546875,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Assinaturas R$ 56,40#1",
+   "rect": {
+    "x": 666,
+    "y": 485,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Assinaturas#1",
+   "rect": {
+    "x": 682,
+    "y": 504.5,
+    "width": 82,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 56,40#1",
+   "rect": {
+    "x": 1103,
+    "y": 504.5,
+    "width": 65,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#9",
+   "rect": {
+    "x": 682,
+    "y": 533.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#10",
+   "rect": {
+    "x": 682,
+    "y": 533.5,
+    "width": 14.09375,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Transporte R$ 10,40#1",
+   "rect": {
+    "x": 666,
+    "y": 565,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Transporte#1",
+   "rect": {
+    "x": 682,
+    "y": 584.5,
+    "width": 78,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 10,40#1",
+   "rect": {
+    "x": 1104,
+    "y": 584.5,
+    "width": 64,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#11",
+   "rect": {
+    "x": 682,
+    "y": 613.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#12",
+   "rect": {
+    "x": 682,
+    "y": 613.5,
+    "width": 7.28125,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  }
+ ],
+ "detalheMercado": [
+  {
+   "nome": "div:Finanças junho de 2026 Resumo do mês Mer#1",
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "width": 1280,
+    "height": 980
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(236, 238, 246)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "32px 16px 64px"
+   }
+  },
+  {
+   "nome": "header:Finanças junho de 2026#1",
+   "rect": {
+    "x": 80,
+    "y": 32,
+    "width": 1120,
+    "height": 52
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Finanças#1",
+   "rect": {
+    "x": 80,
+    "y": 47,
+    "width": 71,
+    "height": 22
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "18px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:junho de 2026#1",
+   "rect": {
+    "x": 983,
+    "y": 32,
+    "width": 217,
+    "height": 52
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "4px"
+   }
+  },
+  {
+   "nome": "button:Mês anterior#1",
+   "rect": {
+    "x": 987,
+    "y": 36,
+    "width": 44,
+    "height": 44
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "svg:#1",
+   "rect": {
+    "x": 1000,
+    "y": 49,
+    "width": 18,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:junho de 2026#1",
+   "rect": {
+    "x": 1043,
+    "y": 49,
+    "width": 97,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px 8px"
+   }
+  },
+  {
+   "nome": "button:Próximo mês#1",
+   "rect": {
+    "x": 1152,
+    "y": 36,
+    "width": 44,
+    "height": 44
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "svg:#2",
+   "rect": {
+    "x": 1165,
+    "y": 49,
+    "width": 18,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "section:Resumo do mês Mercado · 7 transações · 3#1",
+   "rect": {
+    "x": 80,
+    "y": 104,
+    "width": 550,
+    "height": 651
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "36px",
+    "padding": "32px"
+   }
+  },
+  {
+   "nome": "button:Resumo do mês#1",
+   "rect": {
+    "x": 112,
+    "y": 136,
+    "width": 163,
+    "height": 44
+   },
+   "estilo": {
+    "color": "rgb(63, 58, 181)",
+    "backgroundColor": "rgb(242, 243, 250)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px 18px 0px 12px"
+   }
+  },
+  {
+   "nome": "svg:#3",
+   "rect": {
+    "x": 124,
+    "y": 149,
+    "width": 18,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(63, 58, 181)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Resumo do mês#1",
+   "rect": {
+    "x": 148,
+    "y": 149,
+    "width": 109,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(63, 58, 181)",
+    "backgroundColor": "rgb(242, 243, 250)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px 18px 0px 12px"
+   }
+  },
+  {
+   "nome": "texto:Mercado#1",
+   "rect": {
+    "x": 112,
+    "y": 200,
+    "width": 63,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#1",
+   "rect": {
+    "x": 175,
+    "y": 200,
+    "width": 12,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:7 transações#1",
+   "rect": {
+    "x": 187,
+    "y": 200,
+    "width": 90,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#2",
+   "rect": {
+    "x": 277,
+    "y": 200,
+    "width": 12,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:32%#1",
+   "rect": {
+    "x": 289,
+    "y": 200,
+    "width": 31,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:do que saiu#1",
+   "rect": {
+    "x": 320,
+    "y": 200,
+    "width": 85,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.543,89#1",
+   "rect": {
+    "x": 112,
+    "y": 221,
+    "width": 276.53125,
+    "height": 67
+   },
+   "estilo": {
+    "color": "rgb(63, 58, 181)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "56px",
+    "fontWeight": "600",
+    "letterSpacing": "-1.68px",
+    "lineHeight": "56px",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 17/06 · Cartão R$ 188,64#1",
+   "rect": {
+    "x": 112,
+    "y": 303,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#1",
+   "rect": {
+    "x": 112,
+    "y": 316,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:17/06#1",
+   "rect": {
+    "x": 112,
+    "y": 336,
+    "width": 32,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#3",
+   "rect": {
+    "x": 144,
+    "y": 336,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Cartão#1",
+   "rect": {
+    "x": 153,
+    "y": 336,
+    "width": 40,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 188,64#1",
+   "rect": {
+    "x": 530,
+    "y": 316,
+    "width": 68,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 16/06 · Cartão R$ 45,30#1",
+   "rect": {
+    "x": 112,
+    "y": 363,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#2",
+   "rect": {
+    "x": 112,
+    "y": 376,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:16/06#1",
+   "rect": {
+    "x": 112,
+    "y": 396,
+    "width": 32,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#4",
+   "rect": {
+    "x": 144,
+    "y": 396,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Cartão#2",
+   "rect": {
+    "x": 153,
+    "y": 396,
+    "width": 40,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 45,30#1",
+   "rect": {
+    "x": 536,
+    "y": 376,
+    "width": 62,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 15/06 · Cartão R$ 124,16#1",
+   "rect": {
+    "x": 112,
+    "y": 423,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#3",
+   "rect": {
+    "x": 112,
+    "y": 436,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:15/06#1",
+   "rect": {
+    "x": 112,
+    "y": 456,
+    "width": 32,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#5",
+   "rect": {
+    "x": 144,
+    "y": 456,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Cartão#3",
+   "rect": {
+    "x": 153,
+    "y": 456,
+    "width": 40,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 124,16#1",
+   "rect": {
+    "x": 533,
+    "y": 436,
+    "width": 65,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 14/06 · Cartão R$ 91,91#1",
+   "rect": {
+    "x": 112,
+    "y": 483,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#4",
+   "rect": {
+    "x": 112,
+    "y": 496,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:14/06#1",
+   "rect": {
+    "x": 112,
+    "y": 516,
+    "width": 33,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#6",
+   "rect": {
+    "x": 145,
+    "y": 516,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Cartão#4",
+   "rect": {
+    "x": 154,
+    "y": 516,
+    "width": 40,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 91,91#1",
+   "rect": {
+    "x": 542,
+    "y": 496,
+    "width": 56,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 10/06 · Cartão R$ 341,78#1",
+   "rect": {
+    "x": 112,
+    "y": 543,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#5",
+   "rect": {
+    "x": 112,
+    "y": 556,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:10/06#1",
+   "rect": {
+    "x": 112,
+    "y": 576,
+    "width": 33,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#7",
+   "rect": {
+    "x": 145,
+    "y": 576,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Cartão#5",
+   "rect": {
+    "x": 154,
+    "y": 576,
+    "width": 40,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 341,78#1",
+   "rect": {
+    "x": 532,
+    "y": 556,
+    "width": 66,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 09/06 · Conta R$ 510,82#1",
+   "rect": {
+    "x": 112,
+    "y": 603,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#6",
+   "rect": {
+    "x": 112,
+    "y": 616,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:09/06#1",
+   "rect": {
+    "x": 112,
+    "y": 636,
+    "width": 35,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#8",
+   "rect": {
+    "x": 147,
+    "y": 636,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Conta#1",
+   "rect": {
+    "x": 156,
+    "y": 636,
+    "width": 36,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 510,82#1",
+   "rect": {
+    "x": 529,
+    "y": 616,
+    "width": 69,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "div:Mercado Central 02/06 · Cartão R$ 241,28#1",
+   "rect": {
+    "x": 112,
+    "y": 663,
+    "width": 486,
+    "height": 60
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "12px 0px"
+   }
+  },
+  {
+   "nome": "texto:Mercado Central#7",
+   "rect": {
+    "x": 112,
+    "y": 676,
+    "width": 113,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:02/06#1",
+   "rect": {
+    "x": 112,
+    "y": 696,
+    "width": 35,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:·#9",
+   "rect": {
+    "x": 147,
+    "y": 696,
+    "width": 9,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Cartão#6",
+   "rect": {
+    "x": 156,
+    "y": 696,
+    "width": 40,
+    "height": 15
+   },
+   "estilo": {
+    "color": "rgb(86, 91, 114)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "13px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 241,28#1",
+   "rect": {
+    "x": 530,
+    "y": 676,
+    "width": 68,
+    "height": 18
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "15px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "section:Para onde foi Alimentação fora R$ 1.919,#1",
+   "rect": {
+    "x": 650,
+    "y": 104,
+    "width": 550,
+    "height": 651
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(255, 255, 255)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "36px",
+    "padding": "24px 16px"
+   }
+  },
+  {
+   "nome": "h2:Para onde foi#1",
+   "rect": {
+    "x": 682,
+    "y": 132,
+    "width": 502,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:Para onde foi#1",
+   "rect": {
+    "x": 682,
+    "y": 132,
+    "width": 95,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Alimentação fora R$ 1.919,60#1",
+   "rect": {
+    "x": 666,
+    "y": 165,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Alimentação fora#1",
+   "rect": {
+    "x": 682,
+    "y": 184.5,
+    "width": 124,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.919,60#1",
+   "rect": {
+    "x": 1086,
+    "y": 184.5,
+    "width": 82,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#1",
+   "rect": {
+    "x": 682,
+    "y": 213.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#2",
+   "rect": {
+    "x": 682,
+    "y": 213.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Mercado R$ 1.543,89#1",
+   "rect": {
+    "x": 666,
+    "y": 245,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 247)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Mercado#2",
+   "rect": {
+    "x": 682,
+    "y": 264.5,
+    "width": 64,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.543,89#2",
+   "rect": {
+    "x": 1083,
+    "y": 264.5,
+    "width": 85,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#3",
+   "rect": {
+    "x": 682,
+    "y": 293.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#4",
+   "rect": {
+    "x": 682,
+    "y": 293.5,
+    "width": 390.734375,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Saúde R$ 1.259,36#1",
+   "rect": {
+    "x": 666,
+    "y": 325,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Saúde#1",
+   "rect": {
+    "x": 682,
+    "y": 344.5,
+    "width": 45,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 1.259,36#1",
+   "rect": {
+    "x": 1085,
+    "y": 344.5,
+    "width": 83,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#5",
+   "rect": {
+    "x": 682,
+    "y": 373.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#6",
+   "rect": {
+    "x": 682,
+    "y": 373.5,
+    "width": 318.8125,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Compras R$ 60,69#1",
+   "rect": {
+    "x": 666,
+    "y": 405,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Compras#1",
+   "rect": {
+    "x": 682,
+    "y": 424.5,
+    "width": 66,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 60,69#1",
+   "rect": {
+    "x": 1104,
+    "y": 424.5,
+    "width": 64,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#7",
+   "rect": {
+    "x": 682,
+    "y": 453.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#8",
+   "rect": {
+    "x": 682,
+    "y": 453.5,
+    "width": 15.546875,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Assinaturas R$ 56,40#1",
+   "rect": {
+    "x": 666,
+    "y": 485,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Assinaturas#1",
+   "rect": {
+    "x": 682,
+    "y": 504.5,
+    "width": 82,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 56,40#1",
+   "rect": {
+    "x": 1103,
+    "y": 504.5,
+    "width": 65,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#9",
+   "rect": {
+    "x": 682,
+    "y": 533.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#10",
+   "rect": {
+    "x": 682,
+    "y": 533.5,
+    "width": 14.09375,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "button:Transporte R$ 10,40#1",
+   "rect": {
+    "x": 666,
+    "y": 565,
+    "width": 518,
+    "height": 76
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "24px",
+    "padding": "14px 16px"
+   }
+  },
+  {
+   "nome": "texto:Transporte#1",
+   "rect": {
+    "x": 682,
+    "y": 584.5,
+    "width": 78,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "500",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "texto:R$ 10,40#1",
+   "rect": {
+    "x": 1104,
+    "y": 584.5,
+    "width": 64,
+    "height": 19
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "600",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "0px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#11",
+   "rect": {
+    "x": 682,
+    "y": 613.5,
+    "width": 486,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(230, 232, 242)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  },
+  {
+   "nome": "span:#12",
+   "rect": {
+    "x": 682,
+    "y": 613.5,
+    "width": 7.28125,
+    "height": 8
+   },
+   "estilo": {
+    "color": "rgb(28, 30, 46)",
+    "backgroundColor": "rgb(63, 58, 181)",
+    "fontFamily": "Figtree, system-ui, sans-serif",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "letterSpacing": "normal",
+    "lineHeight": "normal",
+    "borderRadius": "999px",
+    "padding": "0px"
+   }
+  }
+ ]
+}
