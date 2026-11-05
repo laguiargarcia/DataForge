@@ -60,7 +60,10 @@ def list_transactions(account_id):
     headers = {"accept": "application/json", "X-API-KEY": token}
     all_results = []
     base = "https://api.pluggy.ai/v2/transactions"
-    url = f"{base}?accountId={account_id}&pageSize={PLUGGY_PAGE_SIZE}"
+    # Pluggy v2/transactions uses cursor pagination (the `next` field) and REJECTS a pageSize
+    # param: sending it returns 400 "property pageSize should not exist". Request bare and
+    # follow `next` until it is null. (Bills/investments still take pageSize — this is v2-only.)
+    url = f"{base}?accountId={account_id}"
     page = 1
     while True:
         response = requests.get(url, headers=headers)
