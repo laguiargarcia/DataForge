@@ -1,7 +1,7 @@
 """Test loop CLI. Usage: cli.py <command> <module> [options]
 
-Run from the repo root. Exit codes: 0 measured (and, for check, passed);
-1 check: tests failed; 2 usage or tool error. Prints the result JSON path.
+Run from the repo root. Exit codes: 0 measured (and, for check and gate, passed);
+1 check: tests failed, gate: score below min_score; 2 usage or tool error. Prints the result JSON path.
 """
 
 import argparse
@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import ToolError, clear_result, load_config  # noqa: E402
 import check_cmd  # noqa: E402
+import gate_cmd  # noqa: E402
 import map_cmd  # noqa: E402
 import mutate_cmd  # noqa: E402
 
@@ -22,6 +23,7 @@ COMMANDS = {
     "mutate": (mutate_cmd, lambda parser: parser.add_argument(
         "--budget-seconds", type=float, default=mutate_cmd.DEFAULT_BUDGET_SECONDS,
         help="wall-clock budget for the whole run; exceeded = partial result, exit 2")),
+    "gate": (gate_cmd, lambda parser: None),
 }
 
 
@@ -46,7 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     except ToolError as exc:
         print(f"testloop: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # any tool breakage is exit 2; exit 1 is reserved for check failures
+    except Exception as exc:  # any tool breakage is exit 2; exit 1 is reserved for check and gate failures
         print(f"testloop: unexpected {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     out, code = result if isinstance(result, tuple) else (result, 0)
