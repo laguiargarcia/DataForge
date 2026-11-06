@@ -14,6 +14,7 @@ htmlcov/
 .hypothesis/
 mutants/
 scripts/testloop/evals/
+/tests/test_testloop_evals.py
 
 # Logs / temp
 *.log
