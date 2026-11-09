@@ -190,3 +190,46 @@ def test_malformed_target_trigger_does_not_crash(tmp_path):  # HIGH — robustne
     p = load_pipeline(src, "p")
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))  # must not raise
     assert any(i.target_path == "triggers/daily.yaml" for i in plan.items)
+
+
+_PLAN_PROBE = r'''
+import json, sys, warnings
+from pathlib import Path
+from dataforge.deploy.ignore import DeployIgnore
+from dataforge.deploy.pairing import load_pipeline, resolve_pairs
+from dataforge.deploy.plan import build_plan
+src, tgt = Path(sys.argv[1], "Dev"), Path(sys.argv[1], "Prod")
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    p = load_pipeline(src, "to-prod")
+    plan = build_plan(src, tgt, p, "to-prod", DeployIgnore.load(src), resolve_pairs(src, p))
+print(json.dumps([i.model_dump(mode="json") for i in plan.items]))
+'''
+
+
+def test_plan_does_not_depend_on_the_machine_locale(tmp_path):
+    # Workspace files are UTF-8 whatever the locale (df-nfbh). The same accented triggers must
+    # give the same plan here and under the C locale (ASCII), where a locale read crashes.
+    import json
+    import os
+    import subprocess
+    import sys
+    import dataforge
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    trigger = "name: relatório {}\ncron: '{}'\nenabled: {}\njobs: []\n"
+    for ws, rel, text in [
+        (src, "triggers/daily.yaml", trigger.format("diário", "0 9 * * *", "true")),
+        (tgt, "triggers/daily.yaml", trigger.format("diário", "0 9 * * *", "false")),   # in sync
+        (src, "triggers/weekly.yaml", trigger.format("semanal", "0 9 * * 1", "true")),
+        (tgt, "triggers/weekly.yaml", trigger.format("semanal", "0 5 * * 1", "true")),  # modified
+    ]:
+        _mk(ws, rel, "").write_bytes(text.encode("utf-8"))
+    _pipeline(src)
+    here = [i.model_dump(mode="json") for i in _build(src, tgt).items]
+    assert [(i["target_path"], i["action"]) for i in here] == [("triggers/weekly.yaml", "MODIFY")]
+    env = {**os.environ, "LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0",
+           "PYTHONPATH": str(Path(dataforge.__file__).parent.parent)}
+    proc = subprocess.run([sys.executable, "-X", "utf8=0", "-c", _PLAN_PROBE, str(tmp_path)],
+                          env=env, capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr[-400:]
+    assert json.loads(proc.stdout) == here

@@ -49,7 +49,7 @@ def run(config: Config, module: str) -> dict:
         )
         if cov.returncode != 0 or not report.is_file():
             raise ToolError(f"no coverage data for {module}: {cov.stdout}{cov.stderr}")
-        files = json.loads(report.read_text())["files"]
+        files = json.loads(report.read_text(encoding="utf-8"))["files"]
 
     entry = next((v for k, v in files.items() if Path(k).as_posix() == module), None)
     if entry is None or not entry["executed_lines"]:

@@ -245,7 +245,6 @@ apply_plan(src, tgt, plan, Ledger(tgt))
 '''
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="df-nfbh")
 def test_apply_promotes_utf8_trigger_text_on_a_non_utf8_machine(tmp_path):
     # Workspace files are UTF-8 whatever the machine's locale. Under a non-UTF-8 locale the
     # planner crashes on an accented trigger (ASCII), or on Windows (cp1252) decodes it as

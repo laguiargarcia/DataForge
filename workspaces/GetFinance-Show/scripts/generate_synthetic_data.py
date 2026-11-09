@@ -20,7 +20,7 @@ from pathlib import Path
 # Reuse the workspace's IO + partition helpers (same mechanism landing2raw.py uses: exec the
 # functions module in this namespace). This script is at scripts/ depth 1, so functions.py is
 # one level shallower than for the depth-2 landing/raw2cleansed scripts.
-exec(open(Path(__file__).parent / "functions" / "functions.py").read())  # noqa: S102
+exec(open(Path(__file__).parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
 
 SEED = 20260621
 ANCHOR = date(2026, 6, 21)        # fixed; do NOT use datetime.now() (determinism)

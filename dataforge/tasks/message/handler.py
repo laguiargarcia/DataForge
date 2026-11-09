@@ -4,7 +4,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ...compat import global_db_url
-from ...db import ExecucaoORM, JobRunORM, init_db
+from ...db import ExecucaoORM, JobRunORM, init_db, utcnow
 from ...models import Job, Task
 from .channels import get_channel
 from .dispatch import deliver_all
@@ -13,7 +13,7 @@ from .render import build_variables, render
 
 def _load_env_file(path: Path) -> dict[str, str]:
     env: dict[str, str] = {}
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -60,7 +60,7 @@ class MessageHandler:
 
     def run(self, task: Task, job: Job, workspace_dir: Path,
             db_url: str, run_id: str | None) -> int:
-        started_at = datetime.utcnow()
+        started_at = utcnow()
         db_engine = init_db(db_url)
         with Session(db_engine) as s:
             row = ExecucaoORM(
@@ -108,7 +108,7 @@ class MessageHandler:
                 workspace=workspace_dir.name, job=job.name,
                 trigger=trigger, run_id=run_id or "",
                 status=pre_status,
-                started_at=run_started, finished_at=datetime.utcnow(),
+                started_at=run_started, finished_at=utcnow(),
                 task_results=siblings,
             )
             subject = render(subject_tpl, vars)
@@ -116,7 +116,7 @@ class MessageHandler:
 
             deliver_all(targets, subject=subject, body=body, env=env)
 
-            fim = datetime.utcnow()
+            fim = utcnow()
             with Session(db_engine) as s:
                 row = s.get(ExecucaoORM, row_id)
                 row.status = "success"
@@ -126,7 +126,7 @@ class MessageHandler:
                 s.commit()
             return 0
         except Exception as e:
-            fim = datetime.utcnow()
+            fim = utcnow()
             with Session(db_engine) as s:
                 row = s.get(ExecucaoORM, row_id)
                 row.status = "failed"

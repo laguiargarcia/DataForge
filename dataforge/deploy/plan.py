@@ -30,7 +30,7 @@ def content_sha(path: Path) -> str:
 def _load_yaml_dict(path: Path):
     """Parse YAML to a mapping; return None if unparseable or not a mapping."""
     try:
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError:
         return None
     return data if isinstance(data, dict) else None
