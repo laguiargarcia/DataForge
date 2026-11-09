@@ -75,14 +75,14 @@ def _compact_job_dict(job: Job) -> dict:
 
 
 def load_workspace(workspace_dir: Path) -> Workspace:
-    with open(workspace_dir / "workspace.yaml") as f:
+    with open(workspace_dir / "workspace.yaml", encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return Workspace(**data)
 
 
 def load_job(workspace_dir: Path, job_name: str) -> Job:
     job_dir = workspace_dir / "jobs" / job_name
-    with open(job_dir / "job.yaml") as f:
+    with open(job_dir / "job.yaml", encoding="utf-8") as f:
         job_data = yaml.safe_load(f)
     tasks = [Task(**t) for t in job_data.pop("tasks", [])]
     return Job(tasks=tasks, **job_data)
@@ -98,7 +98,7 @@ def save_job(workspace_dir: Path, job: Job) -> None:
     """
     job_dir = workspace_dir / "jobs" / job.name
     job_dir.mkdir(parents=True, exist_ok=True)
-    with open(job_dir / "job.yaml", "w") as f:
+    with open(job_dir / "job.yaml", "w", encoding="utf-8") as f:
         yaml.dump(_compact_job_dict(job), f, allow_unicode=True, sort_keys=False)
 
 
@@ -120,7 +120,7 @@ def load_jobs(workspace_dir: Path) -> list[Job]:
 
 def load_trigger(workspace_dir: Path, trigger_name: str) -> TriggerModel:
     path = workspace_dir / "triggers" / f"{trigger_name}.yaml"
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return TriggerModel(**data)
 
@@ -139,7 +139,7 @@ def save_trigger(workspace_dir: Path, trigger: TriggerModel) -> None:
     triggers_dir = workspace_dir / "triggers"
     triggers_dir.mkdir(exist_ok=True)
     path = triggers_dir / f"{trigger.name}.yaml"
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         yaml.dump(trigger.model_dump(), f, allow_unicode=True)
 
 
@@ -150,6 +150,6 @@ def delete_trigger(workspace_dir: Path, trigger_name: str) -> None:
 
 def load_connections(workspace_dir: Path) -> dict[str, Connection]:
     connections_file = workspace_dir / "connections" / "connections.yaml"
-    with open(connections_file) as f:
+    with open(connections_file, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return {name: Connection(**conn) for name, conn in data["connections"].items()}

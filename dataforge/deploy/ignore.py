@@ -15,7 +15,7 @@ class DeployIgnore:
     @classmethod
     def load(cls, workspace_dir: Path) -> "DeployIgnore":
         path = workspace_dir / "deploy" / ".deployignore"
-        lines = path.read_text().splitlines() if path.exists() else []
+        lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
         return cls(pathspec.PathSpec.from_lines("gitwildmatch", [*cls.DEFAULT_PATTERNS, *lines]))
 
     def matches(self, relpath: str) -> bool:

@@ -107,10 +107,12 @@ def init(
     (ws_dir / "logs").mkdir()
 
     (ws_dir / "workspace.yaml").write_text(
-        f'name: {name}\nversion: "1.0"\nengine: duckdb\ndatabase: sqlite\n'
+        f'name: {name}\nversion: "1.0"\nengine: duckdb\ndatabase: sqlite\n',
+        encoding="utf-8",
     )
     (ws_dir / "connections" / "connections.yaml").write_text(
-        "connections:\n  raw_data:\n    type: parquet\n    path: ./data/raw\n"
+        "connections:\n  raw_data:\n    type: parquet\n    path: ./data/raw\n",
+        encoding="utf-8",
     )
 
     rprint(f"[green]✓[/green] Workspace '{name}' criado em {ws_dir}/")
@@ -263,7 +265,7 @@ def _register_launchd(
 """
     plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(plist_content)
+    plist_path.write_text(plist_content, encoding="utf-8")
 
     # Delete+recreate: unload (ignore failure) then load
     subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
@@ -827,7 +829,7 @@ def execucoes_logs(
         raise typer.Exit(1)
 
     rprint(f"[dim]--- {matches[0].name} ---[/dim]")
-    console.print(matches[0].read_text())
+    console.print(matches[0].read_text(encoding="utf-8", errors="replace"))
 
 
 if __name__ == "__main__":

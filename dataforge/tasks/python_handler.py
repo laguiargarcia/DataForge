@@ -13,7 +13,7 @@ from ..models import Job, Task
 
 def _load_env_file(path: Path) -> dict[str, str]:
     env = {}
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
