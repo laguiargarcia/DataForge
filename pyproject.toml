@@ -25,6 +25,14 @@ dependencies = [
     "pathspec>=0.12",
 ]
 
+[tool.ruff.lint]
+# Text files are UTF-8 on every machine: open() and read_text() without encoding= fall back to
+# the locale (cp1252 on Windows, ASCII under the C locale). Ruff only sees Path methods when it
+# can infer the type, so open() is always checked and read_text()/write_text() only sometimes.
+preview = true
+explicit-preview-rules = true
+select = ["PLW1514"]
+
 [tool.setuptools.packages.find]
 include = ["dataforge*"]
 

@@ -46,7 +46,7 @@ def _python(config: Config) -> str:
 
 def _run(cmd: list[str], cwd: Path, env: dict, deadline: float) -> tuple[int, str]:
     """Run in its own process group; kill the whole group if the deadline passes."""
-    with tempfile.TemporaryFile(mode="w+") as out:
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as out:
         proc = subprocess.Popen(
             cmd, cwd=cwd, env=env, stdout=out, stderr=subprocess.STDOUT,
             text=True, start_new_session=True,

@@ -6,7 +6,7 @@ from .models import PipelineModel
 
 def load_pipeline(workspace_dir: Path, name: str) -> PipelineModel:
     path = workspace_dir / "deploy" / f"{name}.yaml"
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
     return PipelineModel(**data)
 

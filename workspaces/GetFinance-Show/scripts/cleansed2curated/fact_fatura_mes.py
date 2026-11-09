@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py").read())  # noqa: S102
+exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", required=True)   # cleansed (convention; data deps are curated)

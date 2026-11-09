@@ -2,7 +2,7 @@ import argparse
 import polars as pl
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py").read())  # noqa: S102
+exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
 
 # Pluggy taxonomy code for "Credit card payment" — tags both bill-settlement legs
 # (checking-side debit + card-side payment) identically across any institution.
