@@ -59,7 +59,8 @@ jobs:
           exit $status
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: testloop-results, path: .testloop/, if-no-files-found: ignore }
+        # .testloop/ is a hidden directory, which upload-artifact skips unless told otherwise.
+        with: { name: testloop-results, path: .testloop/, include-hidden-files: true, if-no-files-found: warn }
   testloop-tools:
     # Tests of the test loop tools themselves (map, check, mutate, gate).
     runs-on: ubuntu-latest
