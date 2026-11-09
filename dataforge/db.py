@@ -1,6 +1,14 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, text
 from sqlalchemy.orm import DeclarativeBase
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def utcnow() -> datetime:
+    """Current UTC time without tzinfo, the form every DateTime column here stores.
+
+    Replaces the deprecated datetime.utcnow(); an aware value would not compare with the naive
+    values already in the databases."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -14,7 +22,7 @@ class ExecucaoORM(Base):
     job = Column(String, nullable=False)
     task = Column(String, nullable=False)
     status = Column(String, nullable=False, default="pending")
-    inicio = Column(DateTime, nullable=False, default=datetime.utcnow)
+    inicio = Column(DateTime, nullable=False, default=utcnow)
     fim = Column(DateTime, nullable=True)
     duracao_segundos = Column(Float, nullable=True)
     output = Column(Text, nullable=True)
@@ -29,7 +37,7 @@ class JobRunORM(Base):
     workspace = Column(String, nullable=False)
     job = Column(String, nullable=False)
     status = Column(String, nullable=False, default="pending")
-    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=False, default=utcnow)
     finished_at = Column(DateTime, nullable=True)
     owner_id = Column(String, nullable=False, default="system")
     # "manual" for CLI/GUI runs, or the trigger name for OS-scheduled runs

@@ -16,7 +16,7 @@ class DeployIgnore:
     def load(cls, workspace_dir: Path) -> "DeployIgnore":
         path = workspace_dir / "deploy" / ".deployignore"
         lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-        return cls(pathspec.PathSpec.from_lines("gitwildmatch", [*cls.DEFAULT_PATTERNS, *lines]))
+        return cls(pathspec.GitIgnoreSpec.from_lines([*cls.DEFAULT_PATTERNS, *lines]))
 
     def matches(self, relpath: str) -> bool:
         """relpath is POSIX, relative to the workspace root."""

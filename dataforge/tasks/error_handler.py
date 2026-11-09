@@ -1,9 +1,8 @@
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ..db import ExecucaoORM, init_db
+from ..db import ExecucaoORM, init_db, utcnow
 from ..models import Job, Task
 
 
@@ -14,7 +13,7 @@ class ErrorHandler:
 
     def run(self, task: Task, job: Job, workspace_dir: Path, db_url: str, run_id: str | None) -> int:
         msg = task.params.get("message", "error task triggered")
-        now = datetime.utcnow()
+        now = utcnow()
         db_engine = init_db(db_url)
         with Session(db_engine) as session:
             row = ExecucaoORM(
