@@ -2,12 +2,11 @@ import logging
 import os
 import subprocess
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from ..db import ExecucaoORM, init_db
+from ..db import ExecucaoORM, init_db, utcnow
 from ..models import Job, Task
 
 
@@ -39,7 +38,7 @@ class PythonHandler:
         with Session(db_engine) as session:
             execucao = ExecucaoORM(
                 job=job.name, task=task.name,
-                status="running", inicio=datetime.utcnow(),
+                status="running", inicio=utcnow(),
                 run_id=run_id,
             )
             session.add(execucao)
@@ -59,7 +58,7 @@ class PythonHandler:
             text=True, env=env,
         )
         stdout_output, _ = proc.communicate()
-        fim = datetime.utcnow()
+        fim = utcnow()
 
         with Session(db_engine) as session:
             execucao = session.get(ExecucaoORM, execucao_id)

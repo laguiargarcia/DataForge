@@ -8,6 +8,8 @@ from typing import Optional
 
 from croniter import croniter as _croniter
 
+from dataforge.db import utcnow
+
 from PySide6.QtCore import QByteArray, QDate, QUrl
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from PySide6.QtWidgets import (
@@ -63,7 +65,7 @@ def next_run(expr: str, base: Optional[datetime] = None) -> Optional[datetime]:
     if not cron_is_valid(expr):
         return None
     try:
-        return _croniter(expr, base or datetime.utcnow()).get_next(datetime)
+        return _croniter(expr, base or utcnow()).get_next(datetime)
     except Exception:
         return None
 

@@ -10,22 +10,22 @@ jobs:
   leak-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: leakguard (PII + private-path block over all tracked files)
         run: python3 scripts/leakguard.py $(git ls-files)
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Qt system libraries
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
@@ -43,8 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Install into .venv (testloop.toml runs .venv/bin/python)
         run: python -m venv .venv && .venv/bin/pip install -e . pytest==9.2.0 -r scripts/testloop/requirements.txt
@@ -57,7 +57,7 @@ jobs:
             .venv/bin/python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=1
           done
           exit $status
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         # .testloop/ is a hidden directory, which upload-artifact skips unless told otherwise.
         with: { name: testloop-results, path: .testloop/, include-hidden-files: true, if-no-files-found: warn }
@@ -66,8 +66,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Install
         run: pip install -e . pytest==9.2.0 -r scripts/testloop/requirements.txt
