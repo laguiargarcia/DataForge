@@ -30,7 +30,7 @@ jobs:
       - name: Qt system libraries
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
       - name: Install
-        # httpx2: the client starlette.testclient wants; plain httpx there is deprecated.
+        # httpx2 (every test job): tests/conftest.py loads starlette.testclient, which deprecates httpx.
         run: pip install -e . pytest==9.2.0 ruff==0.14.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
       - name: Lint (explicit file encodings)
         run: ruff check
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Install into .venv (testloop.toml runs .venv/bin/python)
-        run: python -m venv .venv && .venv/bin/pip install -e . pytest==9.2.0 -r scripts/testloop/requirements.txt
+        run: python -m venv .venv && .venv/bin/pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
       - name: Mutate and gate each target
         shell: bash
         run: |
@@ -71,6 +71,6 @@ jobs:
       - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: Install
-        run: pip install -e . pytest==9.2.0 -r scripts/testloop/requirements.txt
+        run: pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
       - name: Test loop tool tests
         run: python -m pytest tests/test_testloop.py -p no:cacheprovider
