@@ -36,14 +36,14 @@ class Ledger:
     # --- append-only deploy log ---
     def append(self, entry: DeployEntry) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "a") as f:
+        with open(self.log, "a", encoding="utf-8") as f:
             f.write(entry.model_dump_json() + "\n")
 
     def entries(self) -> list[DeployEntry]:
         if not self.log.exists():
             return []
         return [DeployEntry.model_validate_json(line)
-                for line in self.log.read_text().splitlines() if line.strip()]
+                for line in self.log.read_text(encoding="utf-8").splitlines() if line.strip()]
 
     def last(self) -> DeployEntry | None:
         es = self.entries()
@@ -52,6 +52,6 @@ class Ledger:
     def drop_last(self) -> None:
         es = self.entries()[:-1]
         self.root.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "w") as f:
+        with open(self.log, "w", encoding="utf-8") as f:
             for e in es:
                 f.write(e.model_dump_json() + "\n")

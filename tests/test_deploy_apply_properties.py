@@ -77,18 +77,22 @@ def deploy(cases: dict, prune: bool):
 
 TWO_DELETES_THEN_ADD = {"scripts/a.py": ("target_only", b"a"), "scripts/b.py": ("target_only", b"b"),
                         "scripts/c.py": ("source_only", b"c")}
+# Prune is refused when the source has no file at all, so it never empties the target (df-gl6).
+ONLY_TARGET = {"scripts/a.py": ("target_only", b"a")}
 
 
 @LAW
 @given(CASES, st.booleans())
 @example(TWO_DELETES_THEN_ADD, True)
+@example(ONLY_TARGET, True)
 def test_apply_makes_the_target_match_the_source(cases, prune):
     root, source, target, plan, before, ledger, entry = deploy(cases, prune)
     with root:
         after = files(target)
+        pruning = prune and any(state != "target_only" for state, _ in cases.values())
         for rel, (state, blob) in cases.items():
             if state == "target_only":
-                assert (rel in after) is not prune      # pruned only when asked
+                assert (rel in after) is not pruning    # pruned only when asked, never from an empty source
             else:
                 assert after[rel] == (source / rel).read_bytes()
 
@@ -96,6 +100,7 @@ def test_apply_makes_the_target_match_the_source(cases, prune):
 @LAW
 @given(CASES, st.booleans())
 @example(TWO_DELETES_THEN_ADD, True)
+@example(ONLY_TARGET, True)
 def test_rollback_restores_the_target_exactly(cases, prune):
     root, source, target, plan, before, ledger, entry = deploy(cases, prune)
     with root:
@@ -106,6 +111,7 @@ def test_rollback_restores_the_target_exactly(cases, prune):
 @LAW
 @given(CASES, st.booleans())
 @example(TWO_DELETES_THEN_ADD, True)
+@example(ONLY_TARGET, True)
 def test_ledger_records_every_write_with_its_snapshots(cases, prune):
     root, source, target, plan, before, ledger, entry = deploy(cases, prune)
     with root:

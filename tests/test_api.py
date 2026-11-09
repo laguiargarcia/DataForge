@@ -173,23 +173,22 @@ def test_list_jobs_nonexistent_workspace(test_client, dataforge_home):
 def test_output_returns_per_task_logs(test_client, dataforge_home, global_engine, workspace_engine):
     """GET /api/executions/{id}/output returns list of per-task stdout/stderr."""
     import uuid
-    from datetime import datetime
     from sqlalchemy.orm import Session
-    from dataforge.db import JobRunORM, ExecucaoORM
+    from dataforge.db import JobRunORM, ExecucaoORM, utcnow
 
     run_id = str(uuid.uuid4())
 
     with Session(global_engine) as s:
         s.add(JobRunORM(
             id=run_id, workspace="test_ws", job="etl",
-            status="success", started_at=datetime.utcnow(),
+            status="success", started_at=utcnow(),
         ))
         s.commit()
 
     with Session(workspace_engine) as s:
         s.add(ExecucaoORM(
             job="etl", task="step1", status="success",
-            inicio=datetime.utcnow(), output="hello world\n", run_id=run_id,
+            inicio=utcnow(), output="hello world\n", run_id=run_id,
         ))
         s.commit()
 

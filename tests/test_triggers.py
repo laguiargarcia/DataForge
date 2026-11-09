@@ -519,9 +519,8 @@ def test_register_os_trigger_imports_cli(workspace_dir):
 
 def test_startup_scan_publishes_running(dataforge_home, global_engine):
     """Seeded running JobRunORM row → lifespan triggers get_broadcaster().publish with that run."""
-    from datetime import datetime
     from sqlalchemy.orm import Session
-    from dataforge.db import JobRunORM
+    from dataforge.db import JobRunORM, utcnow
 
     # Seed a running row in the global DB before the app starts
     with Session(global_engine) as session:
@@ -530,7 +529,7 @@ def test_startup_scan_publishes_running(dataforge_home, global_engine):
             workspace="test_ws",
             job="test_job",
             status="running",
-            started_at=datetime.utcnow(),
+            started_at=utcnow(),
             owner_id="system",
         ))
         session.commit()

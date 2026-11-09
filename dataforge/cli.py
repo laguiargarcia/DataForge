@@ -107,10 +107,12 @@ def init(
     (ws_dir / "logs").mkdir()
 
     (ws_dir / "workspace.yaml").write_text(
-        f'name: {name}\nversion: "1.0"\nengine: duckdb\ndatabase: sqlite\n'
+        f'name: {name}\nversion: "1.0"\nengine: duckdb\ndatabase: sqlite\n',
+        encoding="utf-8",
     )
     (ws_dir / "connections" / "connections.yaml").write_text(
-        "connections:\n  raw_data:\n    type: parquet\n    path: ./data/raw\n"
+        "connections:\n  raw_data:\n    type: parquet\n    path: ./data/raw\n",
+        encoding="utf-8",
     )
 
     rprint(f"[green]✓[/green] Workspace '{name}' criado em {ws_dir}/")
@@ -263,7 +265,7 @@ def _register_launchd(
 """
     plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     plist_path.parent.mkdir(parents=True, exist_ok=True)
-    plist_path.write_text(plist_content)
+    plist_path.write_text(plist_content, encoding="utf-8")
 
     # Delete+recreate: unload (ignore failure) then load
     subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
@@ -543,9 +545,8 @@ def run(
     """Run a job directly without the HTTP server. Used by OS-level schedulers."""
     from dataforge.parser import load_job
     from dataforge.engine import run_job
-    from dataforge.db import init_db, JobRunORM, ScheduleORM
+    from dataforge.db import init_db, JobRunORM, ScheduleORM, utcnow
     from sqlalchemy.orm import Session
-    from datetime import datetime
     import uuid, os
 
     try:
@@ -562,12 +563,12 @@ def run(
     with Session(global_engine) as session:
         session.add(JobRunORM(
             id=run_id, workspace=workspace, job=job,
-            status="pending", started_at=datetime.utcnow(), owner_id="system",
+            status="pending", started_at=utcnow(), owner_id="system",
             trigger="manual",
         ))
         sched = session.get(ScheduleORM, f"{workspace}:{job}")
         if sched:
-            sched.last_run_at = datetime.utcnow()
+            sched.last_run_at = utcnow()
         session.commit()
 
     loaded_job = load_job(workspace_path, job)
@@ -597,10 +598,9 @@ def scheduled_run(
     import concurrent.futures
     import uuid
     import os
-    from datetime import datetime
     from dataforge.parser import load_trigger, load_job
     from dataforge.engine import run_job
-    from dataforge.db import init_db, JobRunORM
+    from dataforge.db import init_db, JobRunORM, utcnow
     from sqlalchemy.orm import Session
 
     try:
@@ -624,7 +624,7 @@ def scheduled_run(
         with Session(global_engine) as session:
             session.add(JobRunORM(
                 id=run_id, workspace=entry.workspace, job=entry.job,
-                status="pending", started_at=datetime.utcnow(), owner_id="system",
+                status="pending", started_at=utcnow(), owner_id="system",
                 trigger=trigger_name,
             ))
             session.commit()
@@ -827,7 +827,7 @@ def execucoes_logs(
         raise typer.Exit(1)
 
     rprint(f"[dim]--- {matches[0].name} ---[/dim]")
-    console.print(matches[0].read_text())
+    console.print(matches[0].read_text(encoding="utf-8", errors="replace"))
 
 
 if __name__ == "__main__":
