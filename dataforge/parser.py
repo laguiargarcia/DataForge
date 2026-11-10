@@ -35,7 +35,7 @@ def _compact_edge(edge: DependencyEdge):
 
 def _compact_task_dict(task: Task) -> dict:
     out: dict = {"name": task.name}
-    # type: omit when it equals what model inference would produce
+    # The "type" key is omitted when it equals what model inference would produce
     inferred = (
         "python"
         if (task.script and not task.job)
