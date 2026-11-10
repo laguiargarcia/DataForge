@@ -4,6 +4,7 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
+from .pairing import check_target_inside
 
 _KIND_BY_PREFIX = {
     "jobs": Kind.job,
@@ -122,6 +123,8 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
         )
         return out
     bases = {rule.target.rstrip("/") for rule in pipeline.pairs}
+    for base in bases:   # df-886.11: never walk a base outside the target workspace
+        check_target_inside(base)
     for base in sorted(bases):
         base_dir = target_dir / base
         if not base_dir.exists():

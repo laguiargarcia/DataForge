@@ -470,7 +470,6 @@ def test_ledger_guard_sees_any_spelling_of_the_target(spelling):
     assert plan.items == []
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="df-886.11")
 @pytest.mark.parametrize("escape", ["../Other/", "sub/../../Other/"])
 def test_prune_never_plans_a_delete_outside_the_target(escape):
     with workspaces() as (source, target):
