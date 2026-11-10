@@ -32,7 +32,6 @@ def test_kind_for_by_prefix():
     assert kind_for("config/a.yaml") == Kind.config
     assert kind_for("triggers/daily.yaml") == Kind.trigger
     assert kind_for("readme.md") == Kind.other
-    assert kind_for("apps/financas/dist/index.html") == Kind.app
 
 
 def test_add_new_file(tmp_path):
@@ -234,27 +233,3 @@ def test_plan_does_not_depend_on_the_machine_locale(tmp_path):
                           env=env, capture_output=True, text=True, timeout=120)
     assert proc.returncode == 0, proc.stderr[-400:]
     assert json.loads(proc.stdout) == here
-
-
-def test_app_pair_plans_sources_and_bundle_but_not_build_artifacts(tmp_path):
-    # df-ve7: an apps/** pair promotes the app definition, sources and compiled dist/ (binary
-    # fonts included) as Kind.app; node_modules/ and test-results/ never travel (default ignore).
-    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
-    _mk(src, "deploy/to-prod.yaml",
-        "target: Prod\npairs:\n  - {source: 'apps/**', target: 'apps/'}\n")
-    _mk(src, "apps/financas/app.yaml", "name: financas\n")
-    _mk(src, "apps/financas/dist/index.html", "<html></html>")
-    font = src / "apps/financas/dist/assets/f.woff2"
-    font.parent.mkdir(parents=True)
-    font.write_bytes(bytes(range(256)))
-    _mk(src, "apps/financas/node_modules/react/index.js", "x")
-    _mk(src, "apps/financas/test-results/.last-run.json", "{}")
-    p = load_pipeline(src, "to-prod")
-    plan = build_plan(src, tgt, p, "to-prod", DeployIgnore.load(src), resolve_pairs(src, p))
-    by_target = {i.target_path: i for i in plan.items}
-    for rel in ("apps/financas/app.yaml", "apps/financas/dist/index.html",
-                "apps/financas/dist/assets/f.woff2"):
-        assert by_target[rel].action == Action.add
-        assert by_target[rel].kind == Kind.app
-    assert by_target["apps/financas/node_modules/react/index.js"].action == Action.skip_ignored
-    assert by_target["apps/financas/test-results/.last-run.json"].action == Action.skip_ignored

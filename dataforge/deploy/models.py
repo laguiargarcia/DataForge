@@ -10,7 +10,6 @@ class Kind(str, Enum):
     script = "script"
     config = "config"
     trigger = "trigger"
-    app = "app"
     other = "other"
 
 
