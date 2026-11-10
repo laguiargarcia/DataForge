@@ -184,7 +184,7 @@ txn_latest = txn.sort("ingested_at", descending=True).unique(
 # Defensive: old raw partitions predate type/paymentData. diagonal_relaxed only surfaces a
 # column present in at least one file, so project them as typed NULL if entirely absent — keeps
 # reprocess over the full raw history lossless (mirrors raw2cleansed_bills' projection guard).
-for _col in ("type", "paymentData", "creditCardMetadata"):
+for _col in ("type", "paymentData", "creditCardMetadata", "status", "operationType"):
     if _col not in txn_latest.columns:
         txn_latest = txn_latest.with_columns(pl.lit(None, dtype=pl.Utf8).alias(_col))
 
@@ -247,6 +247,10 @@ new_rows = (
         "cc_purchase_date",
         "description_normalized",
         "etl_merchant_key",
+        # df-668.1: E4 carries — settled-cash gate + flow direction + operation kind.
+        pl.col("status").cast(pl.Utf8).alias("status"),
+        pl.col("type").cast(pl.Utf8).alias("txn_type"),
+        pl.col("operationType").cast(pl.Utf8).alias("operation_type"),
         "ingested_at",
     )
 )

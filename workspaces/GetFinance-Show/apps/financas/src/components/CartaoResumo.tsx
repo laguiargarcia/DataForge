@@ -30,7 +30,7 @@ export function CartaoResumo({ sobrou, entrou, saiu, naConta, investido, fatura 
       <div className="flex flex-col gap-2 mt-auto">
         <Faixa rotulo="Na conta" valor={naConta} />
         <Faixa rotulo="Investido" valor={investido} />
-        <Faixa rotulo="Fatura pendente" valor={fatura} />
+        <Faixa rotulo="Próxima fatura" valor={fatura} />
       </div>
     </div>
   )
