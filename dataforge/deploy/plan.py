@@ -10,6 +10,7 @@ _KIND_BY_PREFIX = {
     "scripts": Kind.script,
     "config": Kind.config,
     "triggers": Kind.trigger,
+    "apps": Kind.app,
 }
 
 
