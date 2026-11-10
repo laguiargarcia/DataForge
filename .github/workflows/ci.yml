@@ -33,9 +33,16 @@ jobs:
       - name: Install
         run: pip install -r scripts/quality/requirements.txt
       - name: Quality gate
+        shell: bash   # pipefail: the gate's exit code survives the tee
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
-        run: python scripts/quality/gate.py check ${BASE_REF:+--base-ref "$BASE_REF"}
+        run: |
+          mkdir -p report
+          python scripts/quality/gate.py check ${BASE_REF:+--base-ref "$BASE_REF"} 2>&1 | tee report/quality.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-quality, path: report/, if-no-files-found: ignore }
   tests:
     runs-on: ubuntu-latest
     steps:
@@ -48,10 +55,18 @@ jobs:
         # httpx2 (every test job): tests/conftest.py loads starlette.testclient, which deprecates httpx.
         run: pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
       - name: Engine tests
-        run: python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider
+        shell: bash
+        run: |
+          mkdir -p report
+          python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider 2>&1 | tee report/tests-engine.txt
       - name: GUI tests (separate run; GUI first crashes the full suite)
+        shell: bash
         env: { QT_QPA_PLATFORM: offscreen }
-        run: python -m pytest tests/test_gui_*.py -p no:cacheprovider
+        run: python -m pytest tests/test_gui_*.py -p no:cacheprovider 2>&1 | tee report/tests-gui.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-tests, path: report/, if-no-files-found: ignore }
   mutation:
     # Mutation score of each module in testloop.toml must stay at or above its min_score.
     runs-on: ubuntu-latest
@@ -66,15 +81,21 @@ jobs:
         shell: bash
         run: |
           status=0
+          mkdir -p report
           for module in $(.venv/bin/python -c 'import tomllib; print("\n".join(tomllib.load(open("testloop.toml", "rb"))["targets"]))'); do
-            .venv/bin/python scripts/testloop/cli.py mutate "$module" || { status=1; continue; }
-            .venv/bin/python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=1
+            out="report/mutation-${module//\//_}.txt"
+            .venv/bin/python scripts/testloop/cli.py mutate "$module" || { echo "testloop: mutate $module failed" > "$out"; status=1; continue; }
+            .venv/bin/python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" "$out" || status=1
           done
           exit $status
       - uses: actions/upload-artifact@v7
         if: always()
         # .testloop/ is a hidden directory, which upload-artifact skips unless told otherwise.
         with: { name: testloop-results, path: .testloop/, include-hidden-files: true, if-no-files-found: warn }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-mutation, path: report/, if-no-files-found: ignore }
   testloop-tools:
     # Tests of the test loop tools themselves (map, check, mutate, gate).
     runs-on: ubuntu-latest
@@ -86,4 +107,30 @@ jobs:
       - name: Install
         run: pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
       - name: Test loop tool tests
-        run: python -m pytest tests/test_testloop.py -p no:cacheprovider
+        shell: bash
+        run: |
+          mkdir -p report
+          python -m pytest tests/test_testloop.py -p no:cacheprovider 2>&1 | tee report/testloop-tools.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-testloop-tools, path: report/, if-no-files-found: ignore }
+  report:
+    # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
+    if: always() && github.event_name == 'pull_request'
+    needs: [leak-scan, quality, tests, mutation, testloop-tools]
+    runs-on: ubuntu-latest
+    permissions: { contents: read, issues: write, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        continue-on-error: true   # a job that died before writing anything leaves no artifact
+        with: { pattern: report-*, path: report, merge-multiple: true }
+      - name: Comment the CI report on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scripts/ci_report.py
