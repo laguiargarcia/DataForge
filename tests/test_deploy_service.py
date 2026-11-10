@@ -216,3 +216,21 @@ def test_trigger_names_lists_only_triggers():
     ])
     assert service.trigger_names(entry) == ["daily"]   # stem of the trigger item only
     assert service.trigger_names(None) == []
+
+
+def test_app_bundle_roundtrip_is_byte_exact(dataforge_home):
+    # df-ve7: a binary dist/ asset survives apply byte-for-byte and rollback removes the app.
+    dev = _ws(dataforge_home, "Dev")
+    prod = _ws(dataforge_home, "Prod")
+    _mk(dev, "deploy/to-prod.yaml",
+        "target: Prod\npairs:\n  - {source: 'apps/**', target: 'apps/'}\n")
+    _mk(dev, "apps/financas/app.yaml", "name: financas\n")
+    _mk(dev, "apps/financas/dist/index.html", "<html></html>")
+    blob = bytes(range(256)) * 4
+    (dev / "apps/financas/dist/assets").mkdir(parents=True)
+    (dev / "apps/financas/dist/assets/f.woff2").write_bytes(blob)
+    service.auto_deploy("Dev", "to-prod")
+    assert (prod / "apps/financas/dist/assets/f.woff2").read_bytes() == blob
+    assert (prod / "apps/financas/app.yaml").exists()
+    service.rollback(prod)
+    assert not (prod / "apps").exists()
