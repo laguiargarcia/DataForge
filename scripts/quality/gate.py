@@ -337,12 +337,13 @@ def check(paths: list[str], base_ref: str | None, full: bool, stage: bool = Fals
         _lower(falls, stage)
     if rises:
         _report_rises(rises, findings)
-    failed = bool(rises)
-    if base_ref:
-        failed = _baseline_raised(base_ref) or failed
-    if not failed:
-        print(f"quality gate: ok ({sum(sum(c.values()) for c in current.values())} findings, none new)")
-    return 1 if failed else 0
+    raised = bool(base_ref) and _baseline_raised(base_ref)
+    if rises or raised:
+        why = [f"{len(rises)} file/rule counts above the baseline"] * bool(rises) + ["baseline raised"] * raised
+        print(f"\nquality gate: failed ({', '.join(why)})")
+        return 1
+    print(f"quality gate: ok ({sum(sum(c.values()) for c in current.values())} findings, none new)")
+    return 0
 
 
 def update(allow_increase: bool) -> int:
