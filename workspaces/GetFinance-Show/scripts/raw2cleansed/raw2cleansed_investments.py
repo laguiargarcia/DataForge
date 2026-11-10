@@ -21,7 +21,10 @@ inv_glob = str(src_root / "investments" / "ingestion_date=*" / "data.parquet")
 # columns defensively as typed NULL (mirrors the credit/bankData pattern in
 # raw2cleansed_accounts.py), since diagonal_relaxed cannot invent a column that never appears.
 TEXT_COLS = ["id", "itemId", "name", "type", "subtype", "issuer", "institution"]
-NUMERIC_COLS = ["balance", "amountOriginal"]  # A18: only fields with a known U7 consumer
+# A18: only fields with a known U7 consumer. amountProfit joined the list in df-9uv: Inter
+# populates it (Pluggy's own P&L) while amountOriginal is gross-ever-deposited — never reduced
+# by partial withdrawals — so balance − amountOriginal conflates withdrawals with losses.
+NUMERIC_COLS = ["balance", "amountOriginal", "amountProfit"]
 
 # Fixed cleansed schema (column order: TEXT_COLS, currency, NUMERIC_COLS, ingested_at).
 EMPTY_SCHEMA = {

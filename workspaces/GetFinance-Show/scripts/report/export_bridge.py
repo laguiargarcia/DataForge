@@ -1,8 +1,9 @@
 # Bridge export: this workspace's curated Delta -> CSVs the report workbook reads. Flat, top-to-bottom.
 # Workspace-relative (parents[2] = workspace root), so it runs correctly in BOTH GetFinance-Dev and
-# GetFinance (prod): reads <ws>/data/curated, writes <ws>/data/bridge. The workbook PQ resolves the
-# bridge relative to its OWN folder (WbFolder), so the same workbook reads the local bridge per workspace.
-# routing key is added in Power Query. Run: DataForgeRepo/.venv/bin/python <this>
+# GetFinance (prod): reads <ws>/data/curated, writes <ws>/data/bridge. The report workbooks hardcode
+# their bridge folder in ONE cell (the `BridgeFolder` named range = _aux!M1, pointing at this
+# workspace's data/bridge); a workbook can live anywhere on disk — edit that one cell to repoint it.
+# The routing key is added in Power Query. Run: DataForgeRepo/.venv/bin/python <this>
 from pathlib import Path
 import polars as pl
 
@@ -15,6 +16,18 @@ BRIDGE.mkdir(parents=True, exist_ok=True)
 fact = pl.read_delta(str(CURATED / "fact_transaction")).with_columns(
     (pl.col("date").dt.year() * 100 + pl.col("date").dt.month()).cast(pl.Int32).alias("anomes_key")
 )
+
+# v3 structural columns (df-668.3): the workbook's category-first routing is impossible without
+# them, so exporting an old-shape curated table must fail loudly, not silently emit a stale CSV.
+_REQUIRED_FACT_COLS = {"status", "txn_type", "operation_type", "cash_flag", "etl_tag",
+                       "netting_applied", "income_source_key"}
+_missing = _REQUIRED_FACT_COLS - set(fact.columns)
+if _missing:
+    raise RuntimeError(
+        f"fact_transaction is missing v3 structural columns {sorted(_missing)} — "
+        "rebuild curated with the v3 ETL (finance_daily curate task) before exporting the bridge"
+    )
+
 fact.write_csv(BRIDGE / "fact_transaction.csv")
 
 # --- dim_calendar: DAILY grain over the FULL span across ALL dated facts, so every fact date
@@ -26,16 +39,8 @@ _inv_d = pl.read_delta(str(CURATED / "fact_investment_position")).get_column("sn
 # _fat_d uses mes_inicio: the open fatura row lands on day 1 of a possibly-FUTURE month,
 # so it can extend cal_max forward — without it that row orphans into a NULL month (df-9fc).
 _fat_d = pl.read_delta(str(CURATED / "fact_fatura_mes")).get_column("mes_inicio")
-# A workspace can have EMPTY facts (no investments, or no credit-card bills); an empty
-# column's .min()/.max() is None, so drop None before spanning the range (else min() on
-# a None vs date raises TypeError). fact_transaction is the spine — if even it is empty
-# there is nothing to report.
-_mins = [d for d in (fact["date"].min(), _snap_d.min(), _inv_d.min(), _fat_d.min()) if d is not None]
-_maxs = [d for d in (fact["date"].max(), _snap_d.max(), _inv_d.max(), _fat_d.max()) if d is not None]
-if not _mins:
-    raise SystemExit("export_bridge: no dated rows in any curated fact — run the pipeline first.")
-cal_min = min(_mins)
-cal_max = max(_maxs)
+cal_min = min(fact["date"].min(), _snap_d.min(), _inv_d.min(), _fat_d.min())
+cal_max = max(fact["date"].max(), _snap_d.max(), _inv_d.max(), _fat_d.max())
 days = pl.date_range(cal_min, cal_max, interval="1d", eager=True)
 cal = (
     pl.DataFrame({"date": days})

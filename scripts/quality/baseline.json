@@ -329,7 +329,6 @@
   },
   "workspaces/GetFinance-Show/scripts/generate_synthetic_data.py": {
     "DF001": 1,
-    "PLR2004": 2,
     "RUF100": 1
   },
   "workspaces/GetFinance-Show/scripts/landing/landing2raw.py": {
@@ -354,8 +353,6 @@
   },
   "workspaces/GetFinance-Show/scripts/report/build_report.py": {
     "DF001": 1,
-    "ERA001": 3,
-    "PLR2004": 1,
     "RUF100": 1
   },
   "workspaces/GetFinance-Show/scripts/reprocess.py": {

@@ -8,3 +8,6 @@ connections:
   curated:
     type: delta_dir
     path: data/curated/
+  edicao:
+    type: sqlite_file
+    path: data/edicao.db

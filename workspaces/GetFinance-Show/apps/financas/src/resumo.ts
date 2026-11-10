@@ -1,22 +1,39 @@
-// PROVISÓRIO: passa para o ETL com o df-cns
-// Regras do Resumo em módulo puro. Datas são texto YYYY-MM-DD: nunca vão para Date.
+// Resumo do mês a partir das tabelas que o ETL calcula (df-cns etapa 1). Este módulo só escolhe as
+// linhas do mês e formata: as regras (classificação, base caixa, próxima fatura) estão no ETL.
+// Datas são texto YYYY-MM-DD: nunca vão para Date.
 
-export type Tx = {
+export type SaudeMes = { anomes_key: number; entradas: number; saidas_total: number; sobra: number }
+export type SaudeCategoria = { anomes_key: number; grupo: string; categoria: string; valor: number }
+export type TxClassificada = {
   id: string
   date: string
+  anomes_key: number
   account_type: string
   etl_merchant_key: string | null
   amount_signed: number
-  category: string | null
+  categoria: string
+  Tipo: string
+  cash_flag: boolean
 }
-export type Fatura = { anomes_key: number; valor_pendente: number | null }
-export type Saldo = { snapshot_date: string; account_type: string; balance: number | null }
-export type Posicao = { snapshot_date: string; current_value: number | null }
+export type Liquidez = { anomes_key: number; caixa_saldo: number | null }
+export type Investimentos = { anomes_key: number; posicao: number | null }
+export type Cartao = { anomes_key: number; proxima_fatura: number | null }
+
+// null = a tabela não existe no workspace (a API responde 404).
+export type Dados = {
+  saude: SaudeMes[] | null
+  saudeCategoria: SaudeCategoria[] | null
+  transacoes: TxClassificada[] | null
+  liquidez: Liquidez[] | null
+  investimentos: Investimentos[] | null
+  cartao: Cartao[] | null
+}
 
 export type TxResumo = { id: string; date: string; name: string; value: string; account: string }
 export type Categoria = {
   id: string
   nome: string
+  grupo: string
   total: number
   valor: string
   share: string
@@ -25,14 +42,17 @@ export type Categoria = {
   txs: TxResumo[]
 }
 export type ResumoMes = {
-  entrou: number
-  saiu: number
-  sobrou: number
+  entrou: number | null
+  saiu: number | null
+  sobrou: number | null
   fatura: number | null
   naConta: number | null
   investido: number | null
   categorias: Categoria[]
 }
+
+// O grupo das entradas no report_saude_categoria; os demais são os Tipos de saída.
+const GRUPO_ENTRADAS = 'Entradas'
 
 const MESES = [
   'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
@@ -41,8 +61,11 @@ const MESES = [
 
 const moeda = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function meses(txs: Tx[]): string[] {
-  return [...new Set(txs.map(t => t.date.slice(0, 7)))].sort()
+const paraMes = (anomes: number) => `${Math.floor(anomes / 100)}-${String(anomes % 100).padStart(2, '0')}`
+const paraAnomes = (mes: string) => Number(mes.replace('-', ''))
+
+export function meses(dados: Dados): string[] {
+  return [...new Set((dados.saude ?? []).map(s => paraMes(s.anomes_key)))].sort()
 }
 
 export function rotuloMes(mes: string): string {
@@ -64,78 +87,60 @@ function percentual(fracao: number): string {
   }).format(fracao)
 }
 
-const soma = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
-
-// Nulo é "sem valor", não zero. Sem nenhum valor, o resultado é null e a tela mostra —.
-function somaOuNulo(xs: (number | null)[]): number | null {
-  const valores = xs.filter((x): x is number => x !== null)
-  return valores.length ? soma(valores) : null
-}
-
-function ultimoSnapshot<T extends { snapshot_date: string }>(linhas: T[]): T[] {
-  if (linhas.length === 0) return []
-  const ultimo = linhas.reduce((m, l) => (l.snapshot_date > m ? l.snapshot_date : m), '')
-  return linhas.filter(l => l.snapshot_date === ultimo)
-}
-
 function conta(tipo: string): string {
   return tipo === 'BANK' ? 'Conta' : tipo === 'CREDIT' ? 'Cartão' : tipo
 }
 
-export function resumirMes(
-  mes: string,
-  txs: Tx[],
-  faturas: Fatura[],
-  saldos: Saldo[],
-  posicoes: Posicao[],
-  rotulos: Record<string, string>,
-): ResumoMes {
-  const doMes = txs.filter(t => t.date.slice(0, 7) === mes)
-  const entrou = soma(doMes.filter(t => t.amount_signed > 0).map(t => t.amount_signed))
-  const saiu = soma(doMes.filter(t => t.amount_signed < 0).map(t => -t.amount_signed))
+function doMes<T extends { anomes_key: number }>(linhas: T[] | null, anomes: number): T | null {
+  return linhas?.find(l => l.anomes_key === anomes) ?? null
+}
 
-  const grupos = new Map<string, Tx[]>()
-  for (const t of doMes.filter(t => t.amount_signed < 0)) {
-    const nome = t.category === null ? 'Sem categoria' : (rotulos[t.category] ?? t.category)
-    grupos.set(nome, [...(grupos.get(nome) ?? []), t])
-  }
-  const base = [...grupos].map(([nome, lista]) => ({
-    nome, lista, total: soma(lista.map(t => -t.amount_signed)),
-  }))
-  base.sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'))
-  const maior = base.length ? base[0].total : 0
+function transacoesDaCategoria(dados: Dados, anomes: number, grupo: string, nome: string): TxResumo[] {
+  // O mesmo recorte do report_saude_categoria: linhas de caixa do mês, do Tipo e da categoria.
+  return (dados.transacoes ?? [])
+    .filter(t => t.anomes_key === anomes && t.cash_flag && t.Tipo === grupo && t.categoria === nome)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .map(t => ({
+      id: t.id,
+      date: `${t.date.slice(8, 10)}/${t.date.slice(5, 7)}`,
+      name: t.etl_merchant_key ?? '—',
+      value: brl(-t.amount_signed),
+      account: conta(t.account_type),
+    }))
+}
 
-  const categorias: Categoria[] = base.map(({ nome, lista, total }) => ({
-    id: nome,
-    nome,
-    total,
-    valor: brl(total),
-    share: percentual(total / saiu),
-    width: `${Math.max(1.5, (total / maior) * 100).toFixed(1)}%`,
-    count: lista.length === 1 ? '1 transação' : `${lista.length} transações`,
-    txs: [...lista]
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-      .map(t => ({
-        id: t.id,
-        date: `${t.date.slice(8, 10)}/${t.date.slice(5, 7)}`,
-        name: t.etl_merchant_key ?? '—',
-        value: brl(-t.amount_signed),
-        account: conta(t.account_type),
-      })),
-  }))
+export function resumirMes(mes: string, dados: Dados): ResumoMes {
+  const anomes = paraAnomes(mes)
+  const saude = doMes(dados.saude, anomes)
 
-  const chave = Number(mes.replace('-', ''))
-  const daFatura = faturas.filter(f => f.anomes_key === chave)
-  const bancarios = ultimoSnapshot(saldos.filter(s => s.account_type === 'BANK'))
-  const posicoesAtuais = ultimoSnapshot(posicoes)
+  const saidas = (dados.saudeCategoria ?? [])
+    .filter(c => c.anomes_key === anomes && c.grupo !== GRUPO_ENTRADAS)
+    .sort((a, b) => b.valor - a.valor || a.categoria.localeCompare(b.categoria, 'pt-BR'))
+  const maior = saidas.length ? saidas[0].valor : 0
+  const total = saude?.saidas_total ?? 0
+
+  const categorias: Categoria[] = saidas.map(c => {
+    const txs = transacoesDaCategoria(dados, anomes, c.grupo, c.categoria)
+    return {
+      id: `${c.grupo}|${c.categoria}`,
+      nome: c.categoria,
+      grupo: c.grupo,
+      total: c.valor,
+      valor: brl(c.valor),
+      share: total ? percentual(c.valor / total) : '—',
+      width: `${Math.max(1.5, maior > 0 ? (c.valor / maior) * 100 : 0).toFixed(1)}%`,
+      count: txs.length === 1 ? '1 transação' : `${txs.length} transações`,
+      txs,
+    }
+  })
 
   return {
-    entrou,
-    saiu,
-    sobrou: entrou - saiu,
-    fatura: somaOuNulo(daFatura.map(f => f.valor_pendente)),
-    naConta: somaOuNulo(bancarios.map(s => s.balance)),
-    investido: somaOuNulo(posicoesAtuais.map(p => p.current_value)),
+    entrou: saude?.entradas ?? null,
+    saiu: saude?.saidas_total ?? null,
+    sobrou: saude?.sobra ?? null,
+    fatura: doMes(dados.cartao, anomes)?.proxima_fatura ?? null,
+    naConta: doMes(dados.liquidez, anomes)?.caixa_saldo ?? null,
+    investido: doMes(dados.investimentos, anomes)?.posicao ?? null,
     categorias,
   }
 }
