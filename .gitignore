@@ -14,6 +14,9 @@ htmlcov/
 .hypothesis/
 mutants/
 scripts/testloop/evals/
+# Quality-gate baseline for gitignored (private) files: their paths must not be published
+scripts/quality/baseline.local.json
+/tests/test_testloop_evals.py
 
 # Logs / temp
 *.log
@@ -45,10 +48,10 @@ AGENTS.md
 # Git worktrees
 .worktrees/
 
-# Tests & docs stay PRIVATE — NOT committed to the public repo (D9). They live in
-# the working tree for the owner but are never staged. Same for the local pytest
-# config (the committed pyproject stays test-config-free).
-/tests/
+# Engine tests (fake data) are public and run in CI. Pipeline tests that read the
+# real GetFinance workspaces stay private, as do docs and the local pytest config.
+/tests/workspaces/
+/tests/test_finance_daily_dag.py
 docs/
 /pytest.ini
 

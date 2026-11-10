@@ -25,6 +25,107 @@ dependencies = [
     "pathspec>=0.12",
 ]
 
+[tool.ruff]
+extend-exclude = ["scripts/testloop/evals"]
+
+# The quality gate (scripts/quality/gate.py, docs/quality-gate.md) runs these rules against a
+# baseline: existing findings are counted, and only new ones fail. A plain `ruff check` shows all.
+[tool.ruff.lint]
+preview = true
+# Preview rules apply only when named by exact code (PLW1514 below), never through a family.
+explicit-preview-rules = true
+select = [
+    # Bugs
+    "F", "E9", "PLE", "B", "ASYNC", "DTZ",
+    "PLW0603", "PLW1508", "PLW1510", "PLW2901",
+    "RUF006", "RUF012", "RUF013", "RUF015", "RUF018", "RUF019", "RUF059",
+    # Text files are UTF-8 on every machine: open() and read_text() without encoding= fall back
+    # to the locale (cp1252 on Windows, ASCII under the C locale). Ruff only sees Path methods
+    # when it can infer the type, so open() is always checked and read_text() only sometimes.
+    "PLW1514",
+    # Security: requests without timeout hang a pipeline forever; unsafe YAML, shell, SQL, pickle
+    "S108", "S113", "S301", "S307", "S324", "S501", "S506", "S602", "S608",
+    # Errors swallowed or blurred
+    "BLE001", "S110", "S112", "TRY002", "TRY004", "TRY201", "TRY203", "TRY400", "TRY401",
+    # Dead code
+    "ERA001", "ARG",
+    # Maintainability: complexity, size, magic values, simplifications
+    "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", "SIM",
+    # Project conventions: imports at the top, config through dataforge.compat, honest suppressions
+    "PLC0415", "TID251", "PGH004", "RUF100",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+# Configuration reaches the package through dataforge.compat (docs/subsystems/compat.md).
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"os.environ".msg = "Read configuration through dataforge.compat, not os.environ."
+"os.getenv".msg = "Read configuration through dataforge.compat, not os.getenv."
+
+[tool.ruff.lint.per-file-ignores]
+"dataforge/compat.py" = ["TID251"]
+# The banned-api rule is for the package only: scripts and tests read their own environment.
+"scripts/**" = ["TID251"]
+"tests/**" = ["TID251", "PLR2004", "ARG", "PLC0415", "S108", "DTZ"]
+# Workspace scripts load functions.py with exec(open(...).read()) (docs/scripts-conventions.md):
+# its names are invisible to pyflakes, and the open() is the sanctioned loader.
+"workspaces/**" = ["TID251", "F821", "SIM115"]
+
+[tool.vulture]
+min_confidence = 60
+# Frameworks call these, not our code: Typer commands, FastAPI routes, pydantic validators,
+# pytest fixtures, Qt event overrides, and attributes that mocks or uvicorn read.
+ignore_decorators = ["@*.command", "@router.*", "@app.*", "@field_validator", "@model_validator", "@pytest.fixture"]
+ignore_names = ["*Event", "test_*", "pytest_*", "pytestmark", "side_effect", "return_value", "required_fields", "install_signal_handlers", "should_exit"]
+
+[tool.importlinter]
+root_package = "dataforge"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Core does not import the surfaces (CLI, API, GUI)"
+type = "forbidden"
+source_modules = [
+    "dataforge.engine", "dataforge.parser", "dataforge.dag", "dataforge.db", "dataforge.models",
+    "dataforge.compat", "dataforge.tasks", "dataforge.conditions", "dataforge.deploy", "dataforge.apps",
+]
+forbidden_modules = ["dataforge.cli", "dataforge.api", "dataforge.gui"]
+
+[[tool.importlinter.contracts]]
+name = "The API does not import the CLI"
+type = "forbidden"
+source_modules = ["dataforge.api"]
+forbidden_modules = ["dataforge.cli"]
+# Known violation, tracked in beads: the OS scheduler registration lives in cli.py.
+ignore_imports = ["dataforge.api.routers.triggers -> dataforge.cli"]
+
+[[tool.importlinter.contracts]]
+name = "The GUI talks to the daemon over HTTP, not to the core"
+type = "forbidden"
+source_modules = ["dataforge.gui"]
+forbidden_modules = [
+    "dataforge.engine", "dataforge.db", "dataforge.parser", "dataforge.deploy", "dataforge.tasks",
+    "dataforge.dag",
+]
+# Small shared helpers, not core logic: a UTC clock and the deploy Action enum.
+ignore_imports = [
+    "dataforge.gui.panels.scheduler -> dataforge.db",
+    "dataforge.gui.panels.deploy -> dataforge.deploy.models",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only the GUI imports Qt"
+type = "forbidden"
+source_modules = [
+    "dataforge.engine", "dataforge.parser", "dataforge.dag", "dataforge.db", "dataforge.models",
+    "dataforge.compat", "dataforge.tasks", "dataforge.conditions", "dataforge.deploy",
+    "dataforge.api", "dataforge.apps",
+]
+forbidden_modules = ["PySide6"]
+# The API reaches Qt only through the known API -> CLI import above (cli lazily imports the GUI).
+ignore_imports = ["dataforge.api.routers.triggers -> dataforge.cli"]
+
 [tool.setuptools.packages.find]
 include = ["dataforge*"]
 

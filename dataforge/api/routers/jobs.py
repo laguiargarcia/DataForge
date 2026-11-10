@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -9,7 +8,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from dataforge.api.broadcaster import get_broadcaster
-from dataforge.db import JobRunORM, ScheduleORM, init_db
+from dataforge.db import JobRunORM, ScheduleORM, init_db, utcnow
 from dataforge.engine import run_job
 from dataforge.models import Job
 from dataforge.dag import topological_levels
@@ -155,7 +154,7 @@ async def _run_job_background(
             run = session.get(JobRunORM, run_id)
             if run and run.status not in ("success", "failed"):
                 run.status = "failed"
-                run.finished_at = datetime.utcnow()
+                run.finished_at = utcnow()
                 session.commit()
         await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": "failed"})
 
@@ -232,7 +231,7 @@ async def trigger_job(ws: str, job: str, background_tasks: BackgroundTasks):
             workspace=ws,
             job=job,
             status="pending",
-            started_at=datetime.utcnow(),
+            started_at=utcnow(),
             owner_id="system",
             trigger="manual",
         ))

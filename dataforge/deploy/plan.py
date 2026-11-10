@@ -4,12 +4,14 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
+from .pairing import check_target_inside
 
 _KIND_BY_PREFIX = {
     "jobs": Kind.job,
     "scripts": Kind.script,
     "config": Kind.config,
     "triggers": Kind.trigger,
+    "apps": Kind.app,
 }
 
 
@@ -30,7 +32,7 @@ def content_sha(path: Path) -> str:
 def _load_yaml_dict(path: Path):
     """Parse YAML to a mapping; return None if unparseable or not a mapping."""
     try:
-        data = yaml.safe_load(path.read_text())
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError:
         return None
     return data if isinstance(data, dict) else None
@@ -121,6 +123,8 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
         )
         return out
     bases = {rule.target.rstrip("/") for rule in pipeline.pairs}
+    for base in bases:   # df-886.11: never walk a base outside the target workspace
+        check_target_inside(base)
     for base in sorted(bases):
         base_dir = target_dir / base
         if not base_dir.exists():

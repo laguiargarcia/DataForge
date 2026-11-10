@@ -6,3 +6,10 @@ env = { QT_QPA_PLATFORM = "offscreen" }
 [targets."dataforge/deploy/plan.py"]
 tests = ["tests/test_deploy_plan*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# Lowest mutation score `gate` accepts; CI fails below it. Raise it when the score rises.
+min_score = 0.88
+
+[targets."dataforge/deploy/apply.py"]
+tests = ["tests/test_deploy_apply*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 0.92

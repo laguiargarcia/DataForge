@@ -3,18 +3,87 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "0 6 * * 1"   # weekly, to catch breakage from new dependency releases
+  workflow_dispatch:
 jobs:
   leak-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - name: leakguard (PII + private-path block over all tracked files)
         run: python3 scripts/leakguard.py $(git ls-files)
+  quality:
+    # Lint, dead code and import contracts may not grow past scripts/quality/baseline.json, and the
+    # baseline may not rise against the PR's base branch (docs/quality-gate.md).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.12" }
+      - name: Install
+        run: pip install -r scripts/quality/requirements.txt
+      - name: Quality gate
+        env:
+          BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: python scripts/quality/gate.py check ${BASE_REF:+--base-ref "$BASE_REF"}
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.12" }
+      - name: Qt system libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - name: Install
+        # httpx2 (every test job): tests/conftest.py loads starlette.testclient, which deprecates httpx.
+        run: pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
+      - name: Engine tests
+        run: python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider
+      - name: GUI tests (separate run; GUI first crashes the full suite)
+        env: { QT_QPA_PLATFORM: offscreen }
+        run: python -m pytest tests/test_gui_*.py -p no:cacheprovider
+  mutation:
+    # Mutation score of each module in testloop.toml must stay at or above its min_score.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.12" }
+      - name: Install into .venv (testloop.toml runs .venv/bin/python)
+        run: python -m venv .venv && .venv/bin/pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
+      - name: Mutate and gate each target
+        shell: bash
+        run: |
+          status=0
+          for module in $(.venv/bin/python -c 'import tomllib; print("\n".join(tomllib.load(open("testloop.toml", "rb"))["targets"]))'); do
+            .venv/bin/python scripts/testloop/cli.py mutate "$module" || { status=1; continue; }
+            .venv/bin/python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" || status=1
+          done
+          exit $status
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # .testloop/ is a hidden directory, which upload-artifact skips unless told otherwise.
+        with: { name: testloop-results, path: .testloop/, include-hidden-files: true, if-no-files-found: warn }
+  testloop-tools:
+    # Tests of the test loop tools themselves (map, check, mutate, gate).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.12" }
+      - name: Install
+        run: pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
+      - name: Test loop tool tests
+        run: python -m pytest tests/test_testloop.py -p no:cacheprovider

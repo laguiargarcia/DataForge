@@ -8,7 +8,7 @@ import polars as pl
 from datetime import date
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py").read())  # noqa: S102
+exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
 
 # df-s65 (A5 freeze): description_normalized + etl_merchant_key are derived ONCE here at the
 # cleansed insert (mirroring the df-pzu counterparty freeze) and carried by cleansed2curated.

@@ -1,7 +1,6 @@
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 from .compat import global_db_url
 from .conditions import should_run
 from .dag import topological_levels
-from .db import ExecucaoORM, JobRunORM, init_db
+from .db import ExecucaoORM, JobRunORM, init_db, utcnow
 from .models import Job, Task
 from .tasks import get_handler
 
@@ -97,7 +96,7 @@ def run_job(
                 skipped_in_level.append(t)
 
         if skipped_in_level:
-            now = datetime.utcnow()
+            now = utcnow()
             with Session(db_engine) as s:
                 for t in skipped_in_level:
                     s.add(ExecucaoORM(
@@ -133,7 +132,7 @@ def run_job(
         run = session.get(JobRunORM, run_id)
         if run:
             run.status = final_status
-            run.finished_at = datetime.utcnow()
+            run.finished_at = utcnow()
             session.commit()
 
     return results
