@@ -21,13 +21,23 @@ def source_base(pattern: str) -> str:
     return "/".join(base)
 
 
+def check_target_inside(target_rel: str) -> None:
+    """Raise ValueError if a target path escapes the target workspace (absolute or with '..')."""
+    if posixpath.isabs(target_rel) or ".." in PurePosixPath(target_rel).parts:
+        raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
+
+
 def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, str]]:
     """(source_relpath, target_relpath) for every source FILE matched by a pair rule.
 
     target_relpath = rule.target + (source path relative to the rule's non-wildcard base),
     so the top folder can be renamed while sub-structure is preserved. Targets that escape the
     target workspace (absolute or containing '..') are rejected at plan time. Symlinks are skipped.
+    Every rule's target is checked up front, including rules that match no source file: prune
+    walks every rule's target, so an unchecked one would delete outside the target (df-886.11).
     """
+    for rule in pipeline.pairs:
+        check_target_inside(rule.target)
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for rule in pipeline.pairs:
@@ -43,8 +53,7 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
             if not tail:
                 tail = PurePosixPath(rel).name
             target_rel = posixpath.join(rule.target.rstrip("/"), tail)
-            if posixpath.isabs(target_rel) or ".." in PurePosixPath(target_rel).parts:
-                raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
+            check_target_inside(target_rel)
             key = (rel, target_rel)
             if key in seen:
                 continue
