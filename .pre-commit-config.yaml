@@ -11,3 +11,12 @@ repos:
         language: system
         pass_filenames: true
         always_run: false
+      - id: quality-gate
+        name: quality gate (lint, dead code, import contracts against the baseline)
+        # --stage: when findings were fixed, the lowered baseline goes into this same commit.
+        entry: python scripts/quality/gate.py check --stage
+        language: python
+        # Same pins as scripts/quality/requirements.txt; the gate fails if they drift apart.
+        additional_dependencies: ["ruff==0.17.4", "vulture==2.16", "import-linter==2.16"]
+        pass_filenames: false
+        types: [python]
