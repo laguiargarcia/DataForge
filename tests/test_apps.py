@@ -91,3 +91,13 @@ def test_serve_warns_when_no_workspace_is_found(tmp_path, monkeypatch):
     out = CliRunner().invoke(cli_app, ["serve"]).output
     assert "nenhum workspace encontrado" in out
     assert str(tmp_path / "workspaces") in out.replace("\n", "")
+
+
+def test_serve_binds_dataforge_port_when_no_port_is_given(tmp_path, monkeypatch):
+    # df-oift: serve, the GUI daemon and every client must agree on one port.
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("DATAFORGE_PORT", "8123")
+    seen = {}
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: seen.update(k))
+    CliRunner().invoke(cli_app, ["serve"])
+    assert seen["port"] == 8123

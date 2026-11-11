@@ -7,7 +7,7 @@ import threading
 
 import uvicorn
 
-from dataforge.compat import DEFAULT_API_PORT
+from dataforge.compat import api_port
 
 
 class DaemonServer(uvicorn.Server):
@@ -24,12 +24,13 @@ class DaemonServer(uvicorn.Server):
 class DaemonThread(threading.Thread):
     """Background thread hosting the embedded FastAPI/uvicorn daemon."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = DEFAULT_API_PORT) -> None:
+    def __init__(self, host: str = "127.0.0.1", port: int | None = None) -> None:
+        """`port` defaults to compat.api_port(), the port every GUI panel calls (df-oift)."""
         super().__init__(daemon=True, name="dataforge-api-daemon")
         config = uvicorn.Config(
             "dataforge.api:app",
             host=host,
-            port=port,
+            port=api_port() if port is None else port,
             log_level="info",
             reload=False,
         )
