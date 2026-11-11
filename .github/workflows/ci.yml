@@ -16,6 +16,8 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
+          # Same version as the pre-commit hook (.pre-commit-config.yaml): bump both together.
+          GITLEAKS_VERSION: 8.24.3
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
