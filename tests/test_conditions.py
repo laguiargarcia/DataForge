@@ -1,4 +1,4 @@
-from dataforge.models import Task, DependencyEdge
+from dataforge.models import Task
 from dataforge.conditions import should_run
 
 

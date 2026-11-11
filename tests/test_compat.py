@@ -1,7 +1,9 @@
 import pytest
 from pathlib import Path
 from unittest.mock import patch
-from dataforge.compat import data_dir, db_url, resolve_workspace, resolve_db, list_workspaces
+from dataforge.compat import (
+    DEFAULT_API_PORT, api_port, data_dir, db_url, resolve_workspace, resolve_db, list_workspaces,
+)
 
 
 def test_data_dir_env_set(tmp_path, monkeypatch):
@@ -127,3 +129,13 @@ def test_resolve_db_explicit():
     custom_url = "sqlite:///x"
     result = resolve_db(custom_url, Path("/irrelevant"))
     assert result == custom_url
+
+
+def test_api_port_defaults_when_the_variable_is_unset(monkeypatch):
+    monkeypatch.delenv("DATAFORGE_PORT", raising=False)
+    assert api_port() == DEFAULT_API_PORT == 8000
+
+
+def test_api_port_reads_the_variable(monkeypatch):
+    monkeypatch.setenv("DATAFORGE_PORT", "8123")
+    assert api_port() == 8123

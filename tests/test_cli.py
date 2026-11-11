@@ -1,5 +1,3 @@
-import pytest
-from pathlib import Path
 from typer.testing import CliRunner
 from dataforge.cli import app
 

@@ -27,6 +27,14 @@ def check_target_inside(target_rel: str) -> None:
         raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
 
 
+def normalize_target(target_rel: str) -> str:
+    """Canonical spelling of a target path: './x/', 'x//', 'x/./' all become 'x', and the
+    workspace root becomes ''. Plan, prune and the ledger guard compare paths as strings, so
+    every target must be spelled one way (df-886.10). Check for escapes BEFORE normalizing."""
+    norm = posixpath.normpath(target_rel)
+    return "" if norm == "." else norm
+
+
 def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, str]]:
     """(source_relpath, target_relpath) for every source FILE matched by a pair rule.
 
@@ -52,7 +60,7 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
             # fall back to the filename so it is placed inside the target dir.
             if not tail:
                 tail = PurePosixPath(rel).name
-            target_rel = posixpath.join(rule.target.rstrip("/"), tail)
+            target_rel = normalize_target(posixpath.join(rule.target, tail))
             check_target_inside(target_rel)
             key = (rel, target_rel)
             if key in seen:

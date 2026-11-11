@@ -18,7 +18,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-exec(open(Path(__file__).parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
+exec(open(Path(__file__).parent / "functions" / "functions.py", encoding="utf-8").read())
 
 # entity -> (transform script relative to scripts/, target Delta table). raw -> cleansed only;
 # curated is already DROP+CREATE every run, so it needs no reprocess.

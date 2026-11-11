@@ -165,8 +165,7 @@ def test_new_trigger_button_opens_form(monkeypatch):
 
 def test_create_trigger_posts(monkeypatch):
     """Save in create mode issues POST to /api/workspaces/{ws}/triggers."""
-    from unittest.mock import MagicMock, patch
-    from PySide6.QtNetwork import QNetworkReply
+    from unittest.mock import MagicMock
 
     panel = _make_panel_with_triggers(monkeypatch, triggers=[])
     panel._open_create_form()
@@ -316,8 +315,6 @@ def test_configure_button_opens_dialog_with_declared_params(monkeypatch):
 
 def test_dialog_values_roundtrip_into_payload(monkeypatch):
     """Configured params round-trip into _build_trigger_payload jobs list."""
-    from dataforge.gui.panels import scheduler as scheduler_module
-    from PySide6.QtWidgets import QDialog
 
     panel = _make_bare_panel(monkeypatch)
     panel._name_edit.setText("test-trigger")

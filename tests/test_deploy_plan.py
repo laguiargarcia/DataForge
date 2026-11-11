@@ -2,7 +2,7 @@ from pathlib import Path
 from dataforge.deploy.models import Action, Kind
 from dataforge.deploy.ignore import DeployIgnore
 from dataforge.deploy.pairing import load_pipeline, resolve_pairs
-from dataforge.deploy.plan import build_plan, kind_for, content_sha
+from dataforge.deploy.plan import build_plan, kind_for
 
 
 def _mk(ws: Path, rel: str, content: str) -> Path:

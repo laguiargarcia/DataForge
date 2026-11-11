@@ -7,7 +7,7 @@ import yaml
 import polars as pl
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
+exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", required=True)   # cleansed

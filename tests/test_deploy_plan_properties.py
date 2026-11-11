@@ -410,7 +410,6 @@ def test_engine_treats_a_trigger_without_enabled_as_active():
     assert TriggerModel(name="x", cron="0 5 * * *").enabled is True
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="df-886.8")
 def test_trigger_without_enabled_key_is_protected():
     with workspaces() as (source, target):
         plant(source, {"triggers/a.yaml": b"name: a\ncron: '0 9 * * *'\n"})
@@ -422,7 +421,6 @@ def test_trigger_without_enabled_key_is_protected():
 DIRTY_TRIGGERS = [b"\xff\xfe", b"d: 2001-13-45\n"]
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError, reason="df-886.9")
 @pytest.mark.parametrize("dirty", DIRTY_TRIGGERS, ids=["not-utf8", "invalid-date"])
 @pytest.mark.parametrize("where", ["source", "target", "prune-candidate"])
 def test_dirty_trigger_file_does_not_crash_the_planner(where, dirty):
@@ -436,7 +434,6 @@ def test_dirty_trigger_file_does_not_crash_the_planner(where, dirty):
         plan_for(source, target, same_folder("triggers"))
 
 
-@pytest.mark.xfail(strict=True, raises=ValueError, reason="df-886.9")
 @settings(LAW, report_multiple_bugs=False)
 @given(st.binary(max_size=32))
 @example(b"\xff\xfe")
@@ -447,7 +444,6 @@ def test_any_bytes_in_a_trigger_file_leave_the_planner_standing(content):
         plan_for(source, target, same_folder("triggers"))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="df-886.10")
 @pytest.mark.parametrize("spelling,on_disk", [
     ("./scripts/", "scripts/a.py"),
     ("scripts/./", "scripts/a.py"),
@@ -461,7 +457,6 @@ def test_in_sync_file_survives_any_spelling_of_the_target(spelling, on_disk):
     assert on_disk not in {i.target_path for i in plan.items if i.action == Action.delete}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="df-886.10")
 @pytest.mark.parametrize("spelling", ["./deploy/.ledger/", "deploy//.ledger/", "deploy/./.ledger/"])
 def test_ledger_guard_sees_any_spelling_of_the_target(spelling):
     with workspaces() as (source, target):

@@ -1,5 +1,5 @@
 import pytest
-from dataforge.tasks.message.channels import Channel, get_channel
+from dataforge.tasks.message.channels import get_channel
 
 
 class _Dummy:
