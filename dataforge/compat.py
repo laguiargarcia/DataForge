@@ -7,6 +7,8 @@ import platformdirs
 _VALID_WORKSPACE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 ALLOWED_HOSTS_ENV = "DATAFORGE_ALLOWED_HOSTS"
+PORT_ENV = "DATAFORGE_PORT"
+DEFAULT_API_PORT = 8000
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -111,6 +113,11 @@ def allowed_hosts() -> set[str] | None:
     if "*" in names:
         return None
     return _LOOPBACK_HOSTS | names
+
+
+def api_port() -> int:
+    """Return the port of the local DataForge API: $DATAFORGE_PORT, else DEFAULT_API_PORT."""
+    return int(os.environ.get(PORT_ENV, DEFAULT_API_PORT))
 
 
 def global_db_url() -> str:

@@ -3,7 +3,7 @@ from collections import Counter
 import polars as pl
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())  # noqa: S102
+exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
 
 # dim_counterparty (df-pzu) — one row per counterparty document, from the frozen cleansed
 # counterparty columns. Mirrors dim_account/dim_investment: read cleansed, dedup, DROP+CREATE.

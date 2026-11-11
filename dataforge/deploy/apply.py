@@ -56,7 +56,8 @@ def apply_plan(source_dir: Path, target_dir: Path, plan: DeployPlan, ledger: Led
                 prior_enabled = False
                 if before is not None:
                     tdata = _load_yaml_dict(tgt)
-                    prior_enabled = bool(tdata.get("enabled", False)) if tdata else False
+                    # A target trigger without 'enabled' is active for the engine (df-886.8).
+                    prior_enabled = bool(tdata.get("enabled", True)) if tdata else False
                 content = _trigger_content(source_dir / item.source_path, prior_enabled)
             else:
                 content = (source_dir / item.source_path).read_bytes()

@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
-from .pairing import check_target_inside
+from .pairing import check_target_inside, normalize_target
 
 _KIND_BY_PREFIX = {
     "jobs": Kind.job,
@@ -30,10 +30,12 @@ def content_sha(path: Path) -> str:
 
 
 def _load_yaml_dict(path: Path):
-    """Parse YAML to a mapping; return None if unparseable or not a mapping."""
+    """Parse YAML to a mapping; return None if unparseable or not a mapping. Undecodable bytes
+    (UnicodeDecodeError) and invalid scalars such as a date '2001-13-45' (ValueError) count as
+    unparseable too (df-886.9)."""
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError):   # UnicodeDecodeError is a ValueError
         return None
     return data if isinstance(data, dict) else None
 
@@ -45,7 +47,10 @@ def _trigger_sha(path: Path) -> str:
     if data is None:
         return content_sha(path)
     data.pop("enabled", None)
-    canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
+    try:
+        canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
+    except TypeError:   # keys of mixed types (e.g. 1 and 'a') cannot be sorted
+        return content_sha(path)
     return "sha256:" + hashlib.sha256(canon.encode()).hexdigest()
 
 
@@ -122,9 +127,9 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             stacklevel=2,
         )
         return out
-    bases = {rule.target.rstrip("/") for rule in pipeline.pairs}
-    for base in bases:   # df-886.11: never walk a base outside the target workspace
-        check_target_inside(base)
+    for rule in pipeline.pairs:   # df-886.11: never walk a base outside the target workspace
+        check_target_inside(rule.target)
+    bases = {normalize_target(rule.target) for rule in pipeline.pairs}   # df-886.10
     for base in sorted(bases):
         base_dir = target_dir / base
         if not base_dir.exists():
@@ -142,7 +147,8 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             kind = kind_for(rel)
             if kind == Kind.trigger:   # law #2
                 tdata = _load_yaml_dict(p)
-                if tdata is not None and tdata.get("enabled", False):
+                # The engine runs a trigger without 'enabled' as active (TriggerModel default).
+                if tdata is not None and tdata.get("enabled", True):
                     out.append(ItemChange(source_path=None, target_path=rel, kind=kind,
                                           action=Action.protected, reason="target trigger is active"))
                     continue

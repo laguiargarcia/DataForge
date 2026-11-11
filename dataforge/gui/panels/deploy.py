@@ -7,7 +7,6 @@ like every other panel (mirrors dataforge/gui/panels/scheduler.py).
 from __future__ import annotations
 
 import json
-import os
 from typing import Optional
 
 from PySide6.QtCore import QByteArray, QUrl, Qt
@@ -27,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from dataforge.compat import api_port
 from dataforge.deploy.models import Action
 
 
@@ -102,7 +102,7 @@ class Panel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._port = int(os.environ.get("DATAFORGE_PORT", 8000))
+        self._port = api_port()
         self._nam = QNetworkAccessManager(self)
         self._current_workspace = ""       # SOURCE workspace (from MainWindow)
         self._current_pipeline = ""

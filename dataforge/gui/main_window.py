@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 
-from PySide6.QtCore import QSettings, QTimer, QUrl, Qt, Signal
-from PySide6.QtGui import QAction, QColor, QGuiApplication, QIcon, QPixmap
+from PySide6.QtCore import QSettings, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from dataforge.compat import DEFAULT_API_PORT, api_port
 from dataforge.gui.daemon import DaemonThread
 
 SETTINGS_ORG = "DataForge"
@@ -42,7 +43,7 @@ class MainWindow(QMainWindow):
     def __init__(self, daemon: DaemonThread) -> None:
         super().__init__()
         self._daemon = daemon
-        self._port = 8000
+        self._port = DEFAULT_API_PORT
         self._nam = QNetworkAccessManager(self)
         self.setWindowTitle("DataForge")
         self.resize(1200, 800)
@@ -118,8 +119,7 @@ class MainWindow(QMainWindow):
 
     def _load_workspaces(self) -> None:
         """Fetch workspace list from local daemon API (async, never blocking)."""
-        import os
-        self._port = int(os.environ.get("DATAFORGE_PORT", 8000))
+        self._port = api_port()
         url = QUrl(f"http://127.0.0.1:{self._port}/api/workspaces/")
         req = QNetworkRequest(url)
         reply = self._nam.get(req)
@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def closeEvent(self, event) -> None:
         """Minimize to tray instead of quitting when tray is active."""
         if self._tray is not None and self._tray.isVisible():
             self.hide()

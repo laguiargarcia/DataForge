@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 from typer.testing import CliRunner
 
-from dataforge.cli import app, _cron_to_ps_trigger, _expand_dow
+from dataforge.cli import app, _cron_to_ps_trigger
 
 runner = CliRunner()
 

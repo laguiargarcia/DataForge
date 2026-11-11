@@ -196,13 +196,14 @@ def test_apply_unreadable_target_trigger_degrades_to_disarmed(tmp_path):
     assert written["enabled"] is False and written["cron"] == "0 9 * * *"
 
 
-def test_apply_target_trigger_without_enabled_stays_disarmed(tmp_path):
-    # Law #1: a target trigger that never said 'enabled' was not active, so it is not armed.
+def test_apply_target_trigger_without_enabled_stays_active(tmp_path):
+    # Law #1 + df-886.8: the engine runs a trigger without 'enabled' as active (TriggerModel
+    # default), so updating its definition must keep it active, not write 'enabled: false'.
     src, tgt = tmp_path / "Dev", tmp_path / "Prod"
     _mk(src, "triggers/daily.yaml", _SOURCE_TRIGGER)
     _mk(tgt, "triggers/daily.yaml", "name: daily\ncron: '0 5 * * *'\njobs: []\n")
     apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
-    assert yaml.safe_load((tgt / "triggers/daily.yaml").read_text())["enabled"] is False
+    assert yaml.safe_load((tgt / "triggers/daily.yaml").read_text(encoding="utf-8"))["enabled"] is True
 
 
 def test_apply_promoted_trigger_stays_readable_like_its_source(tmp_path):

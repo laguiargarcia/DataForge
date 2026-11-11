@@ -81,3 +81,13 @@ def test_serve_prints_app_urls(workspace_dir, make_app, monkeypatch):
     out = CliRunner().invoke(cli_app, ["serve", "--port", "8123"]).output
     assert "Demo [v0]" in out
     assert "http://127.0.0.1:8123/apps/test_ws/demo/" in out
+    assert "nenhum workspace" not in out
+
+
+def test_serve_warns_when_no_workspace_is_found(tmp_path, monkeypatch):
+    # df-pr6: with DATAFORGE_HOME on the wrong folder, serve must say where it looked.
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    out = CliRunner().invoke(cli_app, ["serve"]).output
+    assert "nenhum workspace encontrado" in out
+    assert str(tmp_path / "workspaces") in out.replace("\n", "")
