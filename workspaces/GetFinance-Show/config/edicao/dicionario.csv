@@ -1,0 +1,9 @@
+subcategoria,categoria,Tipo
+Groceries,Mercado,Essencial
+Transport,Transporte,Essencial
+Health,Saúde,Essencial
+Dining,Alimentação fora,Não Essencial
+Subscriptions,Assinaturas,Não Essencial
+Shopping,Compras,Não Essencial
+Salário,Salário,Salário
+Pagamento cartão,Pagamento cartão,Pagamento cartão

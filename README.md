@@ -52,9 +52,15 @@ dataforge serve
 It prints the app URL, by default <http://127.0.0.1:8000/apps/GetFinance-Show/financas/>.
 Open it in a browser. No Node is needed: the compiled app (`dist/`) ships in the repo.
 
-If you change the app sources in `workspaces/GetFinance-Show/apps/financas/src/` or its
-`categorias.json`, run `npm install` and `npm run build` in that folder to regenerate
-`dist/`. Before committing, run `npm run build` and check whether `dist/` changed.
+The app only reads and formats: the numbers come from the job's `classify` and `report` tasks
+(`curated.report_*` and `curated.fact_transaction_classified`). Category names and their groups
+(Essencial, Não Essencial, …) come from the editable tables in `data/edicao.db`, seeded on the
+first run from `config/edicao/*.csv`; re-run only those two tasks with
+`dataforge run GetFinance-Show reclassificar`.
+
+If you change the app sources in `workspaces/GetFinance-Show/apps/financas/src/`, run
+`npm install` and `npm run build` in that folder to regenerate `dist/`. Before committing, run
+`npm run build` and check whether `dist/` changed.
 
 ---
 

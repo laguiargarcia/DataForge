@@ -35,14 +35,14 @@ def _slugify(institution):
 
 
 def _last4(number):
-    """last4: last 4 digits of `number` after stripping non-digits ('00012345-2' -> '3452')."""
+    """last4: last 4 digits of `number` after stripping non-digits ('00052577-2' -> '5772')."""
     digits = re.sub(r"\D", "", str(number or ""))
     return digits[-4:] if digits else ""
 
 
 def _account_segment(transfer_number):
     """Account-number segment of transferNumber (its last '/'-part) — used as the last4 source
-    when a BANK account has no `number` ('341/1620/00012345-2' -> '00012345-2')."""
+    when a BANK account has no `number` ('341/1620/00052577-2' -> '00052577-2')."""
     if not transfer_number:
         return None
     return str(transfer_number).split("/")[-1].strip()
@@ -59,7 +59,7 @@ def _kind(account_type, subtype):
 
 
 def _bank_code(transfer_number):
-    """bank (COMPE) code = first '/'-segment of transferNumber ('341/1620/00012345-2' -> '341').
+    """bank (COMPE) code = first '/'-segment of transferNumber ('341/1620/00052577-2' -> '341').
     COMPE codes are always exactly 3 digits; some connectors instead return only 'agency/account'
     (no bank code — see getfinance-pluggy-integration.md §4), where the first segment is the agency.
     Return None unless the first segment is a 3-digit code, so those fall to the plain `unknown`
