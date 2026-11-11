@@ -37,3 +37,10 @@ def test_daemon_start_stop():
     assert resp.status_code == 200
     daemon.stop()
     assert not daemon.is_alive() or True  # join(timeout=5) — daemon thread may linger briefly
+
+
+def test_daemon_binds_dataforge_port_by_default(monkeypatch):
+    """df-oift: the GUI panels call api_port(), so the embedded daemon must listen there too."""
+    from dataforge.gui.daemon import DaemonThread
+    monkeypatch.setenv("DATAFORGE_PORT", "18433")
+    assert DaemonThread().server.config.port == 18433

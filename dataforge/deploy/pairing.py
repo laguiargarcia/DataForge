@@ -1,4 +1,5 @@
 import posixpath
+import re
 from pathlib import Path, PurePosixPath
 import yaml
 from .models import PipelineModel
@@ -21,9 +22,16 @@ def source_base(pattern: str) -> str:
     return "/".join(base)
 
 
+_DRIVE = re.compile(r"^[A-Za-z]:")
+
+
 def check_target_inside(target_rel: str) -> None:
-    """Raise ValueError if a target path escapes the target workspace (absolute or with '..')."""
-    if posixpath.isabs(target_rel) or ".." in PurePosixPath(target_rel).parts:
+    """Raise ValueError if a target path escapes the target workspace: absolute, with '..', or
+    spelled for Windows. On Windows a backslash is a separator and 'C:' a drive, so '..\\x',
+    '\\x' and 'C:\\x' leave the workspace even though POSIX reads them as names (df-886.16).
+    Targets are POSIX paths; a backslash is never part of a valid one."""
+    if ("\\" in target_rel or _DRIVE.match(target_rel)
+            or posixpath.isabs(target_rel) or ".." in PurePosixPath(target_rel).parts):
         raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
 
 

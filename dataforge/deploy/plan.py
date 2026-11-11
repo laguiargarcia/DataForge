@@ -21,7 +21,9 @@ def kind_for(rel: str) -> Kind:
 
 
 def _is_ledger_path(rel: str) -> bool:
-    """True for the engine's own ledger — never a deploy/prune target (law #4)."""
+    """True for the engine's own ledger — never a deploy/prune target (law #4). Case-insensitive:
+    on NTFS 'Deploy/.ledger' IS the ledger (df-886.16)."""
+    rel = rel.casefold()
     return rel == LEDGER_REL or rel.startswith(LEDGER_REL + "/")
 
 
@@ -29,13 +31,19 @@ def content_sha(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# UnicodeDecodeError is a ValueError; the others leak from PyYAML constructors (see below).
+_UNPARSEABLE = (yaml.YAMLError, ValueError, KeyError, AttributeError, RecursionError)
+
+
 def _load_yaml_dict(path: Path):
     """Parse YAML to a mapping; return None if unparseable or not a mapping. Undecodable bytes
     (UnicodeDecodeError) and invalid scalars such as a date '2001-13-45' (ValueError) count as
-    unparseable too (df-886.9)."""
+    unparseable too (df-886.9), and so are the errors PyYAML's constructors leak on a bad explicit
+    tag ('!!bool abc' -> KeyError, '!!timestamp abc' -> AttributeError) or very deep nesting
+    (RecursionError)."""
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (yaml.YAMLError, ValueError):   # UnicodeDecodeError is a ValueError
+    except _UNPARSEABLE:
         return None
     return data if isinstance(data, dict) else None
 
@@ -47,10 +55,8 @@ def _trigger_sha(path: Path) -> str:
     if data is None:
         return content_sha(path)
     data.pop("enabled", None)
-    try:
-        canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
-    except TypeError:   # keys of mixed types (e.g. 1 and 'a') cannot be sorted
-        return content_sha(path)
+    # Keys of mixed types (1 and 'a') can't be sorted; PyYAML then keeps file order, no error.
+    canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
     return "sha256:" + hashlib.sha256(canon.encode()).hexdigest()
 
 
@@ -130,29 +136,39 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
     for rule in pipeline.pairs:   # df-886.11: never walk a base outside the target workspace
         check_target_inside(rule.target)
     bases = {normalize_target(rule.target) for rule in pipeline.pairs}   # df-886.10
+    if "" in bases:
+        # df-886.14: a root target places single root files (workspace.yaml -> '.'). Walking it
+        # would treat the whole workspace (.env, data/, everything unpaired) as prunable.
+        warnings.warn("deploy prune skips the target root: a pair whose target is the workspace "
+                      "root is never pruned.", stacklevel=2)
+        bases.discard("")
+    seen: set[str] = set()   # df-886.15: nested bases ('jobs', 'jobs/sub') reach a file twice
     for base in sorted(bases):
         base_dir = target_dir / base
         if not base_dir.exists():
             continue
         for p in sorted(base_dir.rglob("*")):
-            if p.is_symlink() or not p.is_file():
-                continue
             rel = p.relative_to(target_dir).as_posix()
-            if rel in source_targets:   # has a paired source counterpart — keep it
+            if rel in seen or rel in source_targets or p.is_symlink() or not p.is_file():
                 continue
-            if _is_ledger_path(rel):   # law #4 — never prune our own ledger
-                continue
-            if ignore.matches(rel):    # law #3
-                continue
-            kind = kind_for(rel)
-            if kind == Kind.trigger:   # law #2
-                tdata = _load_yaml_dict(p)
-                # The engine runs a trigger without 'enabled' as active (TriggerModel default).
-                if tdata is not None and tdata.get("enabled", True):
-                    out.append(ItemChange(source_path=None, target_path=rel, kind=kind,
-                                          action=Action.protected, reason="target trigger is active"))
-                    continue
-            out.append(ItemChange(source_path=None, target_path=rel, kind=kind,
-                                  action=Action.delete, reason="prune: absent in source",
-                                  before_sha=content_sha(p)))
+            seen.add(rel)
+            item = _prune_item(p, rel, ignore)
+            if item is not None:
+                out.append(item)
     return out
+
+
+def _prune_item(p: Path, rel: str, ignore: DeployIgnore) -> ItemChange | None:
+    """The plan item for one target file that has no paired source, or None to leave it alone."""
+    if _is_ledger_path(rel) or ignore.matches(rel):   # law #4, law #3
+        return None
+    kind = kind_for(rel)
+    if kind == Kind.trigger:   # law #2
+        tdata = _load_yaml_dict(p)
+        # The engine runs a trigger without 'enabled' as active (TriggerModel default).
+        if tdata is not None and tdata.get("enabled", True):
+            return ItemChange(source_path=None, target_path=rel, kind=kind,
+                              action=Action.protected, reason="target trigger is active")
+    return ItemChange(source_path=None, target_path=rel, kind=kind,
+                      action=Action.delete, reason="prune: absent in source",
+                      before_sha=content_sha(p))

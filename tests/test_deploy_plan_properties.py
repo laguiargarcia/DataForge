@@ -19,8 +19,8 @@ from hypothesis import strategies as st
 from dataforge.deploy.ignore import DeployIgnore
 from dataforge.deploy.ledger import Ledger
 from dataforge.deploy.models import Action, Kind, PairRule, PipelineModel
-from dataforge.deploy.pairing import resolve_pairs
-from dataforge.deploy.plan import build_plan
+from dataforge.deploy.pairing import check_target_inside, resolve_pairs
+from dataforge.deploy.plan import _trigger_sha, build_plan, content_sha
 from dataforge.models import TriggerModel
 
 # database=None: a plain pytest run, outside the deterministic profile, does not replay failures
@@ -418,10 +418,17 @@ def test_trigger_without_enabled_key_is_protected():
     assert actions(plan)["triggers/x.yaml"] == Action.protected
 
 
-DIRTY_TRIGGERS = [b"\xff\xfe", b"d: 2001-13-45\n"]
+DIRTY_TRIGGERS = {
+    "not-utf8": b"\xff\xfe",
+    "invalid-date": b"d: 2001-13-45\n",
+    "mixed-type-keys": b"1: a\nb: c\n",          # parses, but safe_dump(sort_keys=True) can't sort
+    "bad-bool-tag": b"x: !!bool abc\n",          # KeyError inside the YAML constructor
+    "bad-timestamp-tag": b"x: !!timestamp abc\n",  # AttributeError inside the YAML constructor
+    "deep-nesting": b"[" * 5000 + b"]" * 5000,  # RecursionError
+}
 
 
-@pytest.mark.parametrize("dirty", DIRTY_TRIGGERS, ids=["not-utf8", "invalid-date"])
+@pytest.mark.parametrize("dirty", DIRTY_TRIGGERS.values(), ids=DIRTY_TRIGGERS.keys())
 @pytest.mark.parametrize("where", ["source", "target", "prune-candidate"])
 def test_dirty_trigger_file_does_not_crash_the_planner(where, dirty):
     good = b"name: a\ncron: '0 9 * * *'\n"
@@ -477,3 +484,87 @@ def test_prune_never_plans_a_delete_outside_the_target(escape):
             return  # refusing the pipeline keeps the law too, as resolve_pairs does for a matched rule
     assert not [i.target_path for i in plan.items
                 if i.action == Action.delete and ".." in i.target_path.split("/")]
+
+
+UNPARSEABLE = {k: v for k, v in DIRTY_TRIGGERS.items() if k != "mixed-type-keys"}  # that one parses
+
+
+@pytest.mark.parametrize("dirty", UNPARSEABLE.values(), ids=UNPARSEABLE.keys())
+def test_unusable_trigger_is_hashed_by_its_bytes(tmp_path, dirty):
+    """A trigger that can't be parsed is compared byte for byte (df-886.9)."""
+    path = tmp_path / "t.yaml"
+    path.write_bytes(dirty)
+    assert _trigger_sha(path) == content_sha(path)
+
+
+@pytest.mark.parametrize("root", ["", ".", "./"])
+def test_prune_never_walks_the_target_root(root):
+    """df-886.14: a root pair target must not make prune treat the whole workspace as managed."""
+    with workspaces() as (source, target):
+        plant(source, {"workspace.yaml": b"name: Dev\n", "jobs/a/job.yaml": b"a"})
+        plant(target, {"workspace.yaml": b"name: Prod\n", "jobs/a/job.yaml": b"a",
+                       ".env": b"SECRET=1", "data/cleansed/tx/part-0.parquet": b"p",
+                       "jobs/old/job.yaml": b"old"})
+        plan = plan_for(source, target, [("workspace.yaml", root), ("jobs/**", "jobs")])
+    deleted = {i.target_path for i in plan.items if i.action == Action.delete}
+    assert deleted == {"jobs/old/job.yaml"}   # the jobs base still prunes; the root does not
+
+
+def test_nested_bases_list_each_target_file_once():
+    """df-886.15: a file under two nested pair bases gets one plan item, not two."""
+    with workspaces() as (source, target):
+        plant(source, {"jobs/a.yaml": b"a", "jobs/sub/k.yaml": b"k"})
+        plant(target, {"jobs/sub/old.yaml": b"old"})
+        plan = plan_for(source, target, [("jobs/**", "jobs"), ("jobs/sub/**", "jobs/sub")])
+    paths = [i.target_path for i in plan.items]
+    assert sorted(paths) == sorted(set(paths))
+    assert actions(plan)["jobs/sub/old.yaml"] == Action.delete
+
+
+@pytest.mark.parametrize("escape", [
+    "..\\..\\Users\\x", "C:\\Windows", "\\evil", "C:evil", "c:/x", "scripts\\sub",
+])
+def test_windows_spelled_targets_are_rejected(escape):
+    """df-886.16: on Windows a backslash or drive prefix leaves the target workspace."""
+    with pytest.raises(ValueError, match="escapes target workspace"):
+        check_target_inside(escape)
+
+
+@pytest.mark.parametrize("ledger", ["Deploy/.ledger", "deploy/.LEDGER/x", "DEPLOY/.Ledger"])
+def test_ledger_guard_ignores_case(ledger):
+    """df-886.16: NTFS is case-insensitive, so any casing of the ledger is the ledger."""
+    with workspaces() as (source, target):
+        plant(source, {"scripts/a.py": b"new"})
+        plan = plan_for(source, target, [("scripts/**", ledger)], prune=False)
+    assert plan.items == []
+
+
+def test_prune_says_it_skipped_the_target_root():
+    """df-886.14: skipping the root is a choice the operator should see, not a silent gap."""
+    with workspaces() as (source, target):
+        plant(source, {"workspace.yaml": b"name: Dev\n"})
+        plant(target, {".env": b"SECRET=1"})
+        pipeline = PipelineModel(target="Prod", prune=True,
+                                 pairs=[PairRule(source="workspace.yaml", target=".")])
+        with pytest.warns(UserWarning, match="^deploy prune skips the target root: a pair whose "
+                                             "target is the workspace root is never pruned.$"):
+            build_plan(source, target, pipeline, "p", DeployIgnore.load(source),
+                       resolve_pairs(source, pipeline))
+
+
+def test_each_action_carries_the_reason_the_cli_and_gui_show():
+    with workspaces() as (source, target):
+        plant(source, {"scripts/new.py": b"n", "scripts/changed.py": b"2", "scripts/skip.py": b"s",
+                       "deploy/.deployignore": b"scripts/skip.py\n", "triggers/a.yaml": b"name: a\n"})
+        plant(target, {"scripts/changed.py": b"1", "scripts/gone.py": b"g",
+                       "triggers/live.yaml": b"name: live\nenabled: true\n"})
+        plan = plan_for(source, target, same_folder("scripts", "triggers"))
+    reasons = {i.target_path: i.reason for i in plan.items}
+    assert reasons == {
+        "scripts/new.py": "new in target",
+        "scripts/changed.py": "content differs",
+        "scripts/skip.py": ".deployignore",
+        "scripts/gone.py": "prune: absent in source",
+        "triggers/a.yaml": "new in target",
+        "triggers/live.yaml": "target trigger is active",
+    }

@@ -14,7 +14,7 @@ from rich import print as rprint
 from rich.markup import escape as rich_escape
 from dataforge.apps import discover_apps
 from dataforge.compat import (
-    ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, api_port, resolve_workspace, resolve_db, data_dir, db_url,
+    ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, resolve_workspace, resolve_db, data_dir, db_url,
     list_workspaces,
 )
 from dataforge.deploy.cli import deploy_app
@@ -514,11 +514,15 @@ def gui() -> None:
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Bind host"),
-    port: int = typer.Option(DEFAULT_API_PORT, "--port", help="Bind port"),
+    port: Optional[int] = typer.Option(
+        None, "--port", help=f"Bind port (default: ${PORT_ENV} or {DEFAULT_API_PORT})",
+    ),
     reload: bool = typer.Option(False, "--reload", help="Auto-reload on code change"),
 ):
     """Inicia o servidor FastAPI via uvicorn."""
     import uvicorn
+    if port is None:   # df-oift: the same port the GUI panels and the deploy CLI call
+        port = api_port()
     # An environment variable, so the value survives the --reload subprocess.
     url_host = host
     if host in ("0.0.0.0", "::"):

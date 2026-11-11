@@ -61,7 +61,6 @@
     "TID251": 1
   },
   "dataforge/deploy/plan.py": {
-    "C901": 1,
     "PLR0913": 1
   },
   "dataforge/deploy/service.py": {
