@@ -126,6 +126,10 @@ forbidden_modules = ["PySide6"]
 # The API reaches Qt only through the known API -> CLI import above (cli lazily imports the GUI).
 ignore_imports = ["dataforge.api.routers.triggers -> dataforge.cli"]
 
+[tool.coverage.run]
+# Repo-relative paths in coverage.xml, so SonarQube Cloud matches them to its checkout (df-ahua.1.1).
+relative_files = true
+
 [tool.setuptools.packages.find]
 include = ["dataforge*"]
 
