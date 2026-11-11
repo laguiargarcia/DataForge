@@ -37,8 +37,16 @@ for row in joined.iter_rows(named=True):
     snapshot_date = date.fromisoformat(str(ingested_at)[:10])
     invested_amount = amount_original
     current_value = balance
+    # df-9uv: prefer Pluggy's own P&L (amountProfit, populated by Inter) — amountOriginal is
+    # gross-ever-deposited and never reduced by partial withdrawals, so the arithmetic fallback
+    # reads withdrawals as losses. Fallback stays for Itaú (amountProfit always NULL there, and
+    # its CDBs have no partial withdrawals, so current − invested remains correct).
+    # .get(): tolerate a cleansed table built before amountProfit was carried (SCD1 rebuild).
+    amount_profit = row.get("amountProfit")
     ret = None
-    if invested_amount is not None and current_value is not None:
+    if amount_profit is not None:
+        ret = amount_profit
+    elif invested_amount is not None and current_value is not None:
         ret = current_value - invested_amount
     fact_rows.append((holding_uuid, snapshot_date, invested_amount, current_value, ret, currency))
 

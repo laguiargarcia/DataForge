@@ -1,33 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { lerTabela } from './api'
-import rotulos from '../categorias.json'
 import {
   brl, brlSinal, meses, resumirMes, rotuloMes,
-  type Fatura, type Posicao, type Saldo, type Tx,
+  type Cartao, type Dados, type Investimentos, type Liquidez,
+  type SaudeCategoria, type SaudeMes, type TxClassificada,
 } from './resumo'
 import { CartaoResumo } from './components/CartaoResumo'
 import { CartaoDetalhe } from './components/CartaoDetalhe'
 import { ListaCategorias } from './components/ListaCategorias'
 
-type Dados = {
-  txs: Tx[] | null
-  faturas: Fatura[] | null
-  saldos: Saldo[] | null
-  posicoes: Posicao[] | null
-}
 type Estado = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; dados: Dados }
 
+// Tudo vem pronto do ETL (tasks classify e report do finance_daily).
 async function carregar(): Promise<Dados> {
-  const [txs, faturas, saldos, posicoes] = await Promise.all([
-    lerTabela<Tx>('fact_transaction'),
-    lerTabela<Fatura>('fact_fatura_mes'),
-    lerTabela<Saldo>('fact_balance_snapshot'),
-    lerTabela<Posicao>('fact_investment_position'),
+  const [saude, saudeCategoria, transacoes, liquidez, investimentos, cartao] = await Promise.all([
+    lerTabela<SaudeMes>('report_saude'),
+    lerTabela<SaudeCategoria>('report_saude_categoria'),
+    lerTabela<TxClassificada>('fact_transaction_classified'),
+    lerTabela<Liquidez>('report_liquidity'),
+    lerTabela<Investimentos>('report_investimentos'),
+    lerTabela<Cartao>('report_cartao'),
   ])
-  return { txs, faturas, saldos, posicoes }
+  return { saude, saudeCategoria, transacoes, liquidez, investimentos, cartao }
 }
-
-const rotulosCategoria: Record<string, string> = rotulos
 
 const Seta = ({ d }: { d: string }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -44,7 +39,7 @@ export function App() {
     carregar().then(
       dados => {
         setEstado({ fase: 'ok', dados })
-        const lista = dados.txs ? meses(dados.txs) : []
+        const lista = meses(dados)
         setMes(lista.length ? lista[lista.length - 1] : null)
         setSelecionada(null)
       },
@@ -54,9 +49,8 @@ export function App() {
   useEffect(() => { abrir() }, [abrir])
 
   const dados = estado.fase === 'ok' ? estado.dados : null
-  const lista = useMemo(() => (dados?.txs ? meses(dados.txs) : []), [dados])
-  const calcular = (m: string) =>
-    resumirMes(m, dados?.txs ?? [], dados?.faturas ?? [], dados?.saldos ?? [], dados?.posicoes ?? [], rotulosCategoria)
+  const lista = useMemo(() => (dados ? meses(dados) : []), [dados])
+  const calcular = (m: string) => resumirMes(m, dados!)
   const resumo = useMemo(
     () => (dados && mes ? calcular(mes) : null),
     [dados, mes],

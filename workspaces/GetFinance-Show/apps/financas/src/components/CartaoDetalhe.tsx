@@ -13,7 +13,7 @@ export function CartaoDetalhe({ categoria, onVoltar }: Props) {
         Resumo do mês
       </button>
       <div className="flex flex-col gap-2">
-        <span className="text-[16px] text-secundario">{categoria.nome} · {categoria.count} · {categoria.share} do que saiu</span>
+        <span className="text-[16px] text-secundario">{categoria.nome} · {categoria.grupo} · {categoria.count} · {categoria.share} do que saiu</span>
         <span className="text-[clamp(40px,5vw,56px)] leading-none font-semibold tracking-[-0.03em] text-acento">{categoria.valor}</span>
       </div>
       <div className="flex flex-col">

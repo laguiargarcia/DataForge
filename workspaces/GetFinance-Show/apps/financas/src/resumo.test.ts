@@ -1,175 +1,111 @@
 import { describe, expect, test } from 'vitest'
 import {
   brl, brlSinal, meses, resumirMes, rotuloMes,
-  type Fatura, type Posicao, type Saldo, type Tx,
+  type Dados, type SaudeCategoria, type TxClassificada,
 } from './resumo'
 
-const rotulos = { Groceries: 'Mercado', Health: 'Saúde', Other: 'Outra' }
-
-function tx(p: Partial<Tx> & { id: string }): Tx {
+function tx(p: Partial<TxClassificada> & { id: string }): TxClassificada {
   return {
-    date: '2026-06-10', account_type: 'BANK', etl_merchant_key: 'Loja',
-    amount_signed: -1, category: 'Groceries', ...p,
+    date: '2026-06-10', anomes_key: 202606, account_type: 'BANK', etl_merchant_key: 'Loja',
+    amount_signed: -1, categoria: 'Mercado', Tipo: 'Essencial', cash_flag: true, ...p,
   }
 }
 
-const txsJun: Tx[] = [
-  tx({ id: 'a', amount_signed: 100, category: 'Income', etl_merchant_key: 'Salário' }),
-  tx({ id: 'b', amount_signed: -12, category: 'Groceries', date: '2026-06-03', etl_merchant_key: 'Mercadinho' }),
-  tx({ id: 'c', amount_signed: -8, category: 'Groceries', date: '2026-06-20', etl_merchant_key: 'Feira' }),
-  tx({ id: 'd', amount_signed: -8, category: 'Health', account_type: 'CREDIT', etl_merchant_key: 'Farmácia' }),
-  tx({ id: 'e', amount_signed: -2, category: 'Other', account_type: 'OUTRO', etl_merchant_key: null }),
-  tx({ id: 'f', amount_signed: -50, category: 'Groceries', date: '2026-05-31' }),
-]
-const faturas: Fatura[] = [
-  { anomes_key: 202606, valor_pendente: 10 },
-  { anomes_key: 202606, valor_pendente: 2.5 },
-  { anomes_key: 202605, valor_pendente: 99 },
-]
-const saldos: Saldo[] = [
-  { snapshot_date: '2026-06-01', account_type: 'BANK', balance: 1 },
-  { snapshot_date: '2026-06-28', account_type: 'BANK', balance: 300 },
-  { snapshot_date: '2026-06-28', account_type: 'BANK', balance: 200 },
-  { snapshot_date: '2026-06-28', account_type: 'CREDIT', balance: -999 },
-]
-const posicoes: Posicao[] = [
-  { snapshot_date: '2026-06-01', current_value: 1 },
-  { snapshot_date: '2026-06-28', current_value: 1000 },
-  { snapshot_date: '2026-06-28', current_value: 234.5 },
-]
+const cat = (grupo: string, categoria: string, valor: number, anomes_key = 202606): SaudeCategoria =>
+  ({ anomes_key, grupo, categoria, valor })
 
-const resumo202606 = () => resumirMes('2026-06', txsJun, faturas, saldos, posicoes, rotulos)
-const resumoCom = (p: Partial<Tx>) =>
-  resumirMes('2026-06', [tx({ id: 'x', ...p })], [], [], [], rotulos)
-const resumoSemFatura = () => resumirMes('2026-07', txsJun, faturas, saldos, posicoes, rotulos)
+const dados: Dados = {
+  saude: [
+    { anomes_key: 202605, entradas: 50, saidas_total: 80, sobra: -30 },
+    { anomes_key: 202606, entradas: 1000, saidas_total: 400, sobra: 600 },
+  ],
+  saudeCategoria: [
+    cat('Entradas', 'Salário', 1000),
+    cat('Essencial', 'Mercado', 20),
+    cat('Não Essencial', 'Compras', 180),
+    cat('Pagamento cartão', 'Pagamento cartão', 200),
+    cat('Essencial', 'Mercado', 80, 202605),
+  ],
+  transacoes: [
+    tx({ id: 'b', amount_signed: -12, date: '2026-06-03', etl_merchant_key: 'Mercadinho' }),
+    tx({ id: 'c', amount_signed: -8, date: '2026-06-20', etl_merchant_key: 'Feira' }),
+    tx({ id: 'd', amount_signed: -8, account_type: 'CREDIT', cash_flag: false }),
+    tx({ id: 'e', amount_signed: -5, categoria: 'Mercado', Tipo: 'Não Essencial' }),
+    tx({ id: 'f', amount_signed: -50, date: '2026-05-31', anomes_key: 202605 }),
+    tx({ id: 'g', amount_signed: -180, categoria: 'Compras', Tipo: 'Não Essencial', etl_merchant_key: null }),
+  ],
+  liquidez: [{ anomes_key: 202606, caixa_saldo: 5230.55 }, { anomes_key: 202605, caixa_saldo: null }],
+  investimentos: [{ anomes_key: 202606, posicao: 1234.5 }],
+  cartao: [{ anomes_key: 202606, proxima_fatura: 0 }],
+}
+
 const nbsp = (s: string) => s.replace(/\s/g, ' ')
+const jun = () => resumirMes('2026-06', dados)
 
 describe('resumirMes', () => {
-  test('entrou, saiu e sobrou', () => {
-    const r = resumo202606()
-    expect(r.entrou).toBeCloseTo(100); expect(r.saiu).toBeCloseTo(30); expect(r.sobrou).toBeCloseTo(70)
+  test('entrou, saiu e sobrou vêm do report_saude', () => {
+    const r = jun()
+    expect([r.entrou, r.saiu, r.sobrou]).toEqual([1000, 400, 600])
+    expect(resumirMes('2026-05', dados).sobrou).toBe(-30)
   })
-  test('sobrou negativo sem mais e zero sem sinal', () => {
-    expect(brlSinal(-309.97)).toBe(brl(-309.97)); expect(brlSinal(0)).toBe(brl(0))
-    expect(nbsp(brlSinal(5705.02))).toBe('+R$ 5.705,02')
+  test('mês sem linha no report_saude: tudo null', () => {
+    const r = resumirMes('2026-07', dados)
+    expect([r.entrou, r.saiu, r.sobrou, r.naConta, r.investido, r.fatura]).toEqual([null, null, null, null, null, null])
+    expect(r.categorias).toEqual([])
   })
-  test('categorias da maior para a menor, só saídas, com rótulo', () => {
-    expect(resumo202606().categorias.map(c => c.nome)).toEqual(['Mercado', 'Saúde', 'Outra'])
+  test('faixas: caixa, posição e próxima fatura do mês; zero é zero, nulo é null', () => {
+    const r = jun()
+    expect([r.naConta, r.investido, r.fatura]).toEqual([5230.55, 1234.5, 0])
+    expect(resumirMes('2026-05', dados).naConta).toBeNull()
   })
-  test('categoria nula vira Sem categoria', () => {
-    const r = resumoCom({ category: null })
-    expect(r.categorias[0].nome).toBe('Sem categoria')
+  test('categorias só das saídas, maior primeiro, com o grupo', () => {
+    const r = jun()
+    expect(r.categorias.map(c => [c.grupo, c.nome])).toEqual([
+      ['Pagamento cartão', 'Pagamento cartão'], ['Não Essencial', 'Compras'], ['Essencial', 'Mercado'],
+    ])
   })
-  test('share e count seguem o artboard', () => {
-    const [m, s, o] = resumo202606().categorias
-    expect(m.share).toBe('67%')
-    expect(s.share).toBe('27%')
-    expect(o.share).toBe('6,7%')
-    expect(m.count).toBe('2 transações')
-    expect(o.count).toBe('1 transação')
-    expect(nbsp(m.valor)).toBe('R$ 20,00')
-    expect(m.total).toBeCloseTo(20)
+  test('share sobre o que saiu, width relativa à maior com mínimo de 1,5%', () => {
+    const [maior, , menor] = jun().categorias
+    expect(nbsp(maior.share)).toBe('50%')
+    expect(maior.width).toBe('100.0%')
+    expect(menor.width).toBe('10.0%')
+    const minima = resumirMes('2026-06', { ...dados, saudeCategoria: [cat('Essencial', 'A', 1000), cat('Essencial', 'B', 1)] })
+    expect(minima.categorias[1].width).toBe('1.5%')
   })
-  test('width mínima de 1,5% e a maior em 100%', () => {
-    const [m] = resumo202606().categorias
-    expect(m.width).toBe('100.0%')
-    const r = resumirMes('2026-06', [
-      tx({ id: '1', amount_signed: -1000 }),
-      tx({ id: '2', amount_signed: -1, category: 'Health' }),
-    ], [], [], [], rotulos)
-    expect(r.categorias[1].width).toBe('1.5%')
+  test('transações da categoria: mesmo mês, caixa e Tipo, data decrescente, desempate por id', () => {
+    const mercado = jun().categorias.find(c => c.nome === 'Mercado')!
+    expect(mercado.txs.map(t => t.id)).toEqual(['c', 'b'])
+    expect(mercado.count).toBe('2 transações')
+    expect(mercado.txs[0]).toMatchObject({ date: '20/06', name: 'Feira', account: 'Conta' })
+    expect(nbsp(mercado.txs[0].value)).toBe('R$ 8,00')
   })
-  test('transações em data decrescente, nome de etl_merchant_key, Conta ou Cartão', () => {
-    const [m, s, o] = resumo202606().categorias
-    expect(m.txs.map(t => t.id)).toEqual(['c', 'b'])
-    expect(m.txs.map(t => t.date)).toEqual(['20/06', '03/06'])
-    expect(m.txs[0].name).toBe('Feira')
-    expect(nbsp(m.txs[0].value)).toBe('R$ 8,00')
-    expect(m.txs[0].account).toBe('Conta')   // BANK > Conta
-    expect(s.txs[0].account).toBe('Cartão')  // CREDIT > Cartão
-    expect(o.txs[0].account).toBe('OUTRO')   // outro > como veio
-    expect(o.txs[0].name).toBe('—')          // nulo > —
+  test('nome vazio vira —; uma transação no singular', () => {
+    const compras = jun().categorias.find(c => c.nome === 'Compras')!
+    expect(compras.txs[0].name).toBe('—')
+    expect(compras.count).toBe('1 transação')
   })
-  test('empate de data desempata por id', () => {
-    const r = resumirMes('2026-06', [
-      tx({ id: 'z' }), tx({ id: 'a' }),
-    ], [], [], [], rotulos)
-    expect(r.categorias[0].txs.map(t => t.id)).toEqual(['a', 'z'])
+  test('id da categoria separa o mesmo nome em grupos diferentes', () => {
+    const r = resumirMes('2026-06', { ...dados, saudeCategoria: [cat('Essencial', 'X', 2), cat('Não Essencial', 'X', 1)] })
+    expect(new Set(r.categorias.map(c => c.id)).size).toBe(2)
   })
-  test('data sem deslocamento de fuso', () => {
-    expect(resumoCom({ date: '2026-06-01' }).categorias[0].txs[0].date).toBe('01/06')
-  })
-  test('fatura: soma do mês; zero é R$ 0,00; mês sem linha é null', () => {
-    expect(resumo202606().fatura).toBeCloseTo(12.5)
-    expect(resumoSemFatura().fatura).toBeNull()
-    expect(nbsp(brl(0))).toBe('R$ 0,00')
-  })
-  test('naConta e investido usam só o último snapshot e não mudam com o mês', () => {
-    const r = resumo202606()
-    expect(r.naConta).toBeCloseTo(500)
-    expect(r.investido).toBeCloseTo(1234.5)
-    const j = resumoSemFatura()
-    expect(j.naConta).toBeCloseTo(500); expect(j.investido).toBeCloseTo(1234.5)
-    const sem = resumirMes('2026-06', txsJun, faturas, [saldos[3]], [], rotulos)
-    expect(sem.naConta).toBeNull(); expect(sem.investido).toBeNull()
-  })
-  test('fatura ignora nulos; todos nulos é null, não R$ 0,00', () => {
-    const parcial: Fatura[] = [
-      { anomes_key: 202606, valor_pendente: null },
-      { anomes_key: 202606, valor_pendente: 2.5 },
-    ]
-    expect(resumirMes('2026-06', txsJun, parcial, saldos, posicoes, rotulos).fatura).toBeCloseTo(2.5)
-    const nulas: Fatura[] = [{ anomes_key: 202606, valor_pendente: null }]
-    const r = resumirMes('2026-06', txsJun, nulas, saldos, posicoes, rotulos)
-    expect(r.fatura).toBeNull()
-    expect(brl(r.fatura)).toBe('—')
-  })
-  test('naConta ignora nulos; todos nulos é null, não R$ 0,00', () => {
-    const parcial: Saldo[] = [
-      { snapshot_date: '2026-06-20', account_type: 'BANK', balance: null },
-      { snapshot_date: '2026-06-20', account_type: 'BANK', balance: 50 },
-    ]
-    expect(resumirMes('2026-06', txsJun, faturas, parcial, posicoes, rotulos).naConta).toBeCloseTo(50)
-    const nulos: Saldo[] = [
-      { snapshot_date: '2026-06-20', account_type: 'BANK', balance: null },
-      { snapshot_date: '2026-06-10', account_type: 'BANK', balance: 7 },
-    ]
-    const r = resumirMes('2026-06', txsJun, faturas, nulos, posicoes, rotulos)
-    expect(r.naConta).toBeNull()
-    expect(brl(r.naConta)).toBe('—')
-  })
-  test('investido ignora nulos; todos nulos é null, não R$ 0,00', () => {
-    const parcial: Posicao[] = [
-      { snapshot_date: '2026-06-20', current_value: null },
-      { snapshot_date: '2026-06-20', current_value: 30 },
-    ]
-    expect(resumirMes('2026-06', txsJun, faturas, saldos, parcial, rotulos).investido).toBeCloseTo(30)
-    const nulas: Posicao[] = [{ snapshot_date: '2026-06-20', current_value: null }]
-    const r = resumirMes('2026-06', txsJun, faturas, saldos, nulas, rotulos)
-    expect(r.investido).toBeNull()
-    expect(brl(r.investido)).toBe('—')
-  })
-  test('naConta pega o último snapshot só entre linhas BANK, mesmo com CREDIT mais novo', () => {
-    const s: Saldo[] = [
-      { snapshot_date: '2026-06-20', account_type: 'BANK', balance: 150 },
-      { snapshot_date: '2026-06-20', account_type: 'BANK', balance: 50 },
-      { snapshot_date: '2026-06-10', account_type: 'BANK', balance: 7 },
-      { snapshot_date: '2026-06-30', account_type: 'CREDIT', balance: -500 },
-    ]
-    expect(resumirMes('2026-06', txsJun, faturas, s, posicoes, rotulos).naConta).toBeCloseTo(200)
+  test('tabela ausente (null) não quebra: só os valores dela viram null', () => {
+    const r = resumirMes('2026-06', { ...dados, liquidez: null, cartao: null })
+    expect([r.naConta, r.fatura, r.entrou]).toEqual([null, null, 1000])
   })
 })
 
-describe('formatação', () => {
-  test('meses e rótulo', () => {
-    const txsDezAJun = [
-      tx({ id: '1', date: '2026-06-02' }), tx({ id: '2', date: '2025-12-31' }),
-      tx({ id: '3', date: '2026-01-15' }), tx({ id: '4', date: '2026-06-30' }),
-    ]
-    expect(meses(txsDezAJun)).toEqual(['2025-12', '2026-01', '2026-06'])
-    expect(rotuloMes('2026-06')).toBe('junho de 2026'); expect(rotuloMes('2026-03')).toBe('março de 2026')
+describe('meses e formatação', () => {
+  test('meses vêm do report_saude, em ordem', () => {
+    expect(meses(dados)).toEqual(['2026-05', '2026-06'])
+    expect(meses({ ...dados, saude: null })).toEqual([])
   })
-  test('brl nulo é travessão', () => {
-    expect(brl(null)).toBe('—'); expect(brlSinal(null)).toBe('—')
+  test('rótulo do mês', () => {
+    expect(rotuloMes('2026-06')).toBe('junho de 2026')
+  })
+  test('brl nulo é travessão; sinal só no positivo', () => {
+    expect(brl(null)).toBe('—')
+    expect(nbsp(brlSinal(5705.02))).toBe('+R$ 5.705,02')
+    expect(brlSinal(-309.97)).toBe(brl(-309.97))
+    expect(brlSinal(0)).toBe(brl(0))
   })
 })

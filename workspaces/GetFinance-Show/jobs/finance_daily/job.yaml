@@ -145,3 +145,29 @@ tasks:
   - name: build_report
     script: report/build_report.py
     depends_on: [export_bridge]
+
+  # ── Resumo v3 no ETL (df-cns etapa 1) ───────────────────────────────────────────
+  # seed_edicao fills the editable tables (data/edicao.db) from the synthetic config/edicao/*.csv
+  # only when they are empty, so a clean install runs end to end and later edits are kept.
+  # classify routes every transaction to subcategoria -> categoria -> Tipo; report writes the
+  # Resumo numbers and lists (report_*) to curated, where the Finanças app reads them.
+  - name: seed_edicao
+    script: report/carga_inicial_edicao.py
+    params:
+      dicionario: config/edicao/dicionario.csv
+      mapeamento: config/edicao/mapeamento.csv
+    depends_on: []
+
+  - name: classify
+    script: report/classify.py
+    params:
+      source: curated
+      target: curated
+    depends_on: [seed_edicao, curate, fact_fatura_mes]
+
+  - name: report
+    script: report/report_curated.py
+    params:
+      source: curated
+      target: curated
+    depends_on: [classify, fact_balance, fact_investments, fact_fatura_mes]

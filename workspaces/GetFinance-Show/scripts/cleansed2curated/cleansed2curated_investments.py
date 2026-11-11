@@ -57,10 +57,10 @@ investments = read_delta_table(args.source, "investments")
 
 # dim_investment (spec §5, grain holding_uuid): only holdings present in investments.yaml
 # (mapped). The surrogate holding_uuid comes FROM that map (JOIN) — a user-controlled slug like
-# "bank-cdb-2099-01" (NOT a hash of the Pluggy id), so on reconnect the new pluggy_holding_id is
+# "itau-cdb-2030-11" (NOT a hash of the Pluggy id), so on reconnect the new pluggy_holding_id is
 # repointed to the same holding_uuid and snapshot history does not split (A1). pluggy_holding_id
-# is the current-link column. name = COALESCE(alias, raw Pluggy name) (mirrors U3): when several
-# holdings share one raw Pluggy name (e.g. multiple CDBs from the same bank), alias distinguishes them.
+# is the current-link column. name = COALESCE(alias, raw Pluggy name) (mirrors U3): the live CDBs
+# share one raw name ("CDB - ITAU UNIBANCO S.A."), so the alias is what distinguishes them.
 # institution is resolved via the holding's itemId against the derived item->institution map
 # (supplies it for FIXED_INCOME holdings where Pluggy leaves it NULL). subtype is carried through (A19): all live
 # holdings are type=FIXED_INCOME, so subtype (CDB vs TREASURY) is the sole discriminator of

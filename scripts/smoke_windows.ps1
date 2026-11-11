@@ -14,7 +14,7 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $utf8 = New-Object System.Text.UTF8Encoding($false)
-$Expected = @("5.705,02", "10.555,36", "4.850,34", "1.279,19", "5.230,55", "53.212,32")
+$Expected = @("6.066,74", "6.500,00", "433,26", "2.713,73", "5.230,55", "63.943,70")
 $server = $null
 $Fora = $null
 $ok = $false
