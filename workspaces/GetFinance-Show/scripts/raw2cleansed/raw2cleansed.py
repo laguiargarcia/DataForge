@@ -93,28 +93,41 @@ _CP_DTYPE = pl.Struct({
 })
 
 
+def _repr_dict(repr_str):
+    """Parse a raw column holding a Python repr string. Return the dict, or None when the column
+    is empty, the literal "None", malformed, or not a dict."""
+    if not repr_str or repr_str == "None":
+        return None
+    try:
+        obj = ast.literal_eval(repr_str)
+    except (ValueError, SyntaxError):
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def _document(side):
+    """(value, PF/PJ kind) of a paymentData side's documentNumber; None for what is missing."""
+    dn = side.get("documentNumber")
+    if not isinstance(dn, dict):
+        return None, None
+    raw_type = dn.get("type")
+    return dn.get("value"), _DOCUMENT_KIND.get(raw_type) if isinstance(raw_type, str) else None
+
+
 def _counterparty(txn_type, payment_data_str):
     name = doc = doc_type = method = None
-    if payment_data_str and payment_data_str != "None":
-        try:
-            pd_obj = ast.literal_eval(payment_data_str)
-        except (ValueError, SyntaxError):
-            pd_obj = None
-        if isinstance(pd_obj, dict):
-            method = pd_obj.get("paymentMethod")
-            # Counterparty = the side OPPOSITE our flow: receiver on a DEBIT (we paid out),
-            # payer on a CREDIT (we were paid). NO fallback to the other side — verified against
-            # 1,185 live rows: the opposite side is our own account holder, so falling back
-            # mislabels ~800 self-CPF rows as counterparties (CPF 138 -> 937) and breaks the
-            # locked acceptance numbers. The chosen side is simply null when no real counterparty.
-            side = pd_obj.get("receiver") if txn_type == "DEBIT" else pd_obj.get("payer")
-            if isinstance(side, dict):
-                name = side.get("name")
-                dn = side.get("documentNumber")
-                if isinstance(dn, dict):
-                    doc = dn.get("value")
-                    raw_type = dn.get("type")
-                    doc_type = _DOCUMENT_KIND.get(raw_type) if isinstance(raw_type, str) else None
+    pd_obj = _repr_dict(payment_data_str)
+    if pd_obj is not None:
+        method = pd_obj.get("paymentMethod")
+        # Counterparty = the side OPPOSITE our flow: receiver on a DEBIT (we paid out),
+        # payer on a CREDIT (we were paid). NO fallback to the other side — verified against
+        # 1,185 live rows: the opposite side is our own account holder, so falling back
+        # mislabels ~800 self-CPF rows as counterparties (CPF 138 -> 937) and breaks the
+        # locked acceptance numbers. The chosen side is simply null when no real counterparty.
+        side = pd_obj.get("receiver") if txn_type == "DEBIT" else pd_obj.get("payer")
+        if isinstance(side, dict):
+            name = side.get("name")
+            doc, doc_type = _document(side)
     return {"counterparty_name": name, "counterparty_document": doc,
             "counterparty_document_type": doc_type, "payment_method": method}
 
@@ -132,21 +145,17 @@ _CC_DTYPE = pl.Struct({
 
 def _cc_meta(meta_str):
     bill_id = inst_n = inst_total = purchase = None
-    if meta_str and meta_str != "None":
-        try:
-            obj = ast.literal_eval(meta_str)
-        except (ValueError, SyntaxError):
-            obj = None
-        if isinstance(obj, dict):
-            bill_id = obj.get("billId")
-            inst_n = obj.get("installmentNumber")
-            inst_total = obj.get("totalInstallments")
-            pd_raw = obj.get("purchaseDate")
-            if pd_raw is not None:
-                try:
-                    purchase = date.fromisoformat(str(pd_raw)[:10])
-                except ValueError:
-                    purchase = None
+    obj = _repr_dict(meta_str)
+    if obj is not None:
+        bill_id = obj.get("billId")
+        inst_n = obj.get("installmentNumber")
+        inst_total = obj.get("totalInstallments")
+        pd_raw = obj.get("purchaseDate")
+        if pd_raw is not None:
+            try:
+                purchase = date.fromisoformat(str(pd_raw)[:10])
+            except ValueError:
+                purchase = None
     return {"cc_bill_id": bill_id,
             "cc_installment_number": int(inst_n) if inst_n is not None else None,
             "cc_total_installments": int(inst_total) if inst_total is not None else None,
