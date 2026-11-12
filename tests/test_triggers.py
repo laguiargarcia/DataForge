@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 
 def write_trigger_yaml(workspace_dir: Path, name: str, content: str) -> None:
@@ -300,6 +302,56 @@ def test_register_launchd_trigger(tmp_path):
     # launchctl should be called
     launchctl_calls = [c for c in mock_run.call_args_list if "launchctl" in str(c)]
     assert len(launchctl_calls) >= 1
+
+
+def _launchd_interval(tmp_path, cron):
+    """Register *cron* with launchd (subprocess and home mocked) and return the parsed
+    StartCalendarInterval of the plist it wrote."""
+    import plistlib
+    from dataforge.cli import _register_launchd
+
+    with patch("dataforge.cli.subprocess.run") as mock_run, \
+         patch("pathlib.Path.home", return_value=tmp_path):
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+        _register_launchd("myws", "t1", cron, "dataforge", "/home/user")
+    plist_path = tmp_path / "Library" / "LaunchAgents" / "com.dataforge.myws.t1.plist"
+    return plistlib.loads(plist_path.read_bytes())["StartCalendarInterval"]
+
+
+@pytest.mark.parametrize(("cron", "expected"), [
+    ("0 6 * * *", {"Minute": 0, "Hour": 6}),
+    ("30 5 1 6 *", {"Minute": 30, "Hour": 5, "Day": 1, "Month": 6}),   # df-vo3x.1: Month kept
+    ("0 6 * * 1", {"Minute": 0, "Hour": 6, "Weekday": 1}),
+    ("0 6 15 * 1", {"Minute": 0, "Hour": 6, "Day": 15, "Weekday": 1}),  # both kept: launchd ORs them, like cron
+    ("59 23 31 12 7", {"Minute": 59, "Hour": 23, "Day": 31, "Month": 12, "Weekday": 7}),
+])
+def test_register_launchd_keeps_every_cron_field(tmp_path, cron, expected):
+    assert _launchd_interval(tmp_path, cron) == expected
+
+
+@pytest.mark.parametrize("cron", [
+    "*/5 * * * *",   # step
+    "0 6 1,15 * *",  # list
+    "0 6 * * 1-5",   # range
+    "0 6 * * MON",   # name
+    "60 6 * * *",    # minute out of range
+    "0 24 * * *",    # hour out of range
+    "0 6 0 * *",     # day out of range
+    "0 6 * 13 *",    # month out of range
+    "0 6 * * 8",     # weekday out of range
+    "0 6 * *",       # 4 fields
+])
+def test_register_launchd_rejects_what_the_plist_cannot_express(tmp_path, cron):
+    """A cron the plist cannot represent raises before anything is written or loaded, instead of
+    silently dropping the field and firing more often than asked (df-vo3x.1)."""
+    from dataforge.cli import _register_launchd
+
+    with patch("dataforge.cli.subprocess.run") as mock_run, \
+         patch("pathlib.Path.home", return_value=tmp_path), \
+         pytest.raises(ValueError, match="cron"):
+        _register_launchd("myws", "t1", cron, "dataforge", "/home/user")
+    mock_run.assert_not_called()
+    assert not (tmp_path / "Library").exists()
 
 
 def test_register_windows_trigger():
