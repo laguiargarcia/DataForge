@@ -41,7 +41,8 @@ def test_plan_api(test_client, dataforge_home):
     r = test_client.get("/api/workspaces/Dev/deploy/to-prod/plan")
     assert r.status_code == 200
     body = r.json()
-    assert body["source"] == "Dev" and body["target"] == "Prod"
+    assert body["source"] == "Dev"
+    assert body["target"] == "Prod"
     assert any(i["target_path"] == "scripts/a.py" for i in body["items"])
 
 
@@ -117,7 +118,8 @@ def test_apply_updates_active_trigger_preserving_status(test_client, dataforge_h
         "target: Prod\npairs:\n  - {source: 'triggers/**', target: 'triggers/'}\n")
     plan = test_client.get("/api/workspaces/Dev/deploy/to-prod/plan").json()
     item = [i for i in plan["items"] if i["target_path"] == "triggers/nightly.yaml"]
-    assert item and item[0]["action"] == "MODIFY"
+    assert item
+    assert item[0]["action"] == "MODIFY"
     r = test_client.post("/api/workspaces/Dev/deploy/to-prod/apply",
                          json={"only": ["triggers/nightly.yaml"]})
     assert r.json()["applied"] is True
@@ -135,7 +137,8 @@ def test_reconcile_endpoint_registers_active_deregisters_inactive(test_client, d
     with patch("dataforge.api.routers.triggers._register_os_trigger") as reg, \
          patch("dataforge.api.routers.triggers._deregister_os_trigger") as dereg:
         r = test_client.post("/api/workspaces/Dev/triggers/daily/reconcile")
-        assert r.status_code == 200 and r.json()["reconciled"] is True
+        assert r.status_code == 200
+        assert r.json()["reconciled"] is True
         reg.assert_called_once()       # enabled on disk -> register the OS task
         dereg.assert_not_called()
     _mk(dev, "triggers/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: false\njobs: []\n")
@@ -190,7 +193,8 @@ def test_apply_never_writes_ignored_path(test_client, dataforge_home):
         "target: Prod\npairs:\n  - {source: 'scripts/**', target: 'scripts/'}\n")
     plan = test_client.get("/api/workspaces/Dev/deploy/to-prod/plan").json()
     ign = [i for i in plan["items"] if i["target_path"] == "scripts/secret.env"]
-    assert ign and ign[0]["action"] == "SKIP_IGNORED"
+    assert ign
+    assert ign[0]["action"] == "SKIP_IGNORED"
     test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={"only": ["scripts/secret.env"]})
     assert not (prod / "scripts/secret.env").exists()        # cannot force an ignored path
     test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={})
@@ -227,6 +231,7 @@ def test_full_deploy_lifecycle(test_client, dataforge_home):
     assert test_client.get("/api/workspaces/Dev/deploy/to-prod/plan").json()["target"] == "Prod"
     assert test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={}).json()["applied"] is True
     status = test_client.get("/api/workspaces/Dev/deploy/to-prod/status").json()
-    assert status["last"] is not None and status["pending"] == 0
+    assert status["last"] is not None
+    assert status["pending"] == 0
     assert test_client.post("/api/workspaces/Dev/deploy/to-prod/rollback").status_code == 200
     assert test_client.get("/api/workspaces/Dev/deploy/to-prod/status").json()["last"] is None

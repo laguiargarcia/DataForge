@@ -108,7 +108,8 @@ def test_build_payload_roundtrips_tasks():
     assert [t["name"] for t in payload["tasks"]] == ["a", "b"]
     # depends_on preserved (b depends on a)
     b = next(t for t in payload["tasks"] if t["name"] == "b")
-    assert b["depends_on"] and b["depends_on"][0]["task"] == "a"
+    assert b["depends_on"]
+    assert b["depends_on"][0]["task"] == "a"
     panel.close()
 
 
@@ -131,7 +132,8 @@ def test_params_typed_values_survive_roundtrip():
     panel._task_list.setCurrentRow(0)
     payload = panel._build_job_payload()
     p = payload["tasks"][0]["params"]
-    assert p["retries"] == 5 and isinstance(p["retries"], int)
+    assert p["retries"] == 5
+    assert isinstance(p["retries"], int)
     assert p["debug"] is True
     assert p["cols"] == ["a", "b"]
     panel.close()

@@ -195,7 +195,8 @@ def test_apply_unreadable_target_trigger_degrades_to_disarmed(tmp_path):
     _mk(tgt, "triggers/daily.yaml", "- not\n- a mapping\n")
     apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
     written = yaml.safe_load((tgt / "triggers/daily.yaml").read_text())
-    assert written["enabled"] is False and written["cron"] == "0 9 * * *"
+    assert written["enabled"] is False
+    assert written["cron"] == "0 9 * * *"
 
 
 def test_apply_target_trigger_without_enabled_stays_active(tmp_path):
@@ -216,7 +217,8 @@ def test_apply_promoted_trigger_stays_readable_like_its_source(tmp_path):
         "name: relatório\ncron: '0 9 * * *'\nenabled: true\njobs: []\nnote: manhã\n")
     apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
     text = (tgt / "triggers/daily.yaml").read_text(encoding="utf-8")
-    assert "relatório" in text and "manhã" in text
+    assert "relatório" in text
+    assert "manhã" in text
     keys = [line.split(":", 1)[0] for line in text.splitlines()]
     assert keys == ["name", "cron", "enabled", "jobs", "note"]
 

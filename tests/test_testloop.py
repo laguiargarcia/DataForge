@@ -91,7 +91,8 @@ def test_map_lists_uncovered_branch(sample_repo):
     assert [b["from"] for b in data["uncovered_branches"]] == [IF_LINE]
     assert "tests/test_mod.py::test_pos" in data["line_tests"][str(IF_LINE)]
     assert data["source_sha"].startswith("sha256:")
-    assert data["command"] == "map" and data["tests"] == ["tests/test_mod.py"]
+    assert data["command"] == "map"
+    assert data["tests"] == ["tests/test_mod.py"]
     assert data["summary"]["num_branches"] == 2
 
 
@@ -117,7 +118,8 @@ def test_module_without_target_entry_exits_2(sample_repo, command):
     (sample_repo / "tests" / "test_other.py").write_text(TEST_POS)
     proc = run(sample_repo, command, "sample/other.py")
     assert proc.returncode == 2
-    assert "sample/other.py" in proc.stderr and "testloop.toml" in proc.stderr
+    assert "sample/other.py" in proc.stderr
+    assert "testloop.toml" in proc.stderr
     assert not result_path(sample_repo, command, "sample/other.py").exists()
 
 
@@ -158,21 +160,26 @@ def check_twice(repo):
 
 def test_check_passes(sample_repo):
     data = run_ok(sample_repo, "check", "sample/mod.py")
-    assert data["passed"] is True and data["collected"] == 1 and data["failed"] == []
+    assert data["passed"] is True
+    assert data["collected"] == 1
+    assert data["failed"] == []
 
 
 def test_check_failure_exits_1_and_names_test(sample_repo_failing):
     result = run(sample_repo_failing, "check", "sample/mod.py")
     assert result.returncode == 1
     data = read_json(sample_repo_failing, "check", "sample/mod.py")
-    assert data["passed"] is False and data["failed"] == ["tests/test_mod.py::test_fails"]
+    assert data["passed"] is False
+    assert data["failed"] == ["tests/test_mod.py::test_fails"]
 
 
 def test_check_zero_collected_exits_2_and_never_passes(sample_repo_empty_test_file):
     result = run(sample_repo_empty_test_file, "check", "sample/mod.py")
     assert result.returncode == 2
     data = read_json(sample_repo_empty_test_file, "check", "sample/mod.py")
-    assert data["passed"] is False and data["collected"] == 0 and data["exit_code"] == 5
+    assert data["passed"] is False
+    assert data["collected"] == 0
+    assert data["exit_code"] == 5
 
 
 def test_check_pytest_crash_exits_2_not_1(sample_repo):
@@ -181,7 +188,9 @@ def test_check_pytest_crash_exits_2_not_1(sample_repo):
     result = run(sample_repo, "check", "sample/mod.py")
     assert result.returncode == 2
     data = read_json(sample_repo, "check", "sample/mod.py")
-    assert data["passed"] is False and data["exit_code"] == 4 and data["error"]
+    assert data["passed"] is False
+    assert data["exit_code"] == 4
+    assert data["error"]
     assert "no-such-option" in result.stderr
 
 
@@ -191,12 +200,14 @@ def test_check_xfail_is_reported_and_passes(sample_repo):
         "def test_known():\n    assert classify(1) == 'nope'\n"
     )
     data = run_ok(sample_repo, "check", "sample/mod.py")
-    assert data["passed"] is True and data["xfailed"] == ["tests/test_mod.py::test_known"]
+    assert data["passed"] is True
+    assert data["xfailed"] == ["tests/test_mod.py::test_known"]
 
 
 def test_check_same_result_twice(sample_repo_failing):
     first, second = check_twice(sample_repo_failing)
-    assert first == second and first["failed"]
+    assert first == second
+    assert first["failed"]
 
 
 def test_check_all_skipped_exits_2_and_never_passes(sample_repo):
@@ -206,8 +217,10 @@ def test_check_all_skipped_exits_2_and_never_passes(sample_repo):
     result = run(sample_repo, "check", "sample/mod.py")
     assert result.returncode == 2
     data = read_json(sample_repo, "check", "sample/mod.py")
-    assert data["passed"] is False and data["collected"] == 1
-    assert data["skipped"] == ["tests/test_mod.py::test_s"] and "actually ran" in result.stderr
+    assert data["passed"] is False
+    assert data["collected"] == 1
+    assert data["skipped"] == ["tests/test_mod.py::test_s"]
+    assert "actually ran" in result.stderr
 
 
 def test_check_skip_mixed_with_pass_still_passes(sample_repo):
@@ -215,7 +228,8 @@ def test_check_skip_mixed_with_pass_still_passes(sample_repo):
         TEST_POS + "\nimport pytest\n\n\n@pytest.mark.skip(reason='r')\ndef test_s():\n    pass\n"
     )
     data = run_ok(sample_repo, "check", "sample/mod.py")
-    assert data["passed"] is True and data["skipped"] == ["tests/test_mod.py::test_s"]
+    assert data["passed"] is True
+    assert data["skipped"] == ["tests/test_mod.py::test_s"]
 
 
 @pytest.mark.parametrize("command", ["check", "map"])
@@ -225,7 +239,8 @@ def test_stale_result_removed_when_next_run_is_tool_error(sample_repo, command):
     for f in (sample_repo / "tests").glob("test_mod*.py"):
         f.unlink()
     result = run(sample_repo, command, "sample/mod.py")
-    assert result.returncode == 2 and "no tests match" in result.stderr
+    assert result.returncode == 2
+    assert "no tests match" in result.stderr
     assert not result_path(sample_repo, command, "sample/mod.py").exists()
 
 
@@ -290,18 +305,23 @@ def processes_running_in(root):
 
 def test_mutate_reports_survivor_with_diff(sample_repo):        # does not check "nonpos"
     data = run_ok(sample_repo, "mutate", "sample/mod.py")
-    assert data["complete"] is True and data["survived"] and data["survived"][0]["diff"]
-    assert "@@" in data["survived"][0]["diff"] and data["survived"][0]["id"]
+    assert data["complete"] is True
+    assert data["survived"]
+    assert data["survived"][0]["diff"]
+    assert "@@" in data["survived"][0]["diff"]
+    assert data["survived"][0]["id"]
     assert data["total"] == data["killed"] + len(data["survived"]) + len(data["timeout"]) + len(data["not_tested"])
     assert data["score"] == pytest.approx(
         data["killed"] / (data["killed"] + len(data["survived"]) + len(data["not_tested"]))
     )
-    assert data["elapsed_s"] >= 0 and data["warnings"] == []
+    assert data["elapsed_s"] >= 0
+    assert data["warnings"] == []
 
 
 def test_mutate_strong_suite_kills_mutants(sample_repo_strong):
     data = run_ok(sample_repo_strong, "mutate", "sample/mod.py")
-    assert data["killed"] > 0 and data["survived"] == []
+    assert data["killed"] > 0
+    assert data["survived"] == []
     assert data["score"] == 1.0
 
 
@@ -366,7 +386,9 @@ def test_gate_passes_at_or_above_min_score(sample_repo_strong):
     set_min_score(sample_repo_strong, 1.0)
     run_ok(sample_repo_strong, "mutate", "sample/mod.py")
     data = run_ok(sample_repo_strong, "gate", "sample/mod.py")
-    assert data["passed"] is True and data["score"] == 1.0 and data["min_score"] == 1.0
+    assert data["passed"] is True
+    assert data["score"] == 1.0
+    assert data["min_score"] == 1.0
 
 
 def test_gate_below_min_score_exits_1_and_names_survivors(sample_repo):
@@ -375,21 +397,25 @@ def test_gate_below_min_score_exits_1_and_names_survivors(sample_repo):
     proc = run(sample_repo, "gate", "sample/mod.py")
     assert proc.returncode == 1, proc.stdout + proc.stderr
     data = read_json(sample_repo, "gate", "sample/mod.py")
-    assert data["passed"] is False and data["score"] < 1.0
-    assert data["survived"] == survivors and survivors
+    assert data["passed"] is False
+    assert data["score"] < 1.0
+    assert data["survived"] == survivors
+    assert survivors
     assert all(s in proc.stderr for s in survivors)
 
 
 def test_gate_without_min_score_exits_2(sample_repo_strong):
     run_ok(sample_repo_strong, "mutate", "sample/mod.py")
     proc = run(sample_repo_strong, "gate", "sample/mod.py")
-    assert proc.returncode == 2 and "min_score" in proc.stderr
+    assert proc.returncode == 2
+    assert "min_score" in proc.stderr
 
 
 def test_gate_without_mutate_result_exits_2(sample_repo_strong):
     set_min_score(sample_repo_strong, 0.5)
     proc = run(sample_repo_strong, "gate", "sample/mod.py")
-    assert proc.returncode == 2 and "mutate" in proc.stderr
+    assert proc.returncode == 2
+    assert "mutate" in proc.stderr
 
 
 def test_gate_refuses_a_result_for_older_code(sample_repo_strong):
@@ -398,7 +424,8 @@ def test_gate_refuses_a_result_for_older_code(sample_repo_strong):
     mod = Path(sample_repo_strong) / "sample" / "mod.py"
     mod.write_text(mod.read_text() + "\n# changed\n")
     proc = run(sample_repo_strong, "gate", "sample/mod.py")
-    assert proc.returncode == 2 and "stale" in proc.stderr
+    assert proc.returncode == 2
+    assert "stale" in proc.stderr
 
 
 def test_gate_refuses_a_partial_result(sample_repo_strong):
@@ -409,4 +436,5 @@ def test_gate_refuses_a_partial_result(sample_repo_strong):
     data["complete"] = False
     path.write_text(json.dumps(data))
     proc = run(sample_repo_strong, "gate", "sample/mod.py")
-    assert proc.returncode == 2 and "partial" in proc.stderr
+    assert proc.returncode == 2
+    assert "partial" in proc.stderr

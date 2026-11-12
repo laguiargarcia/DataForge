@@ -14,17 +14,20 @@ def app_client(workspace_dir, make_app, test_client):
 
 def test_index_served(app_client):
     r = app_client.get("/apps/test_ws/demo/")
-    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
 
 
 def test_no_trailing_slash_redirects(app_client):
     r = app_client.get("/apps/test_ws/demo", follow_redirects=False)
-    assert r.status_code == 307 and r.headers["location"].endswith("/apps/test_ws/demo/")
+    assert r.status_code == 307
+    assert r.headers["location"].endswith("/apps/test_ws/demo/")
 
 
 def test_spa_fallback_for_route_without_extension(app_client):
     r = app_client.get("/apps/test_ws/demo/qualquer/rota")
-    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
 
 
 def test_missing_asset_is_404_not_index(app_client):
@@ -75,7 +78,8 @@ def test_new_build_is_served_without_restart(app_client, workspace_dir):
 ])
 def test_404_responses_are_no_cache(app_client, url):
     r = app_client.get(url)
-    assert r.status_code == 404 and "no-cache" in r.headers["cache-control"]
+    assert r.status_code == 404
+    assert "no-cache" in r.headers["cache-control"]
 
 
 def test_redirect_is_no_cache(app_client):
@@ -96,7 +100,8 @@ def test_absolute_app_segment_is_404_without_touching_disk(app_client, monkeypat
         raise AssertionError("app.yaml read for an invalid app name")
     monkeypatch.setattr(Path, "read_text", boom)
     r = app_client.get(f"/apps/test_ws/{segment}/")
-    assert r.status_code == 404 and "no-cache" in r.headers["cache-control"]
+    assert r.status_code == 404
+    assert "no-cache" in r.headers["cache-control"]
     assert "cannot read app.yaml" not in caplog.text
 
 
@@ -112,7 +117,8 @@ def test_absolute_app_segment_is_404_without_touching_disk(app_client, monkeypat
 ])
 def test_unsafe_path_is_404(app_client, path):
     r = app_client.get(f"/apps/test_ws/demo/{path}")
-    assert r.status_code == 404 and "no-cache" in r.headers["cache-control"]
+    assert r.status_code == 404
+    assert "no-cache" in r.headers["cache-control"]
 
 
 def test_unc_path_is_refused_before_resolve(app_client, monkeypatch):

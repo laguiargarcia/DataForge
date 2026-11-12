@@ -176,11 +176,14 @@ def test_every_file_gets_the_action_its_state_demands(scenario):
                 assert sha is None or SHA_FORM.fullmatch(sha)
             hashes_content = item.kind != Kind.trigger
             if item.action == Action.add:
-                assert item.before_sha is None and item.after_sha
+                assert item.before_sha is None
+                assert item.after_sha
                 if hashes_content:
                     assert item.after_sha == blob_id(source_files[item.target_path])
             elif item.action == Action.modify:
-                assert item.before_sha and item.after_sha and item.before_sha != item.after_sha
+                assert item.before_sha
+                assert item.after_sha
+                assert item.before_sha != item.after_sha
                 if hashes_content:
                     assert item.before_sha == blob_id(target_files[item.target_path])
                     assert item.after_sha == blob_id(source_files[item.target_path])
