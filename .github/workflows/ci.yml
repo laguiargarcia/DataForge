@@ -87,9 +87,9 @@ jobs:
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
   sonar:
     # SonarQube Cloud (df-ahua.1): coverage of new code, cognitive complexity, duplication, history.
-    # A complement to the quality job, not a replacement. Not required yet (df-ahua.1.6): a failed
-    # gate fails this check without blocking the merge. Left out of the report job, since the
-    # SonarQube Cloud bot comments its own result on the PR.
+    # A complement to the quality job, not a replacement. Required on main (repo ruleset,
+    # df-ahua.1.6): a failed gate fails this check and blocks the merge. Left out of the report
+    # job, since the SonarQube Cloud bot comments its own result on the PR.
     needs: [tests]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
