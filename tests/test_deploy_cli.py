@@ -153,7 +153,8 @@ def test_run_write_failure_exits_one_clean(dataforge_home, monkeypatch):
     monkeypatch.setattr(svc, "apply_plan", boom)
     r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev"])
     assert r.exit_code == 1
-    assert "rollback" in r.output.lower() and "to-prod" in r.output   # hint names the pipeline
+    assert "rollback" in r.output.lower()   # hint names the pipeline
+    assert "to-prod" in r.output
     assert not isinstance(r.exception, OSError)       # OSError handled, never leaked
 
 
@@ -267,7 +268,9 @@ def test_rollback_prompt_shows_provenance(dataforge_home):
     dev, prod = _setup(dataforge_home)
     runner.invoke(app, ["deploy", "apply", "to-prod", "-w", "Dev", "--yes"])
     r = runner.invoke(app, ["deploy", "rollback", "to-prod", "-w", "Dev"], input="n\n")
-    assert "Dev" in r.stdout and "Prod" in r.stdout and "to-prod" in r.stdout
+    assert "Dev" in r.stdout
+    assert "Prod" in r.stdout
+    assert "to-prod" in r.stdout
 
 
 def test_rollback_missing_blob_fails_clean(dataforge_home):
@@ -320,7 +323,8 @@ def test_run_json_error_is_valid_json(dataforge_home):
     r = runner.invoke(app, ["deploy", "run", "nope", "-w", "Dev", "--json"])
     assert r.exit_code == 1
     payload = json.loads(r.stdout.strip().splitlines()[-1])   # stdout stays parseable on error
-    assert payload["status"] == "ERROR" and payload["kind"] == "not_found"
+    assert payload["status"] == "ERROR"
+    assert payload["kind"] == "not_found"
 
 
 def test_run_json_nothing_to_apply_is_valid_json(dataforge_home):
@@ -330,7 +334,8 @@ def test_run_json_nothing_to_apply_is_valid_json(dataforge_home):
     r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev", "--json"])
     assert r.exit_code == 0
     payload = json.loads(r.stdout.strip().splitlines()[-1])
-    assert payload["status"] == "NOTHING_TO_APPLY" and payload["entry_id"] is None
+    assert payload["status"] == "NOTHING_TO_APPLY"
+    assert payload["entry_id"] is None
 
 
 def test_run_all_protected_message_not_up_to_date(dataforge_home):
@@ -345,5 +350,6 @@ def test_run_all_protected_message_not_up_to_date(dataforge_home):
         "target: Prod\nprune: true\npairs:\n  - {source: 'triggers/**', target: 'triggers/'}\n")
     r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev"])
     assert r.exit_code == 0
-    assert "PROTECTED" in r.stdout and "untouched" in r.stdout.lower()
+    assert "PROTECTED" in r.stdout
+    assert "untouched" in r.stdout.lower()
     assert "up to date" not in r.stdout.lower()       # must not claim up-to-date when laws blocked it

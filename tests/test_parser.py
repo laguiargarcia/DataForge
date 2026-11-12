@@ -278,7 +278,8 @@ def test_save_job_typed_params_survive_roundtrip(workspace_dir):
     save_job(workspace_dir, job)
     reloaded = load_job(workspace_dir, "tp")
     p = reloaded.tasks[0].params
-    assert p["retries"] == 5 and isinstance(p["retries"], int)
+    assert p["retries"] == 5
+    assert isinstance(p["retries"], int)
     assert p["debug"] is True
     assert p["cols"] == ["a", "b"]
 

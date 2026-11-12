@@ -43,7 +43,10 @@ def test_auto_deploy_result_defaults():
     from dataforge.deploy.models import AutoDeployResult, AutoDeployStatus
     r = AutoDeployResult(source="Dev", target="Prod", pipeline="to-prod",
                          status=AutoDeployStatus.nothing_to_apply)
-    assert r.applied == 0 and r.protected == 0 and r.ignored == 0 and r.total == 0
+    assert r.applied == 0
+    assert r.protected == 0
+    assert r.ignored == 0
+    assert r.total == 0
     assert r.entry_id is None
     # str-enum serializes to its value (json/model_dump friendly for the --json surface)
     assert r.model_dump(mode="json")["status"] == "NOTHING_TO_APPLY"

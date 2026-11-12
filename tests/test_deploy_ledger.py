@@ -6,7 +6,8 @@ def test_write_blob_is_content_addressed_and_dedups(tmp_path):
     led = Ledger(tmp_path)
     sha1 = led.write_blob(b"hello")
     sha2 = led.write_blob(b"hello")
-    assert sha1 == sha2 and sha1.startswith("sha256:")
+    assert sha1 == sha2
+    assert sha1.startswith("sha256:")
     objs = list((tmp_path / "deploy" / ".ledger" / "objects").rglob("*"))
     assert len([p for p in objs if p.is_file()]) == 1
 
