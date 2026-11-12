@@ -43,7 +43,7 @@ def _validate_job_name(name: str) -> None:
 def _require_workspace(ws: str) -> Path:
     """Resolve a workspace dir or raise 404. NEW helper (not a reuse).
 
-    list_jobs/trigger_job inline the resolve_workspace try/except + workspace.yaml-exists idiom;
+    list_jobs/trigger_job inline the resolve_workspace try/except idiom;
     this consolidates it for the CRUD endpoints only. CRITICAL: never surface str(exc) —
     compat.resolve_workspace's ValueError embeds an ABSOLUTE filesystem path (compat.py), which
     would violate the no-path-leak convention (T-01.5.06-02). The fixed string below leaks nothing.
@@ -171,7 +171,6 @@ def list_jobs(ws: str):
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
-
     jobs = load_jobs(workspace_dir)
     return sorted(
         [{"name": job.name, "parameters": [p.model_dump() for p in job.parameters]} for job in jobs],
@@ -209,7 +208,6 @@ async def trigger_job(ws: str, job: str, background_tasks: BackgroundTasks):
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-
 
     job_yaml = workspace_dir / "jobs" / job / _JOB_YAML
     if not job_yaml.exists():

@@ -103,7 +103,9 @@ def test_only_curated_is_readable(seeded, workspace_dir, test_client):
     assert test_client.get("/api/workspaces/test_ws/tables/raw_tabela").status_code == 404
 
 
-def test_table_name_outside_the_allowed_charset_is_404(seeded, test_client):
+def test_table_name_outside_the_allowed_charset_is_404(workspace_dir, test_client):
+    """A real Delta table exists at curated/ven-das, so only the name check can turn it into 404."""
+    pl.DataFrame({"x": [1]}).write_delta(str(curated_dir(workspace_dir) / "ven-das"))
     r = test_client.get("/api/workspaces/test_ws/tables/ven-das")
     assert r.status_code == 404
     assert r.json() == {"detail": "Not found"}

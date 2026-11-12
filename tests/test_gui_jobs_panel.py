@@ -429,7 +429,7 @@ def test_editor_page_does_not_disturb_run_detail_sse(monkeypatch):
 
 
 def test_relative_time_and_duration_accept_z_suffix():
-    """API timestamps end in 'Z'; both formatters read them as UTC."""
+    """API timestamps end in 'Z'; both formatters read them as UTC (fromisoformat does, on 3.11+)."""
     from datetime import datetime, timedelta, timezone
     from dataforge.gui.panels import jobs as jobs_module
     Panel = jobs_module.Panel
