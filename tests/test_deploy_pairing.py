@@ -130,3 +130,26 @@ def test_source_equivalents_runs_the_pair_rules_backwards():
     assert source_equivalents(p, "cfg/app.yaml") == ["config/app.yaml", "cfg/app.yaml"]
     assert source_equivalents(p, "cfg/other.yaml") == ["cfg/other.yaml"]   # exact file: name only
     assert source_equivalents(p, "codex/a.py") == ["codex/a.py"]          # not under 'code/'
+
+
+def test_resolve_pairs_overlapping_rules_keep_every_file_once(tmp_path):
+    """Two rules can reach the same file onto the same target (an exact rule plus a glob over its
+    folder). The repeat is dropped, and the rule's other files still pair: a repeat is skipped,
+    it does not end the rule."""
+    _mk(tmp_path, "deploy/p.yaml",
+        "target: Prod\npairs:\n"
+        "  - {source: 'jobs/a.yaml', target: 'jobs/'}\n"
+        "  - {source: 'jobs/*', target: 'jobs/'}\n")
+    _mk(tmp_path, "jobs/a.yaml", "a\n")
+    _mk(tmp_path, "jobs/b.yaml", "b\n")
+    pairs = resolve_pairs(tmp_path, load_pipeline(tmp_path, "p"))
+    assert pairs == [("jobs/a.yaml", "jobs/a.yaml"), ("jobs/b.yaml", "jobs/b.yaml")]
+
+
+@pytest.mark.parametrize("name", ["Xa.py", "X/inner.py", "XX.py"])
+def test_resolve_pairs_keeps_the_path_under_the_base_verbatim(tmp_path, name):
+    """target = rule target + the source path below the base, character for character: only the
+    separator after the base is dropped, never the start of a name."""
+    _mk(tmp_path, "deploy/p.yaml", "target: Prod\npairs:\n  - {source: 'scripts/**', target: 'src/'}\n")
+    _mk(tmp_path, f"scripts/{name}", "x\n")
+    assert resolve_pairs(tmp_path, load_pipeline(tmp_path, "p")) == [(f"scripts/{name}", f"src/{name}")]

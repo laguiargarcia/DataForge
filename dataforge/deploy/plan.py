@@ -199,6 +199,18 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             stacklevel=2,
         )
         return out
+    keep = {t.casefold() for t in source_targets}
+    for p, rel in _prune_candidates(target_dir, _prune_bases(pipeline), keep):
+        item = _prune_item(p, rel, ignore, source_equivalents(pipeline, rel))
+        if item is not None:
+            check_folder_inside(target_dir, p.parent)   # df-m1dk: a linked base leads outside
+            out.append(item)
+    return out
+
+
+def _prune_bases(pipeline: PipelineModel) -> set[str]:
+    """The target folders prune walks: every pair's target, checked and normalized, minus the
+    workspace root."""
     for rule in pipeline.pairs:   # df-886.11: never walk a base outside the target workspace
         check_target_inside(rule.target)
     bases = {normalize_target(rule.target) for rule in pipeline.pairs}   # df-886.10
@@ -206,11 +218,15 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
         # df-886.14: a root target places single root files (workspace.yaml -> '.'). Walking it
         # would treat the whole workspace (.env, data/, everything unpaired) as prunable.
         warnings.warn("deploy prune skips the target root: a pair whose target is the workspace "
-                      "root is never pruned.", stacklevel=2)
+                      "root is never pruned.", stacklevel=3)   # points at build_plan, as before
         bases.discard("")
-    # Keys are casefolded (df-886.18): on NTFS 'JOBS/a' and 'jobs/a' are one file. On a
-    # case-sensitive disk that only ever keeps a file prune could have deleted, never the reverse.
-    keep = {t.casefold() for t in source_targets}
+    return bases
+
+
+def _prune_candidates(target_dir: Path, bases: set[str], keep: set[str]):
+    """(path, rel) of each regular file under the bases with no paired source, once each.
+    Keys are casefolded (df-886.18): on NTFS 'JOBS/a' and 'jobs/a' are one file. On a
+    case-sensitive disk that only ever keeps a file prune could have deleted, never the reverse."""
     seen: set[str] = set()   # df-886.15: nested bases ('jobs', 'jobs/sub') reach a file twice
     for base in sorted(bases):
         base_dir = target_dir / base
@@ -222,11 +238,7 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             if key in seen or key in keep or p.is_symlink() or not p.is_file():
                 continue
             seen.add(key)
-            item = _prune_item(p, rel, ignore, source_equivalents(pipeline, rel))
-            if item is not None:
-                check_folder_inside(target_dir, p.parent)   # df-m1dk: a linked base leads outside
-                out.append(item)
-    return out
+            yield p, rel
 
 
 def _prune_item(p: Path, rel: str, ignore: DeployIgnore, sources: list[str]) -> ItemChange | None:

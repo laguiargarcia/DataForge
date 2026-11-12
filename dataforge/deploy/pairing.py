@@ -87,33 +87,45 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
     seen: set[tuple[str, str]] = set()
     owner: dict[str, str] = {}   # casefolded target -> the source file that fills it (df-nyf)
     for rule in pipeline.pairs:
-        base = source_base(rule.source)
-        pattern = rule.source + "/*" if rule.source.endswith("**") else rule.source
-        for p in sorted(source_dir.glob(pattern)):
-            if p.is_symlink() or not p.is_file():
-                continue
-            rel = p.relative_to(source_dir).as_posix()
-            tail = rel[len(base):].lstrip("/") if base else rel
-            # For exact-file sources (no wildcard), base == rel so tail is empty;
-            # fall back to the filename so it is placed inside the target dir.
-            if not tail:
-                tail = PurePosixPath(rel).name
-            target_rel = normalize_target(posixpath.join(rule.target, tail))
-            if _escapes(target_rel):   # the rule target was checked; a glob result can't escape
-                raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
-            # A file NAME Windows can't hold is not fatal here: build_plan skips it (df-886.20).
-            key = (rel, target_rel)
+        for rel in _matched_files(source_dir, rule.source):
+            key = (rel, _target_for(rel, rule.source, rule.target))
             if key in seen:
                 continue
-            # df-nyf: two source files on one target would both be written and one silently
-            # lost. Casefolded, since on NTFS 't/a.py' and 'T/a.py' are one file (df-886.18).
-            first = owner.setdefault(target_rel.casefold(), rel)
-            if first != rel:
-                raise ValueError(f"deploy pairs map two source files to one target {target_rel!r}: "
-                                 f"{first!r} and {rel!r}")
+            _claim_target(owner, *key)
             seen.add(key)
-            out.append((rel, target_rel))
+            out.append(key)
     return out
+
+
+def _matched_files(source_dir: Path, source: str) -> list[str]:
+    """Relative POSIX paths of the regular files (not symlinks) a pair's source glob matches."""
+    pattern = source + "/*" if source.endswith("**") else source
+    return [p.relative_to(source_dir).as_posix() for p in sorted(source_dir.glob(pattern))
+            if not p.is_symlink() and p.is_file()]
+
+
+def _target_for(rel: str, source: str, target: str) -> str:
+    """Where one matched source file lands: the rule target + its path below the source base."""
+    base = source_base(source)
+    tail = rel[len(base):].lstrip("/") if base else rel
+    # For exact-file sources (no wildcard), base == rel so tail is empty;
+    # fall back to the filename so it is placed inside the target dir.
+    if not tail:
+        tail = PurePosixPath(rel).name
+    target_rel = normalize_target(posixpath.join(target, tail))
+    if _escapes(target_rel):   # the rule target was checked; a glob result can't escape
+        raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
+    # A file NAME Windows can't hold is not fatal here: build_plan skips it (df-886.20).
+    return target_rel
+
+
+def _claim_target(owner: dict[str, str], rel: str, target_rel: str) -> None:
+    """df-nyf: two source files on one target would both be written and one silently lost.
+    Casefolded, since on NTFS 't/a.py' and 'T/a.py' are one file (df-886.18)."""
+    first = owner.setdefault(target_rel.casefold(), rel)
+    if first != rel:
+        raise ValueError(f"deploy pairs map two source files to one target {target_rel!r}: "
+                         f"{first!r} and {rel!r}")
 
 
 def source_equivalents(pipeline: PipelineModel, target_rel: str) -> list[str]:
