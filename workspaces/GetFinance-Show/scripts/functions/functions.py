@@ -16,6 +16,8 @@ ITEMS_ID = [item.strip() for item in os.getenv("ITEM_IDS", "").split(",") if ite
 
 # Pluggy paginated endpoints: max page size (used by list_transactions / list_investments).
 PLUGGY_PAGE_SIZE = 500
+_JSON = "application/json"
+_CONNECTIONS_YAML = "connections.yaml"
 
 _api_token = None
 _api_token_created_at = 0
@@ -28,7 +30,7 @@ def get_api_token():
         return _api_token
     url = "https://api.pluggy.ai/auth"
     body = {"clientId": CLIENT_ID, "clientSecret": CLIENT_SECRET}
-    headers = {"accept": "application/json", "content-type": "application/json"}
+    headers = {"accept": _JSON, "content-type": _JSON}
     response = requests.post(url, json=body, headers=headers)
     if response.status_code == 200:
         _api_token = response.json().get("apiKey")
@@ -44,7 +46,7 @@ def list_accounts(item_id):
         print("list_accounts: skipped — no valid API token")
         return None
     url = f"https://api.pluggy.ai/accounts?itemId={item_id}"
-    headers = {"accept": "application/json", "X-API-KEY": token}
+    headers = {"accept": _JSON, "X-API-KEY": token}
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
         return response.json()
@@ -57,7 +59,7 @@ def list_transactions(account_id):
     if token is None:
         print("list_transactions: skipped — no valid API token")
         return None
-    headers = {"accept": "application/json", "X-API-KEY": token}
+    headers = {"accept": _JSON, "X-API-KEY": token}
     all_results = []
     base = "https://api.pluggy.ai/v2/transactions"
     # Pluggy v2/transactions uses cursor pagination (the `next` field) and REJECTS a pageSize
@@ -90,7 +92,7 @@ def list_bills(account_id):
     if token is None:
         print("list_bills: skipped — no valid API token")
         return None
-    headers = {"accept": "application/json", "X-API-KEY": token}
+    headers = {"accept": _JSON, "X-API-KEY": token}
     all_results = []
     page = 1
     while True:
@@ -115,7 +117,7 @@ def list_investments(item_id):
     if token is None:
         print("list_investments: skipped — no valid API token")
         return None
-    headers = {"accept": "application/json", "X-API-KEY": token}
+    headers = {"accept": _JSON, "X-API-KEY": token}
     all_results = []
     page = 1
     while True:
@@ -141,16 +143,16 @@ def _workspace_root() -> Path:
     # depth 1) are one dir shallower, so fall back to walking up to the ancestor that actually
     # holds connections/connections.yaml — making path resolution depth-agnostic.
     base = Path(__file__).parent.parent.parent
-    if (base / "connections" / "connections.yaml").exists():
+    if (base / "connections" / _CONNECTIONS_YAML).exists():
         return base
     for anc in Path(__file__).resolve().parents:
-        if (anc / "connections" / "connections.yaml").exists():
+        if (anc / "connections" / _CONNECTIONS_YAML).exists():
             return anc
     return base
 
 
 def _connection_config(name: str) -> dict:
-    connections_path = _workspace_root() / "connections" / "connections.yaml"
+    connections_path = _workspace_root() / "connections" / _CONNECTIONS_YAML
     with open(connections_path, encoding="utf-8") as f:
         return yaml.safe_load(f)["connections"][name]
 

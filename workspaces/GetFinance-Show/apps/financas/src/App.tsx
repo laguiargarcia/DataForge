@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { lerTabela } from './api'
 import {
   brl, brlSinal, meses, resumirMes, rotuloMes,
@@ -40,7 +40,7 @@ export function App() {
       dados => {
         setEstado({ fase: 'ok', dados })
         const lista = meses(dados)
-        setMes(lista.length ? lista[lista.length - 1] : null)
+        setMes(lista.at(-1) ?? null)
         setSelecionada(null)
       },
       () => setEstado({ fase: 'erro' }),
@@ -65,8 +65,37 @@ export function App() {
   const escolher = (id: string) => setSelecionada(id === selecionada ? null : id)
 
   const semDados = dados !== null && resumo === null
+  const vazio = semDados ? '—' : ''
   const valor = (v: number | null, f: (x: number | null) => string = brl) =>
-    resumo ? f(v) : semDados ? '—' : ''
+    resumo ? f(v) : vazio
+
+  let principal: ReactNode
+  if (estado.fase === 'erro') {
+    principal = (
+      <div className="flex flex-col gap-5 items-start">
+        <span className="text-[16px] text-secundario">Não foi possível carregar os dados.</span>
+        <button
+          onClick={abrir}
+          className="min-h-11 px-[18px] rounded-[999px] bg-faixa text-acento text-[15px] font-semibold flex items-center"
+        >
+          Tentar de novo
+        </button>
+      </div>
+    )
+  } else if (categoria) {
+    principal = <CartaoDetalhe categoria={categoria} onVoltar={() => setSelecionada(null)} />
+  } else {
+    principal = (
+      <CartaoResumo
+        sobrou={valor(resumo?.sobrou ?? null, brlSinal)}
+        entrou={valor(resumo?.entrou ?? null)}
+        saiu={valor(resumo?.saiu ?? null)}
+        naConta={valor(resumo?.naConta ?? null)}
+        investido={valor(resumo?.investido ?? null)}
+        fatura={valor(resumo?.fatura ?? null)}
+      />
+    )
+  }
 
   return (
     <div className="min-h-[980px] bg-fundo text-texto font-sans pt-8 px-4 pb-16 box-border">
@@ -82,7 +111,7 @@ export function App() {
             >
               <Seta d="M15 6l-6 6 6 6" />
             </button>
-            <div className="text-[15px] font-medium px-2">{mes ? rotuloMes(mes) : semDados ? '—' : ''}</div>
+            <div className="text-[15px] font-medium px-2">{mes ? rotuloMes(mes) : vazio}</div>
             <button
               className={classeSeta}
               aria-label="Próximo mês"
@@ -96,28 +125,7 @@ export function App() {
 
         <div className="flex flex-wrap gap-5 items-stretch">
           <section className="flex-[1_1_440px] min-w-0 bg-cartao rounded-[36px] p-8 box-border flex flex-col gap-7">
-            {estado.fase === 'erro' ? (
-              <div className="flex flex-col gap-5 items-start">
-                <span className="text-[16px] text-secundario">Não foi possível carregar os dados.</span>
-                <button
-                  onClick={abrir}
-                  className="min-h-11 px-[18px] rounded-[999px] bg-faixa text-acento text-[15px] font-semibold flex items-center"
-                >
-                  Tentar de novo
-                </button>
-              </div>
-            ) : categoria ? (
-              <CartaoDetalhe categoria={categoria} onVoltar={() => setSelecionada(null)} />
-            ) : (
-              <CartaoResumo
-                sobrou={valor(resumo?.sobrou ?? null, brlSinal)}
-                entrou={valor(resumo?.entrou ?? null)}
-                saiu={valor(resumo?.saiu ?? null)}
-                naConta={valor(resumo?.naConta ?? null)}
-                investido={valor(resumo?.investido ?? null)}
-                fatura={valor(resumo?.fatura ?? null)}
-              />
-            )}
+            {principal}
           </section>
 
           <ListaCategorias categorias={resumo?.categorias ?? []} ativa={categoria?.id ?? null} onEscolher={escolher} />
