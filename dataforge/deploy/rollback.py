@@ -1,6 +1,8 @@
 from pathlib import Path
 from .models import DeployEntry, Action
 from .ledger import Ledger
+from .apply import _atomic_write
+from .pairing import target_file
 
 
 def _prune_empty_dirs(target_dir: Path, leaf_dir: Path) -> None:
@@ -31,16 +33,17 @@ def rollback_last(target_dir: Path, ledger: Ledger) -> DeployEntry | None:
         if item.action != Action.add and item.before_sha and not ledger.has_blob(item.before_sha):
             raise FileNotFoundError(
                 f"rollback aborted: missing snapshot {item.before_sha} for {item.target_path}")
+    # The log is a file in the target: a path in it outside the target is refused before any
+    # change (df-m1dk).
+    checked = [(item, target_file(target_dir, item.target_path)) for item in entry.items]
     emptied: set[Path] = set()
-    for item in entry.items:
-        tgt = target_dir / item.target_path
+    for item, tgt in checked:
         if item.action == Action.add:
             if tgt.exists():
                 tgt.unlink()
             emptied.add(tgt.parent)
         elif item.before_sha:   # MODIFY or DELETE — restore snapshot
-            tgt.parent.mkdir(parents=True, exist_ok=True)
-            tgt.write_bytes(ledger.read_blob(item.before_sha))
+            _atomic_write(tgt, ledger.read_blob(item.before_sha))   # replaces a link, never follows it
     # Prune dirs the removed ADDs left empty — deepest first so nested children clear before
     # their parents are tested. Stops at any dir that still holds a file (e.g. a restored MODIFY).
     for d in sorted(emptied, key=lambda p: len(p.parts), reverse=True):

@@ -5,9 +5,16 @@ Exit 0 when score >= min_score, 1 when below, 2 when there is nothing trustworth
 """
 
 import json
+import math
 import sys
 
 from common import ToolError, result_path, source_sha, write_result
+
+
+def four_places_down(score: float) -> str:
+    """A score as 4 decimals, rounded DOWN: 29/31 = 0.93548 is 0.9354. Rounding to nearest
+    printed 0.9355, so the min_score it suggested failed the next gate (df-0kv9)."""
+    return f"{math.floor(score * 10_000) / 10_000:.4f}"
 
 
 def main(config, module: str):
@@ -39,11 +46,12 @@ def main(config, module: str):
     })
 
     verdict = "passed" if passed else "FAILED"
-    print(f"testloop: gate {module}: score {score:.4f}, min_score {min_score:.4f}: {verdict}", file=sys.stderr)
+    print(f"testloop: gate {module}: score {four_places_down(score)}, min_score {min_score:.4f}: {verdict}",
+          file=sys.stderr)
     if not passed:
         print("surviving mutants (show one with `mutmut show <id>`):", file=sys.stderr)
         for mutant in survived:
             print(f"  {mutant}", file=sys.stderr)
     elif score > min_score:
-        print(f"score is above min_score; raise min_score to {score:.4f} to keep it", file=sys.stderr)
+        print(f"score is above min_score; raise min_score to {four_places_down(score)} to keep it", file=sys.stderr)
     return out, 0 if passed else 1

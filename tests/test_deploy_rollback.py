@@ -100,3 +100,24 @@ def test_rollback_aborts_if_snapshot_blob_missing(tmp_path):
         rollback_last(tgt, led)
     assert led.last() is not None                          # entry retained for retry
     assert (tgt / "scripts/a.py").read_text() == "new\n"   # target untouched (pre-flight aborted)
+
+
+# --- df-m1dk: rollback never writes or deletes outside the target, whatever the ledger says ---
+
+@pytest.mark.parametrize("action", ["ADD", "MODIFY", "DELETE"])
+@pytest.mark.parametrize("hostile", ["../escaped.txt", "scripts/../../escaped.txt"])
+def test_rollback_refuses_a_ledger_path_outside_the_target(tmp_path, hostile, action):
+    from dataforge.deploy.models import Action, DeployEntry, ItemChange, Kind
+    tgt = tmp_path / "Prod"
+    _mk(tgt, "scripts/ok.py", "deployed\n")
+    (tmp_path / "escaped.txt").write_text("precious")
+    led = Ledger(tgt)
+    snap = led.write_blob(b"evil")
+    led.append(DeployEntry(id="dpl_x", ts="2026-11-11T00:00:00+00:00", parent=None, source="Dev",
+                           target="Prod", pipeline="p", items=[
+        ItemChange(source_path=None, target_path=hostile, kind=Kind.script,
+                   action=Action(action), before_sha=None if action == "ADD" else snap)]))
+    with pytest.raises(ValueError, match="outside the target workspace|escapes target workspace"):
+        rollback_last(tgt, led)
+    assert (tmp_path / "escaped.txt").read_text() == "precious"
+    assert led.last() is not None   # entry kept: nothing was rolled back
