@@ -129,7 +129,7 @@ def _collect(python: str, copy: Path, env: dict, deadline: float) -> dict[str, s
 
 
 def _summarise(results: dict[str, str]) -> dict:
-    killed = survived = 0
+    killed = 0
     timeout, not_tested, survivors, unknown = [], [], [], {}
     for key, status in sorted(results.items()):
         if status == KILLED:

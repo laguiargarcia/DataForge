@@ -199,7 +199,7 @@ def test_run_reconciles_active_trigger_via_daemon(dataforge_home, monkeypatch):
     _mk(prod, "triggers/daily.yaml", "name: daily\ncron: '0 5 * * *'\nenabled: true\njobs: []\n")
     _mk(dev, "deploy/to-prod.yaml",
         "target: Prod\npairs:\n  - {source: 'triggers/**', target: 'triggers/'}\n")
-    _FakeClient.posted = []
+    monkeypatch.setattr(_FakeClient, "posted", [])
     monkeypatch.setattr("dataforge.deploy.cli.httpx.Client", _FakeClient)
     r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev"])
     assert r.exit_code == 0

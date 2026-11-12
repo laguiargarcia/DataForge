@@ -32,14 +32,19 @@ def _compact_edge(edge: DependencyEdge):
     return {"task": edge.task, "when": list(edge.when)}
 
 
+def _inferred_type(task: Task) -> str | None:
+    """The task type model inference would produce from script/job alone."""
+    if task.script and not task.job:
+        return "python"
+    if task.job and not task.script:
+        return "job"
+    return None
+
+
 def _compact_task_dict(task: Task) -> dict:
     out: dict = {"name": task.name}
     # The "type" key is omitted when it equals what model inference would produce
-    inferred = (
-        "python"
-        if (task.script and not task.job)
-        else ("job" if (task.job and not task.script) else None)
-    )
+    inferred = _inferred_type(task)
     if task.type is not None and task.type != inferred:
         out["type"] = task.type
     if task.script is not None:

@@ -15,6 +15,9 @@ from dataforge.deploy.models import DeployPlan, Action, PipelineModel
 deploy_app = typer.Typer(help="Deploy workspace definitions from one workspace to another")
 console = Console()
 
+_WORKSPACE_HELP = "Source workspace name"
+_PIPELINE_HELP = "Pipeline name"
+
 
 def _reconcile_via_daemon(target_ws: str, names: List[str], quiet: bool = False) -> None:
     """Ask the running daemon to re-sync the OS schedule for triggers a deploy/rollback touched —
@@ -81,7 +84,7 @@ def _render(plan: DeployPlan) -> None:
 @deploy_app.command()
 def diff(
     pipeline: str = typer.Argument(..., help="Pipeline name (deploy/<name>.yaml in the source workspace)"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Source workspace name"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
 ):
     """Show what a deploy WOULD change (dry-run — writes nothing)."""
     source_dir, pipeline_model, target_dir = _resolve(workspace, pipeline)
@@ -90,8 +93,8 @@ def diff(
 
 @deploy_app.command()
 def apply(
-    pipeline: str = typer.Argument(..., help="Pipeline name"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Source workspace name"),
+    pipeline: str = typer.Argument(..., help=_PIPELINE_HELP),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     only: Optional[str] = typer.Option(None, "--only",
         help="Glob over the full POSIX target path (fnmatch; matches across '/'). Deploy only matching items."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt"),
@@ -115,12 +118,12 @@ def apply(
 
 @deploy_app.command()
 def rollback(
-    pipeline: str = typer.Argument(..., help="Pipeline name"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Source workspace name"),
+    pipeline: str = typer.Argument(..., help=_PIPELINE_HELP),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt"),
 ):
     """Undo the most recent deploy to this pipeline's target workspace."""
-    source_dir, pipeline_model, target_dir = _resolve(workspace, pipeline)
+    _, _, target_dir = _resolve(workspace, pipeline)
     last = service.last_entry(target_dir)
     if last is None:
         rprint("[dim]No deploy to roll back.[/dim]")
@@ -142,8 +145,8 @@ def rollback(
 
 @deploy_app.command()
 def status(
-    pipeline: str = typer.Argument(..., help="Pipeline name"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Source workspace name"),
+    pipeline: str = typer.Argument(..., help=_PIPELINE_HELP),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
 ):
     """Show the last deploy and the currently pending changes for a pipeline."""
     source_dir, pipeline_model, target_dir = _resolve(workspace, pipeline)
@@ -158,8 +161,8 @@ def status(
 
 @deploy_app.command()
 def run(
-    pipeline: str = typer.Argument(..., help="Pipeline name"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Source workspace name"),
+    pipeline: str = typer.Argument(..., help=_PIPELINE_HELP),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     as_json: bool = typer.Option(False, "--json", help="Emit the result as JSON (machine-readable)."),
 ):
     """Deploy a pipeline NON-INTERACTIVELY (no prompt) — for automation/scheduling.
