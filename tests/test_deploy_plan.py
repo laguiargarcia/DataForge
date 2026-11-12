@@ -26,6 +26,11 @@ def _build(src: Path, tgt: Path):
     return build_plan(src, tgt, p, "to-prod", DeployIgnore.load(src), pairs)
 
 
+def _item(plan, target_path: str):
+    """The one plan item for target_path (StopIteration if the plan has none)."""
+    return next(i for i in plan.items if i.target_path == target_path)
+
+
 def test_kind_for_by_prefix():
     assert kind_for("scripts/x.py") == Kind.script
     assert kind_for("jobs/j/job.yaml") == Kind.job
@@ -39,7 +44,7 @@ def test_add_new_file(tmp_path):
     src, tgt = tmp_path / "Dev", tmp_path / "Prod"
     _mk(src, "scripts/a.py", "print(1)\n")
     plan = _build(src, tgt)
-    a = [i for i in plan.items if i.target_path == "scripts/a.py"][0]
+    a = _item(plan, "scripts/a.py")
     assert a.action == Action.add and a.before_sha is None
 
 
@@ -56,7 +61,7 @@ def test_modify_changed_file(tmp_path):
     _mk(src, "scripts/a.py", "new\n")
     _mk(tgt, "scripts/a.py", "old\n")
     plan = _build(src, tgt)
-    a = [i for i in plan.items if i.target_path == "scripts/a.py"][0]
+    a = _item(plan, "scripts/a.py")
     assert a.action == Action.modify and a.before_sha != a.after_sha
 
 
@@ -66,7 +71,7 @@ def test_ignored_path_is_skipped(tmp_path):
     _mk(src, "scripts/a.py", "print(1)\n")
     _mk(src, "deploy/.deployignore", "scripts/a.py\n")
     plan = _build(src, tgt)
-    a = [i for i in plan.items if i.target_path == "scripts/a.py"][0]
+    a = _item(plan, "scripts/a.py")
     assert a.action == Action.skip_ignored
 
 
@@ -76,7 +81,7 @@ def test_active_target_trigger_is_updated_not_protected(tmp_path):
     _mk(src, "triggers/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
     _mk(tgt, "triggers/daily.yaml", "name: daily\ncron: '0 5 * * *'\nenabled: true\njobs: []\n")
     plan = _build(src, tgt)
-    t = [i for i in plan.items if i.target_path == "triggers/daily.yaml"][0]
+    t = _item(plan, "triggers/daily.yaml")
     assert t.action == Action.modify   # definition differs -> update; apply preserves 'enabled'
 
 
@@ -111,7 +116,7 @@ def test_prune_on_marks_extra_target_files_for_delete(tmp_path):
     _mk(tgt, "scripts/old.py", "old\n")
     p = _pipeline_prune(src, prune=True)
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
-    d = [i for i in plan.items if i.target_path == "scripts/old.py"][0]
+    d = _item(plan, "scripts/old.py")
     assert d.action == Action.delete and d.source_path is None
 
 
@@ -166,7 +171,7 @@ def test_prune_protects_active_target_trigger(tmp_path):  # CRITICAL — law #2
         "target: Prod\nprune: true\npairs:\n  - {source: 'triggers/*.yaml', target: 'triggers/'}\n")
     p = load_pipeline(src, "p")
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
-    extra = [i for i in plan.items if i.target_path == "triggers/extra.yaml"][0]
+    extra = _item(plan, "triggers/extra.yaml")
     assert extra.action == Action.protected  # must NOT be delete
 
 
@@ -178,7 +183,7 @@ def test_renamed_trigger_target_is_updated(tmp_path):  # kind from source
         "target: Prod\npairs:\n  - {source: 'triggers/*.yaml', target: 'schedules/'}\n")
     p = load_pipeline(src, "p")
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
-    t = [i for i in plan.items if i.target_path == "schedules/daily.yaml"][0]
+    t = _item(plan, "schedules/daily.yaml")
     assert t.action == Action.modify and t.kind == Kind.trigger   # updated, status preserved by apply
 
 
@@ -258,3 +263,117 @@ def test_app_pair_plans_sources_and_bundle_but_not_build_artifacts(tmp_path):
         assert by_target[rel].kind == Kind.app
     assert by_target["apps/financas/node_modules/react/index.js"].action == Action.skip_ignored
     assert by_target["apps/financas/test-results/.last-run.json"].action == Action.skip_ignored
+
+
+# --- df-886.13: a target path that exists but isn't a file is reported, not a crash ---
+
+def test_target_path_that_is_a_directory_is_protected(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    _mk(src, "scripts/b.py", "print(2)\n")
+    (tgt / "scripts" / "a.py").mkdir(parents=True)
+    plan = _build(src, tgt)   # used to raise IsADirectoryError
+    a = _item(plan, "scripts/a.py")
+    assert a.action == Action.protected
+    assert a.reason == "target has a folder where the source has a file"
+    assert a.source_path == "scripts/a.py"
+    assert a not in plan.writable()
+    assert _item(plan, "scripts/b.py").action == Action.add   # one conflict doesn't stop the plan
+
+
+def test_target_folder_that_is_a_file_is_protected(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/sub/a.py", "print(1)\n")
+    _mk(tgt, "scripts/sub", "a file where the source has a folder\n")
+    plan = _build(src, tgt)   # used to plan an ADD whose apply fails in mkdir mid-batch
+    a = _item(plan, "scripts/sub/a.py")
+    assert a.action == Action.protected
+    assert a.reason == "target has a file at 'scripts/sub' where the source has a folder"
+    assert a not in plan.writable()
+
+
+def test_outer_target_folder_that_is_a_file_is_named(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/sub/a.py", "print(1)\n")
+    _mk(tgt, "scripts", "a file where the source has the scripts folder\n")
+    a = _item(_build(src, tgt), "scripts/sub/a.py")
+    assert a.action == Action.protected
+    assert a.reason == "target has a file at 'scripts' where the source has a folder"
+
+
+# --- df-94s: .deployignore is checked against BOTH the source and the target path ---
+
+def _renamed(src: Path, rule: str, ignore: str, prune: bool = False):
+    _mk(src, "deploy/p.yaml", f"target: Prod\nprune: {str(prune).lower()}\npairs:\n  - {rule}\n")
+    _mk(src, "deploy/.deployignore", ignore)
+    return load_pipeline(src, "p")
+
+
+def test_ignore_matches_the_target_path_on_add(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    p = _renamed(src, "{source: 'scripts/**', target: 'secrets/'}", "secrets/\n")
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    a = _item(plan, "secrets/a.py")
+    assert a.action == Action.skip_ignored
+
+
+def test_renamed_pair_outside_triggers_keeps_the_source_kind(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    p = _renamed(src, "{source: 'scripts/**', target: 'code/'}", "")
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    assert _item(plan, "code/a.py").kind == Kind.script
+
+
+def test_ignore_matches_the_source_path_on_prune(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")          # keeps the source set non-empty
+    _mk(tgt, "code/keep.db", "prod data\n")
+    p = _renamed(src, "{source: 'scripts/**', target: 'code/'}", "scripts/keep.db\n", prune=True)
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    assert all(i.target_path != "code/keep.db" for i in plan.items)   # was DELETE
+
+
+def test_ignore_on_prune_still_deletes_what_no_pattern_names(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    _mk(tgt, "code/old.py", "gone\n")
+    p = _renamed(src, "{source: 'scripts/**', target: 'code/'}", "scripts/keep.db\n", prune=True)
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    old = _item(plan, "code/old.py")
+    assert old.action == Action.delete
+
+
+# --- df-7pl: a file is a trigger when EITHER side of its pair is under triggers/ ---
+
+def test_source_outside_triggers_to_a_live_trigger_keeps_its_status(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "config/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: false\njobs: []\n")
+    _mk(tgt, "triggers/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
+    p = _renamed(src, "{source: 'config/*.yaml', target: 'triggers/'}", "")
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    # Only 'enabled' differs and the target is a live trigger: law #1 makes it a no-op.
+    assert all(i.target_path != "triggers/daily.yaml" for i in plan.items)
+
+
+def test_source_outside_triggers_is_planned_as_a_trigger(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "config/daily.yaml", "name: daily\ncron: '0 5 * * *'\nenabled: false\njobs: []\n")
+    _mk(tgt, "triggers/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
+    p = _renamed(src, "{source: 'config/*.yaml', target: 'triggers/'}", "")
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    t = _item(plan, "triggers/daily.yaml")
+    assert t.action == Action.modify   # apply then keeps enabled: true
+    assert t.kind == Kind.trigger
+
+
+def test_prune_protects_an_active_trigger_under_a_renamed_target(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "triggers/other.yaml", "name: other\ncron: '0 9 * * *'\njobs: []\n")
+    _mk(tgt, "schedules/x.yaml", "name: x\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
+    p = _renamed(src, "{source: 'triggers/*.yaml', target: 'schedules/'}", "", prune=True)
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    x = _item(plan, "schedules/x.yaml")
+    assert x.action == Action.protected   # was DELETE, kind other
+    assert x.kind == Kind.trigger

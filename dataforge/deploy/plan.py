@@ -1,12 +1,12 @@
 import hashlib
 import warnings
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import yaml
 from pydantic import TypeAdapter, ValidationError
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
-from .pairing import (check_folder_inside, check_target_inside, normalize_target, target_file,
-                      windows_unsafe)
+from .pairing import (check_folder_inside, check_target_inside, normalize_target, source_equivalents,
+                      target_file, windows_unsafe)
 
 _KIND_BY_PREFIX = {
     "jobs": Kind.job,
@@ -21,6 +21,28 @@ def kind_for(rel: str) -> Kind:
     """Kind by top folder, ignoring case: on NTFS 'TRIGGERS/x.yaml' is a trigger (df-886.18)."""
     top = rel.split("/", 1)[0].casefold()
     return _KIND_BY_PREFIX.get(top, Kind.other)
+
+
+def pair_kind(*paths: str) -> Kind:
+    """Kind of a file seen through its pair: a trigger when ANY of its paths is under triggers/,
+    else the kind of the first. The engine reads triggers from the target, so 'config/*.yaml ->
+    triggers/' lands on live triggers, and a file promoted as one keeps that care on a renamed
+    target (df-7pl). Laws #1/#2 protect a trigger, so erring towards one is the safe side."""
+    kinds = [kind_for(p) for p in paths]
+    return Kind.trigger if Kind.trigger in kinds else kinds[0]
+
+
+def _shape_conflict(target_dir: Path, tgt_rel: str) -> str | None:
+    """Why a source FILE can't be written at `tgt_rel`, or None: the target has a folder at that
+    path, or a file where the path needs a folder. Reported in the plan instead of crashing it
+    (IsADirectoryError) or failing the apply mid-batch (df-886.13)."""
+    path = target_dir / tgt_rel
+    if path.exists() and not path.is_file():
+        return "target has a folder where the source has a file"
+    for parent in reversed(PurePosixPath(tgt_rel).parents[:-1]):   # outermost first, no '.'
+        if (target_dir / parent).exists() and not (target_dir / parent).is_dir():
+            return f"target has a file at {parent.as_posix()!r} where the source has a folder"
+    return None
 
 
 def _is_ledger_path(rel: str) -> bool:
@@ -89,6 +111,26 @@ def _sha(path: Path, kind: Kind) -> str:
     return _trigger_sha(path) if kind == Kind.trigger else content_sha(path)
 
 
+def _held_back(target_dir: Path, src_rel: str, tgt_rel: str, kind: Kind,
+               ignore: DeployIgnore) -> ItemChange | None:
+    """The SKIP_IGNORED or PROTECTED item for a pair that must not be written, or None to plan it.
+    Raises ValueError when the target path runs through a linked folder (df-m1dk)."""
+    def held(action: Action, reason: str) -> ItemChange:
+        return ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind, action=action,
+                          reason=reason)
+
+    if windows_unsafe(tgt_rel):   # df-886.20: skip the one file, not the whole deploy
+        return held(Action.skip_ignored, "name not valid on Windows")
+    # law #3, on both paths (df-94s): a pair may rename the folder, and prune sees both too.
+    if ignore.matches(src_rel) or ignore.matches_any_case(tgt_rel):
+        return held(Action.skip_ignored, ".deployignore")
+    target_file(target_dir, tgt_rel)   # df-m1dk: never through a linked folder
+    conflict = _shape_conflict(target_dir, tgt_rel)
+    if conflict:   # df-886.13: a person has to sort the target out; nothing is written
+        return held(Action.protected, conflict)
+    return None
+
+
 def build_plan(
     source_dir: Path,
     target_dir: Path,
@@ -101,17 +143,13 @@ def build_plan(
     for src_rel, tgt_rel in pairs:
         if _is_ledger_path(tgt_rel):   # law #4 — never deploy into our own ledger
             continue
-        kind = kind_for(src_rel)
-        if windows_unsafe(tgt_rel):   # df-886.20: skip the one file, not the whole deploy
-            items.append(ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind,
-                                    action=Action.skip_ignored, reason="name not valid on Windows"))
-            continue
-        if ignore.matches(src_rel):    # law #3
-            items.append(ItemChange(source_path=src_rel, target_path=tgt_rel,
-                                    kind=kind, action=Action.skip_ignored, reason=".deployignore"))
+        kind = pair_kind(src_rel, tgt_rel)   # df-7pl
+        held = _held_back(target_dir, src_rel, tgt_rel, kind, ignore)
+        if held is not None:
+            items.append(held)
             continue
         src_path = source_dir / src_rel
-        tgt_path = target_file(target_dir, tgt_rel)   # df-m1dk: never through a linked folder
+        tgt_path = target_dir / tgt_rel
 
         # Triggers (law #2'): a trigger is always promoted as its DEFINITION; the deploy never
         # changes the target's on/off status. So an active target trigger is updated in place
@@ -184,18 +222,22 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             if key in seen or key in keep or p.is_symlink() or not p.is_file():
                 continue
             seen.add(key)
-            item = _prune_item(p, rel, ignore)
+            item = _prune_item(p, rel, ignore, source_equivalents(pipeline, rel))
             if item is not None:
                 check_folder_inside(target_dir, p.parent)   # df-m1dk: a linked base leads outside
                 out.append(item)
     return out
 
 
-def _prune_item(p: Path, rel: str, ignore: DeployIgnore) -> ItemChange | None:
-    """The plan item for one target file that has no paired source, or None to leave it alone."""
-    if _is_ledger_path(rel) or ignore.matches_any_case(rel):   # law #4, law #3 (df-886.18)
+def _prune_item(p: Path, rel: str, ignore: DeployIgnore, sources: list[str]) -> ItemChange | None:
+    """The plan item for one target file that has no paired source, or None to leave it alone.
+    `sources` are the source paths the pair rules map onto `rel` (pairing.source_equivalents), so
+    .deployignore and the trigger rule look at both sides, as on add/modify (df-94s, df-7pl)."""
+    if _is_ledger_path(rel):   # law #4
         return None
-    kind = kind_for(rel)
+    if any(ignore.matches_any_case(r) for r in (rel, *sources)):   # law #3 (df-886.18, df-94s)
+        return None
+    kind = pair_kind(rel, *sources)
     if kind == Kind.trigger:   # law #2: delete a target trigger only when it is known to be off
         status = trigger_status(_load_yaml_dict(p))
         if status is None:   # df-886.12: unreadable is not off; a person has to look at it
