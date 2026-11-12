@@ -16,6 +16,8 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
+          # Same version as the pre-commit hook (.pre-commit-config.yaml): bump both together.
+          GITLEAKS_VERSION: 8.24.3
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
@@ -58,15 +60,51 @@ jobs:
         shell: bash
         run: |
           mkdir -p report
-          python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider 2>&1 | tee report/tests-engine.txt
+          python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
+            --cov=dataforge --cov-branch --cov-report= 2>&1 | tee report/tests-engine.txt
       - name: GUI tests (separate run; GUI first crashes the full suite)
         shell: bash
         env: { QT_QPA_PLATFORM: offscreen }
-        run: python -m pytest tests/test_gui_*.py -p no:cacheprovider 2>&1 | tee report/tests-gui.txt
+        run: |
+          python -m pytest tests/test_gui_*.py -p no:cacheprovider \
+            --cov=dataforge --cov-branch --cov-append --cov-report= 2>&1 | tee report/tests-gui.txt
+      - name: Coverage report (both runs merged, for the sonar job)
+        if: always()
+        run: if [ -f .coverage ]; then python -m coverage xml -o coverage.xml; else echo "no coverage data"; fi
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-tests, path: report/, if-no-files-found: ignore }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the sonar job.
+        with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
+  sonar:
+    # SonarQube Cloud (df-ahua.1): coverage of new code, cognitive complexity, duplication, history.
+    # A complement to the quality job, not a replacement. Not required yet (df-ahua.1.6): a failed
+    # gate fails this check without blocking the merge. Left out of the report job, since the
+    # SonarQube Cloud bot comments its own result on the PR.
+    needs: [tests]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }   # blame and new-code detection
+      - uses: actions/download-artifact@v8
+        continue-on-error: true   # tests died before writing coverage: Sonar still analyzes, without it
+        with: { name: coverage }
+      - name: SonarQube Cloud scan
+        # No token on fork PRs: skip instead of failing.
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          # qualitygate.wait: the scan waits for the server, so a failed gate fails this check.
+          args: >
+            -Dsonar.organization=${{ github.repository_owner }}
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+            -Dsonar.qualitygate.wait=true
   mutation:
     # Mutation score of each module in testloop.toml must stay at or above its min_score.
     runs-on: ubuntu-latest
