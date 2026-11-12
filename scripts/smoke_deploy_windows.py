@@ -14,6 +14,7 @@ that is wrong there still passes them (the code before PR #12 failed 19 of these
 import hashlib
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import warnings
@@ -180,11 +181,35 @@ def s5_dirty_triggers(base: Path) -> None:
         check("S5 dirty triggers plan and apply", False, f"{type(e).__name__}: {e}")
 
 
+def junction(link: Path, target: Path) -> bool:
+    """An NTFS directory junction (no admin needed, unlike a symlink)."""
+    link.parent.mkdir(parents=True, exist_ok=True)
+    done = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                          capture_output=True, check=False)
+    return done.returncode == 0 and os.path.samefile(link, target)
+
+
+def s6_junctions(base: Path) -> None:
+    """S6 (df-m1dk): a Prod folder that is a junction to Outside is refused, never written or
+    pruned through. The spelling of the path is fine, so only resolving the folder catches it."""
+    dev, prod, outside = fresh(base, "s6")
+    plant(dev, {"tools/a.py": b"a", "lib/sub/b.py": b"b"})
+    check("S6 premise: Prod/tools is a junction to Outside", junction(prod / "tools", outside))
+    check("S6 premise: Prod/lib/sub is a junction to Outside", junction(prod / "lib" / "sub", outside))
+    for name, rules in [("base junction, prune", [("tools/**", "tools")]),
+                        ("nested junction", [("lib/**", "lib")])]:
+        before = snapshot(outside)
+        _plan, err = try_deploy(dev, prod, rules)
+        check(f"S6 {name}: refused, Outside untouched", err == "invalid" and snapshot(outside) == before,
+              str(err))
+
+
 def outside_untouched(base: Path) -> None:
     """Outside sentinels: untouched in every scenario."""
-    for scen in ["premises", "s1", "s2", "s3", "s4", "s5"]:
+    for scen in ["premises", "s1", "s2", "s3", "s4", "s5", "s6"]:
         victim = base / scen / "Outside" / "victim.txt"
-        check(f"{scen}: Outside/victim.txt untouched", victim.read_bytes() == b"must survive")
+        check(f"{scen}: Outside/victim.txt untouched",
+              victim.is_file() and victim.read_bytes() == b"must survive")
 
 
 def main(base: Path) -> int:
@@ -199,6 +224,7 @@ def main(base: Path) -> int:
     s3_case_aliases(base)
     s4_nested_bases(base)
     s5_dirty_triggers(base)
+    s6_junctions(base)
     outside_untouched(base)
 
     failed = [r for r in RESULTS if not r[1]]
