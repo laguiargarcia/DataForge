@@ -53,6 +53,8 @@ FULL_ONLY_PREFIXES = ("vulture:", "import-contract")
 SUPPRESSION = re.compile(r"#\s*(?:noqa\b|ruff:\s*ignore\b|type:\s*ignore\b|pragma:\s*no\s*cover\b)(?P<rest>.*)", re.IGNORECASE)
 REASON = re.compile(r"\s--\s*\S")
 VULTURE_LINE = re.compile(r"^(?P<file>.+?):(?P<line>\d+): (?P<msg>.+)$")
+# A git ref name, never an option: a leading "-" would make git read it as a flag (as in affected.py).
+REF = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_./-]*")
 STRING_TOKENS = {tokenize.STRING} | {getattr(tokenize, n) for n in ("FSTRING_MIDDLE", "TSTRING_MIDDLE") if hasattr(tokenize, n)}
 
 
@@ -124,7 +126,7 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
 def ruff(files: list[str]) -> list[Finding]:
     if not files:
         return []
-    r = _run([sys.executable, "-m", "ruff", "check", "--force-exclude", "--exit-zero", "--output-format", "json", *files])
+    r = _run([sys.executable, "-m", "ruff", "check", "--force-exclude", "--exit-zero", "--output-format", "json", "--", *files])
     if r.returncode != 0:
         sys.exit(f"quality gate: ruff failed\n{r.stderr}")
     found = []
@@ -147,7 +149,7 @@ def vulture(files: list[str]) -> list[Finding]:
     """Whole-program dead code over one group of files that see each other's names."""
     if not files:
         return []
-    r = _run([sys.executable, "-m", "vulture", *files])
+    r = _run([sys.executable, "-m", "vulture", "--", *files])
     if r.returncode not in (0, 3):  # 3: dead code found
         sys.exit(f"quality gate: vulture failed\n{r.stdout}{r.stderr}")
     found = []
@@ -243,7 +245,7 @@ def write(path: Path, counts: Counts) -> None:
 
 
 def _git_show(ref: str, rel: str) -> str | None:
-    r = _run(["git", "show", f"{ref}:{rel}"])
+    r = _run(["git", "show", "--end-of-options", f"{ref}:{rel}"])
     return r.stdout if r.returncode == 0 else None
 
 
@@ -375,13 +377,19 @@ def update(allow_increase: bool) -> int:
     return 0
 
 
+def _ref_name(value: str) -> str:
+    if not REF.fullmatch(value):
+        raise argparse.ArgumentTypeError(f"not a git ref name: {value!r}")
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     p_check = sub.add_parser("check", help="fail on findings above the baseline")
     p_check.add_argument("files", nargs="*", help="limit to these files (fast: ruff and project rules)")
     p_check.add_argument("--full", action="store_true", help="with FILE...: run the full gate, judge only these files")
-    p_check.add_argument("--base-ref", help="also fail if the committed baseline rose against this git ref")
+    p_check.add_argument("--base-ref", type=_ref_name, help="also fail if the committed baseline rose against this git ref")
     p_check.add_argument("--stage", action="store_true", help="git add the published baseline after lowering it")
     p_update = sub.add_parser("update", help="rewrite the baseline from the current findings")
     p_update.add_argument("--allow-increase", action="store_true", help="accept counts above the baseline")
