@@ -45,7 +45,8 @@ def test_add_new_file(tmp_path):
     _mk(src, "scripts/a.py", "print(1)\n")
     plan = _build(src, tgt)
     a = _item(plan, "scripts/a.py")
-    assert a.action == Action.add and a.before_sha is None
+    assert a.action == Action.add
+    assert a.before_sha is None
 
 
 def test_identical_file_is_noop(tmp_path):
@@ -62,7 +63,8 @@ def test_modify_changed_file(tmp_path):
     _mk(tgt, "scripts/a.py", "old\n")
     plan = _build(src, tgt)
     a = _item(plan, "scripts/a.py")
-    assert a.action == Action.modify and a.before_sha != a.after_sha
+    assert a.action == Action.modify
+    assert a.before_sha != a.after_sha
 
 
 # --- LAW #3: .deployignore is absolute ---
@@ -117,7 +119,8 @@ def test_prune_on_marks_extra_target_files_for_delete(tmp_path):
     p = _pipeline_prune(src, prune=True)
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
     d = _item(plan, "scripts/old.py")
-    assert d.action == Action.delete and d.source_path is None
+    assert d.action == Action.delete
+    assert d.source_path is None
 
 
 # --- df-gl6: prune must compare against the SOURCE set, not the set of CHANGES ---
@@ -184,7 +187,8 @@ def test_renamed_trigger_target_is_updated(tmp_path):  # kind from source
     p = load_pipeline(src, "p")
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
     t = _item(plan, "schedules/daily.yaml")
-    assert t.action == Action.modify and t.kind == Kind.trigger   # updated, status preserved by apply
+    assert t.action == Action.modify   # updated, status preserved by apply
+    assert t.kind == Kind.trigger
 
 
 def test_malformed_target_trigger_does_not_crash(tmp_path):  # HIGH — robustness

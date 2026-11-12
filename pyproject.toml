@@ -53,6 +53,8 @@ select = [
     "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", "SIM",
     # Project conventions: imports at the top, config through dataforge.compat, honest suppressions
     "PLC0415", "TID251", "PGH004", "RUF100",
+    # One condition per assert, so a failure names the one that broke (Sonar S9073, df-3lde)
+    "PT018",
 ]
 
 [tool.ruff.lint.mccabe]
