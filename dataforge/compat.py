@@ -4,12 +4,20 @@ from pathlib import Path
 from typing import Optional
 import platformdirs
 
-_VALID_WORKSPACE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+# fullmatch, not ^...$: '$' also matches before a trailing newline, so 'Prod\n' passed (df-utq8).
+_VALID_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 ALLOWED_HOSTS_ENV = "DATAFORGE_ALLOWED_HOSTS"
 PORT_ENV = "DATAFORGE_PORT"
 DEFAULT_API_PORT = 8000
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+
+
+def valid_name(name: object) -> bool:
+    """True for a workspace, job or trigger name made only of ASCII letters, digits, '-' and '_'.
+    These names go into paths and into OS scheduler commands (PowerShell, bash, crontab, launchd),
+    so nothing else is ever let through (df-utq8)."""
+    return isinstance(name, str) and _VALID_NAME.fullmatch(name) is not None
 
 
 def data_dir() -> Path:
@@ -73,7 +81,7 @@ def resolve_workspace(name: Optional[str]) -> Path:
     """
     base = data_dir()
     if name is not None:
-        if not _VALID_WORKSPACE_NAME.match(name):
+        if not valid_name(name):
             raise ValueError(
                 f"Invalid workspace name '{name}': only alphanumerics, hyphens, and underscores are allowed."
             )
