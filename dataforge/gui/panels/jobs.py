@@ -35,7 +35,6 @@ _ERROR_BG = "#5c1a1a"
 _WARN_FG = "#ffd166"
 _WARN_BG = "#4a3a00"
 _SSE_DATA = b"data:"
-_UTC_OFFSET = "+00:00"
 
 
 def _append_log_line(text_edit: QTextEdit, line: str) -> None:
@@ -440,7 +439,7 @@ class Panel(QWidget):
         if not ts:
             return "—"
         try:
-            dt = datetime.fromisoformat(ts.replace("Z", _UTC_OFFSET))
+            dt = datetime.fromisoformat(ts)
             now = datetime.now(timezone.utc)
             diff = int((now - dt).total_seconds())
             if diff < 60:
@@ -458,8 +457,8 @@ class Panel(QWidget):
         if status == "running" or not finished_at:
             return "running" if status == "running" else "—"
         try:
-            start = datetime.fromisoformat(started_at.replace("Z", _UTC_OFFSET))
-            end = datetime.fromisoformat(finished_at.replace("Z", _UTC_OFFSET))
+            start = datetime.fromisoformat(started_at)
+            end = datetime.fromisoformat(finished_at)
             secs = int((end - start).total_seconds())
             if secs < 60:
                 return f"{secs}s"

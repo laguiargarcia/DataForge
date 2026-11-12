@@ -233,10 +233,14 @@ def test_background_run_that_raises_marks_the_run_failed(dataforge_home, workspa
     monkeypatch.setattr(jobs_router, "load_job", _raise)
 
     async def _run():
-        q = get_broadcaster("test_ws").subscribe()
-        await jobs_router._run_job_background(
-            "r1", "boom", workspace_dir, db_url(workspace_dir / "dataforge.db"), global_url, "test_ws")
-        return [q.get_nowait()["status"] for _ in range(q.qsize())]
+        broadcaster = get_broadcaster("test_ws")
+        q = broadcaster.subscribe()
+        try:
+            await jobs_router._run_job_background(
+                "r1", "boom", workspace_dir, db_url(workspace_dir / "dataforge.db"), global_url, "test_ws")
+            return [q.get_nowait()["status"] for _ in range(q.qsize())]
+        finally:
+            broadcaster.unsubscribe(q)
 
     assert asyncio.run(_run()) == ["running", "failed"]
     with Session(init_db(global_url)) as session:
