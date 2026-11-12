@@ -17,7 +17,7 @@ min_score = 0.9354
 [targets."dataforge/engine.py"]
 tests = ["tests/test_engine*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-min_score = 0.9791
+min_score = 0.9795
 
 [targets."dataforge/dag.py"]
 tests = ["tests/test_dag*.py"]

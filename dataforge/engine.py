@@ -85,6 +85,18 @@ class _JobRun:
     parent_status: dict[str, str] = field(default_factory=dict)
 
 
+def _split_level(level: list[Task], parent_status: dict[str, str]) -> tuple[list[Task], list[Task]]:
+    """The level's tasks whose dependency conditions hold, and the ones to skip."""
+    runnable: list[Task] = []
+    skipped: list[Task] = []
+    for t in level:
+        if should_run(t, parent_status):
+            runnable.append(t)
+        else:
+            skipped.append(t)
+    return runnable, skipped
+
+
 def _record_skipped(db_engine, run: _JobRun, skipped: list[Task]) -> None:
     now = utcnow()
     with Session(db_engine) as s:
@@ -146,10 +158,7 @@ def run_job(
     _set_run_status(global_engine, run_id, "running")
 
     for level in levels:
-        runnable: list[Task] = []
-        skipped_in_level: list[Task] = []
-        for t in level:
-            (runnable if should_run(t, run.parent_status) else skipped_in_level).append(t)
+        runnable, skipped_in_level = _split_level(level, run.parent_status)
         if skipped_in_level:
             _record_skipped(db_engine, run, skipped_in_level)
         if runnable and _run_parallel(run, runnable):
