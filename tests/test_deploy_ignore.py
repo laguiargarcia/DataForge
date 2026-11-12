@@ -55,3 +55,12 @@ def test_default_pycache_ignore_is_negatable(tmp_path):
     ig = DeployIgnore.load(tmp_path)
     assert ig.matches("scripts/x.pyc") is True
     assert ig.matches("keep.pyc") is False
+
+
+def test_web_build_artifacts_ignored_by_default(tmp_path):
+    # df-ve7: apps/** pairs must never promote node dependencies or Playwright output.
+    ig = DeployIgnore.load(tmp_path)
+    assert ig.matches("apps/financas/node_modules/react/index.js") is True
+    assert ig.matches("apps/financas/test-results/.last-run.json") is True
+    assert ig.matches("apps/financas/dist/index.html") is False
+    assert ig.matches("apps/financas/src/App.tsx") is False

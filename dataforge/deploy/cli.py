@@ -1,5 +1,4 @@
 import json
-import os
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -8,9 +7,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich import print as rprint
+from dataforge.compat import api_port
 from dataforge.deploy import service
 from dataforge.deploy.service import DeployServiceError
-from dataforge.deploy.models import DeployPlan, Action, PipelineModel, AutoDeployResult, AutoDeployStatus
+from dataforge.deploy.models import DeployPlan, Action, PipelineModel
 
 deploy_app = typer.Typer(help="Deploy workspace definitions from one workspace to another")
 console = Console()
@@ -23,7 +23,7 @@ def _reconcile_via_daemon(target_ws: str, names: List[str], quiet: bool = False)
     `quiet` suppresses stdout chatter so `run --json` stays machine-parseable."""
     if not names:
         return
-    port = int(os.environ.get("DATAFORGE_PORT", 8000))
+    port = api_port()
     base = f"http://127.0.0.1:{port}/api/workspaces/{target_ws}/triggers"
     try:
         with httpx.Client(timeout=5.0) as client:

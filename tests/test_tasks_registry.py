@@ -1,5 +1,5 @@
 import pytest
-from dataforge.tasks import register, get_handler, Handler
+from dataforge.tasks import register, get_handler
 
 
 @pytest.fixture(autouse=True)

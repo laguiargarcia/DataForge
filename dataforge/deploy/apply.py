@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, DeployEntry, Action, Kind
 from .ledger import Ledger
-from .plan import _load_yaml_dict, _is_ledger_path
+from .plan import _UNDUMPABLE, _load_yaml_dict, _is_ledger_path
 
 
 def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
@@ -15,7 +15,10 @@ def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
     if sdata is None:
         return source_path.read_bytes()
     sdata["enabled"] = prior_enabled
-    return yaml.safe_dump(sdata, allow_unicode=True, sort_keys=False).encode()
+    try:
+        return yaml.safe_dump(sdata, allow_unicode=True, sort_keys=False).encode()
+    except _UNDUMPABLE:   # loads but won't dump back (df-886.17): copy it verbatim
+        return source_path.read_bytes()
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -56,7 +59,8 @@ def apply_plan(source_dir: Path, target_dir: Path, plan: DeployPlan, ledger: Led
                 prior_enabled = False
                 if before is not None:
                     tdata = _load_yaml_dict(tgt)
-                    prior_enabled = bool(tdata.get("enabled", False)) if tdata else False
+                    # A target trigger without 'enabled' is active for the engine (df-886.8).
+                    prior_enabled = bool(tdata.get("enabled", True)) if tdata else False
                 content = _trigger_content(source_dir / item.source_path, prior_enabled)
             else:
                 content = (source_dir / item.source_path).read_bytes()

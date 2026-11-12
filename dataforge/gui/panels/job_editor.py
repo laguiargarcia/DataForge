@@ -16,7 +16,6 @@ Locked decisions honored here:
 from __future__ import annotations
 
 import json
-import os
 from typing import Optional
 
 from PySide6.QtCore import QByteArray, Qt, QUrl
@@ -40,6 +39,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from dataforge.compat import api_port
 
 # Conditions a depends_on edge may wait on.
 _WHEN_CONDITIONS = ("succeeded", "failed", "skipped")
@@ -80,7 +81,7 @@ class JobEditorPanel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._port = int(os.environ.get("DATAFORGE_PORT", 8000))
+        self._port = api_port()
         self._nam = QNetworkAccessManager(self)
         self._current_workspace = ""
         self._editing_job_name: Optional[str] = None  # None = create mode

@@ -7,6 +7,8 @@ import threading
 
 import uvicorn
 
+from dataforge.compat import api_port
+
 
 class DaemonServer(uvicorn.Server):
     """uvicorn.Server subclass that suppresses signal handler installation.
@@ -15,19 +17,20 @@ class DaemonServer(uvicorn.Server):
     Running Server directly and overriding install_signal_handlers avoids this.
     """
 
-    def install_signal_handlers(self) -> None:  # noqa: D102
+    def install_signal_handlers(self) -> None:
         pass  # Qt owns signal handling
 
 
 class DaemonThread(threading.Thread):
     """Background thread hosting the embedded FastAPI/uvicorn daemon."""
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8000) -> None:
+    def __init__(self, host: str = "127.0.0.1", port: int | None = None) -> None:
+        """`port` defaults to compat.api_port(), the port every GUI panel calls (df-oift)."""
         super().__init__(daemon=True, name="dataforge-api-daemon")
         config = uvicorn.Config(
             "dataforge.api:app",
             host=host,
-            port=port,
+            port=api_port() if port is None else port,
             log_level="info",
             reload=False,
         )

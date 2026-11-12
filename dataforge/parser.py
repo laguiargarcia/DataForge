@@ -8,7 +8,6 @@ from .models import (
     Job,
     Connection,
     TriggerModel,
-    TriggerJobEntry,
     RetryConfig,
     DependencyEdge,
 )
