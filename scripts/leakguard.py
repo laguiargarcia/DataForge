@@ -87,42 +87,49 @@ NAME_PATTERNS = _load_owner_name_patterns()
 BINARY_SUFFIXES = {".xlsx", ".parquet", ".db", ".duckdb"}
 
 
+def _content_checks(norm):
+    """(label, regex) pairs for one file: CPF/ACCT/EMAIL always, owner names unless exempt."""
+    checks = [("CPF", CPF), ("ACCT", ACCT), ("EMAIL", EMAILS)]
+    if norm not in NAME_EXEMPT_PATHS:
+        checks += [("NAME", rx) for rx in NAME_PATTERNS]
+    return checks
+
+
+def _readable_text(p):
+    """The text to scan, or None for a missing file, a binary artifact or an unreadable file."""
+    if not p.is_file() or p.suffix in BINARY_SUFFIXES:
+        return None
+    try:
+        return p.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+
+
+def _is_exempt(hit):
+    # Strip punctuation for allowlist lookup (CPF/ACCT may have dots/dashes)
+    bare = re.sub(r"[\s.\-]", "", hit)
+    return bare in ALLOWLIST or hit in ALLOWLIST   # synthetic literal — exempt
+
+
+def _file_failures(f):
+    p = Path(f)
+    norm = p.as_posix()
+    # --- path-block check -------------------------------------------
+    if any(norm.startswith(pre) for pre in BLOCK_PREFIXES):
+        return [f"PATH-BLOCK: {norm} is under a private surface"]
+    text = _readable_text(p)
+    if text is None:
+        return []
+    # --- content checks ----------------------------------------------
+    return [f"{label}: {norm} -> {m.group(0)!r}"
+            for label, rx in _content_checks(norm)
+            for m in rx.finditer(text)
+            if not _is_exempt(m.group(0))]
+
+
 def main(argv):
     files = argv[1:]
-    failures = []
-
-    for f in files:
-        p = Path(f)
-        norm = p.as_posix()
-
-        # --- path-block check -------------------------------------------
-        if any(norm.startswith(pre) for pre in BLOCK_PREFIXES):
-            failures.append(f"PATH-BLOCK: {norm} is under a private surface")
-            continue
-
-        if not p.is_file():
-            continue
-
-        if p.suffix in BINARY_SUFFIXES:
-            continue
-
-        try:
-            text = p.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            continue
-
-        # --- content checks ----------------------------------------------
-        checks = [("CPF", CPF), ("ACCT", ACCT), ("EMAIL", EMAILS)]
-        if norm not in NAME_EXEMPT_PATHS:
-            checks += [("NAME", rx) for rx in NAME_PATTERNS]
-        for label, rx in checks:
-            for m in rx.finditer(text):
-                hit = m.group(0)
-                # Strip punctuation for allowlist lookup (CPF/ACCT may have dots/dashes)
-                bare = re.sub(r"[\s.\-]", "", hit)
-                if bare in ALLOWLIST or hit in ALLOWLIST:
-                    continue  # synthetic literal — exempt
-                failures.append(f"{label}: {norm} -> {hit!r}")
+    failures = [msg for f in files for msg in _file_failures(f)]
 
     if failures:
         print("LEAK GUARD FAILED:\n  " + "\n  ".join(failures), file=sys.stderr)

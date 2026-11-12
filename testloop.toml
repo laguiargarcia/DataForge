@@ -28,3 +28,14 @@ min_score = 0.9777
 tests = ["tests/test_deploy_pairing*.py", "tests/test_deploy_plan*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.9197
+
+[targets."scripts/leakguard.py"]
+tests = ["tests/test_leakguard.py"]
+copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 0.8823
+
+
+[targets."dataforge/apps.py"]
+tests = ["tests/test_apps*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 0.8073
