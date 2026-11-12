@@ -84,6 +84,28 @@ def no_os_scheduler(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def no_retry_sleep(monkeypatch):
+    """Fail any test whose retry would really sleep (delay_seconds > 0, docs/testing.md).
+
+    A missing retry block means the default 3 x 30s: two API tests once slept 60s each (df-t242).
+    The sleep is skipped and the test fails at teardown, since a raise inside the job's background
+    task would be swallowed by its error handling.
+    """
+    import types
+    import dataforge.engine as engine
+
+    slept = []
+    monkeypatch.setattr(engine, "time", types.SimpleNamespace(
+        sleep=lambda seconds: slept.append(seconds) if seconds > 0 else None,
+    ))
+    yield
+    if slept:
+        pytest.fail(
+            f"retry slept {slept}s: give the test's job/task retry delay_seconds: 0", pytrace=False
+        )
+
+
 @pytest.fixture()
 def simple_job_dir(workspace_dir):
     """Job dir with job.yaml + real script. delay_seconds=0 is mandatory (engine calls real time.sleep)."""
