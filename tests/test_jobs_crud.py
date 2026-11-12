@@ -378,7 +378,11 @@ def test_delete_job_404_when_workspace_missing(test_client):
 
 def test_existing_job_routes_still_resolve(test_client, workspace_dir):
     """New CRUD routes must NOT shadow the pre-existing /schedule and /run routes."""
-    _write_job(workspace_dir, "etl", "name: etl\ntasks:\n  - name: t1\n    script: a.py\n")
+    _write_job(
+        workspace_dir, "etl",
+        "name: etl\ntasks:\n  - name: t1\n    script: a.py\n"
+        "    retry: {attempts: 1, delay_seconds: 0}\n",
+    )
     # /schedule resolves (404 = no schedule row, NOT 405/route-not-found)
     r1 = test_client.get("/api/workspaces/test_ws/jobs/etl/schedule")
     assert r1.status_code in (200, 404)
