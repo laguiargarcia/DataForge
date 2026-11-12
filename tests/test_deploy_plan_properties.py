@@ -720,6 +720,15 @@ needs_symlinks = pytest.mark.skipif(not hasattr(os, "symlink") or sys.platform =
                                     reason="POSIX symlinks; NTFS junctions go in the Windows smoke")
 
 
+def planner(source: Path, target: Path, rules: list[tuple[str, str]], prune: bool = True):
+    """plan_for split in two: resolve the pairs now, build the plan when called, so a
+    pytest.raises block holds only the call that should raise."""
+    pipeline = PipelineModel(target="Prod", prune=prune,
+                             pairs=[PairRule(source=s, target=t) for s, t in rules])
+    pairs, ignore = resolve_pairs(source, pipeline), DeployIgnore.load(source)
+    return lambda: build_plan(source, target, pipeline, "p", ignore, pairs)
+
+
 @needs_symlinks
 def test_prune_through_a_symlinked_base_is_refused_and_deletes_nothing_outside():
     with workspaces() as (source, target):
@@ -727,8 +736,9 @@ def test_prune_through_a_symlinked_base_is_refused_and_deletes_nothing_outside()
         plant(outside, {"victim.py": b"precious"})
         plant(source, {"scripts/a.py": b"a"})
         os.symlink(outside, target / "scripts", target_is_directory=True)
+        build = planner(source, target, same_folder("scripts"))
         with pytest.raises(ValueError, match="outside the target workspace"):
-            plan_for(source, target, same_folder("scripts"))
+            build()
         assert (outside / "victim.py").read_bytes() == b"precious"
 
 
@@ -740,8 +750,9 @@ def test_a_pair_written_through_a_symlinked_folder_is_refused():
         plant(source, {"scripts/sub/a.py": b"a"})
         (target / "scripts").mkdir()
         os.symlink(outside, target / "scripts" / "sub", target_is_directory=True)
+        build = planner(source, target, same_folder("scripts"), prune=False)
         with pytest.raises(ValueError, match="outside the target workspace"):
-            plan_for(source, target, same_folder("scripts"), prune=False)
+            build()
         assert not any(outside.iterdir())
 
 
