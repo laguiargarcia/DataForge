@@ -41,6 +41,29 @@ def check_target_inside(target_rel: str) -> None:
         raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
 
 
+def check_folder_inside(target_dir: Path, folder: Path) -> None:
+    """Raise ValueError if `folder`, with symlinks and junctions resolved, is not the target
+    workspace or inside it. check_target_inside only reads the spelling; a folder of the target
+    that is a link to somewhere else passes it and still leads outside (df-m1dk)."""
+    root = target_dir.resolve()
+    real = folder.resolve()
+    if real != root and root not in real.parents:
+        rel = folder.relative_to(target_dir).as_posix() if folder.is_relative_to(target_dir) else str(folder)
+        raise ValueError(f"deploy target folder {rel!r} resolves outside the target workspace "
+                         f"(a symlink or junction): {real}")
+
+
+def target_file(target_dir: Path, target_rel: str) -> Path:
+    """target_dir / target_rel, refused (ValueError) when it lands outside the target workspace:
+    spelled to escape (check_target_inside) or reached through a linked folder
+    (check_folder_inside). Only the folders are resolved: a write replaces the file itself
+    (os.replace) and a delete unlinks it, neither follows it."""
+    check_target_inside(target_rel)
+    path = target_dir / target_rel
+    check_folder_inside(target_dir, path.parent)
+    return path
+
+
 def normalize_target(target_rel: str) -> str:
     """Canonical spelling of a target path: './x/', 'x//', 'x/./' all become 'x', and the
     workspace root becomes ''. Plan, prune and the ledger guard compare paths as strings, so
