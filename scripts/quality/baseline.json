@@ -26,8 +26,7 @@
     "PLR0913": 1
   },
   "dataforge/api/routers/triggers.py": {
-    "B904": 5,
-    "F401": 1
+    "B904": 5
   },
   "dataforge/api/routers/workspaces.py": {
     "BLE001": 1
@@ -36,15 +35,13 @@
     "B904": 7,
     "BLE001": 4,
     "C901": 1,
-    "F401": 1,
-    "PLC0415": 34,
+    "PLC0415": 33,
     "PLR0912": 1,
     "PLR2004": 3,
-    "PLW1508": 1,
     "PLW1510": 10,
     "RUF059": 1,
     "S110": 2,
-    "TID251": 4
+    "TID251": 3
   },
   "dataforge/dag.py": {
     "C901": 1
@@ -55,10 +52,7 @@
   "dataforge/deploy/cli.py": {
     "B904": 3,
     "BLE001": 2,
-    "F401": 2,
-    "PLW1508": 1,
-    "RUF059": 2,
-    "TID251": 1
+    "RUF059": 2
   },
   "dataforge/deploy/plan.py": {
     "PLR0913": 1
@@ -70,81 +64,50 @@
     "C901": 1,
     "PLR0912": 1
   },
-  "dataforge/gui/__init__.py": {
-    "DF001": 1
-  },
-  "dataforge/gui/daemon.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
   "dataforge/gui/main_window.py": {
     "BLE001": 1,
-    "DF001": 1,
-    "F401": 2,
-    "PLC0415": 2,
-    "PLW1508": 1,
-    "RUF012": 1,
-    "RUF100": 1,
-    "TID251": 1
+    "PLC0415": 1,
+    "RUF012": 1
   },
   "dataforge/gui/panels/deploy.py": {
     "BLE001": 5,
-    "PLR2004": 5,
-    "PLW1508": 1,
-    "TID251": 1
+    "PLR2004": 5
   },
   "dataforge/gui/panels/job_editor.py": {
     "BLE001": 5,
     "ERA001": 2,
     "PLR0915": 2,
-    "PLR2004": 3,
-    "PLW1508": 1,
-    "TID251": 1
+    "PLR2004": 3
   },
   "dataforge/gui/panels/jobs.py": {
     "ARG002": 5,
-    "ARG005": 2,
     "BLE001": 7,
     "ERA001": 1,
     "PLR0915": 1,
     "PLR2004": 4,
-    "PLW1508": 1,
     "S110": 2,
     "SIM102": 1,
-    "SIM105": 2,
-    "TID251": 1,
-    "vulture:unused-variable": 2
+    "SIM105": 2
   },
   "dataforge/gui/panels/scheduler.py": {
     "ARG002": 1,
     "BLE001": 7,
     "C901": 1,
     "ERA001": 2,
-    "F401": 1,
-    "F841": 1,
     "PLR0912": 1,
     "PLR0915": 1,
     "PLR2004": 3,
-    "PLW1508": 1,
     "RUF012": 2,
     "SIM105": 2,
-    "SIM108": 1,
-    "TID251": 1,
-    "vulture:unused-attribute": 2,
-    "vulture:unused-method": 2,
-    "vulture:unused-variable": 1
+    "SIM108": 1
   },
   "dataforge/models.py": {
     "SIM114": 1,
     "TRY004": 2,
     "vulture:unused-variable": 3
   },
-  "dataforge/parser.py": {
-    "F401": 1
-  },
   "dataforge/tasks/__init__.py": {
-    "B904": 1,
-    "vulture:unused-function": 1
+    "B904": 1
   },
   "dataforge/tasks/error_handler.py": {
     "ARG002": 1
@@ -184,9 +147,7 @@
   },
   "scripts/testloop/cli.py": {
     "ARG005": 3,
-    "BLE001": 1,
-    "DF001": 5,
-    "RUF100": 5
+    "BLE001": 1
   },
   "scripts/testloop/map_cmd.py": {
     "ARG001": 1,
@@ -202,20 +163,7 @@
     "SIM105": 3
   },
   "tests/conftest.py": {
-    "F401": 1,
     "PLR0913": 1
-  },
-  "tests/test_api_stream.py": {
-    "F401": 1
-  },
-  "tests/test_cli.py": {
-    "F401": 2
-  },
-  "tests/test_conditions.py": {
-    "F401": 1
-  },
-  "tests/test_db.py": {
-    "F401": 1
   },
   "tests/test_deploy_api.py": {
     "RUF059": 11
@@ -232,11 +180,7 @@
     "RUF012": 1,
     "RUF059": 23
   },
-  "tests/test_deploy_ledger.py": {
-    "F401": 1
-  },
   "tests/test_deploy_plan.py": {
-    "F401": 1,
     "PLW1510": 1,
     "RUF015": 7
   },
@@ -247,8 +191,7 @@
     "RUF059": 5
   },
   "tests/test_engine.py": {
-    "ERA001": 3,
-    "F401": 1
+    "ERA001": 3
   },
   "tests/test_gui_job_editor.py": {
     "ERA001": 1
@@ -257,105 +200,31 @@
     "F841": 17
   },
   "tests/test_gui_main_window.py": {
-    "F401": 1,
     "F841": 7
   },
   "tests/test_gui_scheduler.py": {
-    "F401": 4,
     "F841": 3
-  },
-  "tests/test_message_channels.py": {
-    "F401": 1
-  },
-  "tests/test_scheduler.py": {
-    "F401": 1
-  },
-  "tests/test_tasks_registry.py": {
-    "F401": 1
   },
   "tests/test_testloop.py": {
     "PLW1510": 2
   },
   "tests/test_triggers.py": {
-    "F401": 1,
     "F841": 2,
     "RUF059": 1
   },
-  "workspaces/GetFinance-Show/scripts/cleansed2curated/cleansed2curated.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/cleansed2curated/cleansed2curated_accounts.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
   "workspaces/GetFinance-Show/scripts/cleansed2curated/cleansed2curated_investments.py": {
-    "B905": 1,
-    "DF001": 1,
-    "RUF100": 1
+    "B905": 1
   },
   "workspaces/GetFinance-Show/scripts/cleansed2curated/dim_calendar.py": {
-    "DF001": 1,
     "DTZ011": 1,
-    "PLR2004": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/cleansed2curated/dim_counterparty.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/cleansed2curated/fact_balance_snapshot.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/cleansed2curated/fact_card_statement.py": {
-    "DF001": 1,
-    "RUF100": 1
+    "PLR2004": 1
   },
   "workspaces/GetFinance-Show/scripts/cleansed2curated/fact_fatura_mes.py": {
-    "DF001": 1,
-    "PLR2004": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/cleansed2curated/fact_investment_position.py": {
-    "DF001": 1,
-    "RUF100": 1
+    "PLR2004": 1
   },
   "workspaces/GetFinance-Show/scripts/functions/functions.py": {
     "PLR2004": 6,
     "PLW0603": 2,
     "S113": 5
-  },
-  "workspaces/GetFinance-Show/scripts/generate_synthetic_data.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/landing/landing2raw.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/raw2cleansed/raw2cleansed.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/raw2cleansed/raw2cleansed_accounts.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/raw2cleansed/raw2cleansed_bills.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/raw2cleansed/raw2cleansed_investments.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/report/build_report.py": {
-    "DF001": 1,
-    "RUF100": 1
-  },
-  "workspaces/GetFinance-Show/scripts/reprocess.py": {
-    "DF001": 1,
-    "RUF100": 1
   }
 }
