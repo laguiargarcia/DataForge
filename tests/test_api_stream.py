@@ -2,7 +2,6 @@ import asyncio
 import json
 import pytest
 import httpx
-from fastapi.testclient import TestClient
 
 from dataforge.api import app
 from dataforge.api.broadcaster import get_broadcaster, _broadcasters

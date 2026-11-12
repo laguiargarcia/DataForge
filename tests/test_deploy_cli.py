@@ -1,9 +1,12 @@
+import re
 from pathlib import Path
 from typer.testing import CliRunner
 from dataforge.cli import app
 from dataforge.deploy.ledger import Ledger
 
 runner = CliRunner()
+# rich highlights numbers when color is forced (FORCE_COLOR, CI), splitting 'applied 1' (df-pva).
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def _ws(home: Path, name: str) -> Path:
@@ -112,7 +115,7 @@ def test_run_deploys_non_interactively(dataforge_home):
     r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev"])   # NO input — must not prompt
     assert r.exit_code == 0
     assert (prod / "scripts/a.py").read_text() == "print(1)\n"
-    assert "applied 1" in r.stdout
+    assert "applied 1" in _ANSI.sub("", r.stdout)
 
 
 def test_run_is_idempotent_exit_zero(dataforge_home):

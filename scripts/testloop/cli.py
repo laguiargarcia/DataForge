@@ -10,11 +10,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import ToolError, clear_result, load_config  # noqa: E402
-import check_cmd  # noqa: E402
-import gate_cmd  # noqa: E402
-import map_cmd  # noqa: E402
-import mutate_cmd  # noqa: E402
+from common import ToolError, clear_result, load_config
+import check_cmd
+import gate_cmd
+import map_cmd
+import mutate_cmd
 
 # command name -> (module with main(config, module, **options) -> Path | (Path, exit_code), option adder)
 COMMANDS = {

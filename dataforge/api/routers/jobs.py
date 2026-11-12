@@ -206,6 +206,7 @@ def list_scripts(ws: str):
 @router.post("/{ws}/jobs/{job}/run", status_code=202)
 async def trigger_job(ws: str, job: str, background_tasks: BackgroundTasks):
     """Trigger async job execution. Returns 202 with execution_id within 100ms."""
+    _validate_job_name(job)   # df-7ds: {job} becomes a path segment below
     try:
         workspace_dir = resolve_workspace(ws)
     except ValueError:

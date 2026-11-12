@@ -1,4 +1,3 @@
-import pytest
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from dataforge.db import init_db, ExecucaoORM

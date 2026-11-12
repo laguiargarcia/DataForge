@@ -28,7 +28,3 @@ def get_handler(type_name: str) -> Handler:
         return _REGISTRY[type_name]
     except KeyError:
         raise KeyError(f"unknown task type '{type_name}'; registered: {sorted(_REGISTRY)}")
-
-
-def _reset_for_tests() -> None:
-    _REGISTRY.clear()

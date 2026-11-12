@@ -11,7 +11,7 @@ BRIDGE = DEV / "data" / "bridge"
 BRIDGE.mkdir(parents=True, exist_ok=True)
 
 sys.path.insert(0, str(Path(__file__).parent))
-from report_lib import (  # noqa: E402
+from report_lib import (
     liquidity_per_month, cartao_per_month, investimentos_per_month, extend_liquidity_v3,
 )
 

@@ -40,7 +40,7 @@ def run_app() -> int:
     # Import MainWindow here — not at module level — because MainWindow
     # references panel modules that import PySide6 widgets; safe only after
     # QApplication exists. This is an accepted lazy import for the GUI entry path.
-    from dataforge.gui.main_window import MainWindow  # noqa: PLC0415
+    from dataforge.gui.main_window import MainWindow  # noqa: PLC0415 -- needs a live QApplication
 
     window = MainWindow(daemon=daemon)
     window.show()
