@@ -245,6 +245,10 @@ def write(path: Path, counts: Counts) -> None:
 
 
 def _git_show(ref: str, rel: str) -> str | None:
+    # Checked here as well as in argparse: check() can be called without main(), and the check
+    # has to sit next to the git call for Sonar to see it (pythonsecurity:S8705, df-kza2).
+    if not REF.fullmatch(ref):
+        raise ValueError(f"not a git ref name: {ref!r}")
     r = _run(["git", "show", "--end-of-options", f"{ref}:{rel}"])
     return r.stdout if r.returncode == 0 else None
 
