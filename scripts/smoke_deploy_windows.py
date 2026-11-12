@@ -25,6 +25,13 @@ from dataforge.deploy.service import DeployServiceError
 
 warnings.simplefilter("ignore")   # the root-skip / empty-source warnings are asserted by unit tests
 RESULTS: list[tuple[str, bool, str]] = []
+# Paths and globs several scenarios share (Sonar python:S1192).
+WORKSPACE_YAML = "workspace.yaml"
+SCRIPTS_GLOB = "scripts/**"
+JOBS_GLOB = "jobs/**"
+JOB_A = "jobs/a/job.yaml"          # S2: in sync between Dev and Prod
+JOB_OLD = "jobs/old/job.yaml"      # S2: only in Prod, so prune deletes it
+JOBS_A_YAML = "jobs/a.yaml"        # S3/S4: in sync between Dev and Prod
 
 
 def check(name: str, ok: bool, detail: str = "") -> None:
@@ -59,9 +66,9 @@ def fresh(base: Path, name: str) -> tuple[Path, Path, Path]:
     root = base / name
     dev, prod, outside = root / "Dev", root / "Prod", root / "Outside"
     plant(outside, {"victim.txt": b"must survive"})
-    plant(dev, {"workspace.yaml": b"name: Dev\n", "scripts/seed.py": b"seed"})
-    plant(prod, {"workspace.yaml": b"name: Prod\n"})
-    seed = pipeline([("scripts/**", "scripts")], prune=False)
+    plant(dev, {WORKSPACE_YAML: b"name: Dev\n", "scripts/seed.py": b"seed"})
+    plant(prod, {WORKSPACE_YAML: b"name: Prod\n"})
+    seed = pipeline([(SCRIPTS_GLOB, "scripts")], prune=False)
     service.apply(dev, prod, service.build(dev, seed, "seed", prod), None)
     return dev, prod, outside
 
@@ -104,7 +111,7 @@ def s1_escaping_targets(base: Path) -> None:
                    "Deploy/.ledger", "DEPLOY/.LEDGER/x", "..\\Outside", "..\\..\\x",
                    "\\Outside", str(outside), "C:x", "scripts\\sub"]:
         before = snapshot(prod.parent)
-        plan, err = try_deploy(dev, prod, [("scripts/**", target)])
+        plan, err = try_deploy(dev, prod, [(SCRIPTS_GLOB, target)])
         after = snapshot(prod.parent)
         how = f"rejected ({err})" if err else f"plan writable={len(plan.writable())}"
         check(f"S1 target {target!r}: nothing written anywhere",
@@ -114,35 +121,35 @@ def s1_escaping_targets(base: Path) -> None:
 def s2_root_target(base: Path) -> None:
     """S2: a root target never prunes .env / data/; rollback restores."""
     dev, prod, _outside = fresh(base, "s2")
-    plant(dev, {"jobs/a/job.yaml": b"a"})
+    plant(dev, {JOB_A: b"a"})
     plant(prod, {".env": b"SECRET=1", "data/cleansed/tx/part-0.parquet": b"p",
-                 "jobs/a/job.yaml": b"a", "jobs/old/job.yaml": b"old"})
+                 JOB_A: b"a", JOB_OLD: b"old"})
     for root_spelling in ["", ".", "./"]:
-        _plan, err = try_deploy(dev, prod, [("workspace.yaml", root_spelling), ("jobs/**", "jobs")])
+        _plan, err = try_deploy(dev, prod, [(WORKSPACE_YAML, root_spelling), (JOBS_GLOB, "jobs")])
         check(f"S2 root {root_spelling!r}: .env and data/ survive",
               err is None and (prod / ".env").exists()
               and (prod / "data/cleansed/tx/part-0.parquet").exists(), str(err or ""))
-    check("S2 the jobs base still prunes jobs/old", not (prod / "jobs/old/job.yaml").exists())
-    check("S2 in-sync jobs/a survives", (prod / "jobs/a/job.yaml").exists())
+    check("S2 the jobs base still prunes jobs/old", not (prod / JOB_OLD).exists())
+    check("S2 in-sync jobs/a survives", (prod / JOB_A).exists())
     for _ in range(3):
         service.rollback(prod)
-    check("S2 rollback restores jobs/old", (prod / "jobs/old/job.yaml").exists())
+    check("S2 rollback restores jobs/old", (prod / JOB_OLD).exists())
 
 
 def s3_case_aliases(base: Path) -> None:
     """S3: case aliases on NTFS."""
     dev, prod, _outside = fresh(base, "s3")
-    plant(dev, {"jobs/a.yaml": b"a", "scripts/s.py": b"s", "triggers/t.yaml": b"name: t\n",
+    plant(dev, {JOBS_A_YAML: b"a", "scripts/s.py": b"s", "triggers/t.yaml": b"name: t\n",
                 "deploy/.deployignore": b"config/\n"})
-    plant(prod, {"jobs/a.yaml": b"a", "config/secret.yaml": b"s",
+    plant(prod, {JOBS_A_YAML: b"a", "config/secret.yaml": b"s",
                  "triggers/live.yaml": b"name: live\nenabled: true\n"})
-    plan, err = try_deploy(dev, prod, [("jobs/**", "jobs"), ("nothing/**", "JOBS"),
-                                       ("scripts/**", "scripts"), ("nothing2/**", "CONFIG"),
+    plan, err = try_deploy(dev, prod, [(JOBS_GLOB, "jobs"), ("nothing/**", "JOBS"),
+                                       (SCRIPTS_GLOB, "scripts"), ("nothing2/**", "CONFIG"),
                                        ("triggers/**", "triggers"), ("nothing3/**", "TRIGGERS")])
     deletes = [i.target_path for i in (plan.items if plan else []) if i.action == Action.delete]
     check("S3 plan builds", err is None, str(err or ""))
     check("S3 no DELETE through a case alias", deletes == [], str(deletes))
-    check("S3 in-sync jobs/a.yaml survives", (prod / "jobs/a.yaml").exists())
+    check("S3 in-sync jobs/a.yaml survives", (prod / JOBS_A_YAML).exists())
     check("S3 ignored config/secret.yaml survives", (prod / "config/secret.yaml").exists())
     check("S3 active trigger survives", (prod / "triggers/live.yaml").exists())
 
@@ -150,10 +157,10 @@ def s3_case_aliases(base: Path) -> None:
 def s4_nested_bases(base: Path) -> None:
     """S4: nested bases apply without crashing."""
     dev, prod, _outside = fresh(base, "s4")
-    plant(dev, {"jobs/a.yaml": b"a", "jobs/sub/k.yaml": b"k"})
+    plant(dev, {JOBS_A_YAML: b"a", "jobs/sub/k.yaml": b"k"})
     plant(prod, {"jobs/sub/old.yaml": b"old"})
     try:
-        _plan, err = try_deploy(dev, prod, [("jobs/**", "jobs"), ("jobs/sub/**", "jobs/sub")])
+        _plan, err = try_deploy(dev, prod, [(JOBS_GLOB, "jobs"), ("jobs/sub/**", "jobs/sub")])
         check("S4 nested bases apply cleanly", err is None and not (prod / "jobs/sub/old.yaml").exists())
     except Exception as e:  # noqa: BLE001 -- the smoke reports any crash as a failure
         check("S4 nested bases apply cleanly", False, f"{type(e).__name__}: {e}")
