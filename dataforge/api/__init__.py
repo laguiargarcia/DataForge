@@ -80,17 +80,19 @@ async def lifespan(app):
     # No shutdown work needed
 
 
+_WORKSPACES_PREFIX = "/api/workspaces"
+
 app = FastAPI(title="DataForge API", lifespan=lifespan)
 app.add_middleware(HostOriginMiddleware)
 
-app.include_router(workspaces.router, prefix="/api/workspaces", tags=["workspaces"])
-app.include_router(jobs.router, prefix="/api/workspaces", tags=["jobs"])
+app.include_router(workspaces.router, prefix=_WORKSPACES_PREFIX, tags=["workspaces"])
+app.include_router(jobs.router, prefix=_WORKSPACES_PREFIX, tags=["jobs"])
 app.include_router(executions.router, prefix="/api/executions", tags=["executions"])
-app.include_router(stream.router, prefix="/api/workspaces", tags=["stream"])
-app.include_router(triggers.router, prefix="/api/workspaces", tags=["triggers"])
-app.include_router(deploy.router, prefix="/api/workspaces", tags=["deploy"])
+app.include_router(stream.router, prefix=_WORKSPACES_PREFIX, tags=["stream"])
+app.include_router(triggers.router, prefix=_WORKSPACES_PREFIX, tags=["triggers"])
+app.include_router(deploy.router, prefix=_WORKSPACES_PREFIX, tags=["deploy"])
 app.include_router(apps.router, prefix="/apps", tags=["apps"])
-app.include_router(tables.router, prefix="/api/workspaces", tags=["tables"])
+app.include_router(tables.router, prefix=_WORKSPACES_PREFIX, tags=["tables"])
 
 
 @app.get("/health")

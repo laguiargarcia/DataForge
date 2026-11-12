@@ -11,6 +11,7 @@ from dataforge.cli import _platform_register_trigger, _platform_deregister_trigg
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+_WORKSPACE_YAML = "workspace.yaml"
 
 _VALID_TRIGGER_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -59,7 +60,7 @@ def list_triggers(ws: str):
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     return [t.model_dump() for t in load_triggers(workspace_dir)]
 
@@ -74,7 +75,7 @@ def create_trigger(ws: str, trigger: TriggerModel):
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     save_trigger(workspace_dir, trigger)
     warning = _register_os_trigger(ws, trigger)
@@ -95,7 +96,7 @@ def update_trigger(ws: str, name: str, trigger: TriggerModel):
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     if not (workspace_dir / "triggers" / f"{name}.yaml").exists():
         raise HTTPException(status_code=404, detail=f"Trigger '{name}' not found")
@@ -117,7 +118,7 @@ def reconcile_trigger(ws: str, name: str):
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     warning = reconcile_os_trigger(ws, name)
     result = {"reconciled": True, "trigger": name}
@@ -134,7 +135,7 @@ def remove_trigger(ws: str, name: str):
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     _deregister_os_trigger(ws, name)
     delete_trigger(workspace_dir, name)

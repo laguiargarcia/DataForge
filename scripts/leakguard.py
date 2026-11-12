@@ -58,7 +58,7 @@ NAME_EXEMPT_PATHS = {"LICENSE", "README.md"}
 # NAMES / EMAILS: owner identifiers blocked from the public surface.
 # ---------------------------------------------------------------------------
 CPF   = re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b")
-ACCT  = re.compile(r"\b\d{4,5}-\d{1}\b")
+ACCT  = re.compile(r"\b\d{4,5}-\d\b")
 EMAILS = re.compile(r"(?i)\b[\w.+-]+@(gmail|outlook)\.com\b")
 
 # Owner-specific NAME patterns are deliberately NOT hardcoded in this public guard

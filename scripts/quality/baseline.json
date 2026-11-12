@@ -13,9 +13,7 @@
   },
   "dataforge/api/routers/jobs.py": {
     "B904": 4,
-    "BLE001": 1,
-    "PLR0913": 1,
-    "TRY400": 1
+    "PLR0913": 1
   },
   "dataforge/api/routers/stream.py": {
     "B904": 1
@@ -51,8 +49,7 @@
   },
   "dataforge/deploy/cli.py": {
     "B904": 3,
-    "BLE001": 2,
-    "RUF059": 2
+    "BLE001": 2
   },
   "dataforge/deploy/plan.py": {
     "PLR0913": 1
@@ -82,7 +79,6 @@
   "dataforge/gui/panels/jobs.py": {
     "ARG002": 5,
     "BLE001": 7,
-    "ERA001": 1,
     "PLR0915": 1,
     "PLR2004": 4,
     "S110": 2,
@@ -93,7 +89,6 @@
     "ARG002": 1,
     "BLE001": 7,
     "C901": 1,
-    "ERA001": 2,
     "PLR0912": 1,
     "PLR0915": 1,
     "PLR2004": 3,
@@ -155,7 +150,6 @@
   },
   "scripts/testloop/mutate_cmd.py": {
     "BLE001": 1,
-    "F841": 1,
     "PLC0415": 3,
     "PLR0913": 3,
     "PLW2901": 1,

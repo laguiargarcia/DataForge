@@ -25,6 +25,9 @@ from dataforge.compat import db_url, resolve_workspace, global_db_url
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_WORKSPACE_YAML = "workspace.yaml"
+_JOB_YAML = "job.yaml"
+
 
 def _validate_job_name(name: str) -> None:
     """Raise HTTP 400 if name has path separators or unsafe chars (job name is a directory name).
@@ -50,7 +53,7 @@ def _require_workspace(ws: str) -> Path:
         workspace_dir = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     return workspace_dir
 
@@ -86,7 +89,7 @@ def _validate_job_dag(job: Job, workspace_dir: Path | None = None) -> list[str]:
                     f"Task '{task.name}': script '{task.script}' does not exist yet"
                 )
             # Symmetric soft check for type=job targets (warn, never block — may be created later).
-            if task.job and not (workspace_dir / "jobs" / task.job / "job.yaml").exists():
+            if task.job and not (workspace_dir / "jobs" / task.job / _JOB_YAML).exists():
                 warnings.append(
                     f"Task '{task.name}': referenced job '{task.job}' does not exist yet"
                 )
@@ -147,8 +150,8 @@ async def _run_job_background(
             run = session.get(JobRunORM, run_id)
             terminal_status = run.status if run else "failed"
         await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": terminal_status})
-    except Exception as exc:
-        logger.error("Job run %s failed with exception: %s", run_id, exc)
+    except Exception:
+        logger.exception("Job run %s failed with exception", run_id)
         global_engine = init_db(global_db_url)
         with Session(global_engine) as session:
             run = session.get(JobRunORM, run_id)
@@ -171,7 +174,7 @@ def list_jobs(ws: str):
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
     jobs = load_jobs(workspace_dir)
@@ -212,10 +215,10 @@ async def trigger_job(ws: str, job: str, background_tasks: BackgroundTasks):
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
-    if not (workspace_dir / "workspace.yaml").exists():
+    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
-    job_yaml = workspace_dir / "jobs" / job / "job.yaml"
+    job_yaml = workspace_dir / "jobs" / job / _JOB_YAML
     if not job_yaml.exists():
         raise HTTPException(
             status_code=404, detail=f"Job '{job}' not found in workspace '{ws}'"
@@ -273,7 +276,7 @@ def create_job(ws: str, job: Job):
     """
     _validate_job_name(job.name)
     workspace_dir = _require_workspace(ws)
-    if (workspace_dir / "jobs" / job.name / "job.yaml").exists():
+    if (workspace_dir / "jobs" / job.name / _JOB_YAML).exists():
         raise HTTPException(
             status_code=409, detail=f"Job '{job.name}' already exists in workspace '{ws}'"
         )
@@ -290,7 +293,7 @@ def get_job_references(ws: str, job: str):
     """Report referencing triggers / type=job tasks / schedule row (D2 — pre-delete check)."""
     _validate_job_name(job)
     workspace_dir = _require_workspace(ws)
-    if not (workspace_dir / "jobs" / job / "job.yaml").exists():
+    if not (workspace_dir / "jobs" / job / _JOB_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Job '{job}' not found in workspace '{ws}'")
     return _scan_job_references(workspace_dir, ws, job)
 
@@ -300,7 +303,7 @@ def get_job(ws: str, job: str):
     """Return the full job definition (name, tasks, retry, env_file, schedule, parameters)."""
     _validate_job_name(job)
     workspace_dir = _require_workspace(ws)
-    if not (workspace_dir / "jobs" / job / "job.yaml").exists():
+    if not (workspace_dir / "jobs" / job / _JOB_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Job '{job}' not found in workspace '{ws}'")
     return load_job(workspace_dir, job).model_dump()
 
@@ -311,7 +314,7 @@ def update_job(ws: str, job: str, body: Job):
     _validate_job_name(job)
     _validate_job_name(body.name)
     workspace_dir = _require_workspace(ws)
-    if not (workspace_dir / "jobs" / job / "job.yaml").exists():
+    if not (workspace_dir / "jobs" / job / _JOB_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Job '{job}' not found in workspace '{ws}'")
     # D1: job name is immutable. Reject a rename rather than silently writing under the path
     # name (which would drop the body.name change and confuse the caller).
@@ -336,6 +339,6 @@ def remove_job(ws: str, job: str):
     """Delete a job directory. No cascade (D2): references are the GUI's concern to confirm."""
     _validate_job_name(job)
     workspace_dir = _require_workspace(ws)
-    if not (workspace_dir / "jobs" / job / "job.yaml").exists():
+    if not (workspace_dir / "jobs" / job / _JOB_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Job '{job}' not found in workspace '{ws}'")
     delete_job(workspace_dir, job)

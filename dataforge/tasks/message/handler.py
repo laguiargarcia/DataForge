@@ -104,15 +104,15 @@ class MessageHandler:
             ) else "success"
 
             siblings = [r for r in task_results if r["name"] != task.name]
-            vars = build_variables(
+            variables = build_variables(
                 workspace=workspace_dir.name, job=job.name,
                 trigger=trigger, run_id=run_id or "",
                 status=pre_status,
                 started_at=run_started, finished_at=utcnow(),
                 task_results=siblings,
             )
-            subject = render(subject_tpl, vars)
-            body = render(body_tpl, vars)
+            subject = render(subject_tpl, variables)
+            body = render(body_tpl, variables)
 
             deliver_all(targets, subject=subject, body=body, env=env)
 

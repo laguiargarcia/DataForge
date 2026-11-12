@@ -77,7 +77,7 @@ def run_job(
     leaves = {t.name for t in active_tasks if t.name not in has_child}
 
     parent_status: dict[str, str] = {}
-    results: dict[str, TaskResult] = {name: None for name in inactive}
+    results: dict[str, TaskResult] = dict.fromkeys(inactive)
     error_task_ran_nonzero = False
 
     with Session(global_engine) as session:

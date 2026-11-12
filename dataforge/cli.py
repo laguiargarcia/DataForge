@@ -28,10 +28,14 @@ app.add_typer(deploy_app, name="deploy")
 
 console = Console()
 
+_WORKSPACE_HELP = "Nome do workspace (em workspaces/)"
+_DB_FILE = "dataforge.db"
+_POWERSHELL = "powershell.exe"
+
 
 @app.command()
 def validate(
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Nome do workspace (em workspaces/)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
 ):
     """Valida todos os YAMLs do workspace."""
     from dataforge.parser import load_workspace, load_jobs, load_connections
@@ -175,7 +179,7 @@ def _upsert_and_get_enabled(workspace: str, job_name: str, cron: str) -> bool:
     from dataforge.db import init_db, ScheduleORM
     from sqlalchemy.orm import Session
 
-    global_db_url = db_url(data_dir() / "dataforge.db")
+    global_db_url = db_url(data_dir() / _DB_FILE)
     engine = init_db(global_db_url)
     row_id = f"{workspace}:{job_name}"
     with Session(engine) as session:
@@ -321,7 +325,7 @@ def _register_windows_trigger(
         "-Settings $settings -Force | Out-Null",
     ])
     result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+        [_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", ps_script],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -341,7 +345,7 @@ def _deregister_windows_trigger(workspace: str, trigger_name: str) -> None:
         f"-Confirm:$false -ErrorAction SilentlyContinue"
     )
     subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+        [_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", ps_script],
         capture_output=True, text=True,
     )
 
@@ -383,7 +387,7 @@ def _ensure_task_scheduler_history() -> str | None:
             return None
         # Not already admin: ask the user for permission (UAC consent prompt).
         elevated = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", elevate_ps],
+            [_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", elevate_ps],
             capture_output=True, text=True,
         )
         if elevated.returncode == 0:
@@ -496,7 +500,7 @@ def _register_windows_task(workspace: str, job_name: str, cron: str) -> None:
         f"Register-ScheduledTask -TaskName '{task_name}' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null",
     ])
     result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+        [_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", ps_script],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -572,8 +576,8 @@ def run(
         rprint(f"[red]{e}[/red]")
         raise typer.Exit(1)
 
-    global_db_url = db_url(data_dir() / "dataforge.db")
-    ws_db_url = db_url(workspace_path / "dataforge.db")
+    global_db_url = db_url(data_dir() / _DB_FILE)
+    ws_db_url = db_url(workspace_path / _DB_FILE)
     global_engine = init_db(global_db_url)
     run_id = str(uuid.uuid4())
 
@@ -629,13 +633,13 @@ def scheduled_run(
     if not trigger.enabled:
         return
 
-    global_db_url = db_url(data_dir() / "dataforge.db")
+    global_db_url = db_url(data_dir() / _DB_FILE)
     # Initialize DB schema once before spawning threads (avoids concurrent create_all conflicts)
     global_engine = init_db(global_db_url)
 
     def _run_one(entry):
         job_ws_path = resolve_workspace(entry.workspace)
-        ws_db_url = db_url(job_ws_path / "dataforge.db")
+        ws_db_url = db_url(job_ws_path / _DB_FILE)
         run_id = str(uuid.uuid4())
         with Session(global_engine) as session:
             session.add(JobRunORM(
@@ -655,11 +659,9 @@ def scheduled_run(
         for f in concurrent.futures.as_completed(futures):
             try:
                 f.result()
-            except Exception as exc:
+            except Exception:
                 import logging
-                logging.getLogger(__name__).error(
-                    "scheduled_run: job entry failed: %s", exc, exc_info=True
-                )
+                logging.getLogger(__name__).exception("scheduled_run: job entry failed")
 
     # Silent daemon notify — swallow all exceptions (D-09)
     port = api_port()
@@ -704,7 +706,7 @@ def schedule_sync():
 
 @jobs_app.command("list")
 def jobs_list(
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Nome do workspace (em workspaces/)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
 ):
     """Lista todos os jobs do workspace."""
     from dataforge.parser import load_jobs
@@ -735,7 +737,7 @@ def jobs_list(
 @jobs_app.command("run")
 def jobs_run(
     job_name: str = typer.Argument(..., help="Nome do job a executar"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Nome do workspace (em workspaces/)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     db: Optional[str] = typer.Option(None, "--db"),
 ):
     """Roda um job específico."""
@@ -769,7 +771,7 @@ def jobs_run(
 
 @execucoes_app.command("list")
 def execucoes_list(
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Nome do workspace (em workspaces/)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     db: Optional[str] = typer.Option(None, "--db"),
     limit: int = typer.Option(20, "--limit", "-n"),
 ):
@@ -814,7 +816,7 @@ def execucoes_list(
 @execucoes_app.command("logs")
 def execucoes_logs(
     execucao_id: int = typer.Argument(..., help="ID da execução"),
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help="Nome do workspace (em workspaces/)"),
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     db: Optional[str] = typer.Option(None, "--db"),
 ):
     """Exibe os logs de uma execução."""

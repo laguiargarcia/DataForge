@@ -12,6 +12,7 @@ router = APIRouter()
 
 _TABLE_NAME = re.compile(r"^[A-Za-z0-9_]+$")
 _MAX_LIMIT = 100000
+_NOT_FOUND = "Not found"
 
 
 def _parse_filter(raw: str, schema: pl.Schema) -> tuple[str, Any]:
@@ -46,12 +47,12 @@ def read_table(
     try:
         ws_path = resolve_workspace(ws)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     if not _TABLE_NAME.match(table):
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     table_path = curated_dir(ws_path) / table
     if not (table_path / "_delta_log").is_dir():
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
     lf = pl.scan_delta(str(table_path))
     schema = lf.collect_schema()
