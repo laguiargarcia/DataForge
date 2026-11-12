@@ -4,8 +4,10 @@ Each example builds its own source and target under a temporary directory create
 example, because a test-scoped fixture would be shared between examples. A test marked
 xfail(strict=True) records a real bug: its reason is the beads id, and the fix must remove the mark.
 """
+import os
 import re
 import string
+import sys
 import tempfile
 import warnings
 from contextlib import contextmanager
@@ -15,6 +17,7 @@ import pytest
 import yaml
 from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from dataforge.deploy.ignore import DeployIgnore
 from dataforge.deploy.ledger import Ledger
@@ -143,9 +146,9 @@ def lay_out(bases, spots, prune, unpaired):
         elif state == "active":
             target[rel] = trigger_bytes(definition, True)
             expected[rel] = (Action.protected, None)
-        else:  # malformed: not a mapping, so the engine cannot be running it
+        else:  # malformed: the deploy can't tell whether it is on, so it never deletes it
             target[rel] = b"- not\n- a mapping\n"
-            expected[rel] = (Action.delete, None)
+            expected[rel] = (Action.protected, None)
     if not prune or not source:
         expected = {rel: e for rel, e in expected.items()
                     if e[0] not in (Action.delete, Action.protected)}
@@ -660,3 +663,107 @@ def test_prune_lists_a_file_once_across_case_aliases():
                         [("scripts/**", "scripts"), ("nothing/**", "jobs"), ("none/**", "JOBS")])
     deletes = [i.target_path.casefold() for i in plan.items if i.action == Action.delete]
     assert deletes == ["jobs/old.yaml"]
+
+
+# --- df-886.12: prune deletes a trigger only when the engine reads it as off ---
+
+def engine_status(enabled):
+    """What the engine reads from a trigger's 'enabled' (TriggerModel), None if it can't read it."""
+    try:
+        return TriggerModel(name="x", cron="0 5 * * *", enabled=enabled).enabled
+    except ValidationError:
+        return None
+
+
+ENABLED_VALUES = st.one_of(
+    st.booleans(), st.integers(-2, 2), st.none(), st.just([]), st.just({}),
+    st.sampled_from(["no", "off", "false", "False", "0", "n", "f",
+                     "yes", "on", "true", "1", "y", "maybe", ""]),
+)
+
+
+@LAW
+@given(ENABLED_VALUES)
+@example(None)
+@example("no")
+def test_prune_deletes_a_trigger_only_when_the_engine_reads_it_as_off(enabled):
+    with workspaces() as (source, target):
+        plant(source, {"triggers/a.yaml": b"name: a\ncron: '0 9 * * *'\n"})
+        plant(target, {"triggers/x.yaml": trigger_bytes({"name": "x", "cron": "0 5 * * *"}, enabled)})
+        plan = plan_for(source, target, same_folder("triggers"))
+    expected = Action.delete if engine_status(enabled) is False else Action.protected
+    assert actions(plan)["triggers/x.yaml"] == expected
+
+
+# mixed-type-keys parses to a mapping without 'enabled', which the engine reads as on: it is
+# protected as active (test_trigger_without_enabled_key_is_protected), not as unreadable.
+UNREADABLE_TRIGGERS = {**{k: v for k, v in DIRTY_TRIGGERS.items() if k != "mixed-type-keys"},
+                       "not-a-mapping": b"- not\n- a mapping\n",
+                       "broken-indent": b"name: x\nenabled: true\n  bad: [indent\n",
+                       "enabled-null": b"name: x\ncron: '0 5 * * *'\nenabled: null\n"}
+
+
+@pytest.mark.parametrize("dirty", UNREADABLE_TRIGGERS.values(), ids=UNREADABLE_TRIGGERS.keys())
+def test_prune_protects_a_trigger_whose_status_it_cannot_read(dirty):
+    with workspaces() as (source, target):
+        plant(source, {"triggers/a.yaml": b"name: a\ncron: '0 9 * * *'\n"})
+        plant(target, {"triggers/x.yaml": dirty})
+        plan = plan_for(source, target, same_folder("triggers"))
+    item = next(i for i in plan.items if i.target_path == "triggers/x.yaml")
+    assert item.action == Action.protected
+    assert item.reason == "target trigger unreadable: status unknown"
+
+
+# --- df-m1dk: no deploy path reaches outside the target through a symlinked folder ---
+
+needs_symlinks = pytest.mark.skipif(not hasattr(os, "symlink") or sys.platform == "win32",
+                                    reason="POSIX symlinks; NTFS junctions go in the Windows smoke")
+
+
+@needs_symlinks
+def test_prune_through_a_symlinked_base_is_refused_and_deletes_nothing_outside():
+    with workspaces() as (source, target):
+        outside = target.parent / "outside"
+        plant(outside, {"victim.py": b"precious"})
+        plant(source, {"scripts/a.py": b"a"})
+        os.symlink(outside, target / "scripts", target_is_directory=True)
+        with pytest.raises(ValueError, match="outside the target workspace"):
+            plan_for(source, target, same_folder("scripts"))
+        assert (outside / "victim.py").read_bytes() == b"precious"
+
+
+@needs_symlinks
+def test_a_pair_written_through_a_symlinked_folder_is_refused():
+    with workspaces() as (source, target):
+        outside = target.parent / "outside"
+        outside.mkdir()
+        plant(source, {"scripts/sub/a.py": b"a"})
+        (target / "scripts").mkdir()
+        os.symlink(outside, target / "scripts" / "sub", target_is_directory=True)
+        with pytest.raises(ValueError, match="outside the target workspace"):
+            plan_for(source, target, same_folder("scripts"), prune=False)
+        assert not any(outside.iterdir())
+
+
+@needs_symlinks
+def test_a_symlinked_folder_that_stays_inside_the_target_is_fine():
+    with workspaces() as (source, target):
+        plant(target, {"real/keep.txt": b"k"})
+        plant(source, {"scripts/a.py": b"a"})
+        os.symlink(target / "real", target / "scripts", target_is_directory=True)
+        plan = plan_for(source, target, same_folder("scripts"), prune=False)
+    assert actions(plan) == {"scripts/a.py": Action.add}
+
+
+@needs_symlinks
+def test_an_ignored_folder_linked_outside_the_target_does_not_stop_the_deploy():
+    """A linked folder the deploy never writes to (ignored) is no reason to refuse the rest."""
+    with workspaces() as (source, target):
+        outside = target.parent / "outside"
+        plant(outside, {"big.txt": b"x"})
+        plant(source, {"scripts/a.py": b"a", "scripts/vault_/s.txt": b"s",
+                       "deploy/.deployignore": IGNORE_RULES.encode()})
+        (target / "scripts").mkdir()
+        os.symlink(outside, target / "scripts" / "vault_", target_is_directory=True)
+        plan = plan_for(source, target, same_folder("scripts"))
+    assert actions(plan) == {"scripts/a.py": Action.add, "scripts/vault_/s.txt": Action.skip_ignored}
