@@ -16,7 +16,7 @@ def pytest_configure(config):
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_url(tmp_path):
     """Isolated SQLite DB per test. Never use a real path."""
     return make_db_url(tmp_path / "dataforge.db")
@@ -106,7 +106,7 @@ def no_retry_sleep(monkeypatch):
         )
 
 
-@pytest.fixture()
+@pytest.fixture
 def simple_job_dir(workspace_dir):
     """Job dir with job.yaml + real script. delay_seconds=0 is mandatory (engine calls real time.sleep)."""
     job_dir = workspace_dir / "jobs" / "test_job"

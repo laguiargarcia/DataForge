@@ -3,6 +3,9 @@ from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
 
 
+_EXECUCOES_COLUMNS_SQL = "PRAGMA table_info(execucoes)"
+
+
 def utcnow() -> datetime:
     """Current UTC time without tzinfo, the form every DateTime column here stores.
 
@@ -63,7 +66,7 @@ def init_db(db_url: str):
 
     # Idempotent owner_id migration — SQLite has no ALTER TABLE ... ADD COLUMN IF NOT EXISTS
     with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(execucoes)"))
+        result = conn.execute(text(_EXECUCOES_COLUMNS_SQL))
         columns = [row[1] for row in result.fetchall()]
         if "owner_id" not in columns:
             conn.execute(
@@ -73,13 +76,13 @@ def init_db(db_url: str):
             )
             conn.commit()
 
-        result = conn.execute(text("PRAGMA table_info(execucoes)"))
+        result = conn.execute(text(_EXECUCOES_COLUMNS_SQL))
         columns = [row[1] for row in result.fetchall()]
         if "output" not in columns:
             conn.execute(text("ALTER TABLE execucoes ADD COLUMN output TEXT"))
             conn.commit()
 
-        result = conn.execute(text("PRAGMA table_info(execucoes)"))
+        result = conn.execute(text(_EXECUCOES_COLUMNS_SQL))
         columns = [row[1] for row in result.fetchall()]
         if "run_id" not in columns:
             conn.execute(text("ALTER TABLE execucoes ADD COLUMN run_id TEXT"))

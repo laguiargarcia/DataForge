@@ -301,3 +301,10 @@ def test_is_valid_job_name_accepts_and_rejects():
         assert is_valid_job_name(good), good
     for bad in ["../evil", "a/b", "a b", "", ".", "..", "a.b", "a/", "/a", "a\\b"]:
         assert not is_valid_job_name(bad), bad
+
+
+def test_compact_job_dict_keeps_type_when_nothing_can_be_inferred():
+    """A task with neither script nor job has no inferred type, so an explicit type is kept."""
+    from dataforge.parser import _compact_job_dict
+    job = Job(name="j", tasks=[Task(name="e", type="error")])
+    assert _compact_job_dict(job)["tasks"] == [{"name": "e", "type": "error"}]

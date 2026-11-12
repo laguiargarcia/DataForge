@@ -426,3 +426,42 @@ def test_editor_page_does_not_disturb_run_detail_sse(monkeypatch):
     panel._navigate_to(jobs_module.Panel.PAGE_EDITOR, "Jobs › x › New Job")
     assert loaded == ["run99"]
     panel.close()
+
+
+def test_relative_time_and_duration_accept_z_suffix():
+    """API timestamps end in 'Z'; both formatters read them as UTC (fromisoformat does, on 3.11+)."""
+    from datetime import datetime, timedelta, timezone
+    from dataforge.gui.panels import jobs as jobs_module
+    Panel = jobs_module.Panel
+
+    five_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=5, seconds=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert Panel._relative_time(five_min_ago) == "5 min ago"
+    assert Panel._relative_time("not a date") == "not a date"
+    assert Panel._format_duration("2026-06-01T10:00:00Z", "2026-06-01T10:02:05Z", "success") == "2m 5s"
+    assert Panel._format_duration("2026-06-01T10:00:00Z", "2026-06-01T10:00:42Z", "failed") == "42s"
+
+
+@pytest.mark.parametrize("reply_attr, handler", [
+    ("_run_sse_reply", "_handle_run_snapshot"),
+    ("_sse_reply", "_handle_workspace_event"),
+])
+def test_sse_data_parses_only_complete_data_frames(monkeypatch, reply_attr, handler):
+    """Only 'data:' lines of frames ended by a blank line reach the handler; the rest waits in the buffer."""
+    from unittest.mock import MagicMock
+    _get_app()
+    from dataforge.gui.panels import jobs as jobs_module
+    monkeypatch.setattr(jobs_module.Panel, "_subscribe_sse", lambda self, ws: None)
+    panel = jobs_module.Panel()
+    seen = []
+    monkeypatch.setattr(panel, handler, seen.append)
+
+    reply = MagicMock()
+    reply.readAll.return_value = b': keepalive\n\ndata: {"a": 1}\nevent: x\n\ndata: not json\n\ndata: {"b"'
+    setattr(panel, reply_attr, reply)
+    buffer_attr = "_run_sse_buffer" if reply_attr == "_run_sse_reply" else "_sse_buffer"
+    setattr(panel, buffer_attr, b"")
+    getattr(panel, "_on_run_sse_data" if reply_attr == "_run_sse_reply" else "_on_sse_data")()
+
+    assert seen == [{"a": 1}]
+    assert getattr(panel, buffer_attr) == b'data: {"b"'
+    panel.close()
