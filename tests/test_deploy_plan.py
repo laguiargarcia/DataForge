@@ -270,11 +270,15 @@ def test_app_pair_plans_sources_and_bundle_but_not_build_artifacts(tmp_path):
 def test_target_path_that_is_a_directory_is_protected(tmp_path):
     src, tgt = tmp_path / "Dev", tmp_path / "Prod"
     _mk(src, "scripts/a.py", "print(1)\n")
+    _mk(src, "scripts/b.py", "print(2)\n")
     (tgt / "scripts" / "a.py").mkdir(parents=True)
     plan = _build(src, tgt)   # used to raise IsADirectoryError
     a = _item(plan, "scripts/a.py")
-    assert a.action == Action.protected and "folder" in a.reason
+    assert a.action == Action.protected
+    assert a.reason == "target has a folder where the source has a file"
+    assert a.source_path == "scripts/a.py"
     assert a not in plan.writable()
+    assert _item(plan, "scripts/b.py").action == Action.add   # one conflict doesn't stop the plan
 
 
 def test_target_folder_that_is_a_file_is_protected(tmp_path):
@@ -283,8 +287,18 @@ def test_target_folder_that_is_a_file_is_protected(tmp_path):
     _mk(tgt, "scripts/sub", "a file where the source has a folder\n")
     plan = _build(src, tgt)   # used to plan an ADD whose apply fails in mkdir mid-batch
     a = _item(plan, "scripts/sub/a.py")
-    assert a.action == Action.protected and "scripts/sub" in a.reason
+    assert a.action == Action.protected
+    assert a.reason == "target has a file at 'scripts/sub' where the source has a folder"
     assert a not in plan.writable()
+
+
+def test_outer_target_folder_that_is_a_file_is_named(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/sub/a.py", "print(1)\n")
+    _mk(tgt, "scripts", "a file where the source has the scripts folder\n")
+    a = _item(_build(src, tgt), "scripts/sub/a.py")
+    assert a.action == Action.protected
+    assert a.reason == "target has a file at 'scripts' where the source has a folder"
 
 
 # --- df-94s: .deployignore is checked against BOTH the source and the target path ---
@@ -302,6 +316,14 @@ def test_ignore_matches_the_target_path_on_add(tmp_path):
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
     a = _item(plan, "secrets/a.py")
     assert a.action == Action.skip_ignored
+
+
+def test_renamed_pair_outside_triggers_keeps_the_source_kind(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    p = _renamed(src, "{source: 'scripts/**', target: 'code/'}", "")
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    assert _item(plan, "code/a.py").kind == Kind.script
 
 
 def test_ignore_matches_the_source_path_on_prune(tmp_path):
@@ -342,7 +364,8 @@ def test_source_outside_triggers_is_planned_as_a_trigger(tmp_path):
     p = _renamed(src, "{source: 'config/*.yaml', target: 'triggers/'}", "")
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
     t = _item(plan, "triggers/daily.yaml")
-    assert t.action == Action.modify and t.kind == Kind.trigger   # apply then keeps enabled: true
+    assert t.action == Action.modify   # apply then keeps enabled: true
+    assert t.kind == Kind.trigger
 
 
 def test_prune_protects_an_active_trigger_under_a_renamed_target(tmp_path):
@@ -352,4 +375,5 @@ def test_prune_protects_an_active_trigger_under_a_renamed_target(tmp_path):
     p = _renamed(src, "{source: 'triggers/*.yaml', target: 'schedules/'}", "", prune=True)
     plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
     x = _item(plan, "schedules/x.yaml")
-    assert x.action == Action.protected and x.kind == Kind.trigger   # was DELETE, kind other
+    assert x.action == Action.protected   # was DELETE, kind other
+    assert x.kind == Kind.trigger

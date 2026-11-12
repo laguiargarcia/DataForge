@@ -111,6 +111,26 @@ def _sha(path: Path, kind: Kind) -> str:
     return _trigger_sha(path) if kind == Kind.trigger else content_sha(path)
 
 
+def _held_back(target_dir: Path, src_rel: str, tgt_rel: str, kind: Kind,
+               ignore: DeployIgnore) -> ItemChange | None:
+    """The SKIP_IGNORED or PROTECTED item for a pair that must not be written, or None to plan it.
+    Raises ValueError when the target path runs through a linked folder (df-m1dk)."""
+    def held(action: Action, reason: str) -> ItemChange:
+        return ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind, action=action,
+                          reason=reason)
+
+    if windows_unsafe(tgt_rel):   # df-886.20: skip the one file, not the whole deploy
+        return held(Action.skip_ignored, "name not valid on Windows")
+    # law #3, on both paths (df-94s): a pair may rename the folder, and prune sees both too.
+    if ignore.matches(src_rel) or ignore.matches_any_case(tgt_rel):
+        return held(Action.skip_ignored, ".deployignore")
+    target_file(target_dir, tgt_rel)   # df-m1dk: never through a linked folder
+    conflict = _shape_conflict(target_dir, tgt_rel)
+    if conflict:   # df-886.13: a person has to sort the target out; nothing is written
+        return held(Action.protected, conflict)
+    return None
+
+
 def build_plan(
     source_dir: Path,
     target_dir: Path,
@@ -124,22 +144,12 @@ def build_plan(
         if _is_ledger_path(tgt_rel):   # law #4 — never deploy into our own ledger
             continue
         kind = pair_kind(src_rel, tgt_rel)   # df-7pl
-        if windows_unsafe(tgt_rel):   # df-886.20: skip the one file, not the whole deploy
-            items.append(ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind,
-                                    action=Action.skip_ignored, reason="name not valid on Windows"))
-            continue
-        # law #3, on both paths (df-94s): a pair may rename the folder, and prune sees both too.
-        if ignore.matches(src_rel) or ignore.matches_any_case(tgt_rel):
-            items.append(ItemChange(source_path=src_rel, target_path=tgt_rel,
-                                    kind=kind, action=Action.skip_ignored, reason=".deployignore"))
+        held = _held_back(target_dir, src_rel, tgt_rel, kind, ignore)
+        if held is not None:
+            items.append(held)
             continue
         src_path = source_dir / src_rel
-        tgt_path = target_file(target_dir, tgt_rel)   # df-m1dk: never through a linked folder
-        conflict = _shape_conflict(target_dir, tgt_rel)
-        if conflict:   # df-886.13: a person has to sort the target out; nothing is written
-            items.append(ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind,
-                                    action=Action.protected, reason=conflict))
-            continue
+        tgt_path = target_dir / tgt_rel
 
         # Triggers (law #2'): a trigger is always promoted as its DEFINITION; the deploy never
         # changes the target's on/off status. So an active target trigger is updated in place
