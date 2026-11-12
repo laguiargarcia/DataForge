@@ -37,7 +37,8 @@ def test_reads_rows_with_iso_dates(seeded, test_client):
 
 def test_nan_becomes_null_not_500(seeded, test_client):
     r = test_client.get("/api/workspaces/test_ws/tables/vendas", params={"eq": "id:3"})
-    assert r.status_code == 200 and r.json()["rows"][0]["valor"] is None
+    assert r.status_code == 200
+    assert r.json()["rows"][0]["valor"] is None
 
 
 def test_inf_becomes_null_not_500(workspace_dir, test_client):
@@ -74,7 +75,8 @@ def test_range_is_inclusive(seeded, test_client):
 
 def test_limit_reports_truncation(seeded, test_client):
     body = test_client.get("/api/workspaces/test_ws/tables/vendas", params={"limit": 2}).json()
-    assert len(body["rows"]) == 2 and body["truncated"] is True
+    assert len(body["rows"]) == 2
+    assert body["truncated"] is True
     body = test_client.get("/api/workspaces/test_ws/tables/vendas", params={"limit": 3}).json()
     assert body["truncated"] is False
 

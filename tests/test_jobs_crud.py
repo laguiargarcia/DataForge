@@ -274,7 +274,8 @@ def test_put_preserves_parameters(test_client, workspace_dir):
     reloaded = load_job(workspace_dir, "withp")
     assert [t.name for t in reloaded.tasks] == ["t1", "t2"]   # task change applied
     assert reloaded.schedule == "0 2 * * *"                    # schedule NOT wiped
-    assert len(reloaded.parameters) == 1 and reloaded.parameters[0].name == "env"  # parameters kept
+    assert len(reloaded.parameters) == 1   # parameters kept
+    assert reloaded.parameters[0].name == "env"
 
 
 def test_put_job_400_on_duplicate_tasks(test_client, workspace_dir):
@@ -391,7 +392,8 @@ def test_existing_job_routes_still_resolve(test_client, workspace_dir):
     assert r2.status_code == 202
     # the new GET-one still returns the full job (not swallowed by /schedule's prefix)
     r3 = test_client.get("/api/workspaces/test_ws/jobs/etl")
-    assert r3.status_code == 200 and r3.json()["name"] == "etl"
+    assert r3.status_code == 200
+    assert r3.json()["name"] == "etl"
 
 
 # ---------------------------------------------------------------------------

@@ -132,4 +132,5 @@ def test_ledger_records_every_write_with_its_snapshots(cases, prune):
                 assert item.after_sha is None
             else:
                 now = (target / item.target_path).read_bytes()
-                assert item.after_sha == sha(now) and ledger.read_blob(item.after_sha) == now
+                assert item.after_sha == sha(now)
+                assert ledger.read_blob(item.after_sha) == now

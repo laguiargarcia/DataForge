@@ -260,7 +260,8 @@ def test_apply_refreshes_on_success(monkeypatch):
     monkeypatch.setattr(panel, "_load_plan", lambda: calls.append("plan"))
     monkeypatch.setattr(panel, "_load_status", lambda: calls.append("status"), raising=False)
     panel._on_apply_finished(_fake_reply({"applied": True, "entry": _FAKE_ENTRY}))
-    assert "plan" in calls and "status" in calls   # refresh after deploy
+    assert "plan" in calls   # refresh after deploy
+    assert "status" in calls
     panel.close()
 
 
