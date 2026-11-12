@@ -213,7 +213,8 @@ def test_git_show_reads_a_ref_never_an_option(tmp_path, monkeypatch):
     monkeypatch.setattr(gate, "ROOT", tmp_path)
 
     assert gate._git_show("HEAD", "baseline.json") == "{}\n"
-    assert gate._git_show(f"--output={tmp_path / 'leaked'}", "baseline.json") is None
+    with pytest.raises(ValueError, match="not a git ref name"):
+        gate._git_show(f"--output={tmp_path / 'leaked'}", "baseline.json")
     assert not [p for p in tmp_path.iterdir() if p.name.startswith("leaked")]
 
 
