@@ -568,3 +568,95 @@ def test_each_action_carries_the_reason_the_cli_and_gui_show():
         "triggers/a.yaml": "new in target",
         "triggers/live.yaml": "target trigger is active",
     }
+
+
+# --- Second review of PR #12 ---
+
+UNDUMPABLE = {
+    "int-tag-empty": b'a: !!int ""\n',           # IndexError inside the constructor
+    "int-tag-dash": b'a: !!int "-"\n',
+    "float-tag-empty": b'a: !!float ""\n',
+    "dump-recursion": b"a: " + b"[" * 350 + b"]" * 350 + b"\n",   # loads, but safe_dump recurses
+    "huge-hex-int": b"a: 0x" + b"f" * 4000 + b"\n",              # loads, but str(int) > 4300 digits
+}
+
+
+@pytest.mark.parametrize("dirty", UNDUMPABLE.values(), ids=UNDUMPABLE.keys())
+@pytest.mark.parametrize("where", ["source", "target", "prune-candidate"])
+def test_trigger_that_loads_but_cannot_be_canonicalized_does_not_crash(where, dirty):
+    """df-886.17: every PyYAML failure, on load or on dump, degrades to the bytes."""
+    test_dirty_trigger_file_does_not_crash_the_planner(where, dirty)
+
+
+@pytest.mark.parametrize("dirty", UNDUMPABLE.values(), ids=UNDUMPABLE.keys())
+def test_undumpable_trigger_is_hashed_by_its_bytes(tmp_path, dirty):
+    path = tmp_path / "t.yaml"
+    path.write_bytes(dirty)
+    assert _trigger_sha(path) == content_sha(path)
+
+
+@pytest.mark.parametrize("target", [
+    "deploy./.ledger", "deploy/.ledger ", "deploy/.ledger::$INDEX_ALLOCATION", "triggers./",
+    "scripts:x", "a /b", "x...",
+])
+def test_names_windows_rewrites_are_rejected_as_targets(target):
+    """df-886.19: Win32 drops a trailing dot or space and reads ':' as a stream, so these land
+    somewhere other than they say (the ledger, for the first three)."""
+    with pytest.raises(ValueError, match="escapes target workspace"):
+        check_target_inside(target)
+
+
+@pytest.mark.parametrize("target", ["./scripts/", "scripts/./x", ".hidden/", "a.b/c"])
+def test_ordinary_dots_in_a_target_are_fine(target):
+    check_target_inside(target)
+
+
+@pytest.mark.parametrize("name", ["a\\b.py", "C:notes.py", "trail.py.", "trail.py "])
+def test_a_source_file_with_a_windows_invalid_name_is_skipped_not_fatal(name):
+    """df-886.20: one odd file name must not block the whole deploy; it is skipped, and the
+    plan says why."""
+    with workspaces() as (source, target):
+        plant(source, {"scripts/ok.py": b"ok", f"scripts/{name}": b"odd"})
+        plan = plan_for(source, target, same_folder("scripts"))
+    by_path = {i.target_path: i for i in plan.items}
+    assert by_path["scripts/ok.py"].action == Action.add
+    assert by_path[f"scripts/{name}"].action == Action.skip_ignored
+    assert by_path[f"scripts/{name}"].reason == "name not valid on Windows"
+
+
+# df-886.18: on NTFS (and /mnt/c) 'JOBS' and 'jobs' are one folder. Prune compares paths without
+# case, which on a case-sensitive disk only ever errs toward keeping a file.
+
+def test_prune_through_a_case_alias_keeps_an_in_sync_file():
+    with workspaces() as (source, target):
+        plant(source, {"jobs/a.yaml": b"a"})
+        # Both spellings planted: what NTFS shows when the one folder is walked under each name.
+        plant(target, {"jobs/a.yaml": b"a", "JOBS/a.yaml": b"a"})
+        plan = plan_for(source, target, [("jobs/**", "jobs"), ("nothing/**", "JOBS")])
+    assert not [i for i in plan.items if i.action == Action.delete]
+
+
+def test_prune_keeps_a_file_ignored_under_another_casing():
+    with workspaces() as (source, target):
+        plant(source, {"scripts/a.py": b"a", "deploy/.deployignore": b"config/\n"})
+        plant(target, {"CONFIG/secret.yaml": b"s"})
+        plan = plan_for(source, target, [("scripts/**", "scripts"), ("nothing/**", "CONFIG")])
+    assert not [i for i in plan.items if i.action == Action.delete]
+
+
+def test_prune_protects_an_active_trigger_under_another_casing():
+    with workspaces() as (source, target):
+        plant(source, {"triggers/a.yaml": b"name: a\n"})
+        plant(target, {"TRIGGERS/live.yaml": b"name: live\nenabled: true\n"})
+        plan = plan_for(source, target, [("triggers/**", "triggers"), ("nothing/**", "TRIGGERS")])
+    assert actions(plan)["TRIGGERS/live.yaml"] == Action.protected
+
+
+def test_prune_lists_a_file_once_across_case_aliases():
+    with workspaces() as (source, target):
+        plant(source, {"scripts/a.py": b"a"})
+        plant(target, {"jobs/old.yaml": b"old", "JOBS/old.yaml": b"old"})   # one file on NTFS
+        plan = plan_for(source, target,
+                        [("scripts/**", "scripts"), ("nothing/**", "jobs"), ("none/**", "JOBS")])
+    deletes = [i.target_path.casefold() for i in plan.items if i.action == Action.delete]
+    assert deletes == ["jobs/old.yaml"]

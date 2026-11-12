@@ -290,3 +290,15 @@ def test_apply_trigger_with_a_broken_yaml_tag_is_copied_verbatim(tmp_path, dirty
     plan = _plan(src, tgt, "target: Prod\npairs:\n  - {source: 'triggers/*.yaml', target: 'triggers/'}\n")
     apply_plan(src, tgt, plan, Ledger(tgt))
     assert (tgt / "triggers/bad.yaml").read_text() == dirty
+
+
+@pytest.mark.parametrize("dirty", ['a: !!int ""\n', "a: " + "[" * 350 + "]" * 350 + "\n",
+                                   "a: 0x" + "f" * 4000 + "\n"],
+                         ids=["int-tag-empty", "dump-recursion", "huge-hex-int"])
+def test_apply_trigger_that_cannot_be_redumped_is_copied_verbatim(tmp_path, dirty):
+    # df-886.17: a trigger that loads but can't be dumped again is copied as it is.
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "triggers/bad.yaml", dirty)
+    plan = _plan(src, tgt, "target: Prod\npairs:\n  - {source: 'triggers/*.yaml', target: 'triggers/'}\n")
+    apply_plan(src, tgt, plan, Ledger(tgt))
+    assert (tgt / "triggers/bad.yaml").read_text() == dirty

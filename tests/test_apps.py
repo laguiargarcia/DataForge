@@ -101,3 +101,13 @@ def test_serve_binds_dataforge_port_when_no_port_is_given(tmp_path, monkeypatch)
     monkeypatch.setattr("uvicorn.run", lambda *a, **k: seen.update(k))
     CliRunner().invoke(cli_app, ["serve"])
     assert seen["port"] == 8123
+
+
+def test_serve_explains_an_invalid_dataforge_port(tmp_path, monkeypatch):
+    # df-yvgx: a clear message and exit 1, not a traceback.
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("DATAFORGE_PORT", "abc")
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    result = CliRunner().invoke(cli_app, ["serve"])
+    assert result.exit_code == 1
+    assert "DATAFORGE_PORT must be a port number" in result.output

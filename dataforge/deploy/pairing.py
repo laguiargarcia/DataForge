@@ -1,5 +1,4 @@
 import posixpath
-import re
 from pathlib import Path, PurePosixPath
 import yaml
 from .models import PipelineModel
@@ -22,16 +21,23 @@ def source_base(pattern: str) -> str:
     return "/".join(base)
 
 
-_DRIVE = re.compile(r"^[A-Za-z]:")
+def windows_unsafe(rel: str) -> bool:
+    """True if Windows would read `rel` as a different path: '\\' is a separator there, ':' a drive
+    or an alternate data stream ('x::$INDEX_ALLOCATION' is the folder x), and Win32 drops a
+    trailing dot or space from a segment ('deploy./.ledger' IS deploy/.ledger) (df-886.16/.19)."""
+    if "\\" in rel or ":" in rel:
+        return True
+    return any(seg not in ("", ".", "..") and seg[-1] in ". " for seg in rel.split("/"))
+
+
+def _escapes(rel: str) -> bool:
+    return posixpath.isabs(rel) or ".." in PurePosixPath(rel).parts
 
 
 def check_target_inside(target_rel: str) -> None:
-    """Raise ValueError if a target path escapes the target workspace: absolute, with '..', or
-    spelled for Windows. On Windows a backslash is a separator and 'C:' a drive, so '..\\x',
-    '\\x' and 'C:\\x' leave the workspace even though POSIX reads them as names (df-886.16).
-    Targets are POSIX paths; a backslash is never part of a valid one."""
-    if ("\\" in target_rel or _DRIVE.match(target_rel)
-            or posixpath.isabs(target_rel) or ".." in PurePosixPath(target_rel).parts):
+    """Raise ValueError if a pair target escapes the target workspace: absolute, with '..', or
+    spelled so that Windows reads it as another path (see windows_unsafe). Targets are POSIX."""
+    if _escapes(target_rel) or windows_unsafe(target_rel):
         raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
 
 
@@ -69,7 +75,9 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
             if not tail:
                 tail = PurePosixPath(rel).name
             target_rel = normalize_target(posixpath.join(rule.target, tail))
-            check_target_inside(target_rel)
+            if _escapes(target_rel):   # the rule target was checked; a glob result can't escape
+                raise ValueError(f"deploy pair target escapes target workspace: {target_rel!r}")
+            # A file NAME Windows can't hold is not fatal here: build_plan skips it (df-886.20).
             key = (rel, target_rel)
             if key in seen:
                 continue
