@@ -88,7 +88,16 @@ function percentual(fracao: number): string {
 }
 
 function conta(tipo: string): string {
-  return tipo === 'BANK' ? 'Conta' : tipo === 'CREDIT' ? 'Cartão' : tipo
+  if (tipo === 'BANK') return 'Conta'
+  if (tipo === 'CREDIT') return 'Cartão'
+  return tipo
+}
+
+// Mais recente primeiro; no mesmo dia, pelo id.
+function compararTx(a: TxClassificada, b: TxClassificada): number {
+  if (a.date !== b.date) return a.date < b.date ? 1 : -1
+  if (a.id !== b.id) return a.id < b.id ? -1 : 1
+  return 0
 }
 
 function doMes<T extends { anomes_key: number }>(linhas: T[] | null, anomes: number): T | null {
@@ -99,7 +108,7 @@ function transacoesDaCategoria(dados: Dados, anomes: number, grupo: string, nome
   // O mesmo recorte do report_saude_categoria: linhas de caixa do mês, do Tipo e da categoria.
   return (dados.transacoes ?? [])
     .filter(t => t.anomes_key === anomes && t.cash_flag && t.Tipo === grupo && t.categoria === nome)
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .sort(compararTx)
     .map(t => ({
       id: t.id,
       date: `${t.date.slice(8, 10)}/${t.date.slice(5, 7)}`,

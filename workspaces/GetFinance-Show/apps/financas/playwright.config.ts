@@ -8,7 +8,7 @@ const origem = `http://127.0.0.1:${porta}`
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: /.*\.spec\.ts/,
+  testMatch: /\.spec\.ts/,
   snapshotPathTemplate: '{testDir}/referencia/{arg}{ext}',
   updateSnapshots: 'none',
   fullyParallel: false,

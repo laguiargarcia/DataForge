@@ -10,6 +10,9 @@ from pathlib import Path
 
 exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
 
+# Pluggy documentNumber.type -> person kind of the counterparty document.
+_DOCUMENT_KIND = {"CNPJ": "PJ", "CPF": "PF"}
+
 # df-s65 (A5 freeze): description_normalized + etl_merchant_key are derived ONCE here at the
 # cleansed insert (mirroring the df-pzu counterparty freeze) and carried by cleansed2curated.
 # Config-driven merchant_key normalization (multi-institution). Env override mirrors the
@@ -111,7 +114,7 @@ def _counterparty(txn_type, payment_data_str):
                 if isinstance(dn, dict):
                     doc = dn.get("value")
                     raw_type = dn.get("type")
-                    doc_type = "PJ" if raw_type == "CNPJ" else "PF" if raw_type == "CPF" else None
+                    doc_type = _DOCUMENT_KIND.get(raw_type) if isinstance(raw_type, str) else None
     return {"counterparty_name": name, "counterparty_document": doc,
             "counterparty_document_type": doc_type, "payment_method": method}
 

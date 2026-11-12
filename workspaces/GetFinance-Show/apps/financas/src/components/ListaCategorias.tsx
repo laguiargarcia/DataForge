@@ -1,6 +1,6 @@
 import type { Categoria } from '../resumo'
 
-type Props = { categorias: Categoria[]; ativa: string | null; onEscolher: (id: string) => void }
+type Props = Readonly<{ categorias: Categoria[]; ativa: string | null; onEscolher: (id: string) => void }>
 
 export function ListaCategorias({ categorias, ativa, onEscolher }: Props) {
   return (

@@ -106,8 +106,12 @@ for a in accounts:
     account_type = a["type"]
     if account_type == "BANK":
         code = _bank_code(a.get("transfer_number"))
-        institution = bank_names.get(code) if code and code in bank_names else (
-            f"unknown-{code}" if code else "unknown")
+        if code and code in bank_names:
+            institution = bank_names[code]
+        elif code:
+            institution = f"unknown-{code}"
+        else:
+            institution = "unknown"
     else:
         institution = item_institution.get(a["itemId"])
         if institution is None:
