@@ -13,3 +13,18 @@ min_score = 0.9437
 tests = ["tests/test_deploy_apply*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.9354
+
+[targets."dataforge/engine.py"]
+tests = ["tests/test_engine*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 0.9791
+
+[targets."dataforge/dag.py"]
+tests = ["tests/test_dag*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 0.9777
+
+[targets."dataforge/deploy/pairing.py"]
+tests = ["tests/test_deploy_pairing*.py", "tests/test_deploy_plan*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 0.9197

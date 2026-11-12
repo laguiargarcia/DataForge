@@ -41,9 +41,6 @@
     "S110": 2,
     "TID251": 3
   },
-  "dataforge/dag.py": {
-    "C901": 1
-  },
   "dataforge/deploy/apply.py": {
     "BLE001": 1
   },
@@ -56,10 +53,6 @@
   },
   "dataforge/deploy/service.py": {
     "B904": 5
-  },
-  "dataforge/engine.py": {
-    "C901": 1,
-    "PLR0912": 1
   },
   "dataforge/gui/main_window.py": {
     "BLE001": 1,
