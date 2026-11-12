@@ -370,6 +370,94 @@ class CronPicker(QWidget):
 _PARAM_TYPES = ["string", "int", "float", "bool", "date", "json"]
 
 
+# Typed value widgets of JobParamsDialog, one factory per parameter type. Each pre-fills the
+# widget with *value* when it is given and parses; otherwise the widget keeps its default.
+
+def _int_widget(value) -> QSpinBox:
+    w = QSpinBox()
+    w.setRange(-2_147_483_648, 2_147_483_647)
+    if value is not None:
+        try:
+            w.setValue(int(value))
+        except (ValueError, TypeError):
+            pass
+    return w
+
+
+def _float_widget(value) -> QDoubleSpinBox:
+    w = QDoubleSpinBox()
+    w.setRange(-1e15, 1e15)
+    w.setDecimals(6)
+    if value is not None:
+        try:
+            w.setValue(float(value))
+        except (ValueError, TypeError):
+            pass
+    return w
+
+
+def _bool_widget(value) -> QCheckBox:
+    w = QCheckBox()
+    if value is not None:
+        w.setChecked(bool(value))
+    return w
+
+
+def _date_widget(value) -> QDateEdit:
+    w = QDateEdit()
+    w.setCalendarPopup(True)
+    if value is None:
+        return w
+    try:
+        parts = str(value).split("-")
+        if len(parts) == 3:
+            w.setDate(QDate(int(parts[0]), int(parts[1]), int(parts[2])))
+    except (ValueError, TypeError):
+        pass
+    return w
+
+
+def _json_widget(value) -> QPlainTextEdit:
+    w = QPlainTextEdit()
+    w.setFixedHeight(60)
+    if value is not None:
+        try:
+            w.setPlainText(json.dumps(value) if not isinstance(value, str) else value)
+        except Exception:
+            w.setPlainText(str(value))
+    return w
+
+
+def _string_widget(value) -> QLineEdit:
+    w = QLineEdit()
+    if value is not None:
+        w.setText(str(value))
+    return w
+
+
+_VALUE_WIDGETS = {
+    "int": _int_widget,
+    "float": _float_widget,
+    "bool": _bool_widget,
+    "date": _date_widget,
+    "json": _json_widget,
+}
+
+
+def _fill_workspace_combo(combo: QComboBox, ws_list: list[dict], workspace: str) -> None:
+    """Fill a job row's workspace combo and select *workspace* when it is listed, without
+    emitting currentIndexChanged (the caller refreshes the job combo once, afterwards)."""
+    combo.blockSignals(True)
+    combo.clear()
+    for item in ws_list:
+        combo.addItem(item.get("name", ""), item.get("name", ""))
+    if workspace:
+        idx = combo.findText(workspace)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+    combo.blockSignals(False)
+
+
 class JobParamsDialog(QDialog):
     """ADF-style dialog for editing per-trigger parameter values for one job.
 
@@ -421,52 +509,9 @@ class JobParamsDialog(QDialog):
     # ------------------------------------------------------------------
 
     def _make_value_widget(self, type_str: str, value=None) -> QWidget:
-        """Create a typed input widget pre-filled with *value*."""
-        if type_str == "int":
-            w = QSpinBox()
-            w.setRange(-2_147_483_648, 2_147_483_647)
-            if value is not None:
-                try:
-                    w.setValue(int(value))
-                except (ValueError, TypeError):
-                    pass
-        elif type_str == "float":
-            w = QDoubleSpinBox()
-            w.setRange(-1e15, 1e15)
-            w.setDecimals(6)
-            if value is not None:
-                try:
-                    w.setValue(float(value))
-                except (ValueError, TypeError):
-                    pass
-        elif type_str == "bool":
-            w = QCheckBox()
-            if value is not None:
-                w.setChecked(bool(value))
-        elif type_str == "date":
-            w = QDateEdit()
-            w.setCalendarPopup(True)
-            if value is not None:
-                try:
-                    parts = str(value).split("-")
-                    if len(parts) == 3:
-                        w.setDate(QDate(int(parts[0]), int(parts[1]), int(parts[2])))
-                except (ValueError, TypeError):
-                    pass
-        elif type_str == "json":
-            w = QPlainTextEdit()
-            w.setFixedHeight(60)
-            if value is not None:
-                try:
-                    w.setPlainText(json.dumps(value) if not isinstance(value, str) else value)
-                except Exception:
-                    w.setPlainText(str(value))
-        else:
-            # "string" and unknown types
-            w = QLineEdit()
-            if value is not None:
-                w.setText(str(value))
-        return w
+        """Create a typed input widget pre-filled with *value* ("string" and unknown types get a
+        line edit)."""
+        return _VALUE_WIDGETS.get(type_str, _string_widget)(value)
 
     def _read_value_widget(self, widget: QWidget, type_str: str):
         """Extract the typed Python value from a typed widget."""
@@ -547,29 +592,41 @@ class JobParamsDialog(QDialog):
     def _on_ok(self) -> None:
         # Validate JSON cells before accepting (T-01.5.06-01)
         for row in range(self._table.rowCount()):
-            type_widget = self._table.cellWidget(row, 1)
-            # Determine type for this row
-            if isinstance(type_widget, QLabel):
-                type_str = type_widget.text()
-            elif isinstance(type_widget, QComboBox):
-                type_str = type_widget.currentText()
-            else:
-                continue
-            if type_str == "json":
-                value_widget = self._table.cellWidget(row, 2)
-                if isinstance(value_widget, QPlainTextEdit):
-                    raw = value_widget.toPlainText().strip()
-                    if raw:
-                        try:
-                            json.loads(raw)
-                        except json.JSONDecodeError as exc:
-                            QMessageBox.warning(
-                                self,
-                                "Invalid JSON",
-                                f"Row {row + 1}: invalid JSON — {exc}\n\nPlease fix before saving.",
-                            )
-                            return  # Keep dialog open
+            error = self._json_error(row)
+            if error is not None:
+                QMessageBox.warning(
+                    self,
+                    "Invalid JSON",
+                    f"Row {row + 1}: invalid JSON — {error}\n\nPlease fix before saving.",
+                )
+                return  # Keep dialog open
         self.accept()
+
+    def _row_type(self, row: int) -> Optional[str]:
+        """The type shown in column 1: a declared row's label or a free row's combo."""
+        type_widget = self._table.cellWidget(row, 1)
+        if isinstance(type_widget, QLabel):
+            return type_widget.text()
+        if isinstance(type_widget, QComboBox):
+            return type_widget.currentText()
+        return None
+
+    def _json_error(self, row: int) -> Optional[str]:
+        """The parse error of a json row's text; None when the row is not json, its value widget
+        is not a text edit, the text is blank, or it parses."""
+        if self._row_type(row) != "json":
+            return None
+        value_widget = self._table.cellWidget(row, 2)
+        if not isinstance(value_widget, QPlainTextEdit):
+            return None
+        raw = value_widget.toPlainText().strip()
+        if not raw:
+            return None
+        try:
+            json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return str(exc)
+        return None
 
     # ------------------------------------------------------------------
     # Public API
@@ -579,38 +636,35 @@ class JobParamsDialog(QDialog):
         """Return {name: value} for all rows. Called after exec() == Accepted."""
         result = {}
         for row in range(self._table.rowCount()):
-            name_widget = self._table.cellWidget(row, 0)
-            type_widget = self._table.cellWidget(row, 1)
             value_widget = self._table.cellWidget(row, 2)
-
-            if name_widget is None or value_widget is None:
+            named = self._row_name_and_type(row)
+            if value_widget is None or named is None or not named[0]:
                 continue
-
-            # Determine name
-            if isinstance(name_widget, QLabel):
-                name = name_widget.text()
-                type_str = name_widget.property("param_type") or "string"
-            elif isinstance(name_widget, QLineEdit):
-                name = name_widget.text().strip()
-                type_str = type_widget.currentText() if isinstance(type_widget, QComboBox) else "string"
-            else:
-                continue
-
-            if not name:
-                continue
-
-            # Determine value
-            if type_str == "json":
-                raw = value_widget.toPlainText().strip() if isinstance(value_widget, QPlainTextEdit) else "{}"
-                try:
-                    value = json.loads(raw) if raw else {}
-                except json.JSONDecodeError:
-                    value = raw
-            else:
-                value = self._read_value_widget(value_widget, type_str)
-
-            result[name] = value
+            name, type_str = named
+            result[name] = self._row_value(value_widget, type_str)
         return result
+
+    def _row_name_and_type(self, row: int) -> Optional[tuple[str, str]]:
+        """(name, type) of a row: a declared row keeps its type on the name label, a free row
+        reads its name edit and type combo. None when column 0 is neither."""
+        name_widget = self._table.cellWidget(row, 0)
+        if isinstance(name_widget, QLabel):
+            return name_widget.text(), name_widget.property("param_type") or "string"
+        if isinstance(name_widget, QLineEdit):
+            type_widget = self._table.cellWidget(row, 1)
+            type_str = type_widget.currentText() if isinstance(type_widget, QComboBox) else "string"
+            return name_widget.text().strip(), type_str
+        return None
+
+    def _row_value(self, value_widget: QWidget, type_str: str):
+        """A row's value; a json row parses its text ({} when blank, the raw text when invalid)."""
+        if type_str != "json":
+            return self._read_value_widget(value_widget, type_str)
+        raw = value_widget.toPlainText().strip() if isinstance(value_widget, QPlainTextEdit) else "{}"
+        try:
+            return json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            return raw
 
 
 # ---------------------------------------------------------------------------
@@ -817,34 +871,37 @@ class Panel(QWidget):
 
     def _render_trigger_rows(self) -> None:
         """Refresh the trigger table using the cached data + current display mode."""
-        tz_label = "local" if self._display_mode == "local" else "UTC"
         self._trigger_table.setRowCount(0)
         for i, trigger in enumerate(self._trigger_data):
             self._trigger_table.insertRow(i)
-            cron_expr = trigger.get("cron", "")
-            # cron in payload is UTC; show user-mode equivalent
-            shown_cron = (
-                utc_to_local_cron(cron_expr)
-                if self._display_mode == "local" and cron_expr
-                else cron_expr
-            )
-
-            nxt = next_run(cron_expr)
-            if nxt is not None:
-                shown_nxt = utc_to_local_dt(nxt) if self._display_mode == "local" else nxt
-                nxt_str = shown_nxt.strftime(f"%Y-%m-%d %H:%M {tz_label}")
-            else:
-                nxt_str = "—"
-
-            items = [
-                QTableWidgetItem(trigger.get("name", "")),
-                QTableWidgetItem(shown_cron),
-                QTableWidgetItem("Yes" if trigger.get("enabled", True) else "No"),
-                QTableWidgetItem(trigger.get("last_run", "—") or "—"),
-                QTableWidgetItem(nxt_str),
-            ]
-            for col, item in enumerate(items):
+            for col, item in enumerate(self._trigger_row_items(trigger)):
                 self._trigger_table.setItem(i, col, item)
+
+    def _trigger_row_items(self, trigger: dict) -> list[QTableWidgetItem]:
+        """The Name, Cron, Enabled, Last Run and Next Run cells of one trigger."""
+        cron_expr = trigger.get("cron", "")
+        # cron in payload is UTC; show user-mode equivalent
+        shown_cron = (
+            utc_to_local_cron(cron_expr)
+            if self._display_mode == "local" and cron_expr
+            else cron_expr
+        )
+        return [
+            QTableWidgetItem(trigger.get("name", "")),
+            QTableWidgetItem(shown_cron),
+            QTableWidgetItem("Yes" if trigger.get("enabled", True) else "No"),
+            QTableWidgetItem(trigger.get("last_run", "—") or "—"),
+            QTableWidgetItem(self._next_run_text(cron_expr)),
+        ]
+
+    def _next_run_text(self, cron_expr: str) -> str:
+        """Next fire time of a UTC cron in the display mode, or '—' when there is none."""
+        nxt = next_run(cron_expr)
+        if nxt is None:
+            return "—"
+        if self._display_mode == "local":
+            return utc_to_local_dt(nxt).strftime("%Y-%m-%d %H:%M local")
+        return nxt.strftime("%Y-%m-%d %H:%M UTC")
 
     def _on_tz_changed(self, _index: int) -> None:
         """User flipped the View toggle: propagate to picker + re-render the list."""
@@ -1006,41 +1063,33 @@ class Panel(QWidget):
         )
 
         # Wire configure button
-        def _on_configure(_checked=False, r=row):
-            combo_j = self._jobs_table.cellWidget(r, 1)
-            declared = combo_j.currentData() if combo_j and combo_j.currentIndex() >= 0 else []
-            if declared is None:
-                declared = []
-            btn = self._jobs_table.cellWidget(r, 2)
-            current = btn.property("params") or {} if btn else {}
-            cw = self._jobs_table.cellWidget(r, 0)
-            ws_name = cw.currentText() if cw else ""
-            job_name = combo_j.currentText() if combo_j else ""
-            dlg = JobParamsDialog(declared, current, ws_name, job_name, parent=self)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
-                new_params = dlg.result_params()
-                if btn:
-                    btn.setProperty("params", new_params)
-                    btn.setText(self._params_button_label(new_params))
-
-        btn_cfg.clicked.connect(_on_configure)
+        btn_cfg.clicked.connect(lambda _checked=False, r=row: self._configure_job_row(r))
 
         # Populate workspace combo from API, then pre-select workspace
         def _on_workspaces(ws_list):
-            combo_ws.blockSignals(True)
-            combo_ws.clear()
-            for item in ws_list:
-                combo_ws.addItem(item.get("name", ""), item.get("name", ""))
-            # Pre-select the specified workspace
-            if workspace:
-                idx = combo_ws.findText(workspace)
-                if idx >= 0:
-                    combo_ws.setCurrentIndex(idx)
-            combo_ws.blockSignals(False)
+            _fill_workspace_combo(combo_ws, ws_list, workspace)
             # Trigger job refresh after workspace is set
             self._refresh_job_combo(row, pre_select_job=job)
 
         self._fetch_workspaces(_on_workspaces)
+
+    def _configure_job_row(self, r: int) -> None:
+        """Open JobParamsDialog for job row *r*; on OK store the new params on its button."""
+        combo_j = self._jobs_table.cellWidget(r, 1)
+        declared = combo_j.currentData() if combo_j and combo_j.currentIndex() >= 0 else []
+        if declared is None:
+            declared = []
+        btn = self._jobs_table.cellWidget(r, 2)
+        current = btn.property("params") or {} if btn else {}
+        cw = self._jobs_table.cellWidget(r, 0)
+        ws_name = cw.currentText() if cw else ""
+        job_name = combo_j.currentText() if combo_j else ""
+        dlg = JobParamsDialog(declared, current, ws_name, job_name, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_params = dlg.result_params()
+            if btn:
+                btn.setProperty("params", new_params)
+                btn.setText(self._params_button_label(new_params))
 
     def _refresh_job_combo(self, row: int, pre_select_job: str = "") -> None:
         """Repopulate the job combo for *row* from the API, optionally pre-selecting *pre_select_job*."""
