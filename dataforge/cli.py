@@ -247,26 +247,42 @@ def _deregister_crontab(workspace: str, trigger_name: str) -> None:
     subprocess.run(["crontab", "-"], input="\n".join(lines) + "\n", text=True, check=True)
 
 
+# StartCalendarInterval key and accepted range for each cron field, in cron order.
+_LAUNCHD_FIELDS = (("Minute", 0, 59), ("Hour", 0, 23), ("Day", 1, 31), ("Month", 1, 12),
+                   ("Weekday", 0, 7))
+
+
+def _cron_to_launchd_interval(cron: str) -> dict[str, int]:
+    """Translate a cron expression to a launchd StartCalendarInterval dict.
+
+    A '*' field is left out (launchd treats a missing key as "every"); a plain integer becomes
+    its key. Steps, lists, ranges and names have no single-dict form, so they raise ValueError
+    instead of being dropped, which would make the job fire more often than asked (df-vo3x.1).
+    Day and Weekday may both be set: launchd starts the job when either matches, as cron does.
+    """
+    parts = cron.strip().split()
+    if len(parts) != len(_LAUNCHD_FIELDS):
+        raise ValueError(f"Invalid cron expression (need 5 fields): {cron!r}")
+    cal: dict[str, int] = {}
+    for value, (key, low, high) in zip(parts, _LAUNCHD_FIELDS, strict=True):
+        if value == "*":
+            continue
+        if not value.isdigit() or not low <= int(value) <= high:
+            raise ValueError(
+                f"Unsupported cron expression for launchd: {cron!r}. "
+                f"Each field must be '*' or a plain integer; {key} {value!r} is not "
+                f"(allowed {low}-{high})."
+            )
+        cal[key] = int(value)
+    return cal
+
+
 def _register_launchd(
     workspace: str, trigger_name: str, cron: str, dataforge_bin: str, home: str
 ) -> None:
     """Register a trigger with macOS launchd. Delete+recreate contract (D-05)."""
     _check_scheduler_names(workspace=workspace, trigger=trigger_name)
-    parts = cron.strip().split()
-    if len(parts) != 5:
-        raise ValueError(f"Invalid cron expression (need 5 fields): {cron!r}")
-    minute, hour, dom, month, dow = parts
-
-    # Build StartCalendarInterval from cron fields (Pitfall 3)
-    cal: dict = {}
-    if minute != "*" and minute.isdigit():
-        cal["Minute"] = int(minute)
-    if hour != "*" and hour.isdigit():
-        cal["Hour"] = int(hour)
-    if dow != "*" and dow.isdigit():
-        cal["Weekday"] = int(dow)
-    elif dom != "*" and dom.isdigit():
-        cal["Day"] = int(dom)
+    cal = _cron_to_launchd_interval(cron)
 
     cal_items = "\n".join(
         f"                <key>{k}</key>\n                <integer>{v}</integer>"
