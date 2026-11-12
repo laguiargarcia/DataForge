@@ -32,7 +32,6 @@ def test_sidebar_nav_sets_stack_index(monkeypatch):
 def test_mainwindow_has_workspace_signal(monkeypatch):
     """MainWindow has a workspace_changed Signal attribute."""
     app = _get_app()
-    from dataforge.gui.main_window import MainWindow
     win = _make_window(monkeypatch)
     assert hasattr(win, "workspace_changed")
     win.close()

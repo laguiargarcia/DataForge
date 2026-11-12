@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 
 from PySide6.QtCore import QSettings, QTimer, QUrl
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from dataforge.compat import api_port
 from dataforge.gui.panels.job_editor import JobEditorPanel
 
 SETTINGS_ORG = "DataForge"
@@ -64,7 +64,7 @@ class Panel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._port = int(os.environ.get("DATAFORGE_PORT", 8000))
+        self._port = api_port()
         self._nam = QNetworkAccessManager(self)
         self._sse_reply = None
         self._sse_buffer = b""
@@ -566,11 +566,11 @@ class Panel(QWidget):
             row_layout.addWidget(badge)
 
             edit_btn = QPushButton("Edit")
-            edit_btn.clicked.connect(lambda checked=False, jn=job_name: self._open_editor(jn))
+            edit_btn.clicked.connect(lambda _checked=False, jn=job_name: self._open_editor(jn))
             row_layout.addWidget(edit_btn)
 
             run_btn = QPushButton("Run")
-            run_btn.clicked.connect(lambda checked=False, jn=job_name: self._trigger_run(jn))
+            run_btn.clicked.connect(lambda _checked=False, jn=job_name: self._trigger_run(jn))
             row_layout.addWidget(run_btn)
 
             self._list_layout.addWidget(row)

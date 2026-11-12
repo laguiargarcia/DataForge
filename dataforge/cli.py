@@ -13,7 +13,10 @@ from rich.console import Console
 from rich import print as rprint
 from rich.markup import escape as rich_escape
 from dataforge.apps import discover_apps
-from dataforge.compat import ALLOWED_HOSTS_ENV, resolve_workspace, resolve_db, data_dir, db_url
+from dataforge.compat import (
+    ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, resolve_workspace, resolve_db, data_dir, db_url,
+    list_workspaces,
+)
 from dataforge.deploy.cli import deploy_app
 
 app = typer.Typer(help="DataForge — workspace local de engenharia de dados")
@@ -511,11 +514,19 @@ def gui() -> None:
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Bind host"),
-    port: int = typer.Option(8000, "--port", help="Bind port"),
+    port: Optional[int] = typer.Option(
+        None, "--port", help=f"Bind port (default: ${PORT_ENV} or {DEFAULT_API_PORT})",
+    ),
     reload: bool = typer.Option(False, "--reload", help="Auto-reload on code change"),
 ):
     """Inicia o servidor FastAPI via uvicorn."""
     import uvicorn
+    if port is None:   # df-oift: the same port the GUI panels and the deploy CLI call
+        try:
+            port = api_port()
+        except ValueError as e:   # df-yvgx
+            Console().print(f"[red]{rich_escape(str(e))}[/red]", soft_wrap=True)
+            raise typer.Exit(1) from e
     # An environment variable, so the value survives the --reload subprocess.
     url_host = host
     if host in ("0.0.0.0", "::"):
@@ -529,6 +540,12 @@ def serve(
         existing = os.environ.get(ALLOWED_HOSTS_ENV)
         os.environ[ALLOWED_HOSTS_ENV] = f"{existing},{host}" if existing else host
     rprint(f"[green]Serving at http://{url_host}:{port}[/green]")
+    if not list_workspaces():   # df-pr6: a wrong DATAFORGE_HOME otherwise looks like a healthy server
+        Console().print(
+            f"[yellow]Aviso: nenhum workspace encontrado em "
+            f"{rich_escape(str(data_dir() / 'workspaces'))}. Confira o DATAFORGE_HOME.[/yellow]",
+            soft_wrap=True,
+        )
     for info in discover_apps():
         Console().print(
             f"  {rich_escape(info.title)}: http://{url_host}:{port}{info.url_path}",
@@ -547,7 +564,7 @@ def run(
     from dataforge.engine import run_job
     from dataforge.db import init_db, JobRunORM, ScheduleORM, utcnow
     from sqlalchemy.orm import Session
-    import uuid, os
+    import uuid
 
     try:
         workspace_path = resolve_workspace(workspace)
@@ -597,7 +614,6 @@ def scheduled_run(
     """Headless execution of a trigger — called by OS scheduler."""
     import concurrent.futures
     import uuid
-    import os
     from dataforge.parser import load_trigger, load_job
     from dataforge.engine import run_job
     from dataforge.db import init_db, JobRunORM, utcnow
@@ -646,7 +662,7 @@ def scheduled_run(
                 )
 
     # Silent daemon notify — swallow all exceptions (D-09)
-    port = int(os.environ.get("DATAFORGE_PORT", 8000))
+    port = api_port()
     try:
         import httpx
         httpx.post(f"http://127.0.0.1:{port}/api/triggers/notify", timeout=1.0)

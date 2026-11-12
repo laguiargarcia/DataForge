@@ -1,4 +1,5 @@
 """Orchestration API tests."""
+import pytest
 from fastapi.testclient import TestClient
 from dataforge.api import app
 
@@ -73,6 +74,16 @@ def test_trigger_job_unknown_workspace_returns_404(test_client, dataforge_home):
     """POST /api/workspaces/{ws}/jobs/{job}/run returns 404 for missing workspace."""
     response = test_client.post("/api/workspaces/nonexistent/jobs/noop/run")
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize("job", ["C:%5Cfora", "a.b", "a%5Cb"])
+def test_trigger_job_rejects_an_unsafe_job_name(test_client, dataforge_home, job):
+    """df-7ds: {job} becomes a path segment, so a name like C:\\fora must not reach the disk."""
+    ws = dataforge_home / "workspaces" / "acme"
+    ws.mkdir(parents=True)
+    (ws / "workspace.yaml").write_text("name: acme\n", encoding="utf-8")
+    response = test_client.post(f"/api/workspaces/acme/jobs/{job}/run")
+    assert response.status_code == 400
 
 
 # ---------------------------------------------------------------------------
