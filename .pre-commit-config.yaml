@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4
+    rev: v8.24.3   # same as GITLEAKS_VERSION in .github/workflows/ci.yml: bump both together
     hooks:
       - id: gitleaks
   - repo: local
