@@ -57,6 +57,18 @@ def _append_log_line(text_edit: QTextEdit, line: str) -> None:
     text_edit.setTextCursor(cursor)
 
 
+def _history_records_of(data) -> list:
+    """The record list of an executions payload: a bare list, or a dict wrapping it under
+    'executions' (or 'items'); anything else is empty."""
+    if isinstance(data, dict):
+        return data.get("executions", data.get("items", []))
+    return data if isinstance(data, list) else []
+
+
+def _started_at(rec: dict) -> str:
+    return rec.get("started_at") or rec.get("start_time") or ""
+
+
 class Panel(QWidget):
     PAGE_LIST = 0
     PAGE_DETAIL = 1
@@ -221,7 +233,6 @@ class Panel(QWidget):
     def _handle_run_snapshot(self, snapshot: dict) -> None:
         """Apply a full SSE snapshot: update overall status + per-task tabs/logs."""
         run_status = snapshot.get("status", "")
-        tasks = snapshot.get("tasks", [])
 
         # Update header badge
         self._detail_status_badge.setText(run_status)
@@ -234,48 +245,57 @@ class Panel(QWidget):
         existing_tabs: dict[str, int] = {}
         for i in range(self._task_tabs.count()):
             existing_tabs[self._task_tabs.tabText(i)] = i
-
-        for task in tasks:
-            task_name = task.get("name") or task.get("task") or "(unnamed)"
-            task_status = task.get("status") or ""
-            task_output = task.get("output") or ""
-
-            tab_label = f"{task_name} [{task_status}]" if task_status else task_name
-
-            if task_name not in existing_tabs:
-                # Create new tab with log QTextEdit
-                log_pane = self._make_log_pane(task_name)
-                self._task_tabs.addTab(log_pane, tab_label)
-                existing_tabs[task_name] = self._task_tabs.count() - 1
-                self._tab_auto_scroll[task_name] = True
-            else:
-                # Update tab label
-                idx = existing_tabs[task_name]
-                self._task_tabs.setTabText(idx, tab_label)
-
-            # Replace log pane contents (full snapshot replace per D-07)
-            idx = existing_tabs[task_name]
-            log_pane = self._task_tabs.widget(idx)
-            if isinstance(log_pane, QTextEdit) and task_output:
-                log_pane.clear()
-                for log_line in task_output.splitlines():
-                    _append_log_line(log_pane, log_line)
-                # Auto-scroll after appending
-                if self._tab_auto_scroll.get(task_name, True):
-                    sb = log_pane.verticalScrollBar()
-                    sb.setValue(sb.maximum())
+        for task in snapshot.get("tasks", []):
+            self._apply_task_snapshot(task, existing_tabs)
 
         # Close SSE on terminal status (T-1.4-10)
         if run_status in ("success", "failed"):
-            if self._run_sse_reply is not None:
-                try:
-                    self._run_sse_reply.readyRead.disconnect(self._on_run_sse_data)
-                    self._run_sse_reply.errorOccurred.disconnect(self._on_run_sse_error)
-                    self._run_sse_reply.finished.disconnect(self._on_run_sse_finished)
-                except RuntimeError:
-                    pass
-                self._run_sse_reply.abort()
-                self._run_sse_reply = None
+            self._close_run_stream()
+
+    def _apply_task_snapshot(self, task: dict, existing_tabs: dict[str, int]) -> None:
+        """Create or relabel the task's tab (recording a new one in *existing_tabs*) and replace
+        its log with the snapshot output."""
+        task_name = task.get("name") or task.get("task") or "(unnamed)"
+        task_status = task.get("status") or ""
+        task_output = task.get("output") or ""
+
+        tab_label = f"{task_name} [{task_status}]" if task_status else task_name
+
+        if task_name not in existing_tabs:
+            # Create new tab with log QTextEdit
+            log_pane = self._make_log_pane(task_name)
+            self._task_tabs.addTab(log_pane, tab_label)
+            existing_tabs[task_name] = self._task_tabs.count() - 1
+            self._tab_auto_scroll[task_name] = True
+        else:
+            self._task_tabs.setTabText(existing_tabs[task_name], tab_label)
+
+        # Replace log pane contents (full snapshot replace per D-07)
+        log_pane = self._task_tabs.widget(existing_tabs[task_name])
+        if isinstance(log_pane, QTextEdit) and task_output:
+            self._replace_log(log_pane, task_name, task_output)
+
+    def _replace_log(self, log_pane: QTextEdit, task_name: str, output: str) -> None:
+        log_pane.clear()
+        for log_line in output.splitlines():
+            _append_log_line(log_pane, log_line)
+        # Auto-scroll after appending
+        if self._tab_auto_scroll.get(task_name, True):
+            sb = log_pane.verticalScrollBar()
+            sb.setValue(sb.maximum())
+
+    def _close_run_stream(self) -> None:
+        """Disconnect and abort the per-run SSE reply, if one is open."""
+        if self._run_sse_reply is None:
+            return
+        try:
+            self._run_sse_reply.readyRead.disconnect(self._on_run_sse_data)
+            self._run_sse_reply.errorOccurred.disconnect(self._on_run_sse_error)
+            self._run_sse_reply.finished.disconnect(self._on_run_sse_finished)
+        except RuntimeError:
+            pass
+        self._run_sse_reply.abort()
+        self._run_sse_reply = None
 
     def _make_log_pane(self, task_name: str) -> QTextEdit:
         """Create a dark monospace read-only log QTextEdit for one task."""
@@ -369,44 +389,37 @@ class Panel(QWidget):
         finally:
             reply.deleteLater()
 
-        if isinstance(data, dict):
-            records = data.get("executions", data.get("items", []))
-        else:
-            records = data if isinstance(data, list) else []
-
         # Sort newest-first by started_at (client-side in case API doesn't guarantee order)
-        def _start_key(r: dict):
-            ts = r.get("started_at") or r.get("start_time") or ""
-            return ts
-
-        records = sorted(records, key=_start_key, reverse=True)
+        records = sorted(_history_records_of(data), key=_started_at, reverse=True)
         self._history_records = records
 
         self._history_table.setRowCount(0)
         for i, rec in enumerate(records):
             self._history_table.insertRow(i)
-
-            job_name = rec.get("job_name") or rec.get("job") or ""
-            status = rec.get("status") or ""
-            started_at = rec.get("started_at") or rec.get("start_time") or ""
-            finished_at = rec.get("finished_at") or rec.get("end_time") or ""
-            trigger = rec.get("trigger") or "manual"
-            trigger_label = "Manual" if trigger == "manual" else trigger
-
-            job_item = QTableWidgetItem(job_name)
-            trigger_item = QTableWidgetItem(trigger_label)
-            status_item = QTableWidgetItem(status)
-            status_item.setForeground(QColor(self._badge_color(status)))
-            started_item = QTableWidgetItem(self._relative_time(started_at))
-            duration_item = QTableWidgetItem(self._format_duration(started_at, finished_at, status))
-
-            for col, item in enumerate([job_item, trigger_item, status_item, started_item, duration_item]):
+            for col, item in enumerate(self._history_row_items(rec)):
                 item.setFlags(item.flags() & ~item.flags().__class__.ItemIsEditable)
                 self._history_table.setItem(i, col, item)
 
         # Pagination control state
         self._prev_btn.setEnabled(self._history_offset > 0)
         self._next_btn.setEnabled(len(records) >= self._history_limit)
+
+    def _history_row_items(self, rec: dict) -> list[QTableWidgetItem]:
+        """The Job, Trigger, Status, Started and Duration cells of one history record."""
+        status = rec.get("status") or ""
+        started_at = _started_at(rec)
+        finished_at = rec.get("finished_at") or rec.get("end_time") or ""
+        trigger = rec.get("trigger") or "manual"
+
+        status_item = QTableWidgetItem(status)
+        status_item.setForeground(QColor(self._badge_color(status)))
+        return [
+            QTableWidgetItem(rec.get("job_name") or rec.get("job") or ""),
+            QTableWidgetItem("Manual" if trigger == "manual" else trigger),
+            status_item,
+            QTableWidgetItem(self._relative_time(started_at)),
+            QTableWidgetItem(self._format_duration(started_at, finished_at, status)),
+        ]
 
     def _history_prev(self) -> None:
         if not self._current_workspace:
