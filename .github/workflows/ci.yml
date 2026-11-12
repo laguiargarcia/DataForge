@@ -81,14 +81,14 @@ jobs:
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
   sonar:
     # SonarQube Cloud (df-ahua.1): coverage of new code, cognitive complexity, duplication, history.
-    # A complement to the quality job, not a replacement. Not required yet (df-ahua.1.6); a failed
-    # gate fails this job and shows in the report comment, but does not block the merge.
+    # A complement to the quality job, not a replacement. Not required yet (df-ahua.1.6): a failed
+    # gate fails this check without blocking the merge. Left out of the report job, since the
+    # SonarQube Cloud bot comments its own result on the PR.
     needs: [tests]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_KEY: ${{ github.repository_owner }}_${{ github.event.repository.name }}
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }   # blame and new-code detection
@@ -96,48 +96,15 @@ jobs:
         continue-on-error: true   # tests died before writing coverage: Sonar still analyzes, without it
         with: { name: coverage }
       - name: SonarQube Cloud scan
-        id: scan
-        # No token on fork PRs or before the project exists (df-ahua.1.3): skip instead of failing.
+        # No token on fork PRs: skip instead of failing.
         if: env.SONAR_TOKEN != ''
-        continue-on-error: true   # the summary step below still runs; the last step fails the job
         uses: SonarSource/sonarqube-scan-action@v8
         with:
-          # qualitygate.wait: the scan waits for the server and fails when the gate fails.
+          # qualitygate.wait: the scan waits for the server, so a failed gate fails this check.
           args: >
             -Dsonar.organization=${{ github.repository_owner }}
-            -Dsonar.projectKey=${{ env.SONAR_KEY }}
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
             -Dsonar.qualitygate.wait=true
-      - name: Summary for the report job
-        if: always()
-        shell: bash
-        env:
-          PR: ${{ github.event.pull_request.number }}
-          BRANCH: ${{ github.ref_name }}
-        run: |
-          mkdir -p report
-          if [ -z "$SONAR_TOKEN" ]; then
-            echo "sonar quality gate: skipped (no SONAR_TOKEN: fork PR or project not set up)" > report/sonar.txt
-            exit 0
-          fi
-          scope=$([ -n "$PR" ] && echo "pullRequest=$PR" || echo "branch=$BRANCH")
-          # Python, not curl: the token stays in the environment, off the command line.
-          status=$(SCOPE="$scope" python3 - <<'PY' || echo unknown
-          import json, os, urllib.request
-          url = f"https://sonarcloud.io/api/qualitygates/project_status?projectKey={os.environ['SONAR_KEY']}&{os.environ['SCOPE']}"
-          req = urllib.request.Request(url, headers={"Authorization": f"Bearer {os.environ['SONAR_TOKEN']}"})
-          with urllib.request.urlopen(req, timeout=30) as resp:
-              print(json.load(resp)["projectStatus"]["status"])
-          PY
-          )
-          echo "sonar quality gate: $status (scan ${{ steps.scan.outcome }}) https://sonarcloud.io/dashboard?id=$SONAR_KEY&$scope" > report/sonar.txt
-          cat report/sonar.txt
-      - uses: actions/upload-artifact@v7
-        if: always()
-        # Read by the report job, which comments on the PR.
-        with: { name: report-sonar, path: report/, if-no-files-found: ignore }
-      - name: Fail the job when the scan or the gate failed
-        if: steps.scan.outcome == 'failure'
-        run: exit 1
   mutation:
     # Mutation score of each module in testloop.toml must stay at or above its min_score.
     runs-on: ubuntu-latest
@@ -189,7 +156,7 @@ jobs:
   report:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
-    needs: [leak-scan, quality, tests, sonar, mutation, testloop-tools]
+    needs: [leak-scan, quality, tests, mutation, testloop-tools]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
