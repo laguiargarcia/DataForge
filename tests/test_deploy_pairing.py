@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
-from dataforge.deploy.pairing import load_pipeline, resolve_pairs, source_base
+from dataforge.deploy.models import PipelineModel
+from dataforge.deploy.pairing import load_pipeline, resolve_pairs, source_base, source_equivalents
 
 
 def _mk(ws: Path, rel: str, content: str) -> Path:
@@ -87,3 +88,45 @@ def test_resolve_pairs_skips_symlinks(tmp_path):
     pairs = resolve_pairs(tmp_path, p)
     assert ("scripts/real.py", "scripts/real.py") in pairs
     assert all(src != "scripts/link.py" for src, _ in pairs)
+
+
+# --- df-nyf: two different source files must never share one target path ---
+
+def test_two_sources_to_one_target_are_refused(tmp_path):
+    _mk(tmp_path, "deploy/p.yaml", "target: Prod\npairs:\n"
+        "  - {source: 'scripts/*.py', target: 't/'}\n"
+        "  - {source: 'other/*.py', target: 't/'}\n")
+    _mk(tmp_path, "scripts/a.py", "one\n")
+    _mk(tmp_path, "other/a.py", "two\n")
+    with pytest.raises(ValueError, match="t/a.py"):
+        resolve_pairs(tmp_path, load_pipeline(tmp_path, "p"))
+
+
+def test_two_sources_to_one_target_differing_only_in_case_are_refused(tmp_path):
+    _mk(tmp_path, "deploy/p.yaml", "target: Prod\npairs:\n"
+        "  - {source: 'scripts/*.py', target: 't/'}\n"
+        "  - {source: 'other/*.py', target: 'T/'}\n")
+    _mk(tmp_path, "scripts/a.py", "one\n")
+    _mk(tmp_path, "other/a.py", "two\n")
+    with pytest.raises(ValueError, match="(?i)t/a.py"):   # one file on NTFS
+        resolve_pairs(tmp_path, load_pipeline(tmp_path, "p"))
+
+
+def test_one_source_matched_by_two_rules_is_listed_once(tmp_path):
+    _mk(tmp_path, "deploy/p.yaml", "target: Prod\npairs:\n"
+        "  - {source: 'scripts/**', target: 'scripts/'}\n"
+        "  - {source: 'scripts/*.py', target: 'scripts/'}\n")
+    _mk(tmp_path, "scripts/a.py", "one\n")
+    assert resolve_pairs(tmp_path, load_pipeline(tmp_path, "p")) == [("scripts/a.py", "scripts/a.py")]
+
+
+def test_source_equivalents_runs_the_pair_rules_backwards():
+    p = PipelineModel(target="Prod", pairs=[
+        {"source": "scripts/**", "target": "code/"},
+        {"source": "config/app.yaml", "target": "cfg/"},
+        {"source": "*.md", "target": "."},
+    ])
+    assert source_equivalents(p, "code/sub/a.py") == ["scripts/sub/a.py", "code/sub/a.py"]
+    assert source_equivalents(p, "cfg/app.yaml") == ["config/app.yaml", "cfg/app.yaml"]
+    assert source_equivalents(p, "cfg/other.yaml") == ["cfg/other.yaml"]   # exact file: name only
+    assert source_equivalents(p, "codex/a.py") == ["codex/a.py"]          # not under 'code/'

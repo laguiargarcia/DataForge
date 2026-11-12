@@ -85,6 +85,7 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
         check_target_inside(rule.target)
     out: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
+    owner: dict[str, str] = {}   # casefolded target -> the source file that fills it (df-nyf)
     for rule in pipeline.pairs:
         base = source_base(rule.source)
         pattern = rule.source + "/*" if rule.source.endswith("**") else rule.source
@@ -104,6 +105,32 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
             key = (rel, target_rel)
             if key in seen:
                 continue
+            # df-nyf: two source files on one target would both be written and one silently
+            # lost. Casefolded, since on NTFS 't/a.py' and 'T/a.py' are one file (df-886.18).
+            first = owner.setdefault(target_rel.casefold(), rel)
+            if first != rel:
+                raise ValueError(f"deploy pairs map two source files to one target {target_rel!r}: "
+                                 f"{first!r} and {rel!r}")
             seen.add(key)
             out.append((rel, target_rel))
+    return out
+
+
+def source_equivalents(pipeline: PipelineModel, target_rel: str) -> list[str]:
+    """The source paths that the pair rules would map onto `target_rel`: resolve_pairs run
+    backwards, whether or not such a source file exists. Prune has only the target path of a file
+    it may delete; this gives it the source side too, so .deployignore and the trigger rule see
+    both paths there, as they do on add/modify (df-94s, df-7pl)."""
+    out: list[str] = []
+    for rule in pipeline.pairs:
+        tbase = normalize_target(rule.target)
+        if tbase and not target_rel.startswith(tbase + "/"):
+            continue
+        tail = target_rel[len(tbase):].lstrip("/")
+        base = source_base(rule.source)
+        if base == rule.source:   # an exact file lands as <target>/<its name>
+            if tail == PurePosixPath(base).name:
+                out.append(base)
+        else:
+            out.append(posixpath.join(base, tail) if base else tail)
     return out
