@@ -522,7 +522,11 @@ def serve(
     """Inicia o servidor FastAPI via uvicorn."""
     import uvicorn
     if port is None:   # df-oift: the same port the GUI panels and the deploy CLI call
-        port = api_port()
+        try:
+            port = api_port()
+        except ValueError as e:   # df-yvgx
+            Console().print(f"[red]{rich_escape(str(e))}[/red]", soft_wrap=True)
+            raise typer.Exit(1) from e
     # An environment variable, so the value survives the --reload subprocess.
     url_host = host
     if host in ("0.0.0.0", "::"):

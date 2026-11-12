@@ -4,7 +4,7 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
-from .pairing import check_target_inside, normalize_target
+from .pairing import check_target_inside, normalize_target, windows_unsafe
 
 _KIND_BY_PREFIX = {
     "jobs": Kind.job,
@@ -16,7 +16,8 @@ _KIND_BY_PREFIX = {
 
 
 def kind_for(rel: str) -> Kind:
-    top = rel.split("/", 1)[0]
+    """Kind by top folder, ignoring case: on NTFS 'TRIGGERS/x.yaml' is a trigger (df-886.18)."""
+    top = rel.split("/", 1)[0].casefold()
     return _KIND_BY_PREFIX.get(top, Kind.other)
 
 
@@ -32,15 +33,18 @@ def content_sha(path: Path) -> str:
 
 
 # UnicodeDecodeError is a ValueError; the others leak from PyYAML constructors (see below).
-_UNPARSEABLE = (yaml.YAMLError, ValueError, KeyError, AttributeError, RecursionError)
+_UNPARSEABLE = (yaml.YAMLError, ValueError, KeyError, AttributeError, IndexError, RecursionError)
+# What safe_dump raises on data that safe_load accepted: nesting that recurses deeper on the way
+# out, and an int whose str() exceeds the 4300-digit limit (hex/binary/base-60 load without it).
+_UNDUMPABLE = (yaml.YAMLError, ValueError, RecursionError)
 
 
 def _load_yaml_dict(path: Path):
     """Parse YAML to a mapping; return None if unparseable or not a mapping. Undecodable bytes
     (UnicodeDecodeError) and invalid scalars such as a date '2001-13-45' (ValueError) count as
     unparseable too (df-886.9), and so are the errors PyYAML's constructors leak on a bad explicit
-    tag ('!!bool abc' -> KeyError, '!!timestamp abc' -> AttributeError) or very deep nesting
-    (RecursionError)."""
+    tag ('!!bool abc' -> KeyError, '!!timestamp abc' -> AttributeError, '!!int ""' -> IndexError)
+    or very deep nesting (RecursionError) (df-886.17)."""
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except _UNPARSEABLE:
@@ -56,7 +60,10 @@ def _trigger_sha(path: Path) -> str:
         return content_sha(path)
     data.pop("enabled", None)
     # Keys of mixed types (1 and 'a') can't be sorted; PyYAML then keeps file order, no error.
-    canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
+    try:
+        canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
+    except _UNDUMPABLE:   # loads but won't dump back (df-886.17): compare the bytes
+        return content_sha(path)
     return "sha256:" + hashlib.sha256(canon.encode()).hexdigest()
 
 
@@ -77,6 +84,10 @@ def build_plan(
         if _is_ledger_path(tgt_rel):   # law #4 — never deploy into our own ledger
             continue
         kind = kind_for(src_rel)
+        if windows_unsafe(tgt_rel):   # df-886.20: skip the one file, not the whole deploy
+            items.append(ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind,
+                                    action=Action.skip_ignored, reason="name not valid on Windows"))
+            continue
         src_path = source_dir / src_rel
         tgt_path = target_dir / tgt_rel
 
@@ -142,6 +153,9 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
         warnings.warn("deploy prune skips the target root: a pair whose target is the workspace "
                       "root is never pruned.", stacklevel=2)
         bases.discard("")
+    # Keys are casefolded (df-886.18): on NTFS 'JOBS/a' and 'jobs/a' are one file. On a
+    # case-sensitive disk that only ever keeps a file prune could have deleted, never the reverse.
+    keep = {t.casefold() for t in source_targets}
     seen: set[str] = set()   # df-886.15: nested bases ('jobs', 'jobs/sub') reach a file twice
     for base in sorted(bases):
         base_dir = target_dir / base
@@ -149,9 +163,10 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             continue
         for p in sorted(base_dir.rglob("*")):
             rel = p.relative_to(target_dir).as_posix()
-            if rel in seen or rel in source_targets or p.is_symlink() or not p.is_file():
+            key = rel.casefold()
+            if key in seen or key in keep or p.is_symlink() or not p.is_file():
                 continue
-            seen.add(rel)
+            seen.add(key)
             item = _prune_item(p, rel, ignore)
             if item is not None:
                 out.append(item)
@@ -160,7 +175,7 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
 
 def _prune_item(p: Path, rel: str, ignore: DeployIgnore) -> ItemChange | None:
     """The plan item for one target file that has no paired source, or None to leave it alone."""
-    if _is_ledger_path(rel) or ignore.matches(rel):   # law #4, law #3
+    if _is_ledger_path(rel) or ignore.matches_any_case(rel):   # law #4, law #3 (df-886.18)
         return None
     kind = kind_for(rel)
     if kind == Kind.trigger:   # law #2

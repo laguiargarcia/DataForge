@@ -139,3 +139,11 @@ def test_api_port_defaults_when_the_variable_is_unset(monkeypatch):
 def test_api_port_reads_the_variable(monkeypatch):
     monkeypatch.setenv("DATAFORGE_PORT", "8123")
     assert api_port() == 8123
+
+
+@pytest.mark.parametrize("value", ["abc", "0", "70000", "-1", ""])
+def test_api_port_rejects_a_value_that_is_not_a_port(monkeypatch, value):
+    # df-yvgx: say which variable is wrong and what it must be, not a bare int() error.
+    monkeypatch.setenv("DATAFORGE_PORT", value)
+    with pytest.raises(ValueError, match=r"^DATAFORGE_PORT must be a port number \(1-65535\), got "):
+        api_port()

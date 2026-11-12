@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, DeployEntry, Action, Kind
 from .ledger import Ledger
-from .plan import _load_yaml_dict, _is_ledger_path
+from .plan import _UNDUMPABLE, _load_yaml_dict, _is_ledger_path
 
 
 def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
@@ -15,7 +15,10 @@ def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
     if sdata is None:
         return source_path.read_bytes()
     sdata["enabled"] = prior_enabled
-    return yaml.safe_dump(sdata, allow_unicode=True, sort_keys=False).encode()
+    try:
+        return yaml.safe_dump(sdata, allow_unicode=True, sort_keys=False).encode()
+    except _UNDUMPABLE:   # loads but won't dump back (df-886.17): copy it verbatim
+        return source_path.read_bytes()
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
