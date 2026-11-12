@@ -98,6 +98,16 @@ def test_sqlite_url_only_in_compat_and_tests(tmp_path, monkeypatch):
     assert rules_for(tmp_path, monkeypatch, "tests/test_x.py", source) == []
 
 
+def test_a_file_that_does_not_tokenize_is_left_to_ruff(tmp_path, monkeypatch):
+    """An unterminated string or bytes that are not UTF-8 stop tokenizing: no project finding
+    for that file, and the files after it are still judged."""
+    (tmp_path / "bad.py").write_bytes(b"x = 1  # noqa: F401\ns = '''never closed\n")
+    (tmp_path / "latin.py").write_bytes(b"x = 'caf\xe9'  # noqa: F401\n")
+    assert rules_for(tmp_path, monkeypatch, "ok.py", "y = 2  # noqa: E501\n") == [("DF001", 1)]
+    found = gate.project_rules(["bad.py", "latin.py", "ok.py"])
+    assert [(f.file, f.code) for f in found] == [("ok.py", "DF001")]
+
+
 # ---------------------------------------------------------------------------- update
 
 

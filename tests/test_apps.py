@@ -17,6 +17,31 @@ def test_discover_finds_app_with_dist(workspace_dir, make_app):
     assert apps[0].url_path == "/apps/test_ws/demo/"
 
 
+
+def test_discover_walks_every_workspace_and_sorts_by_workspace_then_name(dataforge_home, make_app,
+                                                                     caplog):
+    """A workspace with no apps/ folder, a stray file and a folder without app.yaml are passed
+    over without a warning. A folder with an invalid name is warned about and skipped, and the
+    folders after it are still read. The apps found come back sorted across workspaces."""
+    def workspace(name):
+        ws = dataforge_home / "workspaces" / name
+        ws.mkdir()
+        (ws / "workspace.yaml").write_text(f"name: {name}\n", encoding="utf-8")
+        return ws
+
+    workspace("a_none")                      # no apps/ at all
+    b, c = workspace("b_ws"), workspace("c_ws")
+    make_app(c, "zeta")
+    make_app(c, "alpha")
+    make_app(c, "bad name")                  # sorts between alpha and zeta
+    make_app(b, "mid")
+    (b / "apps" / "README.md").write_text("not an app", encoding="utf-8")
+    (b / "apps" / "draft").mkdir()           # no app.yaml yet
+    with caplog.at_level(logging.WARNING, logger="dataforge.apps"):
+        found = discover_apps()
+    assert [(a.workspace, a.name) for a in found] == [("b_ws", "mid"), ("c_ws", "alpha"), ("c_ws", "zeta")]
+    assert [r.args[0].name for r in caplog.records] == ["bad name"]
+
 def test_app_without_dist_is_skipped_with_warning(workspace_dir, make_app, caplog):
     make_app(workspace_dir, "semdist", dist=False)
     assert discover_apps() == []
