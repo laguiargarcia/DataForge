@@ -58,6 +58,7 @@ def test_trigger_job_returns_202(test_client, dataforge_home):
     (ws / "jobs" / "noop").mkdir(parents=True)
     (ws / "jobs" / "noop" / "job.yaml").write_text(
         "name: noop\ntasks:\n  - name: step1\n    script: run.py\n"
+        "    retry: {attempts: 1, delay_seconds: 0}\n"
     )
 
     response = test_client.post("/api/workspaces/acme/jobs/noop/run")
