@@ -175,8 +175,7 @@
     "RUF059": 23
   },
   "tests/test_deploy_plan.py": {
-    "PLW1510": 1,
-    "RUF015": 7
+    "PLW1510": 1
   },
   "tests/test_deploy_plan_properties.py": {
     "C901": 1
