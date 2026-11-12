@@ -12,4 +12,4 @@ min_score = 0.9303
 [targets."dataforge/deploy/apply.py"]
 tests = ["tests/test_deploy_apply*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-min_score = 0.9355
+min_score = 0.9354

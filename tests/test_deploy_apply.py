@@ -320,7 +320,8 @@ def test_apply_keeps_the_status_the_engine_reads_from_the_target(tmp_path, enabl
     assert TriggerModel(**yaml.safe_load((tgt / "triggers/daily.yaml").read_text())).enabled is engine_reads
     apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
     written = yaml.safe_load((tgt / "triggers/daily.yaml").read_text(encoding="utf-8"))
-    assert written["enabled"] is engine_reads and written["cron"] == "0 9 * * *"
+    assert written["enabled"] is engine_reads
+    assert written["cron"] == "0 9 * * *"
 
 
 def test_apply_target_trigger_with_an_unreadable_status_is_written_disarmed(tmp_path):
