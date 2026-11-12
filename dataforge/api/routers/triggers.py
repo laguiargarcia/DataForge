@@ -43,7 +43,7 @@ def reconcile_os_trigger(ws: str, name: str) -> str | None:
     The deploy calls this with names taken from trigger FILES, which no route validated: an
     unsafe name is skipped with a warning, never handed to the OS scheduler (df-utq8)."""
     if not valid_name(name):
-        logger.warning("reconcile_os_trigger: skipping invalid trigger name %r in %r", name, ws)
+        logger.warning("reconcile_os_trigger: skipped a trigger with an invalid name")   # no raw name: S5145
         return f"invalid trigger name {name!r}: not registered with the OS scheduler"
     try:
         workspace_dir = resolve_workspace(ws)
