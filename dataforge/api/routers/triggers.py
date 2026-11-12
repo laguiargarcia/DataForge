@@ -1,23 +1,21 @@
 import logging
-import re
 
 import croniter as croniter_module
 from fastapi import APIRouter, HTTPException
 
 from dataforge.models import TriggerModel
 from dataforge.parser import delete_trigger, load_triggers, save_trigger
-from dataforge.compat import resolve_workspace
+from dataforge.compat import resolve_workspace, valid_name
 from dataforge.cli import _platform_register_trigger, _platform_deregister_trigger
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_VALID_TRIGGER_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def _validate_trigger_name(name: str) -> None:
     """Raise HTTP 400 if name contains path separators or other unsafe characters (T-01.5-01)."""
-    if not _VALID_TRIGGER_NAME.match(name):
+    if not valid_name(name):   # fullmatch: 'daily\n' is refused too (df-utq8)
         raise HTTPException(
             status_code=400,
             detail=f"Invalid trigger name '{name}': only alphanumerics, hyphens, and underscores are allowed",
@@ -40,7 +38,13 @@ def reconcile_os_trigger(ws: str, name: str) -> str | None:
     """Make the OS scheduled task match the on-disk trigger definition: (re)register with its
     current cron if the trigger exists and is enabled, else deregister. Used after a deploy/rollback
     changes a trigger's definition — the daemon is the single OS-task writer. Idempotent; returns an
-    optional registration warning."""
+    optional registration warning.
+
+    The deploy calls this with names taken from trigger FILES, which no route validated: an
+    unsafe name is skipped with a warning, never handed to the OS scheduler (df-utq8)."""
+    if not valid_name(name):
+        logger.warning("reconcile_os_trigger: skipping invalid trigger name %r in %r", name, ws)
+        return f"invalid trigger name {name!r}: not registered with the OS scheduler"
     try:
         workspace_dir = resolve_workspace(ws)
     except ValueError:

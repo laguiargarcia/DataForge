@@ -15,7 +15,7 @@ from rich.markup import escape as rich_escape
 from dataforge.apps import discover_apps
 from dataforge.compat import (
     ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, resolve_workspace, resolve_db, data_dir, db_url,
-    list_workspaces,
+    list_workspaces, valid_name,
 )
 from dataforge.deploy.cli import deploy_app
 
@@ -190,6 +190,16 @@ def _upsert_and_get_enabled(workspace: str, job_name: str, cron: str) -> bool:
         return row.enabled
 
 
+def _check_scheduler_names(**names: str) -> None:
+    """Raise ValueError unless every name is a valid_name. Called by every function that puts a
+    workspace, trigger or job name into an OS scheduler command: whatever the caller (API, deploy
+    reconcile, CLI), an unsafe name never reaches PowerShell, bash, crontab or a plist (df-utq8)."""
+    for kind, value in names.items():
+        if not valid_name(value):
+            raise ValueError(f"invalid {kind} name for the OS scheduler: {value!r} "
+                             "(only letters, digits, '-' and '_')")
+
+
 def _is_wsl() -> bool:
     """True when running inside Windows Subsystem for Linux."""
     return "microsoft" in platform.release().lower()
@@ -197,6 +207,7 @@ def _is_wsl() -> bool:
 
 def _register_crontab(workspace: str, trigger_name: str, cron: str, cmd: str) -> None:
     """Register a trigger in the user crontab (Linux). Delete+recreate contract (D-05)."""
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     marker = f"# DataForge:{workspace}:{trigger_name}"
     result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
     # crontab -l exits non-zero on empty crontab — treat both as "no existing" (T-01.5-06)
@@ -209,6 +220,7 @@ def _register_crontab(workspace: str, trigger_name: str, cron: str, cmd: str) ->
 
 def _deregister_crontab(workspace: str, trigger_name: str) -> None:
     """Remove a trigger entry from the user crontab."""
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     marker = f"# DataForge:{workspace}:{trigger_name}"
     result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
     existing = result.stdout if result.returncode == 0 else ""
@@ -220,6 +232,7 @@ def _register_launchd(
     workspace: str, trigger_name: str, cron: str, dataforge_bin: str, home: str
 ) -> None:
     """Register a trigger with macOS launchd. Delete+recreate contract (D-05)."""
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     parts = cron.strip().split()
     if len(parts) != 5:
         raise ValueError(f"Invalid cron expression (need 5 fields): {cron!r}")
@@ -277,6 +290,7 @@ def _register_launchd(
 
 def _deregister_launchd(workspace: str, trigger_name: str) -> None:
     """Unload and remove a launchd plist for the given trigger."""
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     label = f"com.dataforge.{workspace}.{trigger_name}"
     plist_path = Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"
     subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
@@ -287,6 +301,7 @@ def _register_windows_trigger(
     workspace: str, trigger_name: str, cron: str, dataforge_bin: str, home: str
 ) -> None:
     """Register a trigger with Windows Task Scheduler. Delete+recreate (D-05)."""
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     trigger_args = _cron_to_ps_trigger(cron)
     task_name = f"DataForge\\{workspace}\\trigger\\{trigger_name}"
 
@@ -335,6 +350,7 @@ def _deregister_windows_trigger(workspace: str, trigger_name: str) -> None:
     Register-ScheduledTask does, so the folder must be passed separately as
     -TaskPath or the lookup silently misses and the task is orphaned (df-413).
     """
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     task_path = f"\\DataForge\\{workspace}\\trigger\\"
     ps_script = (
         f"Unregister-ScheduledTask -TaskName '{trigger_name}' -TaskPath '{task_path}' "
@@ -439,6 +455,7 @@ def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> 
     """
     import sys
 
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     dataforge_bin = shutil.which("dataforge") or f"{sys.executable} -m dataforge"
     home = str(data_dir())
     cron = _utc_cron_to_local(cron)
@@ -459,6 +476,7 @@ def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> 
 
 def _platform_deregister_trigger(workspace: str, trigger_name: str) -> None:
     """Dispatch to platform-specific OS trigger deregistration."""
+    _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     if platform.system() == "Windows" or _is_wsl():
         _deregister_windows_trigger(workspace, trigger_name)
     elif platform.system() == "Darwin":
@@ -468,6 +486,7 @@ def _platform_deregister_trigger(workspace: str, trigger_name: str) -> None:
 
 
 def _register_windows_task(workspace: str, job_name: str, cron: str) -> None:
+    _check_scheduler_names(workspace=workspace, job=job_name)
     import sys
 
     dataforge_bin = shutil.which("dataforge") or f"{sys.executable} -m dataforge"
@@ -696,8 +715,9 @@ def schedule_sync():
                 _register_windows_task(ws_dir.name, job.name, job.schedule)
                 rprint(f"[green]✓[/green] {ws_dir.name}/{job.name} [{job.schedule}]")
                 registered += 1
-            except RuntimeError as e:
-                rprint(f"[red]✗[/red] {ws_dir.name}/{job.name}: {e}")
+            except (RuntimeError, ValueError) as e:   # ValueError: unsafe name (df-utq8)
+                rprint(f"[red]✗[/red] {rich_escape(ws_dir.name)}/{rich_escape(job.name)}: "
+                       f"{rich_escape(str(e))}")
 
     rprint(f"\n{registered} task(s) registered in Windows Task Scheduler.")
 
