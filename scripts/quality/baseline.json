@@ -72,14 +72,11 @@
     "PLR0915": 1,
     "PLR2004": 4,
     "S110": 2,
-    "SIM102": 1,
     "SIM105": 2
   },
   "dataforge/gui/panels/scheduler.py": {
     "ARG002": 1,
     "BLE001": 7,
-    "C901": 1,
-    "PLR0912": 1,
     "PLR0915": 1,
     "PLR2004": 3,
     "RUF012": 2,
