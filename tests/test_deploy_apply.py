@@ -1,3 +1,5 @@
+import os
+import sys
 from pathlib import Path
 import pytest
 import yaml
@@ -302,3 +304,73 @@ def test_apply_trigger_that_cannot_be_redumped_is_copied_verbatim(tmp_path, dirt
     plan = _plan(src, tgt, "target: Prod\npairs:\n  - {source: 'triggers/*.yaml', target: 'triggers/'}\n")
     apply_plan(src, tgt, plan, Ledger(tgt))
     assert (tgt / "triggers/bad.yaml").read_text() == dirty
+
+
+# --- df-ocwj: the deploy keeps the on/off status the ENGINE reads, not Python's bool() ---
+
+@pytest.mark.parametrize("enabled,engine_reads", [
+    ("'no'", False), ("'false'", False), ("'off'", False), ("0", False),
+    ("'yes'", True), ("1", True), ("true", True),
+])
+def test_apply_keeps_the_status_the_engine_reads_from_the_target(tmp_path, enabled, engine_reads):
+    from dataforge.models import TriggerModel
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "triggers/daily.yaml", _SOURCE_TRIGGER)
+    _mk(tgt, "triggers/daily.yaml", f"name: daily\ncron: '0 5 * * *'\nenabled: {enabled}\n")
+    assert TriggerModel(**yaml.safe_load((tgt / "triggers/daily.yaml").read_text())).enabled is engine_reads
+    apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
+    written = yaml.safe_load((tgt / "triggers/daily.yaml").read_text(encoding="utf-8"))
+    assert written["enabled"] is engine_reads and written["cron"] == "0 9 * * *"
+
+
+def test_apply_target_trigger_with_an_unreadable_status_is_written_disarmed(tmp_path):
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "triggers/daily.yaml", _SOURCE_TRIGGER)
+    _mk(tgt, "triggers/daily.yaml", "name: daily\ncron: '0 5 * * *'\nenabled: null\n")
+    apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
+    assert yaml.safe_load((tgt / "triggers/daily.yaml").read_text(encoding="utf-8"))["enabled"] is False
+
+
+# --- df-m1dk: apply never writes or deletes outside the target, whatever plan it is handed ---
+
+_HOSTILE = ["../escaped.txt", "scripts/../../escaped.txt", "/abs/escaped.txt", "scripts\\..\\..\\escaped.txt"]
+
+
+@pytest.mark.parametrize("action", [Action.add, Action.modify, Action.delete])
+@pytest.mark.parametrize("hostile", _HOSTILE)
+def test_apply_refuses_a_target_path_outside_the_target_before_touching_anything(
+        tmp_path, hostile, action):
+    from dataforge.deploy.models import DeployPlan, ItemChange
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    _mk(tgt, "scripts/ok.py", "old\n")
+    (tmp_path / "escaped.txt").write_text("precious")
+    hostile = hostile.replace("/abs", str(tmp_path)) if hostile.startswith("/abs") else hostile
+    plan = DeployPlan(source="Dev", target="Prod", pipeline="p", items=[
+        ItemChange(source_path="scripts/a.py", target_path="scripts/ok.py",
+                   kind=Kind.script, action=Action.modify),          # a good item goes first
+        ItemChange(source_path=None if action == Action.delete else "scripts/a.py",
+                   target_path=hostile, kind=Kind.script, action=action),
+    ])
+    led = Ledger(tgt)
+    with pytest.raises(ValueError, match="outside the target workspace|escapes target workspace"):
+        apply_plan(src, tgt, plan, led)
+    assert (tmp_path / "escaped.txt").read_text() == "precious"
+    assert (tgt / "scripts/ok.py").read_text() == "old\n"   # pre-flight: nothing applied
+    assert led.last() is None
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks; junctions go in the Windows smoke")
+def test_apply_refuses_a_folder_symlinked_out_of_the_target(tmp_path):
+    from dataforge.deploy.models import DeployPlan, ItemChange
+    src, tgt, outside = tmp_path / "Dev", tmp_path / "Prod", tmp_path / "outside"
+    _mk(src, "scripts/a.py", "print(1)\n")
+    outside.mkdir()
+    tgt.mkdir()
+    os.symlink(outside, tgt / "scripts", target_is_directory=True)
+    plan = DeployPlan(source="Dev", target="Prod", pipeline="p", items=[
+        ItemChange(source_path="scripts/a.py", target_path="scripts/a.py",
+                   kind=Kind.script, action=Action.add)])
+    with pytest.raises(ValueError, match="outside the target workspace"):
+        apply_plan(src, tgt, plan, Ledger(tgt))
+    assert not any(outside.iterdir())

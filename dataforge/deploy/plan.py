@@ -2,9 +2,11 @@ import hashlib
 import warnings
 from pathlib import Path
 import yaml
+from pydantic import TypeAdapter, ValidationError
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
-from .pairing import check_target_inside, normalize_target, windows_unsafe
+from .pairing import (check_folder_inside, check_target_inside, normalize_target, target_file,
+                      windows_unsafe)
 
 _KIND_BY_PREFIX = {
     "jobs": Kind.job,
@@ -52,6 +54,22 @@ def _load_yaml_dict(path: Path):
     return data if isinstance(data, dict) else None
 
 
+_ENABLED = TypeAdapter(bool)   # the type of TriggerModel.enabled, read the same lax way
+
+
+def trigger_status(data) -> bool | None:
+    """A trigger's on/off status as the engine reads it (TriggerModel.enabled: no key is on, and
+    'no', 'off', 'false', 0 are off), or None when it can't be read: the file is not a mapping, or
+    'enabled' is a value the engine rejects (null, a list). Never Python's bool(): bool('no') is
+    True (df-886.12, df-ocwj)."""
+    if data is None:
+        return None
+    try:
+        return _ENABLED.validate_python(data.get("enabled", True))
+    except ValidationError:
+        return None
+
+
 def _trigger_sha(path: Path) -> str:
     """Hash a trigger's definition EXCLUDING 'enabled' (law #1). Unparseable or non-mapping
     files degrade to an opaque byte hash so a dirty file can't crash the planner."""
@@ -88,13 +106,12 @@ def build_plan(
             items.append(ItemChange(source_path=src_rel, target_path=tgt_rel, kind=kind,
                                     action=Action.skip_ignored, reason="name not valid on Windows"))
             continue
-        src_path = source_dir / src_rel
-        tgt_path = target_dir / tgt_rel
-
         if ignore.matches(src_rel):    # law #3
             items.append(ItemChange(source_path=src_rel, target_path=tgt_rel,
                                     kind=kind, action=Action.skip_ignored, reason=".deployignore"))
             continue
+        src_path = source_dir / src_rel
+        tgt_path = target_file(target_dir, tgt_rel)   # df-m1dk: never through a linked folder
 
         # Triggers (law #2'): a trigger is always promoted as its DEFINITION; the deploy never
         # changes the target's on/off status. So an active target trigger is updated in place
@@ -169,6 +186,7 @@ def _prune_deletes(target_dir: Path, pipeline: PipelineModel,
             seen.add(key)
             item = _prune_item(p, rel, ignore)
             if item is not None:
+                check_folder_inside(target_dir, p.parent)   # df-m1dk: a linked base leads outside
                 out.append(item)
     return out
 
@@ -178,10 +196,12 @@ def _prune_item(p: Path, rel: str, ignore: DeployIgnore) -> ItemChange | None:
     if _is_ledger_path(rel) or ignore.matches_any_case(rel):   # law #4, law #3 (df-886.18)
         return None
     kind = kind_for(rel)
-    if kind == Kind.trigger:   # law #2
-        tdata = _load_yaml_dict(p)
-        # The engine runs a trigger without 'enabled' as active (TriggerModel default).
-        if tdata is not None and tdata.get("enabled", True):
+    if kind == Kind.trigger:   # law #2: delete a target trigger only when it is known to be off
+        status = trigger_status(_load_yaml_dict(p))
+        if status is None:   # df-886.12: unreadable is not off; a person has to look at it
+            return ItemChange(source_path=None, target_path=rel, kind=kind, action=Action.protected,
+                              reason="target trigger unreadable: status unknown")
+        if status:
             return ItemChange(source_path=None, target_path=rel, kind=kind,
                               action=Action.protected, reason="target trigger is active")
     return ItemChange(source_path=None, target_path=rel, kind=kind,

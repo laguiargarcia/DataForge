@@ -5,7 +5,8 @@ from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, DeployEntry, Action, Kind
 from .ledger import Ledger
-from .plan import _UNDUMPABLE, _load_yaml_dict, _is_ledger_path
+from .pairing import target_file
+from .plan import _UNDUMPABLE, _load_yaml_dict, _is_ledger_path, trigger_status
 
 
 def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
@@ -38,14 +39,15 @@ def apply_plan(source_dir: Path, target_dir: Path, plan: DeployPlan, ledger: Led
     first, write atomically, and record a DeployEntry. The entry is recorded even if a write
     fails mid-batch, so a partial apply stays rollback-recoverable (law #4). The engine's own
     ledger is never a target. Returns the entry (raising afterwards if the apply failed)."""
+    # law #4 — never touch our own ledger. Every path is checked before the first write, so a plan
+    # with a path outside the target is refused whole, with nothing applied (df-m1dk).
+    checked = [(item, target_file(target_dir, item.target_path))
+               for item in plan.writable() if not _is_ledger_path(item.target_path)]
     prev = ledger.last()
     applied: list[ItemChange] = []
     error: Exception | None = None
     try:
-        for item in plan.writable():
-            if _is_ledger_path(item.target_path):   # law #4 — never touch our own ledger
-                continue
-            tgt = target_dir / item.target_path
+        for item, tgt in checked:
             before = ledger.write_blob(tgt.read_bytes()) if tgt.exists() else None
 
             if item.action == Action.delete:
@@ -56,11 +58,9 @@ def apply_plan(source_dir: Path, target_dir: Path, plan: DeployPlan, ledger: Led
                 continue
 
             if item.kind == Kind.trigger:
-                prior_enabled = False
-                if before is not None:
-                    tdata = _load_yaml_dict(tgt)
-                    # A target trigger without 'enabled' is active for the engine (df-886.8).
-                    prior_enabled = bool(tdata.get("enabled", True)) if tdata else False
+                # Keep the status the engine reads (df-886.8, df-ocwj); one it can't read is
+                # written off, like a new trigger (D14).
+                prior_enabled = bool(before is not None and trigger_status(_load_yaml_dict(tgt)))
                 content = _trigger_content(source_dir / item.source_path, prior_enabled)
             else:
                 content = (source_dir / item.source_path).read_bytes()
