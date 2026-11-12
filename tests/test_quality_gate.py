@@ -186,3 +186,46 @@ def test_base_ref_fails_when_the_committed_baseline_rose(repo, monkeypatch):
     assert gate.check([], "origin/main", full=False) == 1
     monkeypatch.setattr(gate, "_git_show", lambda ref, rel: json.dumps({"pub.py": {"F401": 2}}))
     assert gate.check([], "origin/main", full=False) == 0
+
+
+# ---------------------------------------------------------------- arguments never read as options
+
+
+def test_ruff_and_vulture_get_the_files_after_double_dash(monkeypatch):
+    """A file whose name starts with '-' (e.g. '--fix.py') must reach the tool as a path."""
+    import subprocess
+    calls = []
+    monkeypatch.setattr(gate, "_run", lambda cmd: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "[]", ""))
+    files = ["--fix.py", "pub.py"]
+    gate.ruff(files)
+    gate.vulture(files)
+    assert [cmd[cmd.index("--") + 1:] for cmd in calls] == [files, files]
+
+
+def test_git_show_reads_a_ref_never_an_option(tmp_path, monkeypatch):
+    """A ref like '--output=<file>' would make git show write that file."""
+    import subprocess
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+    subprocess.run([*git, "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "baseline.json").write_text("{}\n", encoding="utf-8")
+    subprocess.run([*git, "add", "baseline.json"], cwd=tmp_path, check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], cwd=tmp_path, check=True)
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+
+    assert gate._git_show("HEAD", "baseline.json") == "{}\n"
+    assert gate._git_show(f"--output={tmp_path / 'leaked'}", "baseline.json") is None
+    assert not [p for p in tmp_path.iterdir() if p.name.startswith("leaked")]
+
+
+@pytest.mark.parametrize("ref", ["origin/main", "main", "v1.2", "feature/df-1.2_x"])
+def test_base_ref_accepts_ref_names(ref):
+    assert gate._ref_name(ref) == ref
+
+
+@pytest.mark.parametrize("ref", ["--output=/tmp/x", "-p", "", "a b", "main;rm"])
+def test_base_ref_rejects_what_is_not_a_ref_name(ref, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["gate.py", "check", f"--base-ref={ref}"])
+    with pytest.raises(SystemExit) as exc:
+        gate.main()
+    assert exc.value.code == 2
+    assert "not a git ref name" in capsys.readouterr().err
