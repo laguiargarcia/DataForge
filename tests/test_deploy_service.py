@@ -109,7 +109,8 @@ def test_apply_and_rollback_roundtrip(dataforge_home):
     assert entry is not None
     assert (prod / "scripts/a.py").read_text() == "print(1)\n"
     last = service.last_entry(tgt)
-    assert last is not None and last.id == entry.id
+    assert last is not None
+    assert last.id == entry.id
     rolled = service.rollback(tgt)
     assert rolled.id == entry.id
     assert not (prod / "scripts/a.py").exists()  # ADD undone
@@ -126,7 +127,9 @@ def test_auto_deploy_applies_and_returns_result(dataforge_home):
     from dataforge.deploy.models import AutoDeployStatus
     r = service.auto_deploy("Dev", "to-prod")
     assert r.status == AutoDeployStatus.applied
-    assert r.applied == 1 and r.entry_id is not None and r.total == 1
+    assert r.applied == 1
+    assert r.entry_id is not None
+    assert r.total == 1
     assert (dataforge_home / "workspaces/Prod/scripts/a.py").read_text() == "print(1)\n"
 
 
@@ -140,7 +143,8 @@ def test_auto_deploy_idempotent_second_run_is_nothing(dataforge_home):
     service.auto_deploy("Dev", "to-prod")
     r = service.auto_deploy("Dev", "to-prod")
     assert r.status == AutoDeployStatus.nothing_to_apply
-    assert r.applied == 0 and r.entry_id is None
+    assert r.applied == 0
+    assert r.entry_id is None
 
 
 def test_auto_deploy_honors_law3_and_preserves_trigger_status(dataforge_home):
@@ -200,7 +204,9 @@ def test_auto_deploy_protected_prune_is_nothing_to_apply(dataforge_home):
     from dataforge.deploy.models import AutoDeployStatus
     r = service.auto_deploy("Dev", "to-prod")
     assert r.status == AutoDeployStatus.nothing_to_apply
-    assert r.protected == 1 and r.applied == 0 and r.entry_id is None
+    assert r.protected == 1
+    assert r.applied == 0
+    assert r.entry_id is None
     assert (prod / "triggers/daily.yaml").read_text()    # in-sync trigger left intact (never deleted)
     assert (prod / "triggers/extra.yaml").read_text()    # live source-absent trigger PROTECTED, not deleted
 
