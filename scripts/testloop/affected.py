@@ -18,6 +18,7 @@ main still audits what a PR skipped. The reason for each choice goes to stderr.
 import argparse
 import ast
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,13 +40,17 @@ SHARED = (
 )
 SHARED_DIRS = ("scripts/testloop/",)
 
+INIT = "__init__.py"
+# A git ref name, never an option: a leading "-" would make git read it as a flag.
+REF = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_./-]*")
+
 
 def _module_file(repo: Path, dotted: str) -> str | None:
     """Repo-relative file for a first-party dotted name, or None."""
     if dotted.split(".")[0] not in FIRST_PARTY:
         return None
     base = repo.joinpath(*dotted.split("."))
-    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+    for candidate in (base.with_suffix(".py"), base / INIT):
         if candidate.is_file():
             return candidate.relative_to(repo).as_posix()
     return None
@@ -54,38 +59,50 @@ def _module_file(repo: Path, dotted: str) -> str | None:
 def _package_inits(rel: str) -> list[str]:
     """The __init__.py files Python runs before it can import `rel`."""
     parts = Path(rel).parts[:-1]
-    return [Path(*parts[:i], "__init__.py").as_posix() for i in range(1, len(parts) + 1)]
+    return [Path(*parts[:i], INIT).as_posix() for i in range(1, len(parts) + 1)]
 
 
-def _imports(repo: Path, rel: str) -> set[str]:
-    """First-party files that `rel` imports directly (every import statement in the file)."""
-    try:
-        tree = ast.parse((repo / rel).read_text(encoding="utf-8"), filename=rel)
-    except (OSError, SyntaxError):
-        return set()
-    package = list(Path(rel).with_suffix("").parts)
-    if Path(rel).name != "__init__.py":
-        package = package[:-1]
+def _package_of(rel: str) -> list[str]:
+    """Dotted parts of the package that `rel` belongs to (relative imports start here)."""
+    parts = list(Path(rel).with_suffix("").parts)
+    return parts if Path(rel).name == INIT else parts[:-1]
+
+
+def _from_names(node: ast.ImportFrom, package: list[str]) -> set[str]:
+    """Dotted names a `from ... import ...` can load: the module, and each name as a submodule."""
+    if node.level:
+        base = package[: len(package) - node.level + 1]  # level 1 = this package
+        prefix = ".".join([*base, node.module] if node.module else base)
+    else:
+        prefix = node.module or ""
+    return {prefix, *(f"{prefix}.{alias.name}" for alias in node.names)}
+
+
+def _imported_names(tree: ast.AST, package: list[str]) -> set[str]:
+    """Every dotted name the file imports, wherever the import statement is."""
     names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            if node.level:
-                base = package[: len(package) - node.level + 1]  # level 1 = this package
-                prefix = ".".join([*base, node.module] if node.module else base)
-            else:
-                prefix = node.module or ""
-            names.add(prefix)
-            # `from pkg import mod` imports pkg/mod.py when mod is a module.
-            names.update(f"{prefix}.{alias.name}" for alias in node.names)
+            names |= _from_names(node, package)
+    return names
+
+
+def _imports(repo: Path, rel: str) -> set[str]:
+    """First-party files that `rel` imports directly."""
+    try:
+        tree = ast.parse((repo / rel).read_text(encoding="utf-8"), filename=rel)
+    except (OSError, SyntaxError):
+        return set()
     found = set()
-    for name in names:
+    for name in _imported_names(tree, _package_of(rel)):
         # `import a.b.c` runs a, a.b and a.b.c.
         parts = name.split(".")
-        for i in range(1, len(parts) + 1):
-            if (path := _module_file(repo, ".".join(parts[:i]))) is not None:
-                found.add(path)
+        found.update(
+            path for i in range(1, len(parts) + 1)
+            if (path := _module_file(repo, ".".join(parts[:i]))) is not None
+        )
     return found
 
 
@@ -132,8 +149,10 @@ def select(config, changed: list[str]) -> tuple[list[str], dict[str, str]]:
 
 
 def changed_files(repo: Path, base_ref: str) -> list[str]:
+    if not REF.fullmatch(base_ref):
+        raise ToolError(f"not a git ref name: {base_ref!r}")
     proc = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
+        ["git", "diff", "--name-only", "--end-of-options", f"{base_ref}...HEAD"],
         cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False,
     )
     if proc.returncode != 0:

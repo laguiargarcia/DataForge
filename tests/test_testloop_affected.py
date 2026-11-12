@@ -107,3 +107,11 @@ def test_cli_bad_base_ref_is_a_tool_error(repo, monkeypatch, capsys):
     monkeypatch.chdir(repo)
     assert affected.main(["--base-ref", "nope"]) == 2
     assert "git diff against nope failed" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("ref", ["--output=/tmp/x", "-p", "main;rm", "a b"])
+def test_cli_rejects_a_base_ref_that_is_not_a_ref_name(repo, monkeypatch, capsys, ref):
+    """A ref starting with '-' would reach git as an option (Sonar pythonsecurity:S8705)."""
+    monkeypatch.chdir(repo)
+    assert affected.main([f"--base-ref={ref}"]) == 2
+    assert "not a git ref name" in capsys.readouterr().err
