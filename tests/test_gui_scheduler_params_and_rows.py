@@ -394,3 +394,137 @@ def test_configure_with_job_without_parameters_data_passes_empty_list(monkeypatc
     panel._append_job_row("ws-a", "j", {})
     panel._jobs_table.cellWidget(0, 2).click()
     assert opened == [([], {}, "ws-a", "j")]
+
+
+# ---------------------------------------------------------------------------
+# Row buttons after an earlier row is removed (df-r3x8): each button acts on its own row, found
+# when it fires, not on the index the row had when it was built.
+# ---------------------------------------------------------------------------
+
+def _free_rows(d, *names):
+    for name in names:
+        d._add_free_row()
+        d._table.cellWidget(d._table.rowCount() - 1, 0).setText(name)
+
+
+def _names(d):
+    return [d._table.cellWidget(r, 0).text() for r in range(d._table.rowCount())]
+
+
+def test_free_row_remove_buttons_follow_their_rows(sched):
+    d = _dialog(sched)
+    _free_rows(d, "a", "b", "c")
+    buttons = [d._table.cellWidget(r, 3) for r in range(3)]
+    buttons[0].click()
+    buttons[1].click()
+    assert _names(d) == ["c"]
+
+
+def test_last_free_row_remove_button_works_after_an_earlier_removal(sched):
+    d = _dialog(sched)
+    _free_rows(d, "a", "b", "c")
+    buttons = [d._table.cellWidget(r, 3) for r in range(3)]
+    buttons[0].click()
+    buttons[2].click()
+    assert _names(d) == ["b"]
+
+
+def test_declared_row_remove_buttons_follow_their_rows(sched):
+    d = _dialog(sched, [{"name": n, "type": "string"} for n in ("a", "b", "c")])
+    buttons = [d._table.cellWidget(r, 3) for r in range(3)]
+    buttons[0].click()
+    buttons[2].click()
+    assert d.result_params() == {"b": ""}
+
+
+def test_free_row_type_change_after_an_earlier_removal_replaces_its_own_value(sched):
+    d = _dialog(sched)
+    _free_rows(d, "a", "b")
+    type_combo = d._table.cellWidget(1, 1)
+    d._table.cellWidget(0, 3).click()
+    type_combo.setCurrentText("bool")
+    assert type(d._table.cellWidget(0, 2)).__name__ == "QCheckBox"
+    d._table.cellWidget(0, 2).setChecked(True)
+    assert d.result_params() == {"b": True}
+
+
+def _job_rows(panel):
+    return [(panel._jobs_table.cellWidget(r, 0).currentText(),
+             panel._jobs_table.cellWidget(r, 1).currentText())
+            for r in range(panel._jobs_table.rowCount())]
+
+
+def test_job_row_remove_buttons_follow_their_rows(panel, rows):
+    for job in ("job1", "job2", "job1"):
+        panel._append_job_row("ws-a", job, {})
+    buttons = [panel._jobs_table.cellWidget(r, 3) for r in range(3)]
+    buttons[0].click()
+    buttons[2].click()
+    assert _job_rows(panel) == [("ws-a", "job2")]
+
+
+def test_job_row_configure_after_an_earlier_removal_opens_its_own_row(monkeypatch, sched, panel,
+                                                                       rows):
+    opened = _capture_dialog(monkeypatch, sched, accepted=True, result={"d": "2026-01-01"})
+    panel._append_job_row("ws-a", "job1", {"first": 1})
+    panel._append_job_row("ws-b", "job2", {"second": 2})
+    btn = panel._jobs_table.cellWidget(1, 2)
+    panel._jobs_table.cellWidget(0, 3).click()
+    btn.click()
+    assert opened == [(_JOBS[1]["parameters"], {"second": 2}, "ws-b", "job2")]
+    assert btn.property("params") == {"d": "2026-01-01"}
+
+
+def test_job_row_workspace_change_after_an_earlier_removal_refetches_its_jobs(panel, rows):
+    panel._append_job_row("ws-a", "", {})
+    panel._append_job_row("ws-a", "", {})
+    combo_ws = panel._jobs_table.cellWidget(1, 0)
+    panel._jobs_table.cellWidget(0, 3).click()
+    rows.clear()
+    combo_ws.setCurrentIndex(1)
+    assert rows == ["ws-b"]
+
+
+@pytest.fixture
+def pending(monkeypatch, panel):
+    """Hold workspace and job fetches until the test answers them, like the real async API."""
+    held = {"ws": [], "jobs": []}
+    monkeypatch.setattr(panel, "_fetch_workspaces", held["ws"].append)
+    monkeypatch.setattr(panel, "_fetch_jobs_for_ws", lambda ws, cb: held["jobs"].append(cb))
+    return held
+
+
+def _remove_job_row_and_delete_its_widgets(panel, row):
+    """Click the row's ✕ and run the deleteLater that removeRow posts for its cell widgets, as
+    the event loop would before a late API answer arrives. Only those widgets: flushing every
+    pending deletion in the app also frees leftovers of earlier tests and crashes at exit."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    widgets = [panel._jobs_table.cellWidget(row, c) for c in range(4)]
+    widgets[3].click()
+    for w in widgets:
+        QCoreApplication.sendPostedEvents(w, QEvent.Type.DeferredDelete)
+
+
+def test_late_workspace_answer_fills_the_row_that_asked(panel, pending):
+    panel._append_job_row("ws-a", "job1", {})
+    panel._append_job_row("ws-b", "job2", {})
+    _remove_job_row_and_delete_its_widgets(panel, 0)
+    pending["ws"][1](_WS)
+    pending["jobs"][-1](_JOBS)
+    assert _job_rows(panel) == [("ws-b", "job2")]
+
+
+def test_late_answers_for_a_removed_row_are_ignored(panel, pending):
+    panel._append_job_row("ws-a", "job1", {})
+    _remove_job_row_and_delete_its_widgets(panel, 0)
+    pending["ws"][0](_WS)
+    assert pending["jobs"] == []
+    assert panel._jobs_table.rowCount() == 0
+
+
+def test_late_jobs_answer_for_a_removed_row_is_ignored(panel, pending):
+    panel._append_job_row("ws-a", "job1", {})
+    pending["ws"][0](_WS)
+    _remove_job_row_and_delete_its_widgets(panel, 0)
+    pending["jobs"][0](_JOBS)
+    assert panel._jobs_table.rowCount() == 0
