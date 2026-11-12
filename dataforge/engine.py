@@ -1,5 +1,6 @@
 import time
 import uuid
+from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -44,6 +45,81 @@ def run_task_with_retry(
     return rc
 
 
+def _prune_inactive(job: Job) -> tuple[set[str], list[Task]]:
+    """The inactive task names, and the active tasks with their edges to inactive ones dropped."""
+    inactive = {t.name for t in job.tasks if not t.active}
+    active_tasks = [
+        t.model_copy(update={
+            "depends_on": [e for e in t.depends_on if e.task not in inactive]
+        })
+        for t in job.tasks if t.active
+    ]
+    return inactive, active_tasks
+
+
+def _leaf_names(tasks: list[Task]) -> set[str]:
+    """Tasks no other task depends on: the ones whose outcome decides the run."""
+    has_child = {e.task for t in tasks for e in t.depends_on}
+    return {t.name for t in tasks if t.name not in has_child}
+
+
+def _set_run_status(global_engine, run_id: str, status: str, finished: bool = False) -> None:
+    """Update the caller's JobRunORM row; a no-op when no global row exists (R2-F6)."""
+    with Session(global_engine) as session:
+        run = session.get(JobRunORM, run_id)
+        if run:
+            run.status = status
+            if finished:
+                run.finished_at = utcnow()
+            session.commit()
+
+
+@dataclass
+class _JobRun:
+    """One run of a job: what its tasks need to execute, and what they have produced so far."""
+    job: Job
+    workspace_dir: Path
+    db_url: str
+    run_id: str
+    results: dict[str, TaskResult]
+    parent_status: dict[str, str] = field(default_factory=dict)
+
+
+def _record_skipped(db_engine, run: _JobRun, skipped: list[Task]) -> None:
+    now = utcnow()
+    with Session(db_engine) as s:
+        for t in skipped:
+            s.add(ExecucaoORM(
+                job=run.job.name, task=t.name,
+                status="skipped",
+                inicio=now, fim=now,
+                duracao_segundos=0.0,
+                run_id=run.run_id,
+            ))
+            run.results[t.name] = "skipped"
+            run.parent_status[t.name] = "skipped"
+        s.commit()
+
+
+def _run_parallel(run: _JobRun, runnable: list[Task]) -> bool:
+    """Run one level's tasks in parallel; True if an error-type task ran and failed."""
+    forced_failure = False
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(run_task_with_retry, t, run.job, run.workspace_dir, run.db_url,
+                            run.run_id): t
+            for t in runnable
+        }
+        for future in as_completed(futures):
+            t = futures[future]
+            rc = future.result()
+            run.results[t.name] = rc
+            run.parent_status[t.name] = "success" if rc == 0 else "failed"
+            if rc != 0 and get_handler(t.type).forces_run_failure:
+                forced_failure = True
+    return forced_failure
+
+
 def run_job(
     job: Job,
     workspace_dir: Path,
@@ -60,79 +136,28 @@ def run_job(
     if run_id is None:
         run_id = f"local-{uuid.uuid4().hex[:12]}"
 
-    inactive = {t.name for t in job.tasks if not t.active}
-
-    active_tasks = [
-        t.model_copy(update={
-            "depends_on": [e for e in t.depends_on if e.task not in inactive]
-        })
-        for t in job.tasks if t.active
-    ]
+    inactive, active_tasks = _prune_inactive(job)
     levels = topological_levels(active_tasks)
+    leaves = _leaf_names(active_tasks)
 
-    has_child: set[str] = set()
-    for t in active_tasks:
-        for e in t.depends_on:
-            has_child.add(e.task)
-    leaves = {t.name for t in active_tasks if t.name not in has_child}
-
-    parent_status: dict[str, str] = {}
-    results: dict[str, TaskResult] = dict.fromkeys(inactive)
+    run = _JobRun(job, workspace_dir, db_url, run_id, results=dict.fromkeys(inactive))
     error_task_ran_nonzero = False
 
-    with Session(global_engine) as session:
-        run = session.get(JobRunORM, run_id)
-        if run:
-            run.status = "running"
-            session.commit()
+    _set_run_status(global_engine, run_id, "running")
 
     for level in levels:
         runnable: list[Task] = []
         skipped_in_level: list[Task] = []
         for t in level:
-            if should_run(t, parent_status):
-                runnable.append(t)
-            else:
-                skipped_in_level.append(t)
-
+            (runnable if should_run(t, run.parent_status) else skipped_in_level).append(t)
         if skipped_in_level:
-            now = utcnow()
-            with Session(db_engine) as s:
-                for t in skipped_in_level:
-                    s.add(ExecucaoORM(
-                        job=job.name, task=t.name,
-                        status="skipped",
-                        inicio=now, fim=now,
-                        duracao_segundos=0.0,
-                        run_id=run_id,
-                    ))
-                    results[t.name] = "skipped"
-                    parent_status[t.name] = "skipped"
-                s.commit()
-
-        if runnable:
-            with ThreadPoolExecutor() as executor:
-                futures = {
-                    executor.submit(run_task_with_retry, t, job, workspace_dir, db_url, run_id): t
-                    for t in runnable
-                }
-                for future in as_completed(futures):
-                    t = futures[future]
-                    rc = future.result()
-                    results[t.name] = rc
-                    parent_status[t.name] = "success" if rc == 0 else "failed"
-                    if rc != 0 and get_handler(t.type).forces_run_failure:
-                        error_task_ran_nonzero = True
+            _record_skipped(db_engine, run, skipped_in_level)
+        if runnable and _run_parallel(run, runnable):
+            error_task_ran_nonzero = True
 
     any_leaf_failed = any(
-        results.get(name) not in (0, "skipped", None) for name in leaves
+        run.results.get(name) not in (0, "skipped", None) for name in leaves
     )
     final_status = "failed" if (any_leaf_failed or error_task_ran_nonzero) else "success"
-    with Session(global_engine) as session:
-        run = session.get(JobRunORM, run_id)
-        if run:
-            run.status = final_status
-            run.finished_at = utcnow()
-            session.commit()
-
-    return results
+    _set_run_status(global_engine, run_id, final_status, finished=True)
+    return run.results
