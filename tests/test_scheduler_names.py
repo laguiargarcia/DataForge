@@ -48,8 +48,9 @@ def test_no_scheduler_command_is_built_from_an_unsafe_name(sink, bad, which, tmp
          patch("dataforge.cli._is_wsl", return_value=False), \
          patch("dataforge.cli.Path.home", return_value=tmp_path):
         run.return_value = MagicMock(returncode=0, stderr="", stdout="")
+        build = _sinks()[sink]
         with pytest.raises(ValueError, match="OS scheduler"):
-            _sinks()[sink](ws, name)
+            build(ws, name)
     run.assert_not_called()
     assert not any(tmp_path.rglob("*.plist"))
 
@@ -92,7 +93,8 @@ def test_reconcile_never_hands_an_unsafe_trigger_name_to_the_scheduler(dataforge
     (ws / "workspace.yaml").write_text("name: Prod\n")
     _hostile_trigger(ws, bad)
     warning = triggers.reconcile_os_trigger("Prod", bad)
-    assert warning is not None and "invalid trigger name" in warning
+    assert warning is not None
+    assert "invalid trigger name" in warning
     triggers._platform_register_trigger.assert_not_called()      # conftest's MagicMock
     triggers._platform_deregister_trigger.assert_not_called()
 
@@ -129,4 +131,5 @@ def test_schedule_sync_skips_a_job_with_an_unsafe_name_and_registers_the_rest(mo
         run.return_value = MagicMock(returncode=0, stderr="")
         cli.schedule_sync()
     scripts = [c.args[0][-1] for c in run.call_args_list]
-    assert len(scripts) == 1 and "DataForge\\Prod\\nightly" in scripts[0]
+    assert len(scripts) == 1
+    assert "DataForge\\Prod\\nightly" in scripts[0]
