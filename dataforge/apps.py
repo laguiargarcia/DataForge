@@ -58,19 +58,25 @@ def load_app(workspace_path: Path, name: str) -> AppInfo | None:
     )
 
 
+def _workspace_apps(ws: Path) -> list[AppInfo]:
+    """The valid apps of one workspace: each folder of apps/ that holds an app.yaml."""
+    root = apps_dir(ws)
+    if not root.is_dir():
+        return []
+    found: list[AppInfo] = []
+    for d in sorted(root.iterdir()):
+        if not (d.is_dir() and (d / "app.yaml").is_file()):
+            continue
+        if not _APP_NAME.fullmatch(d.name):
+            logger.warning("app %s: folder name must match [A-Za-z0-9_-]+ — skipped", d)
+            continue
+        info = load_app(ws, d.name)
+        if info is not None:
+            found.append(info)
+    return found
+
+
 def discover_apps() -> list[AppInfo]:
     """All valid apps across workspaces, sorted by workspace then name."""
-    found: list[AppInfo] = []
-    for ws in list_workspaces():
-        root = apps_dir(ws)
-        if not root.is_dir():
-            continue
-        for d in sorted(root.iterdir()):
-            if d.is_dir() and (d / "app.yaml").is_file():
-                if not _APP_NAME.fullmatch(d.name):
-                    logger.warning("app %s: folder name must match [A-Za-z0-9_-]+ — skipped", d)
-                    continue
-                info = load_app(ws, d.name)
-                if info is not None:
-                    found.append(info)
+    found = [info for ws in list_workspaces() for info in _workspace_apps(ws)]
     return sorted(found, key=lambda a: (a.workspace, a.name))

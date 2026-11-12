@@ -179,14 +179,19 @@ def project_rules(files: list[str]) -> list[Finding]:
         except (tokenize.TokenError, SyntaxError, UnicodeDecodeError):
             continue  # ruff reports the syntax error
         sqlite_allowed = rel in SQLITE_URL_HOMES or rel.startswith(TESTS)
-        for tok in tokens:
-            if tok.type == tokenize.COMMENT:
-                m = SUPPRESSION.search(tok.string)
-                if m and not REASON.search(m["rest"]):
-                    found.append(Finding(rel, "DF001", tok.start[0], "suppression without a reason: end it with ' -- why'"))
-            elif tok.type in STRING_TOKENS and not sqlite_allowed and "sqlite:///" in tok.string:
-                found.append(Finding(rel, "DF002", tok.start[0], "SQLite URL spelled inline: use dataforge.compat.db_url()"))
+        found += [f for tok in tokens if (f := _token_rule(rel, tok, sqlite_allowed)) is not None]
     return found
+
+
+def _token_rule(rel: str, tok: tokenize.TokenInfo, sqlite_allowed: bool) -> Finding | None:
+    """The project-rule finding one token breaks, if any."""
+    if tok.type == tokenize.COMMENT:
+        m = SUPPRESSION.search(tok.string)
+        if m and not REASON.search(m["rest"]):
+            return Finding(rel, "DF001", tok.start[0], "suppression without a reason: end it with ' -- why'")
+    elif tok.type in STRING_TOKENS and not sqlite_allowed and "sqlite:///" in tok.string:
+        return Finding(rel, "DF002", tok.start[0], "SQLite URL spelled inline: use dataforge.compat.db_url()")
+    return None
 
 
 def collect_full(public: list[str], private: list[str]) -> list[Finding]:

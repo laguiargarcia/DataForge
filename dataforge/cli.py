@@ -17,7 +17,9 @@ from dataforge.compat import (
     ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, resolve_workspace, resolve_db, data_dir, db_url,
     list_workspaces, valid_name,
 )
+from dataforge.dag import topological_levels
 from dataforge.deploy.cli import deploy_app
+from dataforge.parser import load_connections, load_jobs, load_workspace
 
 app = typer.Typer(help="DataForge — workspace local de engenharia de dados")
 jobs_app = typer.Typer(help="Gerenciar jobs")
@@ -33,61 +35,74 @@ _DB_FILE = "dataforge.db"
 _POWERSHELL = "powershell.exe"
 
 
-@app.command()
-def validate(
-    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
-):
-    """Valida todos os YAMLs do workspace."""
-    from dataforge.parser import load_workspace, load_jobs, load_connections
-    from dataforge.dag import topological_levels
+def _field_errors(where: str, e: ValidationError) -> list[str]:
+    return [f"{where}: campo '{'.'.join(str(x) for x in err['loc'])}' — {err['msg']}" for err in e.errors()]
 
-    try:
-        workspace_path = resolve_workspace(workspace)
-    except ValueError as e:
-        rprint(f"[red]{e}[/red]")
-        raise typer.Exit(1)
-    errors = []
 
+def _check_workspace_yaml(workspace_path: Path) -> list[str]:
     try:
         ws = load_workspace(workspace_path)
-        rprint(f"[green]✓[/green] workspace.yaml — {ws.name} (engine={ws.engine.value})")
     except ValidationError as e:
-        for err in e.errors():
-            field = ".".join(str(x) for x in err["loc"])
-            errors.append(f"workspace.yaml: campo '{field}' — {err['msg']}")
+        return _field_errors("workspace.yaml", e)
     except FileNotFoundError:
-        errors.append("workspace.yaml não encontrado")
+        return ["workspace.yaml não encontrado"]
+    rprint(f"[green]✓[/green] workspace.yaml — {ws.name} (engine={ws.engine.value})")
+    return []
 
-    jobs = []
+
+def _check_jobs(workspace_path: Path) -> tuple[list, list[str]]:
+    """The jobs that loaded (none if any job failed to load), and the load errors."""
     try:
         jobs = load_jobs(workspace_path)
-        rprint(f"[green]✓[/green] jobs/ — {len(jobs)} job(s) carregados")
-        for job in jobs:
-            rprint(f"  [cyan]{job.name}[/cyan] — {len(job.tasks)} task(s)")
     except ValidationError as e:
-        for err in e.errors():
-            field = ".".join(str(x) for x in err["loc"])
-            errors.append(f"jobs/: campo '{field}' — {err['msg']}")
+        return [], _field_errors("jobs/", e)
     except Exception as e:
-        errors.append(f"jobs/: {e}")
+        return [], [f"jobs/: {e}"]
+    rprint(f"[green]✓[/green] jobs/ — {len(jobs)} job(s) carregados")
+    for job in jobs:
+        rprint(f"  [cyan]{job.name}[/cyan] — {len(job.tasks)} task(s)")
+    return jobs, []
 
+
+def _check_connections(workspace_path: Path) -> list[str]:
     try:
         conns = load_connections(workspace_path)
-        rprint(f"[green]✓[/green] connections.yaml — {len(conns)} conexão(ões)")
     except Exception as e:
-        errors.append(f"connections.yaml: {e}")
+        return [f"connections.yaml: {e}"]
+    rprint(f"[green]✓[/green] connections.yaml — {len(conns)} conexão(ões)")
+    return []
 
+
+def _check_job_graphs(jobs: list) -> list[str]:
+    """Per job: its task graph has no cycle, and every task.job names a job that exists."""
+    errors = []
+    job_names = {j.name for j in jobs}
     for job in jobs:
         try:
             topological_levels(job.tasks)
         except ValueError as e:
             errors.append(f"job '{job.name}': {e}")
+        errors += [f"job '{job.name}', task '{task.name}': job referenciado '{task.job}' não existe"
+                   for task in job.tasks if task.job and task.job not in job_names]
+    return errors
 
-        for task in job.tasks:
-            if task.job:
-                job_names = [j.name for j in jobs]
-                if task.job not in job_names:
-                    errors.append(f"job '{job.name}', task '{task.name}': job referenciado '{task.job}' não existe")
+
+@app.command()
+def validate(
+    workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
+):
+    """Valida todos os YAMLs do workspace."""
+    try:
+        workspace_path = resolve_workspace(workspace)
+    except ValueError as e:
+        rprint(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    errors = _check_workspace_yaml(workspace_path)
+    jobs, job_errors = _check_jobs(workspace_path)
+    errors += job_errors
+    errors += _check_connections(workspace_path)
+    errors += _check_job_graphs(jobs)
 
     if errors:
         rprint("\n[red]Erros encontrados:[/red]")

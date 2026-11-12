@@ -32,9 +32,7 @@
   "dataforge/cli.py": {
     "B904": 7,
     "BLE001": 4,
-    "C901": 1,
-    "PLC0415": 33,
-    "PLR0912": 1,
+    "PLC0415": 31,
     "PLR2004": 3,
     "PLW1510": 10,
     "RUF059": 1,
@@ -126,9 +124,7 @@
   },
   "scripts/leakguard.py": {
     "BLE001": 1,
-    "C901": 1,
-    "PLW2901": 1,
-    "S112": 1
+    "PLW2901": 1
   },
   "scripts/testloop/check_cmd.py": {
     "PLW1510": 1
