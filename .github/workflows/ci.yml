@@ -153,10 +153,34 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-testloop-tools, path: report/, if-no-files-found: ignore }
+  windows-smoke:
+    # Deploy path guards on native Windows (df-llmm): NTFS drops a trailing dot or space, reads ':'
+    # as a stream and ignores case, which no Linux test reproduces (scripts/smoke_deploy_windows.py).
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: { python-version: "3.12" }
+      - name: Install runtime dependencies (all of pyproject's but PySide6, which deploy never imports)
+        shell: bash
+        run: |
+          python -c "import tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']; print('\n'.join(d for d in deps if not d.lower().startswith('pyside6')))" > deps.txt
+          python -m pip install -r deps.txt
+      - name: Deploy smoke
+        shell: bash   # pipefail: the smoke's exit code survives the tee
+        env: { PYTHONPATH: "${{ github.workspace }}" }
+        run: |
+          mkdir -p report
+          python scripts/smoke_deploy_windows.py 2>&1 | tee report/windows-smoke.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-windows-smoke, path: report/, if-no-files-found: ignore }
   report:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
-    needs: [leak-scan, quality, tests, mutation, testloop-tools]
+    needs: [leak-scan, quality, tests, mutation, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
