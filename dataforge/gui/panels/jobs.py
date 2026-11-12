@@ -57,6 +57,10 @@ def _append_log_line(text_edit: QTextEdit, line: str) -> None:
     text_edit.setTextCursor(cursor)
 
 
+# Qt property on each run-detail log pane holding its task name, the key tabs are found by.
+_TASK_NAME = "task_name"
+
+
 def _history_records_of(data) -> list:
     """The record list of an executions payload: a bare list, or a dict wrapping it under
     'executions' (or 'items'); anything else is empty."""
@@ -241,10 +245,11 @@ class Panel(QWidget):
             " color: white; padding: 2px 8px; border-radius: 4px;"
         )
 
-        # Update per-task tabs — create missing tabs; do not duplicate
+        # Update per-task tabs — create missing tabs; do not duplicate. Look tabs up by the task
+        # name stored on the pane: the tab text is 'name [status]', so it never matches (df-0kcj).
         existing_tabs: dict[str, int] = {}
         for i in range(self._task_tabs.count()):
-            existing_tabs[self._task_tabs.tabText(i)] = i
+            existing_tabs[self._task_tabs.widget(i).property(_TASK_NAME)] = i
         for task in snapshot.get("tasks", []):
             self._apply_task_snapshot(task, existing_tabs)
 
@@ -300,6 +305,7 @@ class Panel(QWidget):
     def _make_log_pane(self, task_name: str) -> QTextEdit:
         """Create a dark monospace read-only log QTextEdit for one task."""
         pane = QTextEdit()
+        pane.setProperty(_TASK_NAME, task_name)
         pane.setReadOnly(True)
         pane.setAcceptRichText(False)  # XSS guard (T-1.4-09 / Critical Note 5)
         pane.setStyleSheet(
