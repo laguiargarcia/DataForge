@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timedelta
 from typing import Optional
 
 from croniter import croniter as _croniter
 
+from dataforge.compat import api_port
 from dataforge.db import utcnow
 
 from PySide6.QtCore import QByteArray, QDate, QUrl
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -153,8 +153,7 @@ def preset_to_cron(
 class CronPicker(QWidget):
     """Friendly cron entry widget: preset ComboBox + time/day inputs + Advanced raw field.
 
-    Emits no custom signals; parent reads .current_cron() and .current_description()
-    after any change (via the _on_changed callback if set).
+    Emits no custom signals; the parent reads .current_cron() when it saves.
     """
 
     PRESET_KEYS = ["hourly", "daily", "weekly", "monthly", "advanced"]
@@ -162,7 +161,6 @@ class CronPicker(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._on_changed_cb = None
         # "utc" = entered/displayed times are UTC (wire format).
         # "local" = entered/displayed times are OS-local; converted to UTC at boundaries.
         self._display_mode = "utc"
@@ -257,7 +255,6 @@ class CronPicker(QWidget):
     def _on_preset_changed(self, _index: int) -> None:
         key = self._preset_key()
         is_hourly = key == "hourly"
-        is_daily = key == "daily"
         is_weekly = key == "weekly"
         is_monthly = key == "monthly"
         is_advanced = key == "advanced"
@@ -304,9 +301,6 @@ class CronPicker(QWidget):
         else:
             self._preview_label.setText(description)
 
-        if self._on_changed_cb:
-            self._on_changed_cb()
-
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -333,24 +327,6 @@ class CronPicker(QWidget):
         if self._display_mode == "local":
             cron_str = local_to_utc_cron(cron_str)
         return cron_str
-
-    def current_description(self) -> str:
-        """Return the plain-English description for the current selection."""
-        key = self._preset_key()
-        if key == "advanced":
-            return "Custom schedule"
-        try:
-            h = int(self._hour_edit.text() or 0)
-            m = int(self._minute_edit.text() or 0)
-        except ValueError:
-            h, m = 0, 0
-        wd = self._day_combo.currentData()
-        try:
-            dom = int(self._dom_edit.text() or 1)
-        except ValueError:
-            dom = 1
-        _, description = preset_to_cron(key, h, m, weekday=wd, dom=dom)
-        return description
 
     def set_cron(self, cron_str: str) -> None:
         """Pre-fill the picker from a UTC cron string (uses Advanced mode).
@@ -386,10 +362,6 @@ class CronPicker(QWidget):
             self._display_mode = mode
         self._on_changed()
 
-    def set_on_changed(self, callback) -> None:
-        """Register a zero-argument callback called whenever picker changes."""
-        self._on_changed_cb = callback
-
 
 # ---------------------------------------------------------------------------
 # JobParamsDialog — typed parameter editor dialog
@@ -421,8 +393,6 @@ class JobParamsDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(f"Configure parameters — {workspace}/{job}")
         self.setMinimumWidth(520)
-        self._declared_params = declared_params
-        self._current_values = current_values
 
         layout = QVBoxLayout(self)
 
@@ -655,7 +625,7 @@ class Panel(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._port = int(os.environ.get("DATAFORGE_PORT", 8000))
+        self._port = api_port()
         self._nam = QNetworkAccessManager(self)
         self._current_workspace = ""
         # Cached trigger data indexed by row number

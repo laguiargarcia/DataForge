@@ -81,3 +81,33 @@ def test_serve_prints_app_urls(workspace_dir, make_app, monkeypatch):
     out = CliRunner().invoke(cli_app, ["serve", "--port", "8123"]).output
     assert "Demo [v0]" in out
     assert "http://127.0.0.1:8123/apps/test_ws/demo/" in out
+    assert "nenhum workspace" not in out
+
+
+def test_serve_warns_when_no_workspace_is_found(tmp_path, monkeypatch):
+    # df-pr6: with DATAFORGE_HOME on the wrong folder, serve must say where it looked.
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    out = CliRunner().invoke(cli_app, ["serve"]).output
+    assert "nenhum workspace encontrado" in out
+    assert str(tmp_path / "workspaces") in out.replace("\n", "")
+
+
+def test_serve_binds_dataforge_port_when_no_port_is_given(tmp_path, monkeypatch):
+    # df-oift: serve, the GUI daemon and every client must agree on one port.
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("DATAFORGE_PORT", "8123")
+    seen = {}
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: seen.update(k))
+    CliRunner().invoke(cli_app, ["serve"])
+    assert seen["port"] == 8123
+
+
+def test_serve_explains_an_invalid_dataforge_port(tmp_path, monkeypatch):
+    # df-yvgx: a clear message and exit 1, not a traceback.
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
+    monkeypatch.setenv("DATAFORGE_PORT", "abc")
+    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    result = CliRunner().invoke(cli_app, ["serve"])
+    assert result.exit_code == 1
+    assert "DATAFORGE_PORT must be a port number" in result.output

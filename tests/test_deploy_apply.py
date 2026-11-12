@@ -196,13 +196,14 @@ def test_apply_unreadable_target_trigger_degrades_to_disarmed(tmp_path):
     assert written["enabled"] is False and written["cron"] == "0 9 * * *"
 
 
-def test_apply_target_trigger_without_enabled_stays_disarmed(tmp_path):
-    # Law #1: a target trigger that never said 'enabled' was not active, so it is not armed.
+def test_apply_target_trigger_without_enabled_stays_active(tmp_path):
+    # Law #1 + df-886.8: the engine runs a trigger without 'enabled' as active (TriggerModel
+    # default), so updating its definition must keep it active, not write 'enabled: false'.
     src, tgt = tmp_path / "Dev", tmp_path / "Prod"
     _mk(src, "triggers/daily.yaml", _SOURCE_TRIGGER)
     _mk(tgt, "triggers/daily.yaml", "name: daily\ncron: '0 5 * * *'\njobs: []\n")
     apply_plan(src, tgt, _plan(src, tgt, _TRIGGERS), Ledger(tgt))
-    assert yaml.safe_load((tgt / "triggers/daily.yaml").read_text())["enabled"] is False
+    assert yaml.safe_load((tgt / "triggers/daily.yaml").read_text(encoding="utf-8"))["enabled"] is True
 
 
 def test_apply_promoted_trigger_stays_readable_like_its_source(tmp_path):
@@ -264,3 +265,40 @@ def test_apply_promotes_utf8_trigger_text_on_a_non_utf8_machine(tmp_path):
     assert proc.returncode == 0, proc.stderr[-400:]
     written = (tmp_path / "Prod/triggers/daily.yaml").read_bytes().decode("utf-8")
     assert "relatório" in written
+
+
+def test_apply_with_nested_pair_bases_deletes_once_and_finishes(tmp_path):
+    # df-886.15: the same DELETE listed twice made the second unlink raise FileNotFoundError.
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "jobs/a.yaml", "a\n")
+    _mk(src, "jobs/sub/k.yaml", "k\n")
+    _mk(tgt, "jobs/sub/old.yaml", "old\n")
+    plan = _plan(src, tgt, "target: Prod\nprune: true\npairs:\n"
+                           "  - {source: 'jobs/**', target: 'jobs'}\n"
+                           "  - {source: 'jobs/sub/**', target: 'jobs/sub'}\n")
+    apply_plan(src, tgt, plan, Ledger(tgt))   # must not raise
+    assert not (tgt / "jobs/sub/old.yaml").exists()
+    assert (tgt / "jobs/sub/k.yaml").exists()
+
+
+@pytest.mark.parametrize("dirty", ["x: !!bool abc\n", "x: !!timestamp abc\n", "[" * 5000 + "]" * 5000],
+                         ids=["bad-bool-tag", "bad-timestamp-tag", "deep-nesting"])
+def test_apply_trigger_with_a_broken_yaml_tag_is_copied_verbatim(tmp_path, dirty):
+    # df-886.9: constructor errors (KeyError, AttributeError, RecursionError) degrade, never crash.
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "triggers/bad.yaml", dirty)
+    plan = _plan(src, tgt, "target: Prod\npairs:\n  - {source: 'triggers/*.yaml', target: 'triggers/'}\n")
+    apply_plan(src, tgt, plan, Ledger(tgt))
+    assert (tgt / "triggers/bad.yaml").read_text() == dirty
+
+
+@pytest.mark.parametrize("dirty", ['a: !!int ""\n', "a: " + "[" * 350 + "]" * 350 + "\n",
+                                   "a: 0x" + "f" * 4000 + "\n"],
+                         ids=["int-tag-empty", "dump-recursion", "huge-hex-int"])
+def test_apply_trigger_that_cannot_be_redumped_is_copied_verbatim(tmp_path, dirty):
+    # df-886.17: a trigger that loads but can't be dumped again is copied as it is.
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "triggers/bad.yaml", dirty)
+    plan = _plan(src, tgt, "target: Prod\npairs:\n  - {source: 'triggers/*.yaml', target: 'triggers/'}\n")
+    apply_plan(src, tgt, plan, Ledger(tgt))
+    assert (tgt / "triggers/bad.yaml").read_text() == dirty

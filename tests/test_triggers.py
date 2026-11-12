@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 
 
 def write_trigger_yaml(workspace_dir: Path, name: str, content: str) -> None:
