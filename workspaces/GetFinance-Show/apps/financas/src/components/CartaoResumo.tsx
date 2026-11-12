@@ -1,13 +1,13 @@
-type Props = {
+type Props = Readonly<{
   sobrou: string
   entrou: string
   saiu: string
   naConta: string
   investido: string
   fatura: string
-}
+}>
 
-function Faixa({ rotulo, valor }: { rotulo: string; valor: string }) {
+function Faixa({ rotulo, valor }: Readonly<{ rotulo: string; valor: string }>) {
   return (
     <div className="bg-faixa rounded-[20px] py-[14px] px-[18px] flex justify-between gap-4">
       <span className="text-[15px] text-secundario">{rotulo}</span>

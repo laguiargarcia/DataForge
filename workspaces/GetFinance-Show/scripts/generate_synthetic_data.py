@@ -115,7 +115,7 @@ def add(acct, d, amount, txn_type, description, **extra):
 
 bank, card = accounts
 # Card charges per bill index; the key None is the still-open cycle (no billId yet).
-charges = {m: 0.0 for m in [*range(MONTHS_BACK), None]}
+charges = dict.fromkeys([*range(MONTHS_BACK), None], 0.0)
 
 
 def card_charge(d, amount, description, cat_index, meta=None):

@@ -241,7 +241,7 @@ for _acct, _ in sorted(_by_acct.items()):
         if recs:
             paid_amount = sum(r["amount"] for r in recs)
             paid_date = max(r["date"] for r in recs)
-            distinct_types = set(r["value_type"] for r in recs if r["value_type"] is not None)
+            distinct_types = {r["value_type"] for r in recs if r["value_type"] is not None}
             if len(distinct_types) > 1:
                 payment_type = "MIXED"
             elif distinct_types == {"FULL_PAYMENT"}:

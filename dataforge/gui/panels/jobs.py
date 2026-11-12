@@ -34,6 +34,7 @@ _ERROR_FG = "#ff6b6b"
 _ERROR_BG = "#5c1a1a"
 _WARN_FG = "#ffd166"
 _WARN_BG = "#4a3a00"
+_SSE_DATA = b"data:"
 
 
 def _append_log_line(text_edit: QTextEdit, line: str) -> None:
@@ -100,7 +101,7 @@ class Panel(QWidget):
 
         self._stack = QStackedWidget()
 
-        # PAGE_LIST = 0
+        # Page 0 (PAGE_LIST)
         self._list_page = QWidget()
         list_outer = QVBoxLayout(self._list_page)
         list_outer.setContentsMargins(0, 0, 0, 0)
@@ -204,8 +205,8 @@ class Panel(QWidget):
         while b"\n\n" in self._run_sse_buffer:
             frame, self._run_sse_buffer = self._run_sse_buffer.split(b"\n\n", 1)
             for line in frame.splitlines():
-                if line.startswith(b"data:"):
-                    payload = line[len(b"data:"):].strip()
+                if line.startswith(_SSE_DATA):
+                    payload = line[len(_SSE_DATA):].strip()
                     try:
                         self._handle_run_snapshot(json.loads(payload))
                     except Exception:
@@ -438,7 +439,7 @@ class Panel(QWidget):
         if not ts:
             return "—"
         try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(ts)
             now = datetime.now(timezone.utc)
             diff = int((now - dt).total_seconds())
             if diff < 60:
@@ -456,8 +457,8 @@ class Panel(QWidget):
         if status == "running" or not finished_at:
             return "running" if status == "running" else "—"
         try:
-            start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-            end = datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
+            start = datetime.fromisoformat(started_at)
+            end = datetime.fromisoformat(finished_at)
             secs = int((end - start).total_seconds())
             if secs < 60:
                 return f"{secs}s"
@@ -633,8 +634,8 @@ class Panel(QWidget):
         while b"\n\n" in self._sse_buffer:
             frame, self._sse_buffer = self._sse_buffer.split(b"\n\n", 1)
             for line in frame.splitlines():
-                if line.startswith(b"data:"):
-                    payload = line[len(b"data:"):].strip()
+                if line.startswith(_SSE_DATA):
+                    payload = line[len(_SSE_DATA):].strip()
                     try:
                         self._handle_workspace_event(json.loads(payload))
                     except Exception:

@@ -8,6 +8,7 @@ from dataforge.compat import resolve_workspace
 router = APIRouter()
 
 _NO_CACHE = {"Cache-Control": "no-cache"}
+_NOT_FOUND = "Not found"
 
 # Fixed map: the OS mimetypes registry (e.g. Windows) can return wrong types for .js.
 _MEDIA_TYPES = {
@@ -41,22 +42,22 @@ def app_root(workspace: str, app: str):
 @router.get("/{workspace}/{app}/{path:path}")
 def app_file(workspace: str, app: str, path: str):
     if _is_unsafe_path(path):
-        raise HTTPException(status_code=404, detail="Not found", headers=_NO_CACHE)
+        raise HTTPException(status_code=404, detail=_NOT_FOUND, headers=_NO_CACHE)
     try:
         ws_path = resolve_workspace(workspace)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found", headers=_NO_CACHE)
+        raise HTTPException(status_code=404, detail=_NOT_FOUND, headers=_NO_CACHE)
     info = load_app(ws_path, app)
     if info is None:
-        raise HTTPException(status_code=404, detail="Not found", headers=_NO_CACHE)
+        raise HTTPException(status_code=404, detail=_NOT_FOUND, headers=_NO_CACHE)
 
     dist = info.dist.resolve()
     target = (dist / path).resolve()
     if not target.is_relative_to(dist):
-        raise HTTPException(status_code=404, detail="Not found", headers=_NO_CACHE)
+        raise HTTPException(status_code=404, detail=_NOT_FOUND, headers=_NO_CACHE)
     if target.is_file():
         return _serve(target)
     last_segment = path.rsplit("/", 1)[-1]
     if "." in last_segment:
-        raise HTTPException(status_code=404, detail="Not found", headers=_NO_CACHE)
+        raise HTTPException(status_code=404, detail=_NOT_FOUND, headers=_NO_CACHE)
     return _serve(dist / "index.html")

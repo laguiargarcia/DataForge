@@ -1,6 +1,6 @@
 import type { Categoria } from '../resumo'
 
-type Props = { categoria: Categoria; onVoltar: () => void }
+type Props = Readonly<{ categoria: Categoria; onVoltar: () => void }>
 
 export function CartaoDetalhe({ categoria, onVoltar }: Props) {
   return (

@@ -658,10 +658,10 @@ class Panel(QWidget):
         # ---- Stacked widget: LIST | DETAIL ----
         self._stack = QStackedWidget()
 
-        # PAGE_LIST = 0
+        # Page 0 (PAGE_LIST)
         self._stack.addWidget(self._build_list_page())
 
-        # PAGE_DETAIL = 1
+        # Page 1 (PAGE_DETAIL)
         self._stack.addWidget(self._build_detail_page())
 
         outer.addWidget(self._stack, stretch=1)
