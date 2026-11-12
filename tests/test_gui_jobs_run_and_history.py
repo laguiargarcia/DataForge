@@ -64,9 +64,8 @@ def test_snapshot_writes_one_log_line_per_output_line(panel):
     assert _log(panel, 0) == ["one", "two"]
 
 
-@pytest.mark.xfail(strict=True, reason="df-0kcj: tabs are looked up by 'name [status]' text, so a "
-                   "status change adds a second tab")
 def test_second_snapshot_updates_label_and_replaces_log_without_new_tab(panel):
+    """df-0kcj: a status change relabels the task's tab instead of adding a second one."""
     panel._handle_run_snapshot({"status": "running", "tasks": [
         {"name": "a", "status": "running", "output": "one\n"},
     ]})
@@ -75,6 +74,52 @@ def test_second_snapshot_updates_label_and_replaces_log_without_new_tab(panel):
     ]})
     assert _tabs(panel) == ["a [success]"]
     assert _log(panel, 0) == ["one", "two"]
+
+
+def test_second_snapshot_with_same_status_reuses_the_tab(panel):
+    panel._handle_run_snapshot({"status": "running", "tasks": [
+        {"name": "a", "status": "running", "output": "one\n"},
+    ]})
+    panel._handle_run_snapshot({"status": "running", "tasks": [
+        {"name": "a", "status": "running", "output": "one\ntwo\n"},
+    ]})
+    assert _tabs(panel) == ["a [running]"]
+    assert _log(panel, 0) == ["one", "two"]
+
+
+def test_a_whole_run_keeps_one_tab_per_task(panel):
+    for statuses in [("queued", "queued"), ("running", "queued"), ("success", "running"),
+                     ("success", "failed")]:
+        panel._handle_run_snapshot({"status": "running", "tasks": [
+            {"name": "extract", "status": statuses[0], "output": f"extract {statuses[0]}\n"},
+            {"name": "load", "status": statuses[1], "output": f"load {statuses[1]}\n"},
+        ]})
+    assert _tabs(panel) == ["extract [success]", "load [failed]"]
+    assert _log(panel, 0) == ["extract success"]
+    assert _log(panel, 1) == ["load failed"]
+
+
+def test_task_named_like_another_tabs_label_gets_its_own_tab(panel):
+    """Tabs are found by task name, not by their text: a task literally called 'a [running]'
+    is not task 'a' while running."""
+    panel._handle_run_snapshot({"status": "running", "tasks": [
+        {"name": "a", "status": "running", "output": "from a\n"},
+    ]})
+    panel._handle_run_snapshot({"status": "running", "tasks": [
+        {"name": "a [running]", "output": "from the other\n"},
+    ]})
+    assert _tabs(panel) == ["a [running]", "a [running]"]
+    assert _log(panel, 0) == ["from a"]
+    assert _log(panel, 1) == ["from the other"]
+
+
+def test_new_run_starts_with_no_tabs(panel, monkeypatch):
+    """Opening another run clears the previous run's tabs, so the lookup starts empty."""
+    panel._handle_run_snapshot({"status": "success", "tasks": [{"name": "a", "status": "success"}]})
+    monkeypatch.setattr(panel, "_nam", MagicMock())   # no real SSE connection
+    panel._load_run_detail("run-2")
+    panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "status": "running"}]})
+    assert _tabs(panel) == ["a [running]"]
 
 
 def test_snapshot_with_empty_output_keeps_the_previous_log(panel):
