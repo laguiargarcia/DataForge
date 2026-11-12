@@ -101,3 +101,9 @@ def test_not_found_is_404(seeded, test_client, url):
 def test_only_curated_is_readable(seeded, workspace_dir, test_client):
     pl.DataFrame({"x": [1]}).write_delta(str(workspace_dir / "data/raw_tabela"))
     assert test_client.get("/api/workspaces/test_ws/tables/raw_tabela").status_code == 404
+
+
+def test_table_name_outside_the_allowed_charset_is_404(seeded, test_client):
+    r = test_client.get("/api/workspaces/test_ws/tables/ven-das")
+    assert r.status_code == 404
+    assert r.json() == {"detail": "Not found"}

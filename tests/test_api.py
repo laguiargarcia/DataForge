@@ -211,3 +211,35 @@ def test_output_returns_per_task_logs(test_client, dataforge_home, global_engine
     assert len(data) == 1
     assert data[0]["task"] == "step1"
     assert "output" in data[0]
+
+
+def test_background_run_that_raises_marks_the_run_failed(dataforge_home, workspace_dir, monkeypatch):
+    """If loading or running the job raises, the run row and the broadcast both end as failed."""
+    import asyncio
+    from sqlalchemy.orm import Session
+    from dataforge.api.broadcaster import get_broadcaster
+    from dataforge.api.routers import jobs as jobs_router
+    from dataforge.compat import db_url
+    from dataforge.db import JobRunORM, init_db
+
+    global_url = db_url(dataforge_home / "dataforge.db")
+    with Session(init_db(global_url)) as session:
+        session.add(JobRunORM(id="r1", workspace="test_ws", job="boom", status="running"))
+        session.commit()
+
+    def _raise(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(jobs_router, "load_job", _raise)
+
+    async def _run():
+        q = get_broadcaster("test_ws").subscribe()
+        await jobs_router._run_job_background(
+            "r1", "boom", workspace_dir, db_url(workspace_dir / "dataforge.db"), global_url, "test_ws")
+        return [q.get_nowait()["status"] for _ in range(q.qsize())]
+
+    assert asyncio.run(_run()) == ["running", "failed"]
+    with Session(init_db(global_url)) as session:
+        run = session.get(JobRunORM, "r1")
+        assert run.status == "failed"
+        assert run.finished_at is not None

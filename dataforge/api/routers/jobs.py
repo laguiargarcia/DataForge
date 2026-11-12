@@ -25,7 +25,6 @@ from dataforge.compat import db_url, resolve_workspace, global_db_url
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_WORKSPACE_YAML = "workspace.yaml"
 _JOB_YAML = "job.yaml"
 
 
@@ -52,8 +51,6 @@ def _require_workspace(ws: str) -> Path:
     try:
         workspace_dir = resolve_workspace(ws)
     except ValueError:
-        raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
-    if not (workspace_dir / _WORKSPACE_YAML).exists():
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
     return workspace_dir
 
@@ -174,8 +171,6 @@ def list_jobs(ws: str):
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
-    if not (workspace_dir / _WORKSPACE_YAML).exists():
-        raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
     jobs = load_jobs(workspace_dir)
     return sorted(
@@ -215,8 +210,6 @@ async def trigger_job(ws: str, job: str, background_tasks: BackgroundTasks):
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
-    if not (workspace_dir / _WORKSPACE_YAML).exists():
-        raise HTTPException(status_code=404, detail=f"Workspace '{ws}' not found")
 
     job_yaml = workspace_dir / "jobs" / job / _JOB_YAML
     if not job_yaml.exists():
