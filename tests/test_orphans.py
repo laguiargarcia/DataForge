@@ -1,5 +1,6 @@
 """Rules of dataforge/orphans.py: in-progress rows whose owner process has ended become `failed`
 with the reason; every other row is left exactly as it was (df-bw7, df-ahua.5.6, df-413)."""
+import dataclasses
 import logging
 from datetime import datetime, timedelta
 
@@ -9,6 +10,7 @@ from sqlalchemy.orm import Session
 from dataforge import orphans
 from dataforge.compat import db_url
 from dataforge.db import ExecucaoORM, JobRunORM, init_db
+from dataforge.liveness import Owner
 from dataforge.orphans import REASON, reconcile, reconcile_or_log, reconcile_task_rows
 from tests.process_owners import dead_owner_text
 
@@ -222,3 +224,27 @@ def test_the_cli_history_fails_dead_task_rows_before_listing(workspace_dir, data
     assert {k: v[0] for k, v in _tasks(store).items()} == {"dead": "failed", "live": "running"}
     assert "failed" in result.output
     assert "running" in result.output
+
+
+def test_task_rows_are_judged_from_the_process_given_as_me(tmp_path):
+    """reconcile_task_rows judges each row against the `me` it is given, not this process: an owner
+    on me's host whose boot id differs from me's has ended (its kernel restarted), so its row fails,
+    while the row of an owner on another host stays."""
+    url = db_url(tmp_path / "dataforge.db")
+    me = Owner("linux", "elsewhere", "pid:[1]", "boot-now", 10, "5")
+    rebooted = dataclasses.replace(me, boot="boot-before", pid=11).dumps()
+    foreign = dataclasses.replace(me, host="another", boot="boot-before", pid=12).dumps()
+    engine = init_db(url)
+    with Session(engine) as s:
+        s.add_all([ExecucaoORM(job="j", task="old", status="running", owner_process=rebooted),
+                   ExecucaoORM(job="j", task="far", status="running", owner_process=foreign)])
+        s.commit()
+    engine.dispose()
+
+    assert reconcile_task_rows(url, me) == 1
+
+    engine = init_db(url)
+    with Session(engine) as s:
+        status = {r.task: r.status for r in s.query(ExecucaoORM)}
+    engine.dispose()
+    assert status == {"old": "failed", "far": "running"}

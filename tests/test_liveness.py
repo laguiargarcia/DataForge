@@ -287,3 +287,34 @@ def test_windows_an_opened_process(monkeypatch, kernel, expected):
     monkeypatch.setattr(liveness, "_kernel32", kernel)
     assert liveness._windows_start(7) == expected
     assert kernel.closed == [11]
+
+
+# --- readers judged afresh (current_owner caches its answer per process) -----------------------
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="boot id and pid namespace are Linux's")
+def test_on_linux_a_fresh_owner_reads_the_boot_id_and_the_pid_namespace(monkeypatch):
+    """Computed afresh on Linux, the owner's boot is the kernel's boot id and its space the target of
+    /proc/self/ns/pid ('pid:[<inode>]')."""
+    monkeypatch.setattr(liveness, "_current", {})
+    me = current_owner()
+    with open("/proc/sys/kernel/random/boot_id", encoding="ascii") as f:
+        assert me.boot == f.read().strip()
+    assert me.space == os.readlink("/proc/self/ns/pid")
+    assert me.space.startswith("pid:[")
+    assert liveness._pid_space() == me.space
+
+
+@pytest.mark.skipif(sys.platform.startswith("linux"), reason="Linux records them")
+def test_elsewhere_a_fresh_owner_records_no_boot_or_pid_namespace(monkeypatch):
+    """Computed afresh outside Linux, the owner's boot and space are empty (not known there)."""
+    monkeypatch.setattr(liveness, "_current", {})
+    assert (current_owner().boot, current_owner().space) == ("", "")
+
+
+def test_a_command_name_that_is_not_utf8_does_not_hide_the_start(tmp_path, monkeypatch):
+    """A process whose name holds bytes that are not UTF-8 still gives its start time (the kernel
+    copies the name as raw bytes)."""
+    monkeypatch.setattr(liveness, "_PROC", tmp_path)
+    (tmp_path / "7").mkdir()
+    (tmp_path / "7" / "stat").write_bytes(_stat("S", "py").encode("ascii").replace(b"(py)", b"(p\xff)"))
+    assert liveness._linux_start(7) == "4242"
