@@ -55,6 +55,8 @@ select = [
     "PLC0415", "TID251", "PGH004", "RUF100",
     # One condition per assert, so a failure names the one that broke (Sonar S9073, df-3lde)
     "PT018",
+    # A function that returns a value says so on every path: no falling off the end (df-ahua.20)
+    "RET503",
 ]
 
 [tool.ruff.lint.mccabe]
