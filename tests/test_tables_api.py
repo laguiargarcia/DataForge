@@ -1,3 +1,4 @@
+import sys
 import polars as pl
 import pytest
 from datetime import date
@@ -109,5 +110,16 @@ def test_table_name_outside_the_allowed_charset_is_404(workspace_dir, test_clien
     """A real Delta table exists at curated/ven-das, so only the name check can turn it into 404."""
     pl.DataFrame({"x": [1]}).write_delta(str(curated_dir(workspace_dir) / "ven-das"))
     r = test_client.get("/api/workspaces/test_ws/tables/ven-das")
+    assert r.status_code == 404
+    assert r.json() == {"detail": "Not found"}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="NTFS cannot hold a folder name ending in a newline")
+def test_a_table_name_with_a_trailing_newline_is_404(workspace_dir, test_client):
+    """curated/'vendas\\n'/_delta_log exists (delta-rs cannot write such a path, so the folder is
+    planted by hand): only the name check can turn the request into 404 ('$' with re.match accepted
+    the trailing newline, df-ahua.23.1)."""
+    (curated_dir(workspace_dir) / "vendas\n" / "_delta_log").mkdir(parents=True)
+    r = test_client.get("/api/workspaces/test_ws/tables/vendas%0A")
     assert r.status_code == 404
     assert r.json() == {"detail": "Not found"}
