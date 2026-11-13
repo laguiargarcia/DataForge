@@ -19,6 +19,8 @@ so the matching (separators between digits, names wrapped across lines) lives in
 real_values(workspace), allowed(), real_value_hits(text, values). No private workspace in CI, so
 CI runs without it. Fails closed: a private guard that cannot run, or a worktree whose main checkout
 (where the gitignored private workspaces and .leakguard-local live) cannot be found, fails the check.
+A private workspace that lives outside the checkout (the core developed in a clone on the Linux
+disk while the real workspace stays on Windows) is listed in the gitignored .leakguard-workspaces.
 
 ALLOWLIST: synthetic document literals emitted by
 workspaces/GetFinance-Show/scripts/generate_synthetic_data.py.  These are fabricated
@@ -52,6 +54,8 @@ def _main_checkout(here):
 
 MAIN_ROOT, MAIN_ROOT_ERROR = _main_checkout(Path(__file__).resolve().parent.parent)
 WORKSPACES = MAIN_ROOT / "workspaces"
+# Private workspaces outside the checkout (see _listed_workspaces); gitignored, like .leakguard-local.
+LISTED_WORKSPACES_FILE = ".leakguard-workspaces"
 # In the attribution files the owner's name is intended (see NAME_EXEMPT_PATHS); only a value that
 # some private workspace sources from an owner column is let through there, never an account or an id.
 ATTRIBUTION_SOURCES = (".owner",)
@@ -161,18 +165,56 @@ def _private_guard(ws):
     return module, values
 
 
+def _listed_workspaces():
+    """(directories, failures) for the private workspaces kept outside this checkout, as when the
+    code is developed in a clone on another disk and the real workspace stays where its data is.
+    One directory per line in the gitignored '.leakguard-workspaces' at the main checkout's root
+    ('#' comments; '~' expanded; a relative path is taken from that root). Fails closed: a listed
+    directory without tools/leakguard.py is a failure, never a silent skip."""
+    listing = MAIN_ROOT / LISTED_WORKSPACES_FILE
+    if not listing.is_file():
+        return [], []
+    dirs, failures = [], []
+    for line in listing.read_text(encoding="utf-8", errors="ignore").splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith("#"):
+            continue
+        ws = MAIN_ROOT / Path(entry).expanduser()   # an absolute entry replaces the root
+        if (ws / "tools" / "leakguard.py").is_file():
+            dirs.append(ws)
+        else:
+            failures.append(f"REAL-VALUES: {entry} (listed in {LISTED_WORKSPACES_FILE}) has no "
+                            "tools/leakguard.py; nothing was checked against it")
+    return dirs, failures
+
+
+def _guard_label(ws):
+    """The private guard's path as the failure shows it: relative inside this checkout, else as listed."""
+    guard = ws / "tools" / "leakguard.py"
+    try:
+        return guard.relative_to(WORKSPACES.parent).as_posix()
+    except ValueError:
+        return guard.as_posix()
+
+
 def load_real_values():
     """([(workspace name, its guard module, its real values)], failures) for every private guard."""
     guards, failures = [], []
     if MAIN_ROOT_ERROR:
         failures.append(f"REAL-VALUES: {MAIN_ROOT_ERROR}")
-    for guard in sorted(WORKSPACES.glob("*/tools/leakguard.py")):
-        ws = guard.parent.parent
+    listed, listing_failures = _listed_workspaces()
+    failures += listing_failures
+    in_tree = [guard.parent.parent for guard in sorted(WORKSPACES.glob("*/tools/leakguard.py"))]
+    seen = set()
+    for ws in in_tree + listed:
+        if ws.resolve() in seen:
+            continue
+        seen.add(ws.resolve())
         try:
             module, values = _private_guard(ws)
         except Exception as e:  # noqa: BLE001 -- any failure of a private guard must fail closed rather than pass
-            rel = guard.relative_to(WORKSPACES.parent).as_posix()
-            failures.append(f"REAL-VALUES: {rel} could not run ({type(e).__name__}: {e}); nothing was checked against it")
+            failures.append(f"REAL-VALUES: {_guard_label(ws)} could not run ({type(e).__name__}: {e}); "
+                            "nothing was checked against it")
             continue
         guards.append((ws.name, module, values))
     return guards, failures
