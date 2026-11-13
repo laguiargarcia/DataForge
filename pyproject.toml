@@ -85,9 +85,9 @@ max-complexity = 10
 [tool.vulture]
 min_confidence = 60
 # Frameworks call these, not our code: Typer commands, FastAPI routes, pydantic validators,
-# pytest fixtures, Qt event overrides, and attributes that mocks or uvicorn read.
+# pytest fixtures, Qt event overrides, and attributes that mocks, uvicorn or shlex read.
 ignore_decorators = ["@*.command", "@router.*", "@app.*", "@field_validator", "@model_validator", "@pytest.fixture"]
-ignore_names = ["*Event", "test_*", "pytest_*", "pytestmark", "side_effect", "return_value", "required_fields", "install_signal_handlers", "should_exit"]
+ignore_names = ["*Event", "test_*", "pytest_*", "pytestmark", "side_effect", "return_value", "required_fields", "install_signal_handlers", "should_exit", "whitespace_split"]
 
 # Dependency drift (deptry, run by the quality gate): an import with no declared dependency (DEP001),
 # a declared dependency nothing imports (DEP002), a transitive one imported directly (DEP003).
