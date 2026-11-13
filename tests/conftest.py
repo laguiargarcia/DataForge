@@ -1,6 +1,10 @@
 import gc
 import os
 
+# Before anything imports Qt: GUI tests run headless unless the caller chose a platform. Under WSLg a
+# real window per test turns ~5 s of GUI tests into ~5 min (df-m4tz); CI sets the same value.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 import pytest
 from pathlib import Path
 from hypothesis import settings
