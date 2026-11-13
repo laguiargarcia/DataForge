@@ -387,10 +387,11 @@ def _windows_action_line(dataforge_bin: str | list[str], home: str, args: list[s
     through wsl.exe + bash when DataForge lives in WSL, else through powershell.exe."""
     tokens = _command_tokens(dataforge_bin)
     if _is_wsl():
-        wsl_cmd = f"DATAFORGE_HOME={shlex.quote(str(home))} {shlex.join([*tokens, *args])}"
+        wsl_cmd = " ".join([f"DATAFORGE_HOME={shlex.quote(str(home))}",
+                            *(shlex.quote(t) for t in [*tokens, *args])])
         executable, argument = "wsl.exe", f'-e bash -c "{wsl_cmd}"'
     else:
-        call = " ".join(["&", *(_ps_literal(t) for t in tokens), *args])
+        call = " ".join(["&", *(_ps_literal(t) for t in [*tokens, *args])])
         win_cmd = f"$env:DATAFORGE_HOME={_ps_literal(str(home))}; {call}"
         executable, argument = "powershell.exe", f'-NoProfile -NonInteractive -Command "{win_cmd}"'
     return (f"$action = New-ScheduledTaskAction -Execute '{executable}' "
@@ -600,8 +601,8 @@ def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> 
     if platform.system() == "Darwin":
         _register_launchd(workspace, trigger_name, cron, command, home)
     else:  # Linux
-        cmd = (f"DATAFORGE_HOME={shlex.quote(str(home))} "
-               f"{shlex.join([*command, 'scheduled-run', workspace, trigger_name])}")
+        cmd = " ".join([f"DATAFORGE_HOME={shlex.quote(str(home))}",
+                        *(shlex.quote(t) for t in [*command, "scheduled-run", workspace, trigger_name])])
         _register_crontab(workspace, trigger_name, cron, cmd)
     return None
 
@@ -850,25 +851,30 @@ def register_triggers(
         rprint(f"[red]Unknown trigger(s): {rich_escape(', '.join(unknown))}[/red]")
         raise typer.Exit(1)
     rprint(f"[dim]command: {rich_escape(' '.join(_dataforge_command()))}[/dim]")
-    failed = False
-    for t in (t for t in triggers if not trigger or t.name in trigger):
-        label = rich_escape(f"{workspace}/{t.name}")
-        try:
-            if not t.enabled:
-                _platform_deregister_trigger(workspace, t.name)
-                rprint(f"[dim]removed (disabled)[/dim] {label}")
-                continue
-            _platform_check_cron(t.cron)
-            warning = _platform_register_trigger(workspace, t.name, t.cron)
-        except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as e:
-            rprint(f"[red]✗[/red] {label}: {rich_escape(str(e))}")
-            failed = True
-            continue
-        rprint(f"[green]✓[/green] {label} [{rich_escape(t.cron)} UTC]")
-        if warning:
-            rprint(f"[yellow]{rich_escape(warning)}[/yellow]")
-    if failed:
+    results = [_register_one_trigger(workspace, t) for t in triggers
+               if not trigger or t.name in trigger]
+    if not all(results):
         raise typer.Exit(1)
+
+
+def _register_one_trigger(workspace: str, t) -> bool:
+    """register-triggers for one trigger: register it if enabled, else remove its task. Prints the
+    outcome and any warning; False when the OS scheduler failed."""
+    label = rich_escape(f"{workspace}/{t.name}")
+    try:
+        if not t.enabled:
+            _platform_deregister_trigger(workspace, t.name)
+            rprint(f"[dim]removed (disabled)[/dim] {label}")
+            return True
+        _platform_check_cron(t.cron)
+        warning = _platform_register_trigger(workspace, t.name, t.cron)
+    except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as e:
+        rprint(f"[red]✗[/red] {label}: {rich_escape(str(e))}")
+        return False
+    rprint(f"[green]✓[/green] {label} [{rich_escape(t.cron)} UTC]")
+    if warning:
+        rprint(f"[yellow]{rich_escape(warning)}[/yellow]")
+    return True
 
 
 @jobs_app.command("list")

@@ -79,8 +79,9 @@ def test_another_registration_error_is_raised_without_elevation_or_fallback():
 
 
 def test_a_failing_fallback_is_raised():
+    calls = [DENIED, MagicMock(returncode=1, stdout="", stderr=""), OTHER_ERROR]
     with pytest.raises(RuntimeError, match="registration failed"):
-        _register([DENIED, MagicMock(returncode=1, stdout="", stderr=""), OTHER_ERROR])
+        _register(calls)
 
 
 def test_from_wsl_the_task_keeps_the_interactive_logon_and_says_so():
@@ -118,7 +119,7 @@ def test_a_schedule_sync_job_task_gets_the_same_logon_and_settings(tmp_path, mon
     script = _scripts(run)[0]
     assert "-LogonType S4U" in script
     assert "-TaskName 'DataForge\\myws\\myjob'" in script
-    assert " run myws myjob" in script
+    assert " ''run'' ''myws'' ''myjob''\"" in script
 
 
 def test_a_schedule_sync_fallback_warning_points_at_schedule_sync(tmp_path, monkeypatch):
@@ -137,7 +138,7 @@ def test_the_windows_action_quotes_paths_with_spaces_and_quotes():
     action = _scripts(run)[0].splitlines()[0]
     # Inside the -Argument literal every ' is doubled once more.
     assert ("-Command \"$env:DATAFORGE_HOME=''C:\\DataForge''; "
-            "& ''C:\\Program Files\\it''''s\\dataforge.exe'' scheduled-run myws daily\"") in action
+            "& ''C:\\Program Files\\it''''s\\dataforge.exe'' ''scheduled-run'' ''myws'' ''daily''\"") in action
     assert action.startswith("$action = New-ScheduledTaskAction -Execute 'powershell.exe' "
                              "-Argument '-NoProfile -NonInteractive -Command ")
 
@@ -145,7 +146,7 @@ def test_the_windows_action_quotes_paths_with_spaces_and_quotes():
 def test_the_windows_action_runs_the_interpreter_fallback_as_separate_tokens():
     _, run = _register([OK], bin_=["C:\\py\\python.exe", "-m", "dataforge.cli"])
     action = _scripts(run)[0].splitlines()[0]
-    assert "& ''C:\\py\\python.exe'' ''-m'' ''dataforge.cli'' scheduled-run myws daily" in action
+    assert "& ''C:\\py\\python.exe'' ''-m'' ''dataforge.cli'' ''scheduled-run'' ''myws'' ''daily''" in action
 
 
 def test_the_wsl_action_splits_the_interpreter_fallback_into_bash_tokens():
@@ -172,9 +173,10 @@ def test_without_a_console_script_the_command_is_this_interpreter_with_the_cli_m
 
 def test_the_cli_module_fallback_really_starts_dataforge():
     import subprocess
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}   # rich draws boxes; cp1252 cannot hold them
     proc = subprocess.run([sys.executable, "-m", "dataforge.cli", "--help"],
-                          capture_output=True, text=True, check=False,
-                          cwd=Path(cli.__file__).parent.parent)
+                          capture_output=True, encoding="utf-8", errors="replace", check=False,
+                          cwd=Path(cli.__file__).parent.parent, env=env)
     assert proc.returncode == 0, proc.stderr
     assert "scheduled-run" in proc.stdout
 
@@ -312,7 +314,7 @@ def test_on_windows_the_registered_task_really_has_the_s4u_logon(tmp_path, monke
     assert "<LogonType>S4U</LogonType>" in xml
     assert "<StartWhenAvailable>true</StartWhenAvailable>" in xml
     assert "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" in xml
-    assert "scheduled-run " + ws + " daily" in xml
+    assert f"'scheduled-run' '{ws}' 'daily'" in xml
     gone = subprocess.run(["schtasks.exe", "/Query", "/TN", f"\\DataForge\\{ws}\\trigger\\daily"],
                           capture_output=True, text=True, check=False)
     assert gone.returncode != 0
