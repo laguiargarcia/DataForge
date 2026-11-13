@@ -6,6 +6,10 @@ passes over it like any other committed file.
 
 import os
 import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -23,6 +27,7 @@ def repo(tmp_path, monkeypatch):
     """Run the guard from a scratch repo root, with one made-up owner name pattern."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(leakguard, "NAME_PATTERNS", [re.compile(r"fulano\s+de\s+tal", re.IGNORECASE)])
+    monkeypatch.setattr(leakguard, "WORKSPACES", tmp_path / "workspaces")   # no private guard unless a test adds one
 
     def write(rel, text):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -145,3 +150,85 @@ def test_local_file_adds_one_pattern_per_line_skipping_comments_and_blanks(guard
                                                  encoding="utf-8")
     found = names(leakguard._load_owner_name_patterns(), "Fulano, Ciclano, #beltrano")
     assert found == ["Fulano", "Ciclano"]
+
+
+# ---------------------------------------------------------------- real values from a private workspace (df-k37o)
+
+REAL_ACCOUNT = "98765" + "-4321"
+REAL_OWNER = "fulana" + " verdadeira"
+PUBLIC_BANK = "banco" + " publico s.a."
+
+PRIVATE_GUARD = f"""
+from pathlib import Path
+def real_values(workspace: Path):
+    assert (workspace / "tools" / "leakguard.py").is_file()
+    return {{"{REAL_ACCOUNT}": "raw.accounts.number", "{REAL_OWNER}": "raw.accounts.owner",
+            "{PUBLIC_BANK}": "raw.transactions.paymentData"}}
+def _allowed():
+    return {{"{PUBLIC_BANK}"}}
+"""
+
+
+@pytest.fixture
+def private_guard(repo):
+    """A private workspace that ships tools/leakguard.py with made-up 'real' values."""
+    repo("workspaces/Priv/tools/leakguard.py", PRIVATE_GUARD)
+    return repo
+
+
+def test_a_real_value_from_a_private_workspace_fails_without_being_echoed(private_guard, capsys):
+    rel = private_guard("workspaces/Show/scripts/x.py", f"# e.g. '{REAL_ACCOUNT.upper()}' -> '4321'\n")
+    code, _, failures = run(capsys, rel)
+    assert code == 1
+    assert failures == [f"  REAL: {rel}:1 -> '98…' ({len(REAL_ACCOUNT)} chars, raw.accounts.number from Priv)"]
+    assert REAL_ACCOUNT not in "".join(failures)
+
+
+def test_the_owner_name_is_attribution_in_license_and_readme_but_nothing_else_is(private_guard, capsys):
+    lic = private_guard("LICENSE", f"Copyright (c) 2026 {REAL_OWNER}\n")
+    readme = private_guard("README.md", f"by {REAL_OWNER}, account {REAL_ACCOUNT}\n")
+    other = private_guard("notes.md", f"{REAL_OWNER}\n")
+    code, _, failures = run(capsys, lic, readme, other)
+    assert code == 1
+    assert [f.split(" -> ")[0] for f in failures] == ["  REAL: README.md:1", "  REAL: notes.md:1"]
+    assert "raw.accounts.number" in failures[0]
+
+
+def test_a_value_the_private_workspace_allows_passes(private_guard, capsys):
+    code, _, _ = run(capsys, private_guard("a.py", f"issuer = '{PUBLIC_BANK.upper()}'\n"))
+    assert code == 0
+
+
+def test_a_private_guard_that_cannot_run_fails_the_check(repo, capsys):
+    repo("workspaces/Priv/tools/leakguard.py", "import a_module_that_is_not_installed\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert len(failures) == 1
+    assert failures[0].startswith("  REAL-VALUES: workspaces/Priv/tools/leakguard.py could not run")
+
+
+def test_without_a_private_guard_there_is_no_real_value_check(repo, capsys):
+    code, out, _ = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 0
+    assert out.strip() == "leak guard: 1 file(s) clean"
+
+
+def test_from_a_worktree_the_private_guards_come_from_the_main_checkout(tmp_path):
+    """Commits are made from worktrees, where the gitignored private workspaces do not exist."""
+    main = tmp_path / "main"
+    (main / "scripts").mkdir(parents=True)
+    shutil.copy(Path(leakguard.__file__), main / "scripts" / "leakguard.py")
+    (main / ".gitignore").write_text("workspaces/Priv/\n", encoding="utf-8")
+    (main / "workspaces" / "Priv" / "tools").mkdir(parents=True)
+    (main / "workspaces" / "Priv" / "tools" / "leakguard.py").write_text(PRIVATE_GUARD, encoding="utf-8")
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+    subprocess.run([*git, "init", "-q"], cwd=main, check=True)
+    subprocess.run([*git, "add", "-A"], cwd=main, check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], cwd=main, check=True)
+    wt = tmp_path / "wt"
+    subprocess.run([*git, "worktree", "add", "-q", str(wt)], cwd=main, check=True)
+    (wt / "example.py").write_text(f"# '{REAL_ACCOUNT}'\n", encoding="utf-8")
+    result = subprocess.run([sys.executable, "scripts/leakguard.py", "example.py"], cwd=wt,
+                            capture_output=True, text=True, check=False)
+    assert result.returncode == 1
+    assert "raw.accounts.number from Priv" in result.stderr

@@ -11,15 +11,40 @@ NOT blocked — it is the committed surface.
 PII patterns: Brazilian CPF (11-digit), bank agency/account short codes, owner name
 variants, personal email addresses.
 
+Real values (df-k37o): a private workspace on this machine that ships tools/leakguard.py (e.g. the
+GetFinance-Workspace checkout) lists the real values in its data (account numbers, names, ids) via
+real_values(); any committed file holding one fails, masked to its first two characters. A pattern
+cannot recognize a real account number in a docstring example; that list can. No private workspace
+in CI, so CI runs without it; a private guard that is present but cannot run fails the check.
+
 ALLOWLIST: synthetic document literals emitted by
 workspaces/GetFinance-Show/scripts/generate_synthetic_data.py.  These are fabricated
 values (the CPF is checksum-INVALID; the CNPJs are fictional) used to populate
 dim_counterparty in the Show workspace.  They must not trigger the guard.
 """
+import importlib.util
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
+
+
+def _main_checkout_workspaces():
+    """workspaces/ of the main checkout: private workspaces are gitignored, so a worktree has none."""
+    here = Path(__file__).resolve().parent.parent
+    try:
+        common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                cwd=here, capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return here / "workspaces"
+    return Path(common).parent / "workspaces"
+
+
+WORKSPACES = _main_checkout_workspaces()
+# In the attribution files the owner's name is intended (see NAME_EXEMPT_PATHS); only values whose
+# source is an owner column are let through there, never an account number or an id.
+ATTRIBUTION_SOURCES = (".owner",)
 
 # ---------------------------------------------------------------------------
 # Private-path prefixes — any staged file under these surfaces is hard-blocked.
@@ -111,7 +136,34 @@ def _is_exempt(hit):
     return bare in ALLOWLIST or hit in ALLOWLIST   # synthetic literal — exempt
 
 
-def _file_failures(f):
+def load_real_values():
+    """({lowercased value: (source, workspace)}, allowed values, failures) from every private guard."""
+    values, allowed, failures = {}, set(), []
+    for guard in sorted(WORKSPACES.glob("*/tools/leakguard.py")):
+        ws = guard.parent.parent
+        rel = guard.relative_to(WORKSPACES.parent).as_posix()
+        try:
+            spec = importlib.util.spec_from_file_location(f"private_leakguard_{ws.name}", guard)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            for value, source in module.real_values(ws).items():
+                values.setdefault(value.lower(), (source, ws.name))
+            allowed |= {a.lower() for a in module._allowed()}
+        except Exception as e:  # noqa: BLE001 -- any failure of a private guard must fail closed, not pass
+            failures.append(f"REAL-VALUES: {rel} could not run ({type(e).__name__}: {e}); nothing was checked against it")
+    return {v: src for v, src in values.items() if v not in allowed}, failures
+
+
+def _real_value_failures(norm, text, real):
+    lowered = text.lower()
+    present = [(v, src) for v, src in real.items() if v in lowered
+               and not (norm in NAME_EXEMPT_PATHS and src[0].endswith(ATTRIBUTION_SOURCES))]
+    return [f"REAL: {norm}:{n} -> '{v[:2]}…' ({len(v)} chars, {src} from {ws})"
+            for n, line in enumerate(lowered.splitlines(), start=1)
+            for v, (src, ws) in present if v in line]
+
+
+def _file_failures(f, real=None):
     p = Path(f)
     norm = p.as_posix()
     # --- path-block check -------------------------------------------
@@ -124,12 +176,13 @@ def _file_failures(f):
     return [f"{label}: {norm} -> {m.group(0)!r}"
             for label, rx in _content_checks(norm)
             for m in rx.finditer(text)
-            if not _is_exempt(m.group(0))]
+            if not _is_exempt(m.group(0))] + _real_value_failures(norm, text, real or {})
 
 
 def main(argv):
     files = argv[1:]
-    failures = [msg for f in files for msg in _file_failures(f)]
+    real, failures = load_real_values()
+    failures += [msg for f in files for msg in _file_failures(f, real)]
 
     if failures:
         print("LEAK GUARD FAILED:\n  " + "\n  ".join(failures), file=sys.stderr)
