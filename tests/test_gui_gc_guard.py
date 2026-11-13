@@ -4,7 +4,11 @@ A collection started by another thread (the API daemon) frees leftover Qt object
 PySide6 crashes destroying them off the GUI thread.
 """
 import gc
+import os
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -41,7 +45,13 @@ def _make_cyclic_garbage():
 
 @pytest.fixture
 def gc_enabled_like_a_fresh_process():
-    """conftest keeps the collector off for the session; start from CPython's default here."""
+    """conftest keeps the collector off for the session; start from CPython's default here.
+
+    Collect first, on this (main) thread: a widget left over by an earlier GUI test must not be
+    the garbage the worker thread frees, or this test would reproduce the crash it describes.
+    The main thread waits in join() while the worker runs, so no new Qt garbage appears.
+    """
+    gc.collect()
     gc.enable()
     yield
     gc.disable()
@@ -65,6 +75,25 @@ def test_with_the_guard_only_the_gui_thread_collects(gc_enabled_like_a_fresh_pro
     finally:
         timer.stop()
         timer.deleteLater()
+
+
+def _run_scenario(mode):
+    """Run tests/gc_guard_scenario.py in a fresh process: a crash there cannot take pytest down."""
+    scenario = Path(__file__).with_name("gc_guard_scenario.py")
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen"}
+    return subprocess.run([sys.executable, str(scenario), mode], capture_output=True, text=True,
+                          env=env, timeout=120, check=False)
+
+
+def test_qt_garbage_freed_by_a_worker_thread_crashes_without_the_guard():
+    # The control: the scenario reproduces df-3yh (30 of 30 local runs crashed), so the guarded
+    # run below passing means something.
+    assert _run_scenario("noguard").returncode != 0
+
+
+def test_qt_garbage_and_a_busy_worker_thread_are_safe_with_the_guard():
+    result = _run_scenario("guard")
+    assert (result.returncode, result.stdout.strip()) == (0, "ok"), result.stderr[-2000:]
 
 
 @pytest.mark.parametrize(("counts", "expected"), [
