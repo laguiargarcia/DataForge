@@ -57,10 +57,29 @@ def _prune_inactive(job: Job) -> tuple[set[str], list[Task]]:
     return inactive, active_tasks
 
 
-def _leaf_names(tasks: list[Task]) -> set[str]:
-    """Tasks no other task depends on: the ones whose outcome decides the run."""
-    has_child = {e.task for t in tasks for e in t.depends_on}
-    return {t.name for t in tasks if t.name not in has_child}
+def _failed(result: TaskResult) -> bool:
+    return isinstance(result, int) and result != 0
+
+
+def run_status(job: Job, results: dict[str, TaskResult]) -> str:
+    """The run's outcome from its tasks' results: "failed" or "success".
+
+    A failed task fails the run unless a dependent whose edge to it accepts `failed` (`when:
+    failed` or `completed`) ran: that dependent took the failure over, as an alert handler does.
+    A failed leaf has no dependent, so it always fails the run. A failed `error` task fails it
+    regardless. Skipped tasks are neutral, so a failure that only skipped its chain is not
+    hidden behind skipped leaves (df-h864).
+    """
+    _, active_tasks = _prune_inactive(job)
+    taken_over = {
+        e.task for t in active_tasks if isinstance(results.get(t.name), int)
+        for e in t.depends_on if "failed" in e.when
+    }
+    for t in active_tasks:
+        if _failed(results.get(t.name)) and (
+                t.name not in taken_over or get_handler(t.type).forces_run_failure):
+            return "failed"
+    return "success"
 
 
 def _set_run_status(global_engine, run_id: str, status: str, finished: bool = False) -> None:
@@ -113,9 +132,8 @@ def _record_skipped(db_engine, run: _JobRun, skipped: list[Task]) -> None:
         s.commit()
 
 
-def _run_parallel(run: _JobRun, runnable: list[Task]) -> bool:
-    """Run one level's tasks in parallel; True if an error-type task ran and failed."""
-    forced_failure = False
+def _run_parallel(run: _JobRun, runnable: list[Task]) -> None:
+    """Run one level's tasks in parallel, recording each one's result."""
     with ThreadPoolExecutor() as executor:
         futures = {
             executor.submit(run_task_with_retry, t, run.job, run.workspace_dir, run.db_url,
@@ -127,9 +145,6 @@ def _run_parallel(run: _JobRun, runnable: list[Task]) -> bool:
             rc = future.result()
             run.results[t.name] = rc
             run.parent_status[t.name] = "success" if rc == 0 else "failed"
-            if rc != 0 and get_handler(t.type).forces_run_failure:
-                forced_failure = True
-    return forced_failure
 
 
 def run_job(
@@ -150,10 +165,8 @@ def run_job(
 
     inactive, active_tasks = _prune_inactive(job)
     levels = topological_levels(active_tasks)
-    leaves = _leaf_names(active_tasks)
 
     run = _JobRun(job, workspace_dir, db_url, run_id, results=dict.fromkeys(inactive))
-    error_task_ran_nonzero = False
 
     _set_run_status(global_engine, run_id, "running")
 
@@ -161,12 +174,8 @@ def run_job(
         runnable, skipped_in_level = _split_level(level, run.parent_status)
         if skipped_in_level:
             _record_skipped(db_engine, run, skipped_in_level)
-        if runnable and _run_parallel(run, runnable):
-            error_task_ran_nonzero = True
+        if runnable:
+            _run_parallel(run, runnable)
 
-    any_leaf_failed = any(
-        run.results.get(name) not in (0, "skipped", None) for name in leaves
-    )
-    final_status = "failed" if (any_leaf_failed or error_task_ran_nonzero) else "success"
-    _set_run_status(global_engine, run_id, final_status, finished=True)
+    _set_run_status(global_engine, run_id, run_status(job, run.results), finished=True)
     return run.results
