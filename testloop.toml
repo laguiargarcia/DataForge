@@ -46,3 +46,8 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # 5 survivors, all equivalent or declined (df-d3dy): split/rsplit on a span with 2+ '-' (any variant
 # fails and passes through), the internal ValueError message, and // vs / on a sub-minute offset.
 min_score = 0.9456
+
+[targets."dataforge/conditions.py"]
+tests = ["tests/test_conditions*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
