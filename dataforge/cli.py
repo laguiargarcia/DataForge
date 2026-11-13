@@ -609,6 +609,23 @@ def serve(
     uvicorn.run("dataforge.api:app", host=host, port=port, reload=reload)
 
 
+def _report_results(results: dict, status: str) -> None:
+    """Print each task's outcome; exit 1 when the run failed, so an OS scheduler sees it (df-h864)."""
+    for tname, rc in results.items():
+        if rc == 0:
+            label = "[green]OK[/green]"
+        elif rc == "skipped":
+            label = "[yellow]PULADO[/yellow]"
+        elif rc is None:
+            label = "[yellow]ABORTADO[/yellow]"
+        else:
+            label = "[red]FALHOU[/red]"
+        rprint(f"  {tname}: {label}")
+
+    if status == "failed":
+        raise typer.Exit(1)
+
+
 @app.command()
 def run(
     workspace: str = typer.Argument(..., help="Workspace name"),
@@ -616,7 +633,7 @@ def run(
 ):
     """Run a job directly without the HTTP server. Used by OS-level schedulers."""
     from dataforge.parser import load_job
-    from dataforge.engine import run_job
+    from dataforge.engine import run_job, run_status
     from dataforge.db import init_db, JobRunORM, ScheduleORM, utcnow
     from sqlalchemy.orm import Session
     import uuid
@@ -645,20 +662,7 @@ def run(
 
     loaded_job = load_job(workspace_path, job)
     results = run_job(loaded_job, workspace_path, ws_db_url, run_id)
-
-    for tname, rc in results.items():
-        if rc == 0:
-            status = "[green]OK[/green]"
-        elif rc == "skipped":
-            status = "[yellow]PULADO[/yellow]"
-        elif rc is None:
-            status = "[yellow]ABORTADO[/yellow]"
-        else:
-            status = "[red]FALHOU[/red]"
-        rprint(f"  {tname}: {status}")
-
-    if any(isinstance(rc, int) and rc != 0 for rc in results.values()):
-        raise typer.Exit(1)
+    _report_results(results, run_status(loaded_job, results))
 
 
 @app.command()
@@ -670,7 +674,7 @@ def scheduled_run(
     import concurrent.futures
     import uuid
     from dataforge.parser import load_trigger, load_job
-    from dataforge.engine import run_job
+    from dataforge.engine import run_job, run_status
     from dataforge.db import init_db, JobRunORM, utcnow
     from sqlalchemy.orm import Session
 
@@ -703,16 +707,18 @@ def scheduled_run(
         # Apply trigger static params as defaults; job task params override (Pitfall 6)
         for task in job.tasks:
             task.params = {**entry.params, **task.params}
-        run_job(job, job_ws_path, ws_db_url, run_id)
+        return run_status(job, run_job(job, job_ws_path, ws_db_url, run_id))
 
+    any_failed = False
     with concurrent.futures.ThreadPoolExecutor() as ex:
         futures = [ex.submit(_run_one, entry) for entry in trigger.jobs]
         for f in concurrent.futures.as_completed(futures):
             try:
-                f.result()
+                any_failed |= f.result() == "failed"
             except Exception:
                 import logging
                 logging.getLogger(__name__).exception("scheduled_run: job entry failed")
+                any_failed = True
 
     # Silent daemon notify — swallow all exceptions (D-09)
     port = api_port()
@@ -721,6 +727,10 @@ def scheduled_run(
         httpx.post(f"http://127.0.0.1:{port}/api/triggers/notify", timeout=1.0)
     except Exception:
         pass
+
+    # The OS scheduler only sees the exit code: a failed run must not read as success (df-h864).
+    if any_failed:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -794,7 +804,7 @@ def jobs_run(
 ):
     """Roda um job específico."""
     from dataforge.parser import load_job
-    from dataforge.engine import run_job
+    from dataforge.engine import run_job, run_status
 
     try:
         workspace_path = resolve_workspace(workspace)
@@ -805,20 +815,7 @@ def jobs_run(
 
     job = load_job(workspace_path, job_name)
     results = run_job(job, workspace_path, db_url)
-
-    for tname, rc in results.items():
-        if rc == 0:
-            status = "[green]OK[/green]"
-        elif rc == "skipped":
-            status = "[yellow]PULADO[/yellow]"
-        elif rc is None:
-            status = "[yellow]ABORTADO[/yellow]"
-        else:
-            status = "[red]FALHOU[/red]"
-        rprint(f"  {tname}: {status}")
-
-    if any(isinstance(rc, int) and rc != 0 for rc in results.values()):
-        raise typer.Exit(1)
+    _report_results(results, run_status(job, results))
 
 
 @execucoes_app.command("list")

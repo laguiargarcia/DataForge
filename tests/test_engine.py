@@ -184,3 +184,46 @@ def test_db_thread_safety(tmp_path, db_url):
     results = run_job(job, tmp_path, db_url)
     assert results["t1"] == 0
     assert results["t2"] == 0
+
+
+def _sub_job_workspace(tmp_path, inner_tasks_yaml):
+    """A workspace whose job `inner` is run by a `job`-type task; ok.py exits 0, fail.py 1."""
+    ws = tmp_path / "ws"
+    (ws / "jobs" / "inner").mkdir(parents=True)
+    (ws / "logs").mkdir()
+    write_script(ws, "ok.py", "print('ok')\n")
+    write_script(ws, "fail.py", "import sys; sys.exit(1)\n")
+    (ws / "jobs" / "inner" / "job.yaml").write_text(
+        "name: inner\ntasks:\n" + inner_tasks_yaml.replace(
+            "\n    script:", "\n    retry: {attempts: 1, delay_seconds: 0}\n    script:"))
+    return ws
+
+
+def _run_sub_job(ws, db_url):
+    outer = Task(name="outer", job="inner", retry=RetryConfig(attempts=1, delay_seconds=0))
+    return run_job(Job(name="outer_job", tasks=[outer],
+                       retry=RetryConfig(attempts=1, delay_seconds=0)), ws, db_url)["outer"]
+
+
+def test_a_sub_job_with_a_skipped_handler_succeeds(tmp_path, db_url):
+    """A skipped task is neutral in a sub-job too: its `job` task must not read it as a failure."""
+    ws = _sub_job_workspace(tmp_path,
+                            "  - name: t1\n    script: ok.py\n"
+                            "  - name: notify\n    script: ok.py\n"
+                            "    depends_on: [{task: t1, when: failed}]\n")
+    assert _run_sub_job(ws, db_url) == 0
+
+
+def test_a_sub_job_with_a_failure_nobody_takes_over_fails(tmp_path, db_url):
+    ws = _sub_job_workspace(tmp_path,
+                            "  - name: t1\n    script: fail.py\n"
+                            "  - name: t2\n    script: ok.py\n    depends_on: [t1]\n")
+    assert _run_sub_job(ws, db_url) == 1
+
+
+def test_a_sub_job_whose_failure_is_taken_over_succeeds(tmp_path, db_url):
+    ws = _sub_job_workspace(tmp_path,
+                            "  - name: t1\n    script: fail.py\n"
+                            "  - name: notify\n    script: ok.py\n"
+                            "    depends_on: [{task: t1, when: failed}]\n")
+    assert _run_sub_job(ws, db_url) == 0

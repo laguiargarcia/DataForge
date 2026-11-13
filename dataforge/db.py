@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, text
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
+import threading
 
 from .liveness import current_owner_text
 
@@ -65,6 +66,12 @@ class ScheduleORM(Base):
     owner_id    = Column(String, nullable=False, default="system")
 
 
+# create_all and the column migrations below check, then create: two threads initialising the same
+# new database (two jobs of one trigger, two API runs) both see the table missing and the second
+# CREATE fails. One lock per process serialises them (df-h864).
+_SCHEMA_LOCK = threading.Lock()
+
+
 # Columns added after a table was first released, in the order they came: init_db adds each one an
 # older database lacks (SQLite has no ALTER TABLE ... ADD COLUMN IF NOT EXISTS). Whole statements,
 # not formatted ones: nothing here is ever built from a value.
@@ -85,6 +92,12 @@ _ADDED_COLUMNS = {
 
 def init_db(db_url: str):
     engine = create_engine(db_url)
+    with _SCHEMA_LOCK:
+        _create_schema(engine)
+    return engine
+
+
+def _create_schema(engine) -> None:
     Base.metadata.create_all(engine)
 
     with engine.connect() as conn:
@@ -94,5 +107,3 @@ def init_db(db_url: str):
                 if name not in present:
                     conn.execute(text(alter))
                     conn.commit()
-
-    return engine
