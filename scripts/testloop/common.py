@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -10,6 +11,11 @@ from pathlib import Path
 TOOL_NAME = "testloop"
 TOOL_VERSION = "0.1.0"
 RESULT_DIR = ".testloop"
+# Loaded into every test run of map, check and mutate (df-ahua.26): it sets an ASCII locale encoding
+# for the pytest session, so a mutant that drops or changes `encoding="utf-8"` fails as it would on
+# Windows instead of surviving under Linux's UTF-8 locale. See plugins/testloop_ascii_locale.py.
+PLUGIN_DIR = Path(__file__).resolve().parent / "plugins"
+LOCALE_PLUGIN = "testloop_ascii_locale"
 
 
 class ToolError(Exception):
@@ -43,6 +49,20 @@ def load_config(repo: Path) -> Config:
         env={k: str(v) for k, v in raw.get("env", {}).items()},
         targets=dict(raw.get("targets", {})),
     )
+
+
+def pytest_args(config: Config) -> list[str]:
+    """The arguments every test run of the tool passes to pytest, before the test files."""
+    return [*config.pytest_args, "-p", LOCALE_PLUGIN, *config.check_args]
+
+
+def test_env(config: Config, **extra: str) -> dict[str, str]:
+    """The environment of every test run: os.environ, testloop.toml's `env`, `extra`, UTF-8 mode off
+    (it would ignore the plugin's locale), and the plugin folder first on PYTHONPATH so
+    `-p testloop_ascii_locale` imports from any working directory."""
+    env = {**os.environ, **config.env, **extra, "PYTHONUTF8": "0"}
+    env["PYTHONPATH"] = os.pathsep.join(p for p in (str(PLUGIN_DIR), env.get("PYTHONPATH", "")) if p)
+    return env
 
 
 def resolve_tests(config: Config, module: str) -> list[str]:

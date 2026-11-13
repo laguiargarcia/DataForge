@@ -56,9 +56,8 @@ min_score = 1.0
 [targets."dataforge/deploy/ignore.py"]
 tests = ["tests/test_deploy_ignore*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 2 survivors, both equivalent here: encoding "UTF-8" for "utf-8", and encoding=None, which is UTF-8
-# under Linux's locale (test_ignore_file_is_read_as_utf8 catches it in the Windows test job).
-min_score = 0.9259
+# 1 survivor, equivalent: encoding "UTF-8" for "utf-8" (one codec).
+min_score = 0.9629
 
 [targets."dataforge/parser.py"]
 tests = ["tests/test_parser*.py"]

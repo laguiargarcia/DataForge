@@ -13,7 +13,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from common import Config, ToolError, resolve_tests, write_result
+from common import Config, ToolError, pytest_args, resolve_tests, test_env, write_result
 
 TOOL = "mutmut"
 DEFAULT_BUDGET_SECONDS = 900
@@ -95,7 +95,7 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
         "[tool.mutmut]",
         f"source_paths = {json.dumps([source])}",
         f"only_mutate = {json.dumps([module])}",
-        f"pytest_add_cli_args = {json.dumps([*config.pytest_args, *config.check_args])}",
+        f"pytest_add_cli_args = {json.dumps(pytest_args(config))}",
         f"pytest_add_cli_args_test_selection = {json.dumps(tests)}",
     ]
     (dest / "pyproject.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -182,7 +182,7 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     python = _python(config)
     started = time.monotonic()
     deadline = started + budget_seconds
-    env = {**os.environ, **config.env, "PYTHONDONTWRITEBYTECODE": "1"}
+    env = test_env(config, PYTHONDONTWRITEBYTECODE="1")
     env.pop("MUTANT_UNDER_TEST", None)
 
     copy = Path(tempfile.mkdtemp(prefix="testloop-mutate-", dir=_tmp_root()))
@@ -213,7 +213,7 @@ def _mutate(config, module, tests, python, copy, env, started, deadline):
 
     # 2. Baseline: the copy's tests must pass before anything is mutated.
     code, out = _run(
-        [python, "-m", "pytest", *config.pytest_args, *config.check_args, *tests],
+        [python, "-m", "pytest", *pytest_args(config), *tests],
         copy, env, deadline,
     )
     if code != 0:

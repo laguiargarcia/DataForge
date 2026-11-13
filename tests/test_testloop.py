@@ -232,6 +232,70 @@ def test_check_skip_mixed_with_pass_still_passes(sample_repo):
     assert data["skipped"] == ["tests/test_mod.py::test_s"]
 
 
+def test_check_names_an_xfail_under_a_folder_with_dots(tmp_path):
+    """df-ahua.26: a pytest.ini above the repo (a worktree under the clone) makes pytest's rootdir the
+    parent, so the junit classname starts with the dotted folder name ('.worktrees.df-ahua.23a....')
+    and splitting it on dots gave '::worktrees::df-ahua::23a::...'."""
+    (tmp_path / "pytest.ini").write_text("[pytest]\n")
+    repo = tmp_path / ".wt" / "df-ahua.23a"
+    repo.mkdir(parents=True)
+    make_repo(repo, TEST_POS + "\nimport pytest\n\n\n@pytest.mark.xfail(strict=True, reason='df-x')\n"
+              "def test_known():\n    assert classify(1) == 'nope'\n")
+    data = run_ok(repo, "check", "sample/mod.py")
+    assert data["xfailed"] == ["tests/test_mod.py::test_known"]
+
+
+TEST_ASCII_LOCALE = (
+    "import codecs, locale\n\n\ndef test_locale():\n"
+    "    assert codecs.lookup(locale.getpreferredencoding(False)).name == 'ascii'\n"
+)
+
+
+@pytest.mark.parametrize("command", ["check", "mutate"])
+def test_tests_run_under_an_ascii_locale_encoding(sample_repo, command):
+    """df-ahua.26: open() without encoding= is ASCII in the test runs of check and mutate (mutate's
+    baseline must pass for mutate to exit 0)."""
+    (sample_repo / "tests" / "test_mod.py").write_text(TEST_POS + "\n\n" + TEST_ASCII_LOCALE)
+    run_ok(sample_repo, command, "sample/mod.py")
+
+
+def test_map_runs_tests_under_an_ascii_locale_encoding(sample_repo):
+    """map accepts failing tests, so the test runs the module only under the ASCII locale: its
+    lines are covered only if map loaded the plugin."""
+    (sample_repo / "tests" / "test_mod.py").write_text(
+        "import codecs, locale\n\nfrom sample.mod import classify\n\n\ndef test_locale():\n"
+        "    if codecs.lookup(locale.getpreferredencoding(False)).name == 'ascii':\n"
+        "        classify(1)\n"
+    )
+    data = run_ok(sample_repo, "map", "sample/mod.py")
+    assert any("test_locale" in name for name in data["line_tests"][str(IF_LINE)])
+
+
+MOD_READ_SRC = (
+    "def read(path):\n"
+    '    return path.read_text(encoding="utf-8")\n'
+)
+TEST_READ = (
+    "from sample.mod import read\n\n\ndef test_read(tmp_path):\n"
+    "    f = tmp_path / 'x.txt'\n"
+    "    f.write_bytes('caf\\u00e9'.encode('utf-8'))\n"
+    "    assert read(f) == 'caf\\u00e9'\n"
+)
+
+
+def test_mutate_kills_encoding_mutants_but_the_utf8_spelling(tmp_path):
+    """df-ahua.26: under Linux's UTF-8 locale encoding=None or no encoding read UTF-8 too and
+    survived; the ASCII session locale makes them fail on 'caf\u00e9'. Only "UTF-8" (the same codec)
+    is equivalent."""
+    repo = make_repo(tmp_path, TEST_READ)
+    (repo / "sample" / "mod.py").write_text(MOD_READ_SRC)
+    data = run_ok(repo, "mutate", "sample/mod.py")
+    assert data["killed"] > 0
+    assert data["survived"]
+    for survivor in data["survived"]:
+        assert 'encoding="UTF-8"' in survivor["diff"], survivor["diff"]
+
+
 @pytest.mark.parametrize("command", ["check", "map"])
 def test_stale_result_removed_when_next_run_is_tool_error(sample_repo, command):
     run_ok(sample_repo, command, "sample/mod.py")
