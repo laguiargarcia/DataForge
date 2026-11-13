@@ -160,6 +160,12 @@ def test_snapshot_scrolls_the_log_to_the_bottom(panel):
     assert sb.value() > sb.maximum() // 2
 
 
+def _top_visible_line(panel):
+    """The log line drawn at the top of tab 'a''s viewport."""
+    from PySide6.QtCore import QPoint
+    return panel._task_tabs.widget(0).cursorForPosition(QPoint(4, 4)).block().text()
+
+
 def _paused_at(panel, sb, position):
     """Fill tab 'a' with a long log, then scroll it like the user would."""
     from PySide6.QtWidgets import QApplication
@@ -176,9 +182,11 @@ def test_snapshot_keeps_position_when_auto_scroll_is_paused(panel, position):
     sb = _shown_log_scrollbar(panel)
     _paused_at(panel, sb, position)
     kept = sb.value()
+    top_line = _top_visible_line(panel)
     panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "output": _MANY_LINES}]})
     QApplication.processEvents()
     assert sb.value() == kept
+    assert _top_visible_line(panel) == top_line
     assert panel._tab_auto_scroll["a"] is False
 
 
