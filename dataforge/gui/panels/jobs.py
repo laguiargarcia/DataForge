@@ -96,6 +96,8 @@ class Panel(QWidget):
 
         # Per-tab auto-scroll state: tab_name -> bool
         self._tab_auto_scroll: dict[str, bool] = {}
+        # True while _replace_log rewrites a log: its scrollbar moves are not the user scrolling.
+        self._rewriting_log = False
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -284,18 +286,19 @@ class Panel(QWidget):
     def _replace_log(self, log_pane: QTextEdit, task_name: str, output: str) -> None:
         """Rewrite the log with *output*: follow the end while auto-scroll is on, otherwise keep
         the position the user scrolled to. The rewrite's own scrollbar moves are not the user
-        scrolling, so they must not toggle auto-scroll (df-8i31)."""
+        scrolling, so they must not toggle auto-scroll (df-8i31). The scrollbar's signals stay
+        on: the view scrolls through them."""
         sb = log_pane.verticalScrollBar()
         follow = self._tab_auto_scroll.get(task_name, True)
         position = sb.value()
-        sb.blockSignals(True)
+        self._rewriting_log = True
         try:
             log_pane.clear()
             for log_line in output.splitlines():
                 _append_log_line(log_pane, log_line)
             sb.setValue(sb.maximum() if follow else position)
         finally:
-            sb.blockSignals(False)
+            self._rewriting_log = False
 
     def _close_run_stream(self) -> None:
         """Disconnect and abort the per-run SSE reply, if one is open."""
@@ -331,6 +334,8 @@ class Panel(QWidget):
 
     def _on_log_scroll_changed(self, task_name: str, value: int, scrollbar) -> None:
         """Pause auto-scroll when user scrolls up; resume when back at bottom."""
+        if self._rewriting_log:
+            return
         self._tab_auto_scroll[task_name] = (value == scrollbar.maximum())
 
     # ------------------------------------------------------------------
