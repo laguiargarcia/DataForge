@@ -119,7 +119,7 @@ def test_a_schedule_sync_job_task_gets_the_same_logon_and_settings(tmp_path, mon
     script = _scripts(run)[0]
     assert "-LogonType S4U" in script
     assert "-TaskName 'DataForge\\myws\\myjob'" in script
-    assert " ''run'' ''myws'' ''myjob''\"" in script
+    assert " ''run'' ''--'' ''myws'' ''myjob''\"" in script
 
 
 def test_a_schedule_sync_fallback_warning_points_at_schedule_sync(tmp_path, monkeypatch):
@@ -138,7 +138,7 @@ def test_the_windows_action_quotes_paths_with_spaces_and_quotes():
     action = _scripts(run)[0].splitlines()[0]
     # Inside the -Argument literal every ' is doubled once more.
     assert ("-Command \"$env:DATAFORGE_HOME=''C:\\DataForge''; "
-            "& ''C:\\Program Files\\it''''s\\dataforge.exe'' ''scheduled-run'' ''myws'' ''daily''\"") in action
+            "& ''C:\\Program Files\\it''''s\\dataforge.exe'' ''scheduled-run'' ''--'' ''myws'' ''daily''\"") in action
     assert action.startswith("$action = New-ScheduledTaskAction -Execute 'powershell.exe' "
                              "-Argument '-NoProfile -NonInteractive -Command ")
 
@@ -146,7 +146,7 @@ def test_the_windows_action_quotes_paths_with_spaces_and_quotes():
 def test_the_windows_action_runs_the_interpreter_fallback_as_separate_tokens():
     _, run = _register([OK], bin_=["C:\\py\\python.exe", "-m", "dataforge.cli"])
     action = _scripts(run)[0].splitlines()[0]
-    assert "& ''C:\\py\\python.exe'' ''-m'' ''dataforge.cli'' ''scheduled-run'' ''myws'' ''daily''" in action
+    assert "& ''C:\\py\\python.exe'' ''-m'' ''dataforge.cli'' ''scheduled-run'' ''--'' ''myws'' ''daily''" in action
 
 
 def test_the_wsl_action_splits_the_interpreter_fallback_into_bash_tokens():
@@ -154,7 +154,21 @@ def test_the_wsl_action_splits_the_interpreter_fallback_into_bash_tokens():
     _, run = _register([OK], wsl=True, bin_=["/mnt/c/x y/python", "-m", "dataforge.cli"])
     action = _scripts(run)[0].splitlines()[0]
     assert ("-e bash -c \"DATAFORGE_HOME=''C:\\DataForge'' ''/mnt/c/x y/python'' -m dataforge.cli "
-            "scheduled-run myws daily\"") in action
+            "scheduled-run -- myws daily\"") in action
+
+
+def test_names_follow_an_end_of_options_marker_so_a_leading_dash_is_not_an_option():
+    """valid_name allows '-' first: '--help' as a trigger name must stay a positional argument."""
+    expected = {False: "''scheduled-run'' ''--'' ''myws'' ''--help''",
+                True: "scheduled-run -- myws --help"}
+    for wsl, args in expected.items():
+        with patch("dataforge.cli.subprocess.run", side_effect=[OK]) as run, \
+             patch("dataforge.cli._is_wsl", return_value=wsl):
+            cli._register_windows_trigger("myws", "--help", "0 6 * * *", "dataforge", "/h")
+        assert args in _scripts(run)[0].splitlines()[0]
+    result = CliRunner().invoke(cli.app, ["scheduled-run", "--", "no_such_ws", "--help"])
+    assert "Usage" not in result.output        # parsed as names, not as the --help option
+    assert result.exit_code == 1
 
 
 def test_the_command_is_the_console_script_of_the_running_interpreter(tmp_path):
@@ -201,7 +215,7 @@ def test_linux_crontab_line_quotes_each_token(tmp_path, monkeypatch):
                              tmp_path, monkeypatch)
     line = run.call_args_list[1][1]["input"].splitlines()[-1]
     assert line == (f"0 6 * * * DATAFORGE_HOME='{tmp_path / 'home dir'}' "
-                    "'/opt/my venv/bin/python' -m dataforge.cli scheduled-run myws daily  "
+                    "'/opt/my venv/bin/python' -m dataforge.cli scheduled-run -- myws daily  "
                     "# DataForge:myws:daily")
 
 
@@ -213,7 +227,7 @@ def test_macos_plist_gets_one_program_argument_per_token(tmp_path, monkeypatch):
     strings = [ln.strip() for ln in args.splitlines() if "<string>" in ln]
     assert strings == ["<string>/opt/py</string>", "<string>-m</string>",
                        "<string>dataforge.cli</string>", "<string>scheduled-run</string>",
-                       "<string>myws</string>", "<string>daily</string>"]
+                       "<string>--</string>", "<string>myws</string>", "<string>daily</string>"]
 
 
 def test_windows_dispatch_joins_the_registration_and_history_warnings(tmp_path, monkeypatch):
@@ -314,7 +328,7 @@ def test_on_windows_the_registered_task_really_has_the_s4u_logon(tmp_path, monke
     assert "<LogonType>S4U</LogonType>" in xml
     assert "<StartWhenAvailable>true</StartWhenAvailable>" in xml
     assert "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" in xml
-    assert f"'scheduled-run' '{ws}' 'daily'" in xml
+    assert f"'scheduled-run' '--' '{ws}' 'daily'" in xml
     gone = subprocess.run(["schtasks.exe", "/Query", "/TN", f"\\DataForge\\{ws}\\trigger\\daily"],
                           capture_output=True, text=True, check=False)
     assert gone.returncode != 0

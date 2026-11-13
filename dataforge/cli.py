@@ -305,6 +305,7 @@ def _register_launchd(
     <array>
 {program}
         <string>scheduled-run</string>
+        <string>--</string>
         <string>{xml_escape(workspace)}</string>
         <string>{xml_escape(trigger_name)}</string>
     </array>
@@ -475,7 +476,7 @@ def _register_windows_trigger(
     trigger_args = _cron_to_ps_trigger(cron)
     task_name = f"DataForge\\{workspace}\\trigger\\{trigger_name}"
     action_line = _windows_action_line(dataforge_bin, home,
-                                       ["scheduled-run", workspace, trigger_name])
+                                       ["scheduled-run", "--", workspace, trigger_name])
     rerun = " ".join([*_command_tokens(dataforge_bin), "register-triggers", workspace,
                       "--trigger", trigger_name])
     return _register_windows_scheduled_task(task_name, action_line, trigger_args, rerun)
@@ -602,7 +603,8 @@ def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> 
         _register_launchd(workspace, trigger_name, cron, command, home)
     else:  # Linux
         cmd = " ".join([f"DATAFORGE_HOME={shlex.quote(str(home))}",
-                        *(shlex.quote(t) for t in [*command, "scheduled-run", workspace, trigger_name])])
+                        *(shlex.quote(t) for t in [*command, "scheduled-run", "--", workspace,
+                                                    trigger_name])])
         _register_crontab(workspace, trigger_name, cron, cmd)
     return None
 
@@ -624,7 +626,7 @@ def _register_windows_task(workspace: str, job_name: str, cron: str) -> str | No
     command = _dataforge_command()
     trigger_args = _cron_to_ps_trigger(cron)
     task_name = f"DataForge\\{workspace}\\{job_name}"
-    action_line = _windows_action_line(command, str(data_dir()), ["run", workspace, job_name])
+    action_line = _windows_action_line(command, str(data_dir()), ["run", "--", workspace, job_name])
     rerun = " ".join([*command, "schedule-sync"])
     return _register_windows_scheduled_task(task_name, action_line, trigger_args, rerun)
 
@@ -803,30 +805,34 @@ def schedule_sync():
     registered = 0
     for ws_dir in list_workspaces():
         for job in load_jobs(ws_dir):
-            if not job.schedule:
-                continue
-            try:
-                _cron_to_ps_trigger(job.schedule)
-            except ValueError as e:
-                rprint(f"[yellow]skip[/yellow] {ws_dir.name}/{job.name}: {e}")
-                continue
-
-            enabled = _upsert_and_get_enabled(ws_dir.name, job.name, job.schedule)
-            if not enabled:
-                rprint(f"[dim]skip (disabled)[/dim] {ws_dir.name}/{job.name}")
-                continue
-
-            try:
-                warning = _register_windows_task(ws_dir.name, job.name, job.schedule)
-                rprint(f"[green]✓[/green] {ws_dir.name}/{job.name} [{job.schedule}]")
-                if warning:
-                    rprint(f"[yellow]{rich_escape(warning)}[/yellow]")
+            if job.schedule and _sync_job_schedule(ws_dir.name, job):
                 registered += 1
-            except (RuntimeError, ValueError) as e:   # ValueError: unsafe name (df-utq8)
-                rprint(f"[red]✗[/red] {rich_escape(ws_dir.name)}/{rich_escape(job.name)}: "
-                       f"{rich_escape(str(e))}")
 
     rprint(f"\n{registered} task(s) registered in Windows Task Scheduler.")
+
+
+def _sync_job_schedule(workspace: str, job) -> bool:
+    """schedule-sync for one scheduled job: register its Windows task unless its cron cannot be
+    expressed or its schedule is disabled. Prints the outcome; True when registered."""
+    label = f"{workspace}/{job.name}"
+    try:
+        _cron_to_ps_trigger(job.schedule)
+    except ValueError as e:
+        rprint(f"[yellow]skip[/yellow] {label}: {e}")
+        return False
+    if not _upsert_and_get_enabled(workspace, job.name, job.schedule):
+        rprint(f"[dim]skip (disabled)[/dim] {label}")
+        return False
+    try:
+        warning = _register_windows_task(workspace, job.name, job.schedule)
+    except (RuntimeError, ValueError) as e:   # ValueError: unsafe name (df-utq8)
+        rprint(f"[red]✗[/red] {rich_escape(workspace)}/{rich_escape(job.name)}: "
+               f"{rich_escape(str(e))}")
+        return False
+    rprint(f"[green]✓[/green] {label} [{job.schedule}]")
+    if warning:
+        rprint(f"[yellow]{rich_escape(warning)}[/yellow]")
+    return True
 
 
 @app.command("register-triggers")
@@ -851,9 +857,11 @@ def register_triggers(
         rprint(f"[red]Unknown trigger(s): {rich_escape(', '.join(unknown))}[/red]")
         raise typer.Exit(1)
     rprint(f"[dim]command: {rich_escape(' '.join(_dataforge_command()))}[/dim]")
-    results = [_register_one_trigger(workspace, t) for t in triggers
-               if not trigger or t.name in trigger]
-    if not all(results):
+    ok = True
+    for t in triggers:
+        if not trigger or t.name in trigger:
+            ok = _register_one_trigger(workspace, t) and ok
+    if not ok:
         raise typer.Exit(1)
 
 
