@@ -3,6 +3,7 @@ letters, digits, '-' and '_' (df-utq8). Before, a trigger named "x'; Start-Proce
 out of the PowerShell literal when the daemon registered it, and 'a;Start-Process calc' ran when
 the task fired on native Windows; the deploy reconciled triggers by file name with no check at all.
 """
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -67,8 +68,11 @@ def test_a_workspace_name_with_a_trailing_newline_is_invalid(tmp_path, monkeypat
     from dataforge.compat import resolve_workspace
     monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
     ws = tmp_path / "workspaces" / "Prod\n"
-    ws.mkdir(parents=True)
-    (ws / "workspace.yaml").write_text("name: Prod\n")   # exists on disk: only the name check stops it
+    # Exists on disk, so only the name check stops it. NTFS cannot hold a newline in a name; there
+    # the folder is left out and the message still tells the name check from 'not found'.
+    if sys.platform != "win32":
+        ws.mkdir(parents=True)
+        (ws / "workspace.yaml").write_text("name: Prod\n")
     with pytest.raises(ValueError, match="Invalid workspace name"):
         resolve_workspace("Prod\n")
 

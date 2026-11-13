@@ -16,7 +16,9 @@ _SCRIPTS = "target: Prod\npairs:\n  - {source: 'scripts/**', target: 'scripts/'}
 def _mk(ws: Path, rel: str, content: str) -> Path:
     p = ws / rel
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content)
+    # Bytes, not write_text: on Windows text mode writes CRLF and cp1252, so the fixture would not
+    # be the UTF-8/LF file the tests assume (deploy itself copies bytes as they are).
+    p.write_bytes(content.encode("utf-8"))
     return p
 
 
