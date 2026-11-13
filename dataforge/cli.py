@@ -999,7 +999,7 @@ def execucoes_logs(
     workspace: Optional[str] = typer.Option(None, "--workspace", "-w", help=_WORKSPACE_HELP),
     db: Optional[str] = typer.Option(None, "--db"),
 ):
-    """Exibe os logs de uma execução."""
+    """Exibe os logs de uma execução: a saída (stdout e stderr) que a tarefa gravou ao terminar."""
     from dataforge.db import init_db, ExecucaoORM
     from sqlalchemy.orm import Session
 
@@ -1017,15 +1017,14 @@ def execucoes_logs(
     if not row:
         rprint(f"[red]Execução #{execucao_id} não encontrada.[/red]")
         raise typer.Exit(1)
-
-    log_dir = workspace_path / "logs"
-    matches = list(log_dir.glob(f"execucao_{execucao_id}_*.log"))
-    if not matches:
-        rprint(f"[red]Log não encontrado para execução #{execucao_id}.[/red]")
+    if not row.output:
+        rprint(f"[yellow]Execução #{execucao_id} não tem saída gravada "
+               f"(status: {rich_escape(row.status)}).[/yellow]")
         raise typer.Exit(1)
 
-    rprint(f"[dim]--- {matches[0].name} ---[/dim]")
-    console.print(matches[0].read_text(encoding="utf-8", errors="replace"))
+    console.print(f"[dim]--- execução #{row.id} · {rich_escape(row.job)}/{rich_escape(row.task)}"
+                  f" · {rich_escape(row.status)} ---[/dim]", soft_wrap=True)
+    typer.echo(row.output.rstrip("\n"))   # as stored: not rich markup, not wrapped
 
 
 if __name__ == "__main__":
