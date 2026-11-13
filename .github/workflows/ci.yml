@@ -6,6 +6,13 @@ on:
   schedule:
     - cron: "0 6 * * 1"   # weekly, to catch breakage from new dependency releases
   workflow_dispatch:
+# One run at a time per ref (df-huj7). On main, runs queue instead of overlapping: SonarCloud refuses
+# an analysis of an older commit submitted after a newer one, which failed the sonar job when merges
+# landed seconds apart. A queued run that a newer push replaces is cancelled; the newer commit holds
+# its changes. A new push to a PR cancels that PR's run in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   leak-scan:
     runs-on: ubuntu-latest
