@@ -149,7 +149,7 @@ def load_real_values():
             for value, source in module.real_values(ws).items():
                 values.setdefault(value.lower(), (source, ws.name))
             allowed |= {a.lower() for a in module._allowed()}
-        except Exception as e:  # noqa: BLE001 -- any failure of a private guard must fail closed, not pass
+        except Exception as e:  # noqa: BLE001 -- any failure of a private guard must fail closed rather than pass
             failures.append(f"REAL-VALUES: {rel} could not run ({type(e).__name__}: {e}); nothing was checked against it")
     return {v: src for v, src in values.items() if v not in allowed}, failures
 
