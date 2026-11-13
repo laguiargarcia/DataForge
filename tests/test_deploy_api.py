@@ -233,6 +233,7 @@ def test_full_deploy_lifecycle(test_client, dataforge_home):
     assert test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={}).json()["applied"] is True
     status = test_client.get("/api/workspaces/Dev/deploy/to-prod/status").json()
     assert status["last"] is not None
+    assert status["last"]["status"] == "complete"   # df-ahua.5.1: "in_progress" when it died
     assert status["pending"] == 0
     assert test_client.post("/api/workspaces/Dev/deploy/to-prod/rollback").status_code == 200
     assert test_client.get("/api/workspaces/Dev/deploy/to-prod/status").json()["last"] is None
@@ -282,3 +283,17 @@ def test_rollback_returns_the_trigger_reconcile_warnings(test_client, dataforge_
     [warning] = r.json()["trigger_warnings"]
     assert "daily" in warning
     assert "access denied" in warning
+
+
+def test_status_shows_a_deploy_that_did_not_finish(test_client, dataforge_home):
+    # df-ahua.5.1: an apply killed mid-batch leaves its write-ahead entry in_progress.
+    from dataforge.deploy.ledger import Ledger
+    from dataforge.deploy.models import EntryStatus
+    _, prod = _setup(dataforge_home)
+    test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={})
+    led = Ledger(prod)
+    led.replace_last(led.last().model_copy(update={"status": EntryStatus.in_progress}))
+    last = test_client.get("/api/workspaces/Dev/deploy/to-prod/status").json()["last"]
+    assert last["status"] == "in_progress"
+    assert test_client.post("/api/workspaces/Dev/deploy/to-prod/rollback").json()["status"] == "in_progress"
+    assert not (prod / "scripts/a.py").exists()

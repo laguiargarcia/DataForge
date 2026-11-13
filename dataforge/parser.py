@@ -13,16 +13,18 @@ from .models import (
 )
 
 _DEFAULT_RETRY = RetryConfig().model_dump()  # {"attempts": 3, "delay_seconds": 30}
-_VALID_JOB_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
+# fullmatch, not ^...$ with match: '$' also matches before a trailing newline (df-ahua.23.1).
+_VALID_JOB_NAME = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def is_valid_job_name(name: str) -> bool:
-    """A job name must match ^[A-Za-z0-9_-]+$.
+    """A job name is made only of ASCII letters, digits, '-' and '_' (as compat.valid_name).
 
     The job name is a directory name (``jobs/<name>/``), so this is path-traversal
-    defense — it rejects ``../``, ``/``, spaces, and any other unsafe characters.
+    defense — it rejects ``../``, ``/``, spaces, a trailing newline and any other unsafe
+    characters.
     """
-    return bool(_VALID_JOB_NAME.match(name))
+    return bool(_VALID_JOB_NAME.fullmatch(name))
 
 
 def _compact_edge(edge: DependencyEdge):

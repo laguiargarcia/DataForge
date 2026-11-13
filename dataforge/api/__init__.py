@@ -11,6 +11,7 @@ from dataforge.db import init_db, JobRunORM
 from dataforge.api import broadcaster as _broadcaster_module
 from dataforge.apps import discover_apps
 from dataforge.compat import allowed_hosts, global_db_url
+from dataforge.orphans import reconcile_or_log
 from .routers import workspaces, jobs, executions, stream, triggers, deploy, apps, tables
 
 logger = logging.getLogger(__name__)
@@ -55,7 +56,9 @@ class HostOriginMiddleware:
 
 @asynccontextmanager
 async def lifespan(app):
-    """FastAPI lifespan: on startup, surface in-progress scheduled runs (SCHED-03 / D-10)."""
+    """FastAPI lifespan: on startup, fail the runs whose process provably died (df-bw7), then
+    surface the runs still in progress, e.g. scheduled runs in their own process (SCHED-03 / D-10)."""
+    reconcile_or_log()
     try:
         global_engine = init_db(global_db_url())
         with Session(global_engine) as session:

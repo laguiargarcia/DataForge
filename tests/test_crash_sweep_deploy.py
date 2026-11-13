@@ -6,7 +6,7 @@ import hashlib
 import shutil
 from pathlib import Path
 import pytest
-from dataforge.deploy.ledger import Ledger
+from dataforge.deploy.ledger import Ledger, is_temp_name
 from dataforge.deploy.models import LEDGER_REL
 from tests.crash_sweep import Step, WritePoints, crash_sweep
 from tests.deploy_crash_scenarios import deploy, rollback
@@ -20,9 +20,10 @@ _SOURCE = {"scripts/mod.py": _NEW["scripts/mod.py"], "scripts/new/add.py": _NEW[
 _OUTSIDE = b"outside both workspaces\n"
 _TARGETS = ("scripts/mod.py", "scripts/new/add.py", "scripts/gone.py")
 
-# What makes deploy state durable: the temp file and the ledger blobs (write_bytes), the swap
-# into place (os.replace), deletes (unlink, rmdir) and the deploy log, which the ledger writes
-# through open(): "a" appends an entry, "w" truncates it and rewrites all but the last.
+# What makes deploy state durable: the temp files of targets, blobs and the rewritten deploy log
+# (write_bytes), the swap into place (os.replace), deletes (unlink, rmdir) and the log append,
+# which the ledger writes through open(..., "ab"). Every other log write (completing the entry,
+# dropping the last one) rewrites the whole log through a temp file + os.replace.
 _LOG_OPEN = "dataforge.deploy.ledger.open"
 _POINTS = WritePoints(["pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink",
                        "pathlib.Path.rmdir", _LOG_OPEN],
@@ -102,8 +103,12 @@ def _outside(workdir: Path) -> str:
 
 
 def _bad_blobs(tgt: Path) -> str:
+    """Blobs (files named by a hash) whose content is not that hash. A temp file a killed blob
+    write left behind is not a blob: nothing addresses it, and the next write of that content
+    replaces it."""
     bad = [p.name[:8] for p in Ledger(tgt).objects.rglob("*")
-           if p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest() != p.name]
+           if p.is_file() and not is_temp_name(p.name)
+           and hashlib.sha256(p.read_bytes()).hexdigest() != p.name]
     return f"blobs whose content is not their name: {bad}" if bad else ""
 
 
@@ -123,15 +128,9 @@ def _rollback_restores(workdir: Path) -> str:
 
 
 def _redeploy_converges(workdir: Path) -> str:
-    """Deploying again reaches _NEW. Only when the crash left a .deploytmp is one failed deploy
-    tolerated: the next prune deploy then raises once (open question, df-ahua.5.5)."""
-    if _files(workdir / "Prod") == _tree(workdir / "Prod"):
-        deploy(workdir)
-    else:
-        try:
-            deploy(workdir)
-        except FileNotFoundError:
-            deploy(workdir)
+    """Deploying once more reaches _NEW, a leftover .deploytmp included: prune leaves it alone and
+    the write it belonged to replaces it (df-ahua.5.5)."""
+    deploy(workdir)
     return _differs(_tree(workdir / "Prod"), _NEW)
 
 
@@ -160,7 +159,7 @@ def test_apply_sweep_reaches_every_kind_of_write(apply_sweep):
 
 
 def test_apply_crash_leaves_each_target_old_or_new(apply_sweep):
-    # Promised by apply._atomic_write ("a failed write never leaves a half-written target") and
+    # Promised by ledger.atomic_write ("a failed write never leaves a half-written file") and
     # D16 ("atomic per-file writes").
     apply_sweep.assert_holds("atomic")
 
@@ -177,18 +176,14 @@ def test_redeploy_after_apply_crash_reaches_the_source_state(apply_sweep):
     apply_sweep.assert_holds("converges")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.2: a torn blob write stays under its hash name "
-                   "and Ledger.write_blob never rewrites it")
 def test_apply_crash_keeps_every_blob_true_to_its_hash(apply_sweep):
-    # Promised by Ledger ("content-addressed blob store"), law #4 (every overwrite/delete is
+    # df-ahua.5.2. Promised by Ledger ("content-addressed blob store"), law #4 (every overwrite/delete is
     # recoverable via the ledger) and D18 (rollback must not partially restore).
     apply_sweep.assert_holds("blobs")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.1: the ledger entry is appended only after the "
-                   "last write, so a killed apply has none and rollback undoes the deploy before it")
 def test_apply_crash_stays_rollback_recoverable(apply_sweep):
-    # Promised by apply_plan's docstring ("a partial apply stays rollback-recoverable", law #4)
+    # df-ahua.5.1. Promised by apply_plan's docstring ("a partial apply stays rollback-recoverable", law #4)
     # and D16 ("Crash-safe apply").
     apply_sweep.assert_holds("rollback")
 
@@ -216,14 +211,16 @@ def rollback_sweep(tmp_path_factory) -> _Findings:
 
 
 def test_rollback_sweep_reaches_every_kind_of_write(rollback_sweep):
-    assert {"pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink", "pathlib.Path.rmdir",
-            _LOG_OPEN} <= {s.point for s in rollback_sweep.steps}
+    # Rollback never appends to the log: it drops the entry with a whole-log rewrite, so it
+    # reaches no _LOG_OPEN.
+    assert {"pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink",
+            "pathlib.Path.rmdir"} <= {s.point for s in rollback_sweep.steps}
     dry = rollback_sweep.root / "dry/Prod"   # the uncrashed run did the whole rollback
     assert (_tree(dry), len(_log_ids(dry))) == (_OLD, 1)
 
 
 def test_rollback_crash_leaves_each_target_old_or_new(rollback_sweep):
-    # Promised by apply._atomic_write, which rollback restores through, and D18 ("must not ...
+    # Promised by ledger.atomic_write, which rollback restores through, and D18 ("must not ...
     # partially restore").
     rollback_sweep.assert_holds("atomic")
 
@@ -239,18 +236,14 @@ def test_rerunning_rollback_after_a_crash_restores_the_pre_deploy_state(rollback
     rollback_sweep.assert_holds("rerun")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.3: Ledger.drop_last truncates the log with "
-                   "open('w') before rewriting it, so a kill there loses every earlier entry")
 def test_rollback_crash_keeps_the_earlier_deploys_in_the_log(rollback_sweep):
-    # Ledger: "append-only deploy log"; rollback_last drops only the entry it undid (LIFO), and
+    # df-ahua.5.3. Ledger: "append-only deploy log"; rollback_last drops only the entry it undid (LIFO), and
     # law #4 needs the earlier entries to undo the earlier deploys.
     rollback_sweep.assert_holds("history")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.4: Ledger.entries parses every line, so a "
-                   "half-written last line makes every later apply and rollback raise")
 def test_a_torn_last_log_line_does_not_wedge_rollback_or_deploy(tmp_path):
-    # A crash or a full disk while Ledger.append writes can leave half a JSON line. D18: rollback
+    # df-ahua.5.4. A crash or a full disk while Ledger.append writes can leave half a JSON line. D18: rollback
     # "must not wedge"; D16: the laws hold under failure. The deploy after must still work. Not swept: the line is written by a
     # file object, which the sweep cannot cut, so the torn state is written here directly.
     workdir = _after_apply(tmp_path, "w")

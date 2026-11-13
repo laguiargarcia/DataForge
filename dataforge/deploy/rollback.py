@@ -1,7 +1,6 @@
 from pathlib import Path
 from .models import DeployEntry, Action
-from .ledger import Ledger
-from .apply import _atomic_write
+from .ledger import Ledger, atomic_write
 from .pairing import target_file
 
 
@@ -24,8 +23,11 @@ def rollback_last(target_dir: Path, ledger: Ledger) -> DeployEntry | None:
     """Undo the most recent deploy: ADDs are removed (and any directories they leave empty are
     pruned), MODIFY/DELETE are restored from the snapshotted 'before' blob, then the entry is
     dropped (LIFO). Pre-flights that every needed snapshot blob exists, so a missing blob aborts
-    before any file is touched (never a partial restore). Returns the rolled-back entry, or None
-    if the log was empty."""
+    before any file is touched (never a partial restore). An unfinished (in_progress) entry left
+    by an apply that died is undone the same way: each of its targets holds either its old or its
+    new content, and restoring the old content, or removing an ADD that is not there, is a no-op
+    on a target the apply never reached (df-ahua.5.1). Returns the rolled-back entry, or None if
+    the log was empty."""
     entry = ledger.last()
     if entry is None:
         return None
@@ -43,7 +45,7 @@ def rollback_last(target_dir: Path, ledger: Ledger) -> DeployEntry | None:
                 tgt.unlink()
             emptied.add(tgt.parent)
         elif item.before_sha:   # MODIFY or DELETE — restore snapshot
-            _atomic_write(tgt, ledger.read_blob(item.before_sha))   # replaces a link, never follows it
+            atomic_write(tgt, ledger.read_blob(item.before_sha))   # replaces a link, never follows it
     # Prune dirs the removed ADDs left empty — deepest first so nested children clear before
     # their parents are tested. Stops at any dir that still holds a file (e.g. a restored MODIFY).
     for d in sorted(emptied, key=lambda p: len(p.parts), reverse=True):

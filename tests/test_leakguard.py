@@ -6,6 +6,7 @@ passes over it like any other committed file.
 
 import os
 import re
+import subprocess
 
 import pytest
 
@@ -23,6 +24,9 @@ def repo(tmp_path, monkeypatch):
     """Run the guard from a scratch repo root, with one made-up owner name pattern."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(leakguard, "NAME_PATTERNS", [re.compile(r"fulano\s+de\s+tal", re.IGNORECASE)])
+    monkeypatch.setattr(leakguard, "WORKSPACES", tmp_path / "workspaces")   # no private guard unless a test adds one
+    monkeypatch.setattr(leakguard, "MAIN_ROOT", tmp_path)   # no .leakguard-workspaces unless a test writes one
+    monkeypatch.setattr(leakguard, "MAIN_ROOT_ERROR", None)
 
     def write(rel, text):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +124,7 @@ def test_bytes_that_are_not_utf8_do_not_hide_the_rest_of_the_file(repo, capsys, 
 @pytest.fixture
 def guard_home(tmp_path, monkeypatch):
     """Point the guard at a scratch repo root (its .leakguard-local lives there) with no env."""
-    monkeypatch.setattr(leakguard, "__file__", str(tmp_path / "scripts" / "leakguard.py"))
+    monkeypatch.setattr(leakguard, "MAIN_ROOT", tmp_path)
     monkeypatch.delenv("LEAKGUARD_NAME_PATTERNS", raising=False)
     return tmp_path
 
@@ -145,3 +149,234 @@ def test_local_file_adds_one_pattern_per_line_skipping_comments_and_blanks(guard
                                                  encoding="utf-8")
     found = names(leakguard._load_owner_name_patterns(), "Fulano, Ciclano, #beltrano")
     assert found == ["Fulano", "Ciclano"]
+
+
+# ---------------------------------------------------------------- real values from a private workspace (df-k37o)
+
+REAL_ACCOUNT = "98765" + "-4321"
+REAL_OWNER = "fulana" + " verdadeira"
+PUBLIC_BANK = "banco" + " publico s.a."
+
+PRIVATE_GUARD = f"""
+from pathlib import Path
+def real_values(workspace: Path):
+    assert (workspace / "tools" / "leakguard.py").is_file()
+    return {{"{REAL_ACCOUNT}": "raw.accounts.number", "{REAL_OWNER}": "raw.accounts.owner",
+            "{PUBLIC_BANK}": "raw.transactions.paymentData", "": "raw.x", "ab": "raw.y", 12345678: "raw.z"}}
+def allowed():
+    return {{"{PUBLIC_BANK}"}}
+def real_value_hits(text, values):
+    return sorted((n, v, s) for n, line in enumerate(text.lower().splitlines(), start=1)
+                  for v, s in values.items() if v in line)
+"""
+
+
+def _guard(values: dict, allow=()) -> str:
+    """A private guard with its own values and allow-list."""
+    return f"""
+def real_values(workspace):
+    return {values!r}
+def allowed():
+    return {set(allow)!r}
+def real_value_hits(text, values):
+    return sorted((n, v, s) for n, line in enumerate(text.lower().splitlines(), start=1)
+                  for v, s in values.items() if v in line)
+"""
+
+
+@pytest.fixture
+def private_guard(repo):
+    """A private workspace that ships tools/leakguard.py with made-up 'real' values."""
+    repo("workspaces/Priv/tools/leakguard.py", PRIVATE_GUARD)
+    return repo
+
+
+def test_a_real_value_from_a_private_workspace_fails_without_being_echoed(private_guard, capsys):
+    rel = private_guard("workspaces/Show/scripts/x.py", f"# e.g. '{REAL_ACCOUNT.upper()}' -> '4321'\n")
+    code, _, failures = run(capsys, rel)
+    assert code == 1
+    assert failures == [f"  REAL: {rel}:1 -> '98…' ({len(REAL_ACCOUNT)} chars, raw.accounts.number from Priv)"]
+    assert REAL_ACCOUNT not in "".join(failures)
+
+
+def test_the_owner_name_is_attribution_in_license_and_readme_but_nothing_else_is(private_guard, capsys):
+    lic = private_guard("LICENSE", f"Copyright (c) 2026 {REAL_OWNER}\n")
+    readme = private_guard("README.md", f"by {REAL_OWNER}, account {REAL_ACCOUNT}\n")
+    other = private_guard("notes.md", f"{REAL_OWNER}\n")
+    code, _, failures = run(capsys, lic, readme, other)
+    assert code == 1
+    assert [f.split(" -> ")[0] for f in failures] == ["  REAL: README.md:1", "  REAL: notes.md:1"]
+    assert "raw.accounts.number" in failures[0]
+
+
+def test_the_owner_exemption_does_not_depend_on_which_source_came_first(repo, capsys):
+    """D3: the owner's name may also be a counterparty somewhere; it is still attribution in LICENSE."""
+    repo("workspaces/A/tools/leakguard.py", _guard({REAL_OWNER: "raw.transactions.paymentData"}))
+    repo("workspaces/B/tools/leakguard.py", _guard({REAL_OWNER: "raw.accounts.owner"}))
+    code, _, failures = run(capsys, repo("LICENSE", f"(c) {REAL_OWNER}\n"))
+    assert (code, failures) == (0, [])
+
+
+def test_one_workspace_allowing_a_value_does_not_unblock_it_in_another(repo, capsys):
+    """D4: an allow-list filters only its own workspace's values."""
+    repo("workspaces/A/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.x"}, allow=[REAL_ACCOUNT]))
+    repo("workspaces/B/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.accounts.number"}))
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 1
+    assert [f.endswith("from B)") for f in failures] == [True]
+
+
+def test_empty_short_and_non_string_values_from_a_private_guard_are_dropped(private_guard, capsys):
+    """D9: '' would match every line, a 2-character value would be shown whole by the mask."""
+    code, _, failures = run(capsys, private_guard("a.py", "ab cd 12345678\n"))
+    assert (code, failures) == (0, [])
+
+
+def test_a_value_the_private_workspace_allows_passes(private_guard, capsys):
+    code, _, _ = run(capsys, private_guard("a.py", f"issuer = '{PUBLIC_BANK.upper()}'\n"))
+    assert code == 0
+
+
+def test_a_private_guard_that_cannot_run_fails_the_check(repo, capsys):
+    repo("workspaces/Priv/tools/leakguard.py", "import a_module_that_is_not_installed\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert len(failures) == 1
+    assert failures[0].startswith("  REAL-VALUES: workspaces/Priv/tools/leakguard.py could not run")
+
+
+def test_a_private_guard_without_the_public_api_fails_the_check(repo, capsys):
+    repo("workspaces/Priv/tools/leakguard.py", "def real_values(ws):\n    return {}\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert "AttributeError" in failures[0]
+
+
+def test_a_worktree_without_its_main_checkout_fails_the_check(repo, capsys, monkeypatch):
+    """D2: without the main checkout the private workspaces are not there; that must not pass."""
+    monkeypatch.setattr(leakguard, "MAIN_ROOT_ERROR", "this is a worktree and its main checkout could not be found")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert failures == ["  REAL-VALUES: this is a worktree and its main checkout could not be found"]
+
+
+def test_without_a_private_guard_there_is_no_real_value_check(repo, capsys):
+    code, out, _ = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 0
+    assert out.strip() == "leak guard: 1 file(s) clean"
+
+
+@pytest.fixture
+def clean_git(tmp_path, monkeypatch):
+    """D5: no inherited GIT_* (a git hook exports them) and no repo above tmp_path."""
+    for name in [n for n in os.environ if n.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+    return lambda *args, cwd: subprocess.run([*git, *args], cwd=cwd, check=True, capture_output=True)
+
+
+def test_from_a_worktree_the_main_checkout_is_found(tmp_path, clean_git):
+    """D1: commits are made from worktrees, where gitignored files (private workspaces,
+    .leakguard-local) do not exist."""
+    main = tmp_path / "main"
+    main.mkdir()
+    (main / "README.md").write_text("x\n", encoding="utf-8")
+    clean_git("init", "-q", cwd=main)
+    clean_git("add", "-A", cwd=main)
+    clean_git("commit", "-qm", "init", cwd=main)
+    wt = tmp_path / "wt"
+    clean_git("worktree", "add", "-q", str(wt), cwd=main)
+    assert leakguard._main_checkout(wt)[0].resolve() == main.resolve()
+    assert leakguard._main_checkout(wt)[1] is None
+    assert leakguard._main_checkout(main)[0].resolve() == main.resolve()
+
+
+def test_a_worktree_whose_main_checkout_is_gone_is_an_error(tmp_path, clean_git):
+    wt = tmp_path / "wt"
+    wt.mkdir()
+    (wt / ".git").write_text("gitdir: /nonexistent/main/.git/worktrees/wt\n", encoding="utf-8")
+    root, error = leakguard._main_checkout(wt)
+    assert root == wt
+    assert error == ("this is a worktree and its main checkout could not be found, so the private "
+                     "workspaces and .leakguard-local were not checked")
+
+
+def test_outside_a_git_repo_the_root_is_local_and_not_an_error(tmp_path, clean_git):
+    assert leakguard._main_checkout(tmp_path) == (tmp_path, None)
+
+
+def test_leakguard_local_is_read_from_the_main_checkout(guard_home):
+    (guard_home / ".leakguard-local").write_text("fulano\n", encoding="utf-8")
+    assert names(leakguard._load_owner_name_patterns(), "Fulano") == ["Fulano"]
+
+
+def test_a_value_of_exactly_the_minimum_length_is_kept(repo, capsys):
+    six = "ab" + "c123"
+    repo("workspaces/A/tools/leakguard.py", _guard({six: "raw.x", six[:5]: "raw.y"}))
+    code, _, failures = run(capsys, repo("a.py", f"x = '{six}'\n"))
+    assert code == 1
+    assert [f.split(" -> ")[1][:4] for f in failures] == ["'ab…"]
+
+
+def test_a_failing_private_guard_does_not_stop_the_others(repo, capsys):
+    repo("workspaces/A/tools/leakguard.py", "import a_module_that_is_not_installed\n")
+    repo("workspaces/B/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.accounts.number"}))
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 1
+    assert failures[0].startswith("  REAL-VALUES: workspaces/A/tools/leakguard.py could not run")
+    assert failures[1].endswith("raw.accounts.number from B)")
+
+
+# ------------------------------------------- private workspaces outside the checkout (df-b86q)
+
+
+def _outside(tmp_path, name, text):
+    """A private workspace in a directory that is not under the repo root (like C: seen from ext4)."""
+    ws = tmp_path.parent / f"{tmp_path.name}-outside" / name
+    (ws / "tools").mkdir(parents=True, exist_ok=True)
+    (ws / "tools" / "leakguard.py").write_text(text, encoding="utf-8")
+    return ws
+
+
+def test_a_listed_workspace_outside_the_checkout_is_checked(repo, capsys, tmp_path):
+    ws = _outside(tmp_path, "Real", _guard({REAL_ACCOUNT: "raw.accounts.number"}))
+    repo(".leakguard-workspaces", f"# the real workspace stays on the Windows drive\n\n  {ws}  \n")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 1
+    assert failures == [f"  REAL: a.py:1 -> '98…' ({len(REAL_ACCOUNT)} chars, raw.accounts.number from Real)"]
+
+
+def test_a_listed_entry_may_be_relative_to_the_root_or_start_with_a_tilde(repo, capsys, tmp_path, monkeypatch):
+    home = str(_outside(tmp_path, "Ws", _guard({REAL_OWNER: "raw.b"})).parent)
+    monkeypatch.setenv("HOME", home)
+    monkeypatch.setenv("USERPROFILE", home)   # what expanduser reads on Windows
+    repo("rel/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.c"}))
+    repo(".leakguard-workspaces", "rel\n~/Ws\n")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\ny = '{REAL_OWNER}'\n"))
+    assert code == 1
+    assert [f.rsplit(" from ", 1)[1] for f in failures] == ["rel)", "Ws)"]
+
+
+def test_a_listed_directory_without_a_guard_fails_closed(repo, capsys, tmp_path):
+    repo(".leakguard-workspaces", f"{tmp_path / 'gone'}\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert failures == [f"  REAL-VALUES: {tmp_path / 'gone'} (listed in .leakguard-workspaces) has no "
+                        "tools/leakguard.py; nothing was checked against it"]
+
+
+def test_a_workspace_both_in_the_tree_and_listed_is_checked_once(repo, capsys):
+    repo("workspaces/A/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.accounts.number"}))
+    repo(".leakguard-workspaces", "workspaces/A\n")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 1
+    assert len(failures) == 1
+
+
+def test_a_listed_guard_that_cannot_run_is_named_by_its_full_path(repo, capsys, tmp_path):
+    ws = _outside(tmp_path, "Broken", "import a_module_that_is_not_installed\n")
+    repo(".leakguard-workspaces", f"{ws}\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert failures[0].startswith(f"  REAL-VALUES: {(ws / 'tools' / 'leakguard.py').as_posix()} could not run")

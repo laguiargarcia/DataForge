@@ -3,8 +3,7 @@ from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
 import threading
 
-
-_EXECUCOES_COLUMNS_SQL = "PRAGMA table_info(execucoes)"
+from .liveness import current_owner_text
 
 
 def utcnow() -> datetime:
@@ -32,6 +31,8 @@ class ExecucaoORM(Base):
     output = Column(Text, nullable=True)
     run_id = Column(String, nullable=True)
     owner_id = Column(String, nullable=False, default="system")
+    # The process that wrote the row (dataforge.liveness.Owner as JSON); NULL on older rows.
+    owner_process = Column(Text, nullable=True, default=current_owner_text)
 
 
 class JobRunORM(Base):
@@ -46,6 +47,10 @@ class JobRunORM(Base):
     owner_id = Column(String, nullable=False, default="system")
     # "manual" for CLI/GUI runs, or the trigger name for OS-scheduled runs
     trigger = Column(String, nullable=True)
+    # The process that runs it (dataforge.liveness.Owner as JSON); NULL on older rows.
+    owner_process = Column(Text, nullable=True, default=current_owner_text)
+    # Why the run ended as it did, when the status alone does not say (an interrupted run).
+    reason = Column(Text, nullable=True)
 
 
 class ScheduleORM(Base):
@@ -67,6 +72,24 @@ class ScheduleORM(Base):
 _SCHEMA_LOCK = threading.Lock()
 
 
+# Columns added after a table was first released, in the order they came: init_db adds each one an
+# older database lacks (SQLite has no ALTER TABLE ... ADD COLUMN IF NOT EXISTS). Whole statements,
+# not formatted ones: nothing here is ever built from a value.
+_ADDED_COLUMNS = {
+    "PRAGMA table_info(execucoes)": [
+        ("owner_id", "ALTER TABLE execucoes ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'system'"),
+        ("output", "ALTER TABLE execucoes ADD COLUMN output TEXT"),
+        ("run_id", "ALTER TABLE execucoes ADD COLUMN run_id TEXT"),
+        ("owner_process", "ALTER TABLE execucoes ADD COLUMN owner_process TEXT"),
+    ],
+    "PRAGMA table_info(job_runs)": [
+        ("trigger", "ALTER TABLE job_runs ADD COLUMN trigger TEXT"),
+        ("owner_process", "ALTER TABLE job_runs ADD COLUMN owner_process TEXT"),
+        ("reason", "ALTER TABLE job_runs ADD COLUMN reason TEXT"),
+    ],
+}
+
+
 def init_db(db_url: str):
     engine = create_engine(db_url)
     with _SCHEMA_LOCK:
@@ -77,32 +100,10 @@ def init_db(db_url: str):
 def _create_schema(engine) -> None:
     Base.metadata.create_all(engine)
 
-    # Idempotent owner_id migration — SQLite has no ALTER TABLE ... ADD COLUMN IF NOT EXISTS
     with engine.connect() as conn:
-        result = conn.execute(text(_EXECUCOES_COLUMNS_SQL))
-        columns = [row[1] for row in result.fetchall()]
-        if "owner_id" not in columns:
-            conn.execute(
-                text(
-                    "ALTER TABLE execucoes ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'system'"
-                )
-            )
-            conn.commit()
-
-        result = conn.execute(text(_EXECUCOES_COLUMNS_SQL))
-        columns = [row[1] for row in result.fetchall()]
-        if "output" not in columns:
-            conn.execute(text("ALTER TABLE execucoes ADD COLUMN output TEXT"))
-            conn.commit()
-
-        result = conn.execute(text(_EXECUCOES_COLUMNS_SQL))
-        columns = [row[1] for row in result.fetchall()]
-        if "run_id" not in columns:
-            conn.execute(text("ALTER TABLE execucoes ADD COLUMN run_id TEXT"))
-            conn.commit()
-
-        result = conn.execute(text("PRAGMA table_info(job_runs)"))
-        columns = [row[1] for row in result.fetchall()]
-        if "trigger" not in columns:
-            conn.execute(text("ALTER TABLE job_runs ADD COLUMN trigger TEXT"))
-            conn.commit()
+        for table_info, added in _ADDED_COLUMNS.items():
+            present = {row[1] for row in conn.execute(text(table_info))}
+            for name, alter in added:
+                if name not in present:
+                    conn.execute(text(alter))
+                    conn.commit()

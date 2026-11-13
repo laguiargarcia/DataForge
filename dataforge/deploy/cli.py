@@ -11,7 +11,7 @@ from rich.markup import escape as rich_escape
 from dataforge.compat import api_port
 from dataforge.deploy import service
 from dataforge.deploy.service import DeployServiceError
-from dataforge.deploy.models import DeployPlan, Action, PipelineModel
+from dataforge.deploy.models import DeployEntry, DeployPlan, Action, EntryStatus, PipelineModel
 
 deploy_app = typer.Typer(help="Deploy workspace definitions from one workspace to another")
 console = Console()
@@ -55,6 +55,13 @@ _ACTION_STYLE = {
     Action.protected: "magenta",
     Action.skip_ignored: "dim",
 }
+
+
+def _unfinished(entry: DeployEntry) -> str:
+    """The note shown after an entry whose apply did not finish (df-ahua.5.1), else ''."""
+    if entry.status == EntryStatus.in_progress:
+        return " [yellow](not finished: the deploy stopped part-way; roll back or deploy again)[/yellow]"
+    return ""
 
 
 def _resolve(workspace: Optional[str], pipeline_name: str) -> Tuple[Path, PipelineModel, Path]:
@@ -140,7 +147,7 @@ def rollback(
     # The ledger is per-target, addressed here via the pipeline's target. Show full provenance
     # so a retargeted pipeline can't silently roll back a workspace the operator didn't expect.
     rprint(f"Last deploy on '{target_dir.name}': {last.source} -> {last.target} "
-           f"\\[{last.pipeline}]  {last.id} — {len(last.items)} change(s)")
+           f"\\[{last.pipeline}]  {last.id} — {len(last.items)} change(s){_unfinished(last)}")
     if not yes:
         typer.confirm("Roll back this deploy?", abort=True)
     try:
@@ -163,7 +170,8 @@ def status(
     if last is None:
         rprint("[dim]No deploys recorded.[/dim]")
     else:
-        rprint(f"Last deploy: [cyan]{last.id}[/cyan] at {last.ts} — {len(last.items)} change(s)")
+        rprint(f"Last deploy: [cyan]{last.id}[/cyan] at {last.ts} — {len(last.items)} change(s)"
+               f"{_unfinished(last)}")
     pending = len(_build(source_dir, pipeline_model, pipeline, target_dir).writable())
     rprint(f"Pending: [yellow]{pending}[/yellow] change(s)" if pending else "[green]Up to date.[/green]")
 

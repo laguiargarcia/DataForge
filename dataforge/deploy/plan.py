@@ -5,6 +5,7 @@ import yaml
 from pydantic import TypeAdapter, ValidationError
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
+from .ledger import is_temp_name
 from .pairing import (check_folder_inside, check_target_inside, normalize_target, source_equivalents,
                       target_file, windows_unsafe)
 
@@ -246,6 +247,8 @@ def _prune_item(p: Path, rel: str, ignore: DeployIgnore, sources: list[str]) -> 
     `sources` are the source paths the pair rules map onto `rel` (pairing.source_equivalents), so
     .deployignore and the trigger rule look at both sides, as on add/modify (df-94s, df-7pl)."""
     if _is_ledger_path(rel):   # law #4
+        return None
+    if is_temp_name(rel):   # the temp file of a killed apply is not a definition (df-ahua.5.5)
         return None
     if any(ignore.matches_any_case(r) for r in (rel, *sources)):   # law #3 (df-886.18, df-94s)
         return None

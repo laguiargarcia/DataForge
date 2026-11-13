@@ -90,7 +90,9 @@ def format_provenance(entry: dict) -> str:
         f"[{entry.get('pipeline', '?')}] {entry.get('id', '?')}"
     )
     ts = entry.get("ts", "")
-    return f"{base} ({ts})" if ts else base
+    base = f"{base} ({ts})" if ts else base
+    # df-ahua.5.1: an apply that died leaves its entry in_progress; rollback undoes it as it stands
+    return base + " — not finished" if entry.get("status") == "in_progress" else base
 
 
 # ---------------------------------------------------------------------------

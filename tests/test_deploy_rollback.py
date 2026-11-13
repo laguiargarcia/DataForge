@@ -121,3 +121,43 @@ def test_rollback_refuses_a_ledger_path_outside_the_target(tmp_path, hostile, ac
         rollback_last(tgt, led)
     assert (tmp_path / "escaped.txt").read_text() == "precious"
     assert led.last() is not None   # entry kept: nothing was rolled back
+
+
+# --- df-ahua.5.1: an unfinished entry (an apply that died) is undone as it stands ---
+
+def test_rollback_of_an_unfinished_entry_the_apply_never_reached_changes_nothing(tmp_path):
+    from dataforge.deploy.models import Action, DeployEntry, EntryStatus, ItemChange, Kind
+    tgt = tmp_path / "Prod"
+    _mk(tgt, "scripts/a.py", "old\n")
+    _mk(tgt, "scripts/gone.py", "gone\n")
+    led = Ledger(tgt)
+    led.append(DeployEntry(id="dpl_1", ts="t", source="Dev", target="Prod", pipeline="p"))
+
+    def item(rel, action, before):
+        return ItemChange(source_path=rel, target_path=rel, kind=Kind.script, action=action,
+                          before_sha=before)
+
+    led.append(DeployEntry(id="dpl_2", ts="t", source="Dev", target="Prod", pipeline="p",
+                           status=EntryStatus.in_progress, items=[
+        item("scripts/a.py", Action.modify, led.write_blob(b"old\n")),
+        item("scripts/new/b.py", Action.add, None),
+        item("scripts/gone.py", Action.delete, led.write_blob(b"gone\n"))]))
+    assert rollback_last(tgt, led).id == "dpl_2"
+    assert sorted(p.relative_to(tgt).as_posix() for p in (tgt / "scripts").rglob("*")) == [
+        "scripts/a.py", "scripts/gone.py"]
+    assert (tgt / "scripts/a.py").read_text() == "old\n"
+    assert [e.id for e in led.entries()] == ["dpl_1"]
+
+
+def test_rollback_reads_an_entry_written_before_entries_had_a_status(tmp_path):
+    tgt = tmp_path / "Prod"
+    _mk(tgt, "scripts/a.py", "new\n")
+    led = Ledger(tgt)
+    snap = led.write_blob(b"old\n")
+    led.log.write_bytes(('{"id":"dpl_old","ts":"t","source":"Dev","target":"Prod","pipeline":"p",'
+                         '"parent":null,"items":[{"source_path":"scripts/a.py","target_path":'
+                         '"scripts/a.py","kind":"script","action":"MODIFY","reason":"",'
+                         f'"before_sha":"{snap}","after_sha":null}}]}}\n').encode())
+    assert rollback_last(tgt, led).id == "dpl_old"
+    assert (tgt / "scripts/a.py").read_text() == "old\n"
+    assert led.entries() == []
