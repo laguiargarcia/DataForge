@@ -4,7 +4,6 @@ as the same model, stay compact (no key a reader would not miss) and keep their 
 import tempfile
 from pathlib import Path
 
-import pytest
 import yaml
 from hypothesis import example, given, strategies as st
 from pydantic import ValidationError
@@ -192,13 +191,18 @@ _SAFE = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
 @given(st.text(min_size=1, max_size=6).filter(lambda s: not set(s) <= _SAFE))
 @example("../evil")
 @example("a b")
+@example("etl\n")
+@example("etl\r\n")
+@example("\netl")
+@example("C:etl")
+@example("relatório")
+@example("ｅｔｌ")
 def test_a_job_name_with_any_other_character_is_invalid(name):
     """The job name is a directory name: one character outside [A-Za-z0-9_-] makes it invalid."""
     assert is_valid_job_name(name) is False
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="df-ahua.23.1: '$' in re.match accepts a trailing newline")
 def test_a_trailing_newline_makes_a_job_name_invalid():
-    """'etl\\n' is not a safe directory name; compat.valid_name already refuses it (df-utq8)."""
+    """'etl\\n' is not a safe directory name: a newline at the end is refused like anywhere else (df-ahua.23.1)."""
     assert is_valid_job_name("etl\n") is False
+    assert is_valid_job_name("etl") is True

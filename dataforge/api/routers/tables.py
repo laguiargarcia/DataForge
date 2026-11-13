@@ -10,7 +10,9 @@ from dataforge.compat import curated_dir, resolve_workspace
 
 router = APIRouter()
 
-_TABLE_NAME = re.compile(r"^[A-Za-z0-9_]+$")
+# fullmatch, not ^...$ with match: '$' also matches before a trailing newline (df-ahua.23.1).
+# re.ASCII keeps \w to [A-Za-z0-9_]; without it 'relatório' would pass.
+_TABLE_NAME = re.compile(r"\w+", re.ASCII)
 _MAX_LIMIT = 100000
 _NOT_FOUND = "Not found"
 
@@ -48,7 +50,7 @@ def read_table(
         ws_path = resolve_workspace(ws)
     except ValueError:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
-    if not _TABLE_NAME.match(table):
+    if not _TABLE_NAME.fullmatch(table):
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
     table_path = curated_dir(ws_path) / table
     if not (table_path / "_delta_log").is_dir():
