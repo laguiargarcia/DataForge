@@ -164,6 +164,18 @@ class Panel(QWidget):
             f"/api/workspaces/{self._current_workspace}/deploy"
         )
 
+    def _show_trigger_warnings(self, raw: str) -> None:
+        """Show a deploy's trigger-schedule warnings: the files landed, but the OS scheduler did
+        not take a trigger, so it will not run on schedule (df-vo3x.6)."""
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            return
+        warnings = body.get("trigger_warnings") if isinstance(body, dict) else None
+        if warnings:
+            QMessageBox.warning(self, "Deployed — schedule needs attention",
+                                "\n\n".join(str(w) for w in warnings))
+
     def _show_error(self, status, raw: str) -> None:
         try:
             detail = json.loads(raw).get("detail", raw)
@@ -340,6 +352,7 @@ class Panel(QWidget):
                 self, "Nothing deployed",
                 "No changes were applied (selected items may be protected or ignored).",
             )
+        self._show_trigger_warnings(raw)
         # Re-sync the diff + status with server truth after any apply attempt — even when nothing
         # was applied, the plan may have drifted, so always re-fetch.
         self._load_plan()
@@ -414,5 +427,6 @@ class Panel(QWidget):
         if status is None or status >= 400:
             self._show_error(status, raw)
             return
+        self._show_trigger_warnings(raw)
         self._load_plan()
         self._load_status()

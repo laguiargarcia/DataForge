@@ -102,7 +102,8 @@ def test_apply_nothing_selected(test_client, dataforge_home):
     r = test_client.post("/api/workspaces/Dev/deploy/to-prod/apply",
                          json={"only": ["scripts/does-not-exist.py"]})
     assert r.status_code == 200
-    assert r.json() == {"applied": False, "entry": None, "reconciled_triggers": []}
+    assert r.json() == {"applied": False, "entry": None, "reconciled_triggers": [],
+                        "trigger_warnings": []}
     assert not (prod / "scripts/a.py").exists()  # nothing selected → nothing written
 
 
@@ -235,3 +236,49 @@ def test_full_deploy_lifecycle(test_client, dataforge_home):
     assert status["pending"] == 0
     assert test_client.post("/api/workspaces/Dev/deploy/to-prod/rollback").status_code == 200
     assert test_client.get("/api/workspaces/Dev/deploy/to-prod/status").json()["last"] is None
+
+
+def _deploy_one_trigger(home):
+    """Dev changes the cron of a trigger that is active in Prod: the deploy MODIFYs it and the
+    reconcile registers it again."""
+    dev = _ws(home, "Dev")
+    _mk(_ws(home, "Prod"), "triggers/daily.yaml",
+        "name: daily\ncron: '0 5 * * *'\nenabled: true\njobs: []\n")
+    _mk(dev, "triggers/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
+    _mk(dev, "deploy/to-prod.yaml",
+        "target: Prod\npairs:\n  - {source: 'triggers/**', target: 'triggers/'}\n")
+
+
+def test_apply_returns_the_trigger_reconcile_warnings(test_client, dataforge_home):
+    """The files are deployed; a trigger the OS scheduler did not take is reported, not dropped
+    (df-vo3x.6)."""
+    from dataforge.api.routers import triggers
+    _deploy_one_trigger(dataforge_home)
+    triggers._platform_register_trigger.side_effect = RuntimeError("access denied")
+    r = test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={})
+    assert r.status_code == 200
+    assert r.json()["applied"] is True
+    [warning] = r.json()["trigger_warnings"]
+    assert "daily" in warning
+    assert "access denied" in warning
+
+
+def test_apply_without_trigger_problems_has_no_warnings(test_client, dataforge_home):
+    from dataforge.api.routers import triggers
+    triggers._platform_register_trigger.return_value = None   # registered, nothing to report
+    _deploy_one_trigger(dataforge_home)
+    r = test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={})
+    assert r.json()["trigger_warnings"] == []
+
+
+def test_rollback_returns_the_trigger_reconcile_warnings(test_client, dataforge_home):
+    from dataforge.api.routers import triggers
+    _deploy_one_trigger(dataforge_home)
+    test_client.post("/api/workspaces/Dev/deploy/to-prod/apply", json={})
+    triggers._platform_register_trigger.side_effect = RuntimeError("access denied")
+    r = test_client.post("/api/workspaces/Dev/deploy/to-prod/rollback")
+    assert r.status_code == 200
+    assert "0 5 * * *" in (_ws(dataforge_home, "Prod") / "triggers/daily.yaml").read_text()
+    [warning] = r.json()["trigger_warnings"]
+    assert "daily" in warning
+    assert "access denied" in warning

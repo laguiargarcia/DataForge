@@ -11,15 +11,18 @@ from dataforge.api.routers.triggers import reconcile_os_trigger
 router = APIRouter()
 
 
-def _reconcile_triggers(target_ws: str, entry) -> list:
+def _reconcile_triggers(target_ws: str, entry) -> tuple[list, list]:
     """After a deploy/rollback, re-sync the OS schedule for every trigger the entry touched — the
     daemon is the single OS-task writer. Best-effort: a registration warning is surfaced, not raised
-    (the files are already deployed). Returns the list of reconciled trigger names."""
-    done = []
+    (the files are already deployed). Returns the reconciled trigger names and the warnings, each
+    naming its trigger (df-vo3x.6: they used to be dropped)."""
+    done, warnings = [], []
     for name in service.trigger_names(entry):
-        reconcile_os_trigger(target_ws, name)
+        warning = reconcile_os_trigger(target_ws, name)
+        if warning:
+            warnings.append(f"trigger '{name}': {warning}")
         done.append(name)
-    return done
+    return done, warnings
 
 
 class ApplyRequest(BaseModel):
@@ -74,9 +77,9 @@ def apply_pipeline(ws: str, pipeline: str, body: Optional[ApplyRequest] = None):
     plan = _build_or_http(source_dir, pipeline_model, pipeline, target_dir)
     only = set(body.only) if (body is not None and body.only is not None) else None
     entry = service.apply(source_dir, target_dir, plan, only)
-    reconciled = _reconcile_triggers(pipeline_model.target, entry)
+    reconciled, warnings = _reconcile_triggers(pipeline_model.target, entry)
     return {"applied": entry is not None, "entry": entry.model_dump() if entry else None,
-            "reconciled_triggers": reconciled}
+            "reconciled_triggers": reconciled, "trigger_warnings": warnings}
 
 
 @router.post("/{ws}/deploy/{pipeline}/rollback")
@@ -90,5 +93,5 @@ def rollback_pipeline(ws: str, pipeline: str):
         raise HTTPException(status_code=500, detail=str(e))
     if entry is None:
         raise HTTPException(status_code=409, detail="No deploy to roll back")
-    _reconcile_triggers(entry.target, entry)
-    return entry.model_dump()
+    _, warnings = _reconcile_triggers(entry.target, entry)
+    return {**entry.model_dump(), "trigger_warnings": warnings}
