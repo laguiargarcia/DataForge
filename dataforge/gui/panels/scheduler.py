@@ -12,6 +12,7 @@ from dataforge.db import utcnow
 
 from PySide6.QtCore import QByteArray, QDate, QUrl
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+from shiboken6 import isValid
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -444,6 +445,16 @@ _VALUE_WIDGETS = {
 }
 
 
+def _row_of(table: QTableWidget, widget: QWidget, column: int) -> int:
+    """The row whose *column* cell holds *widget* now; -1 once that row is gone. Row widgets look
+    their row up when they fire, because removing a row shifts every row below it (df-r3x8)."""
+    if isValid(widget):
+        for row in range(table.rowCount()):
+            if table.cellWidget(row, column) is widget:
+                return row
+    return -1
+
+
 def _fill_workspace_combo(combo: QComboBox, ws_list: list[dict], workspace: str) -> None:
     """Fill a job row's workspace combo and select *workspace* when it is listed, without
     emitting currentIndexChanged (the caller refreshes the job combo once, afterwards)."""
@@ -453,6 +464,20 @@ def _fill_workspace_combo(combo: QComboBox, ws_list: list[dict], workspace: str)
         combo.addItem(item.get("name", ""), item.get("name", ""))
     if workspace:
         idx = combo.findText(workspace)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+    combo.blockSignals(False)
+
+
+def _fill_job_combo(combo: QComboBox, job_list: list[dict], job: str) -> None:
+    """Fill a job row's job combo (each item carries the job's declared parameters) and select
+    *job* when it is listed, without emitting signals."""
+    combo.blockSignals(True)
+    combo.clear()
+    for item in job_list:
+        combo.addItem(item.get("name", ""), item.get("parameters", []))
+    if job:
+        idx = combo.findText(job)
         if idx >= 0:
             combo.setCurrentIndex(idx)
     combo.blockSignals(False)
@@ -546,10 +571,7 @@ class JobParamsDialog(QDialog):
         value_widget = self._make_value_widget(type_str, value)
         self._table.setCellWidget(row, 2, value_widget)
 
-        remove_btn = QPushButton("✕")
-        remove_btn.setFixedWidth(28)
-        remove_btn.clicked.connect(lambda _checked=False, r=row: self._remove_row(r))
-        self._table.setCellWidget(row, 3, remove_btn)
+        self._set_remove_button(row)
 
         # Store type on name label for retrieval
         name_label.setProperty("param_type", type_str)
@@ -571,14 +593,19 @@ class JobParamsDialog(QDialog):
         self._table.setCellWidget(row, 2, value_widget)
 
         def _on_type_change(text: str) -> None:
-            new_w = self._make_value_widget(text)
-            self._table.setCellWidget(row, 2, new_w)
+            current_row = _row_of(self._table, type_combo, 1)
+            if current_row >= 0:
+                self._table.setCellWidget(current_row, 2, self._make_value_widget(text))
 
         type_combo.currentTextChanged.connect(_on_type_change)
+        self._set_remove_button(row)
 
+    def _set_remove_button(self, row: int) -> None:
         remove_btn = QPushButton("✕")
         remove_btn.setFixedWidth(28)
-        remove_btn.clicked.connect(lambda _checked=False, r=row: self._remove_row(r))
+        remove_btn.clicked.connect(
+            lambda _checked=False: self._remove_row(_row_of(self._table, remove_btn, 3))
+        )
         self._table.setCellWidget(row, 3, remove_btn)
 
     def _remove_row(self, row: int) -> None:
@@ -1054,22 +1081,29 @@ class Panel(QWidget):
         # col 3: remove button
         btn_rm = QPushButton("✕")
         btn_rm.setFixedWidth(28)
-        btn_rm.clicked.connect(lambda _checked=False, r=row: self._remove_job_row(r))
+        btn_rm.clicked.connect(
+            lambda _checked=False: self._remove_job_row(_row_of(self._jobs_table, btn_rm, 3))
+        )
         self._jobs_table.setCellWidget(row, 3, btn_rm)
 
         # Wire cascade: workspace change -> reload job combo
         combo_ws.currentIndexChanged.connect(
-            lambda _idx, r=row: self._refresh_job_combo(r)
+            lambda _idx: self._refresh_job_combo(_row_of(self._jobs_table, combo_ws, 0))
         )
 
         # Wire configure button
-        btn_cfg.clicked.connect(lambda _checked=False, r=row: self._configure_job_row(r))
+        btn_cfg.clicked.connect(
+            lambda _checked=False: self._configure_job_row(_row_of(self._jobs_table, btn_cfg, 2))
+        )
 
         # Populate workspace combo from API, then pre-select workspace
         def _on_workspaces(ws_list):
+            current_row = _row_of(self._jobs_table, combo_ws, 0)
+            if current_row < 0:
+                return  # the row was removed before the workspaces arrived
             _fill_workspace_combo(combo_ws, ws_list, workspace)
             # Trigger job refresh after workspace is set
-            self._refresh_job_combo(row, pre_select_job=job)
+            self._refresh_job_combo(current_row, pre_select_job=job)
 
         self._fetch_workspaces(_on_workspaces)
 
@@ -1080,7 +1114,7 @@ class Panel(QWidget):
         if declared is None:
             declared = []
         btn = self._jobs_table.cellWidget(r, 2)
-        current = btn.property("params") or {} if btn else {}
+        current = (btn.property("params") or {}) if btn else {}
         cw = self._jobs_table.cellWidget(r, 0)
         ws_name = cw.currentText() if cw else ""
         job_name = combo_j.currentText() if combo_j else ""
@@ -1100,20 +1134,14 @@ class Panel(QWidget):
         ws_name = combo_ws.currentText()
         if not ws_name:
             return
+        btn = self._jobs_table.cellWidget(row, 2)
 
         def _on_jobs(job_list):
-            combo_job.blockSignals(True)
-            combo_job.clear()
-            for j in job_list:
-                combo_job.addItem(j.get("name", ""), j.get("parameters", []))
-            if pre_select_job:
-                idx = combo_job.findText(pre_select_job)
-                if idx >= 0:
-                    combo_job.setCurrentIndex(idx)
-            combo_job.blockSignals(False)
+            if not isValid(combo_job):
+                return  # the row was removed before its jobs arrived
+            _fill_job_combo(combo_job, job_list, pre_select_job)
             # Update configure button label count based on current params
-            btn = self._jobs_table.cellWidget(row, 2)
-            if btn:
+            if btn is not None and isValid(btn):
                 current_params = btn.property("params") or {}
                 btn.setText(self._params_button_label(current_params))
 
