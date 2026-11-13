@@ -39,3 +39,10 @@ min_score = 0.8823
 tests = ["tests/test_apps*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.8073
+
+[targets."dataforge/cron.py"]
+tests = ["tests/test_cron*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 5 survivors, all equivalent or declined (df-d3dy): split/rsplit on a span with 2+ '-' (any variant
+# fails and passes through), the internal ValueError message, and // vs / on a sub-minute offset.
+min_score = 0.9456
