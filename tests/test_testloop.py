@@ -24,7 +24,7 @@ TEST_FULL = TEST_POS + "\n\ndef test_neg():\n    assert classify(-1) == 'nonpos'
 TEST_UNRELATED = "def test_unrelated():\n    assert 1 + 1 == 2\n"
 
 TOML = f"""python = {json.dumps(sys.executable)}
-pytest_args = ["-o", "addopts=", "-p", "no:cacheprovider"]
+pytest_args = ["-o", "addopts=", "-p", "no:cacheprovider", "-p", "no:randomly"]
 check_args = []
 
 [targets."sample/mod.py"]
@@ -184,7 +184,7 @@ def test_check_zero_collected_exits_2_and_never_passes(sample_repo_empty_test_fi
 
 def test_check_pytest_crash_exits_2_not_1(sample_repo):
     toml = sample_repo / "testloop.toml"
-    toml.write_text(toml.read_text().replace('"no:cacheprovider"]', '"no:cacheprovider", "--no-such-option"]'))
+    toml.write_text(toml.read_text().replace('"no:randomly"]', '"no:randomly", "--no-such-option"]'))
     result = run(sample_repo, "check", "sample/mod.py")
     assert result.returncode == 2
     data = read_json(sample_repo, "check", "sample/mod.py")
@@ -438,3 +438,4 @@ def test_gate_refuses_a_partial_result(sample_repo_strong):
     proc = run(sample_repo_strong, "gate", "sample/mod.py")
     assert proc.returncode == 2
     assert "partial" in proc.stderr
+
