@@ -240,3 +240,45 @@ def test_base_ref_rejects_what_is_not_a_ref_name(ref, monkeypatch, capsys):
         gate.main()
     assert exc.value.code == 2
     assert "not a git ref name" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------- private files (df-grvi)
+
+
+def _git_repo(path):
+    import subprocess
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+    return lambda *args: subprocess.run(["git", *args], cwd=path, check=True)
+
+
+def _write(path, text="x = 1\n"):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_private_files_lists_a_plain_ignored_workspace(tmp_path, monkeypatch):
+    _git_repo(tmp_path)
+    _write(tmp_path / ".gitignore", "workspaces/Priv/\n")
+    _write(tmp_path / "workspaces" / "Priv" / "scripts" / "a.py")
+    _write(tmp_path / "workspaces" / "Priv" / "notes.txt")
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+
+    assert gate.private_files() == ["workspaces/Priv/scripts/a.py"]
+
+
+def test_private_files_looks_inside_a_workspace_that_is_its_own_repo(tmp_path, monkeypatch):
+    """git lists a nested repository as one 'dir/' entry, so its files used to vanish from the gate."""
+    _git_repo(tmp_path)
+    _write(tmp_path / ".gitignore", "workspaces/Nested/\n")
+    nested = tmp_path / "workspaces" / "Nested"
+    git = _git_repo(nested)
+    _write(nested / ".gitignore", "data/\n")
+    _write(nested / "scripts" / "tracked.py")
+    git("add", "scripts/tracked.py")
+    _write(nested / "scripts" / "new.py")            # untracked, not ignored: work in progress
+    _write(nested / "data" / "generated.py")         # ignored by the nested repo: not code to gate
+    _write(nested / "scripts" / "__pycache__" / "c.py")
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+
+    assert gate.private_files() == ["workspaces/Nested/scripts/new.py", "workspaces/Nested/scripts/tracked.py"]
