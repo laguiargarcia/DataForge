@@ -119,6 +119,7 @@ def test_apply_records_partial_entry_on_midloop_failure(tmp_path, monkeypatch):
     paths = {i.target_path for i in led.last().items}
     assert "scripts/a.py" in paths                      # the write that happened is recoverable
     assert "scripts/b.py" not in paths
+    assert led.last().status == "complete"              # recorded, not left unfinished
 
 
 def test_apply_never_targets_its_own_ledger(tmp_path):
@@ -185,7 +186,7 @@ def test_apply_with_nothing_to_write_records_no_entry(tmp_path):
     _mk(tgt, "scripts/a.py", "a\n")                                # already in sync
     led = Ledger(tgt)
     entry = apply_plan(src, tgt, _plan(src, tgt, _SCRIPTS), led)
-    assert entry.items == []
+    assert (entry.items, entry.status) == ([], "complete")
     assert led.last() is None                                      # no empty entry to roll back
 
 
@@ -379,3 +380,198 @@ def test_apply_refuses_a_folder_symlinked_out_of_the_target(tmp_path):
     with pytest.raises(ValueError, match="outside the target workspace"):
         apply_plan(src, tgt, plan, Ledger(tgt))
     assert not any(outside.iterdir())
+
+
+# --- write-ahead entry: a deploy killed mid-batch stays rollback-recoverable (df-ahua.5.1) ---
+
+class _Killed(BaseException):
+    """The process died: nothing after this point reaches the disk."""
+
+
+class _Death:
+    """Make the next apply die right after its k-th target write (k=0: before the first one).
+    From then on nothing reaches the disk: no target write, and no ledger write either (which
+    the except/finally of a real exception would still have made)."""
+
+    def __init__(self, monkeypatch, k: int) -> None:
+        import pathlib
+        import dataforge.deploy.apply as apply_mod
+        self.k, self.done, self.dead = k, 0, False
+        self.real = (apply_mod.atomic_write, pathlib.Path.unlink, Ledger._rewrite)
+        death = self
+        monkeypatch.setattr(apply_mod, "atomic_write", self.write)
+        monkeypatch.setattr(pathlib.Path, "unlink", lambda path, *a, **kw: death.unlink(path, *a, **kw))
+        monkeypatch.setattr(Ledger, "_rewrite", lambda led, lines: death.rewrite(led, lines))
+
+    def die(self) -> None:
+        self.dead = True
+        raise _Killed
+
+    def gate(self) -> None:   # before a target write
+        if self.dead or self.k == 0:
+            self.die()
+
+    def landed(self) -> None:   # after a target write
+        self.done += 1
+        if self.done == self.k:
+            self.die()
+
+    def write(self, path, data) -> None:
+        self.gate()
+        self.real[0](path, data)
+        self.landed()
+
+    def unlink(self, path, *args, **kwargs) -> None:
+        from dataforge.deploy.ledger import is_temp_name
+        if is_temp_name(path.name):   # atomic_write cleaning its own temp file
+            return self.real[1](path, *args, **kwargs)
+        self.gate()
+        self.real[1](path, *args, **kwargs)
+        return self.landed()
+
+    def rewrite(self, led, lines) -> None:
+        if self.dead:
+            raise _Killed
+        self.real[2](led, lines)
+
+
+_PRUNE = "target: Prod\nprune: true\npairs:\n  - {source: 'scripts/**', target: 'scripts/'}\n"
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*"))
+            if p.is_file() and "deploy/" not in p.relative_to(root).as_posix()}
+
+
+def _two_deploys_then_a_third_killed(tmp_path, monkeypatch, k):
+    """Deploy 1 adds a.py v1 and old.py, deploy 2 makes a.py v2, deploy 3 (a.py v3, ADD b.py,
+    prune old.py: 3 target writes) dies after k of them. Returns (src, tgt, e1, e2, pre-deploy-3
+    tree)."""
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    led = Ledger(tgt)
+    _mk(src, "scripts/a.py", "v1\n")
+    _mk(src, "scripts/old.py", "old\n")
+    e1 = apply_plan(src, tgt, _plan(src, tgt, _PRUNE), led)
+    _mk(src, "scripts/a.py", "v2\n")
+    e2 = apply_plan(src, tgt, _plan(src, tgt, _PRUNE), led)
+    before = _tree(tgt)
+    _mk(src, "scripts/a.py", "v3\n")
+    _mk(src, "scripts/b.py", "b\n")
+    (src / "scripts/old.py").unlink()
+    plan = _plan(src, tgt, _PRUNE)
+    _Death(monkeypatch, k)
+    with pytest.raises(_Killed):
+        apply_plan(src, tgt, plan, led)
+    monkeypatch.undo()
+    return src, tgt, e1, e2, before
+
+
+_V3 = {"scripts/a.py": b"v3\n", "scripts/b.py": b"b\n"}
+
+
+@pytest.mark.parametrize("k", [0, 1, 2, 3])
+def test_a_killed_apply_leaves_an_unfinished_entry_naming_the_whole_batch(tmp_path, monkeypatch, k):
+    from dataforge.deploy.models import EntryStatus
+    _, tgt, _, e2, _ = _two_deploys_then_a_third_killed(tmp_path, monkeypatch, k)
+    led = Ledger(tgt)
+    last = led.last()
+    assert (last.status, last.parent, len(led.entries())) == (EntryStatus.in_progress, e2.id, 3)
+    assert sorted((i.target_path, i.action) for i in last.items) == [
+        ("scripts/a.py", Action.modify), ("scripts/b.py", Action.add),
+        ("scripts/old.py", Action.delete)]
+    for item in last.items:   # every blob the batch needs was stored before the first write
+        assert all(led.has_blob(sha) for sha in (item.before_sha, item.after_sha) if sha)
+
+
+@pytest.mark.parametrize("k", [0, 1, 2, 3])
+def test_rollback_after_a_killed_apply_restores_the_state_before_it(tmp_path, monkeypatch, k):
+    # The bead's repro: v1, v2, v3 killed -> rollback gives v2 (not v1), whatever v3 had written.
+    from dataforge.deploy.rollback import rollback_last
+    _, tgt, e1, e2, before = _two_deploys_then_a_third_killed(tmp_path, monkeypatch, k)
+    led = Ledger(tgt)
+    rollback_last(tgt, led)
+    assert _tree(tgt) == before
+    assert [e.id for e in led.entries()] == [e1.id, e2.id]
+
+
+@pytest.mark.parametrize("k", [0, 1, 2, 3])
+def test_the_next_apply_records_what_a_killed_one_wrote_then_deploys(tmp_path, monkeypatch, k):
+    # The death is recorded as an exception would have been (D16): the unfinished entry keeps the
+    # items that reached the target and is complete; with none it is dropped. Then the new deploy
+    # runs, and rollback walks back through both.
+    from dataforge.deploy.models import EntryStatus
+    from dataforge.deploy.rollback import rollback_last
+    src, tgt, e1, e2, before = _two_deploys_then_a_third_killed(tmp_path, monkeypatch, k)
+    led = Ledger(tgt)
+    crashed, killed = _tree(tgt), led.last()
+    entry = apply_plan(src, tgt, _plan(src, tgt, _PRUNE), led)
+    assert _tree(tgt) == _V3
+    entries = led.entries()
+    assert [e.status for e in entries] == [EntryStatus.complete] * len(entries)
+    # k=0 wrote nothing: its entry is dropped. k=3 wrote everything: nothing is left to deploy.
+    assert [e.id for e in entries] == [e1.id, e2.id] + [killed.id] * (k > 0) + [entry.id] * (k < 3)
+    if k < 3:
+        assert entry.parent == (killed.id if k else e2.id)
+        rollback_last(tgt, led)   # undoes the new deploy: back to what the kill left
+        assert _tree(tgt) == crashed
+    if k:   # the killed deploy, recorded with what it wrote
+        reached = [i for i in killed.items if crashed.get(i.target_path) != before.get(i.target_path)]
+        assert (entries[2].items, len(reached)) == (reached, k)
+        rollback_last(tgt, led)
+    assert _tree(tgt) == before
+    assert [e.id for e in led.entries()] == [e1.id, e2.id]
+
+
+def test_the_next_apply_says_it_found_an_unfinished_deploy(tmp_path, monkeypatch, caplog):
+    src, tgt, _, _, _ = _two_deploys_then_a_third_killed(tmp_path, monkeypatch, 2)
+    killed = Ledger(tgt).last()
+    with caplog.at_level("WARNING", logger="dataforge.deploy.apply"):
+        apply_plan(src, tgt, _plan(src, tgt, _PRUNE), Ledger(tgt))
+    assert caplog.messages == [f"deploy {killed.id} did not finish; recording the 2 of its 3 "
+                               "change(s) that reached the target"]
+
+
+def test_apply_finishes_by_marking_its_entry_complete(tmp_path):
+    from dataforge.deploy.models import EntryStatus
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "a\n")
+    led = Ledger(tgt)
+    entry = apply_plan(src, tgt, _plan(src, tgt, _SCRIPTS), led)
+    assert entry.status == EntryStatus.complete
+    assert led.entries() == [entry]
+    assert led.log.read_bytes().count(b"\n") == 1
+
+
+def test_apply_writes_its_entry_before_the_first_target_write(tmp_path, monkeypatch):
+    import dataforge.deploy.apply as apply_mod
+    from dataforge.deploy.models import EntryStatus
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "a\n")
+    _mk(src, "scripts/b.py", "b\n")
+    seen = []
+    real = apply_mod.atomic_write
+
+    def write(path, data):
+        seen.append((path.name, Ledger(tgt).last()))
+        real(path, data)
+
+    monkeypatch.setattr(apply_mod, "atomic_write", write)
+    entry = apply_plan(src, tgt, _plan(src, tgt, _SCRIPTS), Ledger(tgt))
+    first_name, ahead = seen[0]
+    assert first_name == "a.py"
+    assert (ahead.id, ahead.status, ahead.items) == (entry.id, EntryStatus.in_progress, entry.items)
+
+
+def test_apply_whose_first_write_fails_records_nothing(tmp_path, monkeypatch):
+    # D16 records what was written; nothing was, so the earlier history is all that is left.
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "a\n")
+    led = Ledger(tgt)
+    e1 = apply_plan(src, tgt, _plan(src, tgt, _SCRIPTS), led)
+    _mk(src, "scripts/a.py", "a2\n")
+    monkeypatch.setattr("dataforge.deploy.apply.atomic_write",
+                        lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    plan = _plan(src, tgt, _SCRIPTS)
+    with pytest.raises(OSError, match="disk full"):
+        apply_plan(src, tgt, plan, led)
+    assert led.entries() == [e1]

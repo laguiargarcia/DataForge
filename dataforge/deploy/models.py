@@ -63,6 +63,12 @@ class DeployPlan(BaseModel):
         return f"{self.source} → {self.target} [{self.pipeline}]: " + (", ".join(parts) or "no changes")
 
 
+class EntryStatus(str, Enum):
+    complete = "complete"           # every item the entry lists reached the target
+    in_progress = "in_progress"     # written ahead of the first target write; not finished yet,
+                                    # or the apply died (df-ahua.5.1)
+
+
 class DeployEntry(BaseModel):
     id: str
     ts: str
@@ -71,6 +77,7 @@ class DeployEntry(BaseModel):
     pipeline: str
     parent: Optional[str] = None
     items: List[ItemChange] = []
+    status: EntryStatus = EntryStatus.complete   # logs from before df-ahua.5.1 have no status
 
 
 class AutoDeployStatus(str, Enum):

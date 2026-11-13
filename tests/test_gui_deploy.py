@@ -93,6 +93,10 @@ def test_format_provenance():
     # Missing ts → no parens
     assert format_provenance({"source": "A", "target": "B", "pipeline": "p", "id": "x"}) \
         == "A → B [p] x"
+    # df-ahua.5.1: a deploy that died part-way says so; a complete or older entry does not
+    assert format_provenance({**_FAKE_ENTRY, "status": "in_progress"}) \
+        == "Dev → Prod [to-prod] a1b2c3 (2026-06-03T10:00:00Z) — not finished"
+    assert format_provenance({**_FAKE_ENTRY, "status": "complete"}) == format_provenance(_FAKE_ENTRY)
 
 
 def test_deploy_panel_init(monkeypatch):

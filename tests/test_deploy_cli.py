@@ -379,3 +379,24 @@ def test_run_prints_the_daemon_reconcile_warnings(dataforge_home, monkeypatch):
     r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev"])
     assert r.exit_code == 0
     assert "access denied" in r.output
+
+
+def _leave_last_deploy_unfinished(prod: Path) -> None:
+    """What an apply killed mid-batch leaves: its entry still in_progress (df-ahua.5.1)."""
+    from dataforge.deploy.models import EntryStatus
+    led = Ledger(prod)
+    led.replace_last(led.last().model_copy(update={"status": EntryStatus.in_progress}))
+
+
+def test_status_and_rollback_say_when_the_last_deploy_did_not_finish(dataforge_home):
+    _, prod = _setup(dataforge_home)
+    runner.invoke(app, ["deploy", "apply", "to-prod", "-w", "Dev", "--yes"])
+    finished = runner.invoke(app, ["deploy", "status", "to-prod", "-w", "Dev"])
+    assert "not finished" not in finished.stdout   # the normal path shows what it always did
+    _leave_last_deploy_unfinished(prod)
+    for cmd in (["status", "to-prod", "-w", "Dev"], ["rollback", "to-prod", "-w", "Dev"]):
+        r = runner.invoke(app, ["deploy", *cmd], input="n\n")
+        assert "not finished" in _ANSI.sub("", r.stdout)
+    r = runner.invoke(app, ["deploy", "rollback", "to-prod", "-w", "Dev", "--yes"])
+    assert r.exit_code == 0
+    assert not (prod / "scripts/a.py").exists()
