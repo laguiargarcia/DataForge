@@ -841,10 +841,14 @@ def test_utc_cron_to_local_moves_a_day_list_across_midnight(monkeypatch):
     from datetime import datetime, timedelta, timezone
     import dataforge.cli as cli
 
-    class _BRT(datetime):
-        @classmethod
-        def now(cls, tz=None):
+    class _Now:   # datetime.now() whose .astimezone() is UTC-3 whatever the machine's zone
+        def astimezone(self):
             return datetime(2026, 1, 1, tzinfo=timezone(timedelta(hours=-3)))
+
+    class _BRT:
+        @staticmethod
+        def now():
+            return _Now()
 
     monkeypatch.setattr(cli, "datetime", _BRT)
     assert cli._utc_cron_to_local("0 1 * * 2,4") == "0 22 * * 1,3"
