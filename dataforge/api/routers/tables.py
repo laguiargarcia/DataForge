@@ -11,7 +11,8 @@ from dataforge.compat import curated_dir, resolve_workspace
 router = APIRouter()
 
 # fullmatch, not ^...$ with match: '$' also matches before a trailing newline (df-ahua.23.1).
-_TABLE_NAME = re.compile(r"[A-Za-z0-9_]+")
+# re.ASCII keeps \w to [A-Za-z0-9_]; without it 'relatório' would pass.
+_TABLE_NAME = re.compile(r"\w+", re.ASCII)
 _MAX_LIMIT = 100000
 _NOT_FOUND = "Not found"
 

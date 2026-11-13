@@ -123,3 +123,12 @@ def test_a_table_name_with_a_trailing_newline_is_404(workspace_dir, test_client)
     r = test_client.get("/api/workspaces/test_ws/tables/vendas%0A")
     assert r.status_code == 404
     assert r.json() == {"detail": "Not found"}
+
+
+def test_a_table_name_with_a_non_ascii_letter_is_404(workspace_dir, test_client):
+    """Table names are ASCII letters, digits and '_' only: curated/relatório/_delta_log exists (planted by
+    hand, delta-rs fails on accented paths, df-tt5), yet the name check alone answers 404."""
+    (curated_dir(workspace_dir) / "relatório" / "_delta_log").mkdir(parents=True)
+    r = test_client.get("/api/workspaces/test_ws/tables/relat%C3%B3rio")
+    assert r.status_code == 404
+    assert r.json() == {"detail": "Not found"}
