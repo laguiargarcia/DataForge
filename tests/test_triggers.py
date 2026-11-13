@@ -728,3 +728,109 @@ def test_advanced_mode_custom():
     result = next_run("30 8 * * 1", base)
     assert result is not None
     assert result > base
+
+
+# ---------------------------------------------------------------------------
+# Crons croniter accepts but the OS scheduler cannot express (df-vo3x.3): refused with a 400
+# before anything is saved or deregistered.
+# ---------------------------------------------------------------------------
+
+
+_PLATFORMS = {
+    "windows": ("Windows", False),
+    "wsl": ("Linux", True),
+    "macos": ("Darwin", False),
+    "linux": ("Linux", False),
+}
+
+
+@pytest.fixture
+def on_platform(monkeypatch):
+    def _set(key):
+        system, wsl = _PLATFORMS[key]
+        monkeypatch.setattr("dataforge.cli.platform.system", lambda: system)
+        monkeypatch.setattr("dataforge.cli._is_wsl", lambda: wsl)
+    return _set
+
+
+# cron stored in UTC; '0 12 ...' stays on the same local day for any offset within ±11h
+_REJECTED = [
+    ("windows", "0 12 1 * *"),        # monthly: Task Scheduler gets daily/weekly only
+    ("wsl", "*/15 * * * *"),          # minute step
+    ("macos", "*/15 * * * *"),        # step: no single StartCalendarInterval
+    ("macos", "0 12 * * 1-5"),        # range
+    ("linux", "0 12 * * * 0"),        # 6 fields: crontab would read the 6th as the command
+    ("linux", "@daily"),              # not shifted from UTC: would fire at local midnight
+    ("windows", "@daily"),
+]
+_ACCEPTED = [
+    ("windows", "0 12 * * *"), ("windows", "0 12 * * 1"), ("wsl", "30 12 * * *"),
+    ("macos", "0 12 1 * *"), ("macos", "5 * * * *"),
+    ("linux", "*/15 * * * *"), ("linux", "0 12 * * 1-5"),
+]
+
+
+@pytest.mark.parametrize(("platform_key", "cron"), _REJECTED)
+def test_platform_check_cron_rejects_what_the_os_scheduler_cannot_run(on_platform, platform_key,
+                                                                      cron):
+    from dataforge.cli import _platform_check_cron
+    on_platform(platform_key)
+    with pytest.raises(ValueError):
+        _platform_check_cron(cron)
+
+
+@pytest.mark.parametrize(("platform_key", "cron"), _ACCEPTED)
+def test_platform_check_cron_accepts_what_the_os_scheduler_runs(on_platform, platform_key, cron):
+    from dataforge.cli import _platform_check_cron
+    on_platform(platform_key)
+    _platform_check_cron(cron)
+
+
+@pytest.mark.parametrize(("platform_key", "cron"), _REJECTED)
+def test_create_trigger_refuses_an_os_unsupported_cron_before_saving(
+        test_client, workspace_dir, on_platform, platform_key, cron):
+    from dataforge.api.routers import triggers
+    on_platform(platform_key)
+    payload = {"name": "monthly", "cron": cron, "enabled": True, "jobs": []}
+    response = test_client.post("/api/workspaces/test_ws/triggers", json=payload)
+    assert response.status_code == 400
+    assert cron in response.json()["detail"]
+    assert not (workspace_dir / "triggers" / "monthly.yaml").exists()
+    triggers._platform_register_trigger.assert_not_called()
+
+
+@pytest.mark.parametrize(("platform_key", "cron"), _ACCEPTED)
+def test_create_trigger_takes_an_os_supported_cron(test_client, workspace_dir, on_platform,
+                                                   platform_key, cron):
+    on_platform(platform_key)
+    payload = {"name": "ok", "cron": cron, "enabled": True, "jobs": []}
+    response = test_client.post("/api/workspaces/test_ws/triggers", json=payload)
+    assert response.status_code == 201
+    assert (workspace_dir / "triggers" / "ok.yaml").exists()
+
+
+def test_update_trigger_refuses_an_os_unsupported_cron_and_keeps_the_old_one(
+        test_client, workspace_dir, on_platform):
+    from dataforge.api.routers import triggers
+    on_platform("windows")
+    old = "name: daily\ncron: '0 6 * * *'\nenabled: true\njobs: []\n"
+    write_trigger_yaml(workspace_dir, "daily", old)
+    payload = {"name": "daily", "cron": "0 12 1 * *", "enabled": True, "jobs": []}
+    response = test_client.put("/api/workspaces/test_ws/triggers/daily", json=payload)
+    assert response.status_code == 400
+    assert (workspace_dir / "triggers" / "daily.yaml").read_text() == old
+    triggers._platform_deregister_trigger.assert_not_called()
+    triggers._platform_register_trigger.assert_not_called()
+
+
+def test_reconcile_of_an_os_unsupported_cron_removes_the_stale_task_and_warns(
+        test_client, workspace_dir, on_platform):
+    from dataforge.api.routers import triggers
+    on_platform("windows")
+    write_trigger_yaml(workspace_dir, "monthly",
+                       "name: monthly\ncron: '0 12 1 * *'\nenabled: true\njobs: []\n")
+    response = test_client.post("/api/workspaces/test_ws/triggers/monthly/reconcile")
+    assert response.status_code == 200
+    assert "0 12 1 * *" in response.json()["warnings"][0]
+    triggers._platform_register_trigger.assert_not_called()
+    triggers._platform_deregister_trigger.assert_called_once_with("test_ws", "monthly")

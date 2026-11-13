@@ -6,7 +6,11 @@ from fastapi import APIRouter, HTTPException
 from dataforge.models import TriggerModel
 from dataforge.parser import delete_trigger, load_triggers, save_trigger
 from dataforge.compat import resolve_workspace, valid_name
-from dataforge.cli import _platform_register_trigger, _platform_deregister_trigger
+from dataforge.cli import (
+    _platform_check_cron,
+    _platform_deregister_trigger,
+    _platform_register_trigger,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,6 +24,20 @@ def _validate_trigger_name(name: str) -> None:
             status_code=400,
             detail=f"Invalid trigger name '{name}': only alphanumerics, hyphens, and underscores are allowed",
         )
+
+
+def _validate_cron(cron: str) -> None:
+    """Raise HTTP 400 unless *cron* is valid and this machine's OS scheduler can run it. Checked
+    before anything is saved or deregistered, so a refused cron changes nothing (df-vo3x.3)."""
+    if not croniter_module.croniter.is_valid(cron):
+        raise HTTPException(status_code=400, detail=f"Invalid cron expression: '{cron}'")
+    try:
+        _platform_check_cron(cron)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"The OS scheduler on this machine cannot run cron '{cron}' (UTC): {exc}",
+        ) from exc
 
 
 def _register_os_trigger(ws: str, trigger: TriggerModel) -> str | None:
@@ -51,6 +69,13 @@ def reconcile_os_trigger(ws: str, name: str) -> str | None:
         return f"workspace '{ws}' not found"
     trig = next((t for t in load_triggers(workspace_dir) if t.name == name), None)
     if trig is not None and trig.enabled:
+        try:
+            _platform_check_cron(trig.cron)
+        except ValueError as exc:
+            # The file's cron cannot be scheduled here: a live task with the old cron would be
+            # a schedule nobody asked for, so remove it and say why (df-vo3x.3).
+            _deregister_os_trigger(ws, name)
+            return f"cron '{trig.cron}' not registered with the OS scheduler: {exc}"
         return _register_os_trigger(ws, trig)
     _deregister_os_trigger(ws, name)   # gone or disabled -> ensure no stale live task
     return None
@@ -70,8 +95,7 @@ def list_triggers(ws: str):
 def create_trigger(ws: str, trigger: TriggerModel):
     """Create a trigger YAML file on disk and register with OS scheduler."""
     _validate_trigger_name(trigger.name)
-    if not croniter_module.croniter.is_valid(trigger.cron):
-        raise HTTPException(status_code=400, detail=f"Invalid cron expression: '{trigger.cron}'")
+    _validate_cron(trigger.cron)
     try:
         workspace_dir = resolve_workspace(ws)
     except ValueError:
@@ -89,8 +113,7 @@ def update_trigger(ws: str, name: str, trigger: TriggerModel):
     """Update an existing trigger: deregister old OS task, save new YAML, register new OS task."""
     _validate_trigger_name(name)
     _validate_trigger_name(trigger.name)
-    if not croniter_module.croniter.is_valid(trigger.cron):
-        raise HTTPException(status_code=400, detail=f"Invalid cron expression: '{trigger.cron}'")
+    _validate_cron(trigger.cron)
     try:
         workspace_dir = resolve_workspace(ws)
     except ValueError:
