@@ -348,7 +348,9 @@ def test_a_listed_workspace_outside_the_checkout_is_checked(repo, capsys, tmp_pa
 
 
 def test_a_listed_entry_may_be_relative_to_the_root_or_start_with_a_tilde(repo, capsys, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(_outside(tmp_path, "Ws", _guard({REAL_OWNER: "raw.b"})).parent))
+    home = str(_outside(tmp_path, "Ws", _guard({REAL_OWNER: "raw.b"})).parent)
+    monkeypatch.setenv("HOME", home)
+    monkeypatch.setenv("USERPROFILE", home)   # what expanduser reads on Windows
     repo("rel/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.c"}))
     repo(".leakguard-workspaces", "rel\n~/Ws\n")
     code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\ny = '{REAL_OWNER}'\n"))
