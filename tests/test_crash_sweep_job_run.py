@@ -1,6 +1,7 @@
 """Crash sweep of the job-run state (df-ahua.5): `dataforge run` is killed at every database
-commit, then the daemon starts once (its lifespan is where df-bw7 puts the recovery) and the run
-and task rows are checked. The process that owned them is gone, so no row may stay in progress."""
+commit, then the daemon starts once (its lifespan reconciles orphaned runs, df-bw7) and the run
+and task rows are checked. The process that owned them is gone, so no row may stay in progress,
+and each one it left unfinished ends `failed` with the reason (dataforge/orphans.py)."""
 import os
 from pathlib import Path
 import pytest
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from dataforge.compat import db_url, global_db_url
 from dataforge.db import ExecucaoORM, JobRunORM, init_db
+from dataforge.orphans import REASON
 from tests.crash_sweep import Step, WritePoints, crash_sweep
 
 _JOB = "name: j\ntasks:\n  - {name: t, script: t.py}\n"
@@ -54,6 +56,7 @@ class _Left:
         self.root = root
         self.steps: list[Step] = []
         self.found: dict[str, list[str]] = {}
+        self.ends: dict[str, set[tuple]] = {}   # step -> {(status, reason)} of its run rows
 
     def record(self, home: Path, step: Step) -> None:
         _restart_daemon(home)
@@ -62,6 +65,8 @@ class _Left:
         for what, statuses in rows.items():
             for status in {"pending", "running"} & set(statuses):
                 self.found.setdefault(f"{what} {status}", []).append(str(step))
+        with Session(init_db(db_url(home / "dataforge.db"))) as session:
+            self.ends[str(step)] = set(session.execute(select(JobRunORM.status, JobRunORM.reason)))
 
     def assert_none(self, kind: str) -> None:
         assert self.found.get(kind, []) == [], f"{kind} after: {self.found[kind]}"
@@ -82,20 +87,21 @@ def test_job_run_sweep_reaches_every_commit_of_a_run(job_run_sweep):
     assert _statuses(job_run_sweep.root / "dry/dataforge.db", JobRunORM) == ["success"]
 
 
-@pytest.mark.xfail(strict=True, reason="df-bw7: a run killed after run_job set it 'running' stays "
-                   "'running' forever; the daemon's startup re-publishes it instead of failing it")
 def test_restart_after_a_killed_run_leaves_no_running_run(job_run_sweep):
     # df-bw7: the owning process is gone, so the row is provably orphaned (fix: lifespan).
     job_run_sweep.assert_none("run running")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.6: a run killed before run_job starts stays "
-                   "'pending' forever")
+def test_a_killed_run_ends_failed_with_the_reason(job_run_sweep):
+    # k=1 died before the run row existed; every later crash left one run row, now failed (df-bw7).
+    ends = job_run_sweep.ends
+    assert ends.pop("k=1 before sqlalchemy.orm.Session.commit") == set()
+    assert ends == {str(step): {("failed", REASON)} for step in job_run_sweep.steps[1:]}
+
+
 def test_restart_after_a_killed_run_leaves_no_pending_run(job_run_sweep):
     job_run_sweep.assert_none("run pending")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.6: a task killed while its script runs stays "
-                   "'running' forever in the workspace's execucoes table")
 def test_restart_after_a_killed_run_leaves_no_running_task(job_run_sweep):
     job_run_sweep.assert_none("task running")

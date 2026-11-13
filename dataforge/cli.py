@@ -829,6 +829,7 @@ def execucoes_list(
 ):
     """Lista histórico de execuções."""
     from dataforge.db import init_db, ExecucaoORM
+    from dataforge.orphans import reconcile_task_rows  # noqa: PLC0415 -- lazy like the rest: fast start
     from sqlalchemy.orm import Session
     from rich.table import Table
 
@@ -839,6 +840,7 @@ def execucoes_list(
         raise typer.Exit(1)
     db_url = resolve_db(db, workspace_path)
 
+    reconcile_task_rows(db_url)   # a task whose process died is failed, not running (df-bw7)
     engine = init_db(db_url)
     with Session(engine) as session:
         rows = session.query(ExecucaoORM).order_by(ExecucaoORM.id.desc()).limit(limit).all()

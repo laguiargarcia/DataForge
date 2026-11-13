@@ -569,23 +569,8 @@ def test_register_os_trigger_imports_cli(workspace_dir):
 # SCHED-03: Daemon startup scan tests (Plan 03, Task 1 — TDD RED)
 # ---------------------------------------------------------------------------
 
-def test_startup_scan_publishes_running(dataforge_home, global_engine):
-    """Seeded running JobRunORM row → lifespan triggers get_broadcaster().publish with that run."""
-    from sqlalchemy.orm import Session
-    from dataforge.db import JobRunORM, utcnow
-
-    # Seed a running row in the global DB before the app starts
-    with Session(global_engine) as session:
-        session.add(JobRunORM(
-            id="run-scan-001",
-            workspace="test_ws",
-            job="test_job",
-            status="running",
-            started_at=utcnow(),
-            owner_id="system",
-        ))
-        session.commit()
-
+def _startup_publishes() -> list[dict]:
+    """Run the app lifespan once; return what it published."""
     published = []
 
     async def _fake_publish(event):
@@ -593,17 +578,43 @@ def test_startup_scan_publishes_running(dataforge_home, global_engine):
 
     mock_broadcaster = MagicMock()
     mock_broadcaster.publish = _fake_publish
-
-    with patch("dataforge.api.broadcaster.get_broadcaster", return_value=mock_broadcaster) as mock_get:
+    with patch("dataforge.api.broadcaster.get_broadcaster", return_value=mock_broadcaster):
         from dataforge.api import app
         from fastapi.testclient import TestClient
         with TestClient(app):
             pass  # lifespan runs on enter
+    return published
 
-    assert any(e.get("run_id") == "run-scan-001" for e in published), (
-        f"Expected publish with run_id='run-scan-001', got: {published}"
-    )
-    assert any(e.get("status") == "running" for e in published)
+
+def test_startup_scan_publishes_running(dataforge_home, global_engine):
+    """At startup a running run whose process may be alive is published as running (SCHED-03);
+    one whose process has ended is failed with the reason and not published (df-bw7)."""
+    from sqlalchemy.orm import Session
+    from dataforge.db import JobRunORM, utcnow
+    from dataforge.orphans import REASON
+    from tests.process_owners import dead_owner_text
+
+    with Session(global_engine) as session:
+        # Inserted by this (live) test process: the row records it as its owner.
+        session.add(JobRunORM(id="run-live", workspace="test_ws", job="test_job",
+                              status="running", started_at=utcnow()))
+        # Written before owners were recorded: cannot be judged, so it is left alone.
+        session.add(JobRunORM(id="run-legacy", workspace="test_ws", job="test_job",
+                              status="running", started_at=utcnow(), owner_process=None))
+        session.add(JobRunORM(id="run-dead", workspace="test_ws", job="test_job",
+                              status="running", started_at=utcnow(),
+                              owner_process=dead_owner_text()))
+        session.commit()
+
+    published = _startup_publishes()
+
+    running = {e["run_id"] for e in published if e.get("status") == "running"}
+    assert running == {"run-live", "run-legacy"}, published
+    with Session(global_engine) as session:
+        assert session.get(JobRunORM, "run-live").status == "running"
+        assert session.get(JobRunORM, "run-legacy").status == "running"
+        dead = session.get(JobRunORM, "run-dead")
+        assert (dead.status, dead.reason) == ("failed", REASON)
 
 
 def test_startup_scan_no_running_clean(dataforge_home, global_engine):

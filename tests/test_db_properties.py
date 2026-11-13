@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 
 from dataforge.compat import db_url as make_db_url
 from dataforge.db import ExecucaoORM, JobRunORM, ScheduleORM, init_db, utcnow
+from dataforge.liveness import current_owner_text
 
 # Columns init_db adds to a database created before they existed (docs/subsystems/db.md).
-_MIGRATED = {"execucoes": ["owner_id", "output", "run_id"], "job_runs": ["trigger"]}
+_MIGRATED = {"execucoes": ["owner_id", "output", "run_id", "owner_process"],
+             "job_runs": ["trigger", "owner_process", "reason"]}
 # The execucoes / job_runs tables as the oldest databases have them: the current columns minus
 # those added later.
 _LEGACY_EXECUCOES = """CREATE TABLE execucoes (
@@ -25,7 +27,7 @@ _LEGACY_JOB_RUNS = """CREATE TABLE job_runs (
     status VARCHAR NOT NULL, started_at DATETIME NOT NULL, finished_at DATETIME,
     owner_id VARCHAR NOT NULL{extra})"""
 _LEGACY_TYPES = {"owner_id": "VARCHAR NOT NULL DEFAULT 'system'", "output": "TEXT", "run_id": "VARCHAR",
-                 "trigger": "VARCHAR"}
+                 "trigger": "VARCHAR", "owner_process": "TEXT", "reason": "TEXT"}
 
 
 def _columns(engine, table: str) -> set[str]:
@@ -79,14 +81,18 @@ def test_init_db_brings_an_older_database_to_the_current_schema(missing_exec, mi
             with Session(engine) as s:
                 (row,) = s.query(ExecucaoORM).all()
                 assert (row.job, row.task, row.status, row.owner_id) == ("j", "t", "success", "system")
+                assert row.owner_process is None   # an old row has no recorded owner
                 (run,) = s.query(JobRunORM).all()
-                assert (run.id, run.workspace, run.trigger) == ("r1", "ws", None)
+                assert (run.id, run.workspace, run.trigger, run.owner_process, run.reason) == (
+                    "r1", "ws", None, None, None)
                 s.add(ExecucaoORM(job="j", task="t2", output="out", run_id="r1", owner_id="u"))
-                s.add(JobRunORM(id="r2", workspace="ws", job="j", trigger="nightly"))
+                s.add(JobRunORM(id="r2", workspace="ws", job="j", trigger="nightly", reason="why"))
                 s.commit()
                 new = s.query(ExecucaoORM).filter_by(task="t2").one()
                 assert (new.output, new.run_id, new.owner_id) == ("out", "r1", "u")
-                assert s.get(JobRunORM, "r2").trigger == "nightly"
+                assert new.owner_process == current_owner_text()
+                r2 = s.get(JobRunORM, "r2")
+                assert (r2.trigger, r2.reason, r2.owner_process) == ("nightly", "why", current_owner_text())
         finally:
             engine.dispose()
 
@@ -152,7 +158,10 @@ def test_a_new_row_gets_the_documented_defaults(db_url):
         after = utcnow() + timedelta(seconds=1)
         assert (e.status, e.owner_id, e.fim, e.output, e.run_id) == ("pending", "system", None, None, None)
         assert before <= e.inicio <= after
-        assert (r.status, r.owner_id, r.trigger, r.finished_at) == ("pending", "system", None, None)
+        assert (r.status, r.owner_id, r.trigger, r.finished_at, r.reason) == (
+            "pending", "system", None, None, None)
+        # Both rows record the process that wrote them, so a dead one can be told (df-bw7).
+        assert e.owner_process == r.owner_process == current_owner_text()
         assert before <= r.started_at <= after
         assert (sc.enabled, sc.owner_id, sc.last_run_at, sc.next_run_at) == (True, "system", None, None)
     engine.dispose()

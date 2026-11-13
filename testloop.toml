@@ -84,4 +84,4 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # 6 survivors, all equivalent: init_db's SQL lower-cased (and PRAGMA table_info(job_runs) upper-cased),
 # which SQLite reads the same, keywords and identifiers alike. mutmut does not mutate the ORM class
 # bodies, only init_db and utcnow.
-min_score = 0.8983
+min_score = 1.0
