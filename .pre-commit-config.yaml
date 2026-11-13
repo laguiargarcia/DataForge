@@ -7,9 +7,13 @@ repos:
     hooks:
       - id: leakguard
         name: leakguard (PII + private-path block)
-        entry: python3 scripts/leakguard.py
-        language: system
+        entry: python scripts/leakguard.py
+        # python + polars, not the system python3: on the owner's machine the guard also runs the private
+        # workspaces' tools/leakguard.py, which reads their raw parquet to list the real values (df-k37o).
+        language: python
+        additional_dependencies: ["polars==1.41.2"]
         pass_filenames: true
+        require_serial: true   # one process: each run loads every private guard's real values
         always_run: false
       - id: quality-gate
         name: quality gate (lint, dead code, import contracts against the baseline)
