@@ -27,6 +27,7 @@ from pathlib import Path
 
 REGISTRY_DIR = "df-sessions"
 ENDING_DIR = "ending"
+STARTING_DIR = "starting"
 PREFIX_CACHE = "bead-prefix"
 CLAUDE_NAMES = frozenset({"claude", "claude.exe"})
 # Without a cached bd prefix, a bead id is the first `<letters>-<id>` in a worktree or branch name

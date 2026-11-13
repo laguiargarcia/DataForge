@@ -5,8 +5,8 @@
     lifecycle.py agent-start  SubagentStart / SubagentStop: mark a subagent running or done,
     lifecycle.py agent-stop   so its worktree claims stop counting once it is finished
     lifecycle.py cwd          CwdChanged: the session moved into a worktree nobody alive holds
-    lifecycle.py bg-start ID  (detached) create or reopen the session bead, reap dead sessions
-    lifecycle.py bg-end ID    (detached) write the closing record and close the session bead
+    lifecycle.py bg-start     (detached) create or reopen the beads of sessions that started, reap
+    lifecycle.py bg-end       (detached) write the closing record, close the beads of ended ones
 
 The hook input arrives as JSON on stdin. Everything synchronous touches files only; every bd call
 runs in a detached process, because a bd write costs 1-4 s on /mnt/c and SessionEnd hooks get
@@ -33,6 +33,7 @@ GH_TIMEOUT = 20
 LOG_LIMIT = 256 * 1024
 BRIEF_FILES = 3
 ENV_KEYS = ("BEADS_ACTOR", "DF_SESSION_BEAD", "DF_SESSION_ID", "CLAUDE_SESSION_ID")
+BG_JOBS = {"bg-start": "bg-start", "bg-end": "bg-end"}  # fixed strings only reach the command line
 
 try:
     import fcntl
@@ -225,7 +226,25 @@ def reap_lock(repo: state.Repo):
             fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def reap(repo: state.Repo, bd: Bd, me: str) -> list[str]:
+def reapable(repo: state.Repo, bead: dict, me: set[str], entries: dict[str, dict]) -> dict | None:
+    """The closing record for a live session bead whose Claude process is gone, else None."""
+    meta = bead.get("metadata") or {}
+    sid = meta.get("session_id")
+    if not sid or sid in me or meta.get("host") != state.host_key():
+        return None
+    if (repo.registry / state.ENDING_DIR / state.entry_path(repo, sid).name).exists():
+        return None  # its own closer is on it
+    if state.pid_alive(meta.get("pid"), meta.get("pid_start")) is not False:
+        return None
+    entry = entries.get(sid) or {}
+    if entry and state.entry_alive(entry):
+        return None  # resumed in a new process; its bg-start has not updated the bead yet
+    worktrees = entry.get("worktrees") or {p: {} for p in meta.get("worktrees", [])}
+    return {**meta, **entry, "worktrees": worktrees, "bead": bead["id"], "end_reason": "abandoned",
+            "ended_at": state.now_iso()}
+
+
+def reap(repo: state.Repo, bd: Bd, me: set[str]) -> list[str]:
     """Close the live session beads of this host whose Claude process is gone; returns their ids."""
     reaped = []
     with reap_lock(repo) as held:
@@ -233,22 +252,10 @@ def reap(repo: state.Repo, bd: Bd, me: str) -> list[str]:
             return reaped
         entries = state.load_entries(repo)
         for b in bd.json("list", "-t", "session", "-s", "live", "-n", "0") or []:
-            meta = b.get("metadata") or {}
-            sid = meta.get("session_id")
-            if not sid or sid == me or meta.get("host") != state.host_key():
-                continue
-            if (repo.registry / state.ENDING_DIR / f"{sid}.json").exists():
-                continue  # its own closer is on it
-            if state.pid_alive(meta.get("pid"), meta.get("pid_start")) is not False:
-                continue
-            entry = entries.get(sid) or {}
-            if entry and state.entry_alive(entry):
-                continue  # resumed in a new process; its bg-start has not updated the bead yet
-            worktrees = entry.get("worktrees") or {p: {} for p in meta.get("worktrees", [])}
-            dead = {**meta, **entry, "worktrees": worktrees, "bead": b["id"], "end_reason": "abandoned",
-                    "ended_at": state.now_iso(), "reaped_by": bd.actor}
-            close_session(bd, dead)
-            reaped.append(b["id"])
+            dead = reapable(repo, b, me, entries)
+            if dead is not None:
+                close_session(bd, {**dead, "reaped_by": bd.actor})
+                reaped.append(b["id"])
         state.drop_dead_entries(repo, entries)
     return reaped
 
@@ -256,32 +263,42 @@ def reap(repo: state.Repo, bd: Bd, me: str) -> list[str]:
 # --------------------------------------------------------------------------- hooks
 
 
-def brief(repo: state.Repo, me: str, entries: dict[str, dict]) -> str:
-    """A few lines on the other live sessions' worktrees; empty when nobody else is live."""
-    prefix = repo.bead_prefix()
-    rows = {}
+def live_worktrees(repo: state.Repo, me: str, entries: dict[str, dict]) -> dict[Path, dict]:
+    """{worktree: session entry} for the worktrees other live sessions hold or started in."""
+    rows: dict[Path, dict] = {}
     for sid, e in entries.items():
         if sid == me or not state.entry_alive(e):
             continue
         held = [Path(p) for p in e.get("worktrees", {})]
-        cwd_wt = repo.worktree_of(Path(e["cwd"])) if e.get("cwd") else None
-        for wt in [*held, *([cwd_wt] if cwd_wt else [])]:
+        if e.get("cwd"):
+            held.append(repo.worktree_of(Path(e["cwd"])))
+        for wt in held:
             if wt in repo.worktrees():
                 rows.setdefault(wt, e)
+    return rows
+
+
+def brief_line(repo: state.Repo, wt: Path, entry: dict, changed: list[str]) -> str:
+    prefix = repo.bead_prefix()
+    branch = repo.head_of(wt)
+    bead = state.bead_id_in(wt.name, prefix) or state.bead_id_in(branch, prefix) or "no bead"
+    shown = ", ".join(changed[:BRIEF_FILES]) or "none"
+    if len(changed) > BRIEF_FILES:
+        shown += f" +{len(changed) - BRIEF_FILES}"
+    where = (wt.relative_to(repo.main) if state.is_within(wt, repo.main) else wt).as_posix()
+    return (f"- {where}: {bead}, branch {branch}, session {entry.get('actor')} "
+            f"(pid {entry.get('pid')}); uncommitted: {shown}")
+
+
+def brief(repo: state.Repo, me: str, entries: dict[str, dict]) -> str:
+    """A few lines on the other live sessions' worktrees; empty when nobody else is live."""
+    rows = live_worktrees(repo, me, entries)
     if not rows:
         return ""
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         files = dict(zip(rows, pool.map(changed_files, rows), strict=True))
     lines = ["Other live Claude sessions in this repo (from scripts/sessions/board.py):"]
-    for wt, e in sorted(rows.items(), key=lambda kv: str(kv[0])):
-        branch = repo.head_of(wt)
-        bead = state.bead_id_in(wt.name, prefix) or state.bead_id_in(branch, prefix) or "no bead"
-        changed = files[wt]
-        shown = ", ".join(changed[:BRIEF_FILES]) + (f" +{len(changed) - BRIEF_FILES}" if len(changed) > BRIEF_FILES else "")
-        where = (wt.relative_to(repo.main) if state.is_within(wt, repo.main) else wt).as_posix()
-        lines.append(f"- {where}: {bead}, "
-                     f"branch {branch}, session {e.get('actor')} (pid {e.get('pid')}); "
-                     f"uncommitted: {shown or 'none'}")
+    lines += [brief_line(repo, wt, rows[wt], files[wt]) for wt in sorted(rows, key=str)]
     lines.append("Work only in your own worktree. Owner of any path: python3 scripts/sessions/board.py --owner PATH")
     return "\n".join(lines)
 
@@ -296,15 +313,18 @@ def export_identity(env_file: str | None, entry: dict) -> None:
         f.writelines(lines)
 
 
-def spawn(repo: state.Repo, *args: str) -> None:
-    """Run this script detached, so it outlives the hook (and the session, for bg-end)."""
+def spawn(repo: state.Repo, job: str) -> None:
+    """Run this script's `bg-start` or `bg-end` detached, so it outlives the hook (and the session,
+    for bg-end). Nothing from the hook input reaches the command line: the job reads marker files."""
+    if job not in BG_JOBS:
+        return
     repo.registry.mkdir(parents=True, exist_ok=True)
     log = repo.registry / "hooks.log"
     with contextlib.suppress(OSError):
         if log.stat().st_size > LOG_LIMIT:
             log.unlink()
     with open(log, "a", encoding="utf-8") as out:
-        subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), *args],
+        subprocess.Popen([sys.executable, "-S", str(Path(__file__).resolve()), BG_JOBS[job]],
                          cwd=repo.main, stdin=subprocess.DEVNULL, stdout=out, stderr=out,
                          start_new_session=True, close_fds=True)
 
@@ -333,8 +353,10 @@ def on_start(repo: state.Repo, event: dict, env: dict, *, background: bool = Tru
     state.write_json(state.entry_path(repo, sid), entry)
     entries[sid] = entry
     export_identity(env.get("CLAUDE_ENV_FILE"), entry)
-    if background and event.get("source") != "compact":
-        spawn(repo, "bg-start", sid)
+    if event.get("source") != "compact":
+        state.write_json(repo.registry / state.STARTING_DIR / state.entry_path(repo, sid).name, entry)
+        if background:
+            spawn(repo, "bg-start")
     return brief(repo, sid, entries)
 
 
@@ -348,7 +370,7 @@ def on_end(repo: state.Repo, event: dict, *, background: bool = True) -> None:
     state.write_json(repo.registry / state.ENDING_DIR / path.name, entry)
     path.unlink()
     if background:
-        spawn(repo, "bg-end", sid)
+        spawn(repo, "bg-end")
 
 
 def on_agent(repo: state.Repo, event: dict, live: bool) -> None:
@@ -374,58 +396,89 @@ def on_cwd(repo: state.Repo, event: dict) -> None:
         state.write_json(state.entry_path(repo, sid), entry)
 
 
-def bg_start(repo: state.Repo, sid: str, exe: str = "bd") -> None:
-    entry = state.read_json(state.entry_path(repo, sid))
-    if entry is None:
-        return
-    bd = Bd(repo.main, entry["actor"], sid, exe)
-    prefix = bead_prefix(repo, bd)
-    if not prefix:
-        return
-    bead = entry.get("bead") or state.session_bead_for(sid, prefix)
-    sync_start(bd, bead, entry)
-    reap(repo, bd, sid)
+def take_markers(repo: state.Repo, kind: str) -> list[tuple[Path, dict]]:
+    """Claim the pending marker files of one kind (renamed to `<sid>.<pid>.work`, so two jobs never
+    take the same one). A marker held by a job that died goes back to the queue first."""
+    folder = repo.registry / kind
+    if not folder.is_dir():
+        return []
+    for stale in folder.glob("*.work"):
+        stem, owner, _ = stale.name.rsplit(".", 2)
+        if owner.isdigit() and state.pid_alive(int(owner)) is False:
+            with contextlib.suppress(OSError):
+                os.replace(stale, folder / f"{stem}.json")
+    taken = []
+    for marker in sorted(folder.glob("*.json")):
+        mine = folder / f"{marker.stem}.{os.getpid()}.work"
+        try:
+            os.replace(marker, mine)
+        except OSError:
+            continue
+        data = state.read_json(mine)
+        if data and data.get("session_id"):
+            taken.append((mine, data))
+        else:
+            mine.unlink()
+    return taken
 
 
-def bg_end(repo: state.Repo, sid: str, exe: str = "bd") -> None:
-    path = repo.registry / state.ENDING_DIR / state.entry_path(repo, sid).name
-    ending = state.read_json(path)
-    if ending is None:
-        return
-    bd = Bd(repo.main, ending.get("actor"), sid, exe)
-    if not ending.get("bead"):
+def bg_start(repo: state.Repo, exe: str = "bd") -> None:
+    """Create or reopen the bead of every session that started, then reap dead ones."""
+    done: set[str] = set()
+    bd = Bd(repo.main, exe=exe)
+    for marker, started in take_markers(repo, state.STARTING_DIR):
+        sid = started["session_id"]
+        entry = state.read_json(state.entry_path(repo, sid)) or started  # the registry is fresher
+        bd = Bd(repo.main, entry["actor"], sid, exe)
         prefix = bead_prefix(repo, bd)
-        ending["bead"] = state.session_bead_for(sid, prefix) if prefix else None
-    close_session(bd, ending)
-    path.unlink()
+        if prefix:
+            sync_start(bd, entry.get("bead") or state.session_bead_for(sid, prefix), entry)
+        marker.unlink()
+        done.add(sid)
+    reap(repo, bd, done)
 
 
-def main(argv: list[str]) -> int:
+def bg_end(repo: state.Repo, exe: str = "bd") -> None:
+    """Write the end record and close the bead of every session that ended."""
+    for marker, ending in take_markers(repo, state.ENDING_DIR):
+        sid = ending["session_id"]
+        bd = Bd(repo.main, ending.get("actor"), sid, exe)
+        if not ending.get("bead"):
+            prefix = bead_prefix(repo, bd)
+            ending["bead"] = state.session_bead_for(sid, prefix) if prefix else None
+        close_session(bd, ending)
+        marker.unlink()
+
+
+def run_hook(cmd: str, event: dict) -> str:
+    """One hook call; returns what goes to stdout (context, for SessionStart only)."""
+    repo = state.Repo(Path(os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or "."))
+    if cmd == "start":
+        return on_start(repo, event, dict(os.environ))
+    if cmd == "end":
+        on_end(repo, event)
+    elif cmd in {"agent-start", "agent-stop"}:
+        on_agent(repo, event, live=cmd == "agent-start")
+    elif cmd == "cwd":
+        on_cwd(repo, event)
+    return ""
+
+
+def main(argv: list[str]) -> None:
+    """Never fails: every error is swallowed (logged for the detached jobs), exit status 0."""
     cmd = argv[1] if len(argv) > 1 else ""
     try:
-        project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or ".")
-        if cmd in {"bg-start", "bg-end"}:
-            repo = state.Repo(project)
-            (bg_start if cmd == "bg-start" else bg_end)(repo, argv[2])
-            return 0
-        event = json.loads(sys.stdin.read() or "{}")
-        repo = state.Repo(Path(os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or "."))
-        if cmd == "start":
-            text = on_start(repo, event, dict(os.environ))
+        if cmd in BG_JOBS.values():
+            repo = state.Repo(Path(os.environ.get("CLAUDE_PROJECT_DIR") or "."))
+            (bg_start if cmd == "bg-start" else bg_end)(repo)
+        else:
+            text = run_hook(cmd, json.loads(sys.stdin.read() or "{}"))
             if text:
                 sys.stdout.write(text + "\n")
-        elif cmd == "end":
-            on_end(repo, event)
-        elif cmd in {"agent-start", "agent-stop"}:
-            on_agent(repo, event, live=cmd == "agent-start")
-        elif cmd == "cwd":
-            on_cwd(repo, event)
     except Exception as exc:  # noqa: BLE001 -- fail open: a hook bug must never stall a session
-        if cmd.startswith("bg-"):
+        if cmd in BG_JOBS.values():
             sys.stderr.write(f"{state.now_iso()} {cmd}: {exc!r}\n")
-        return 0
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    main(sys.argv)

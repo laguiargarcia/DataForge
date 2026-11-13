@@ -283,7 +283,8 @@ def run(event: dict, project: Path, mode: str,
     return render(findings, mode) if findings else None
 
 
-def main() -> int:
+def main() -> None:
+    """Never fails: on any error the hook prints nothing and exits 0, so the call goes ahead."""
     try:
         event = json.loads(sys.stdin.read() or "{}")
         mode = os.environ.get(MODE_ENV, "warn").strip().lower()
@@ -292,9 +293,8 @@ def main() -> int:
         if out:
             sys.stdout.write(json.dumps(out) + "\n")
     except Exception:  # noqa: BLE001 -- fail open: a guard bug must never stall a session
-        return 0
-    return 0
+        return
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

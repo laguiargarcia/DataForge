@@ -101,6 +101,26 @@ def test_start_says_nothing_about_dead_sessions(repo, tmp_path):
     assert start(repo, start_event(repo), tmp_path)[0] == ""
 
 
+def test_start_queues_the_bead_work_as_a_marker_except_after_compaction(repo, tmp_path):
+    starting = state.Repo(repo).registry / state.STARTING_DIR
+    start(repo, start_event(repo, source="compact"), tmp_path)
+    assert not starting.exists()
+    start(repo, start_event(repo), tmp_path)
+    assert [m.name for m in starting.glob("*.json")] == [f"{ME}.json"]
+
+
+def test_a_marker_is_taken_once_and_one_held_by_a_dead_job_is_taken_again(repo):
+    r = state.Repo(repo)
+    folder = r.registry / state.ENDING_DIR
+    state.write_json(folder / f"{ME}.json", {"session_id": ME})
+    first = lifecycle.take_markers(r, state.ENDING_DIR)
+    assert [d["session_id"] for _m, d in first] == [ME]
+    assert lifecycle.take_markers(r, state.ENDING_DIR) == []  # held by this (live) process
+    if sys.platform != "win32":  # liveness of the holder reads /proc
+        first[0][0].rename(folder / f"{ME}.{dead_pid()}.work")
+        assert [d["session_id"] for _m, d in lifecycle.take_markers(r, state.ENDING_DIR)] == [ME]
+
+
 # --------------------------------------------------------------------------- other hooks
 
 
@@ -227,7 +247,7 @@ def bdrepo(repo, monkeypatch):
 def test_the_session_bead_is_created_live_out_of_ready_and_reopened_on_resume(bdrepo, tmp_path):
     lifecycle.on_start(state.Repo(bdrepo), start_event(bdrepo), {"CLAUDE_ENV_FILE": str(tmp_path / "e")},
                        background=False)
-    lifecycle.bg_start(state.Repo(bdrepo), ME)
+    lifecycle.bg_start(state.Repo(bdrepo))
     bead = bd_json(bdrepo, "show", "df-sess-aaaaaaaa")[0]
     assert (bead["issue_type"], bead["status"], bead["created_by"]) == ("session", "live", "claude-aaaaaaaa")
     assert bead["metadata"]["transcript_path"] == f"/transcripts/{ME}.jsonl"
@@ -236,7 +256,7 @@ def test_the_session_bead_is_created_live_out_of_ready_and_reopened_on_resume(bd
     bd_run(bdrepo, "close", "df-sess-aaaaaaaa", "-r", "ended: other")
     lifecycle.on_start(state.Repo(bdrepo), start_event(bdrepo, source="resume"),
                        {"CLAUDE_ENV_FILE": str(tmp_path / "e")}, background=False)
-    lifecycle.bg_start(state.Repo(bdrepo), ME)
+    lifecycle.bg_start(state.Repo(bdrepo))
     again = bd_json(bdrepo, "show", "df-sess-aaaaaaaa")[0]
     assert again["status"] == "live"
     assert again["title"] == bead["title"]
@@ -248,7 +268,7 @@ def test_end_writes_a_structured_record_releases_claims_and_closes(bdrepo, tmp_p
     wt = add_worktree(bdrepo, "df-abc1")
     r = state.Repo(bdrepo)
     lifecycle.on_start(r, start_event(wt), {"CLAUDE_ENV_FILE": str(tmp_path / "e")}, background=False)
-    lifecycle.bg_start(r, ME)
+    lifecycle.bg_start(r)
     actor = "claude-aaaaaaaa"
     made = bd_run(bdrepo, "create", "found while working", "--silent", actor=actor)
     held = bd_run(bdrepo, "create", "still working", "--silent")
@@ -257,7 +277,7 @@ def test_end_writes_a_structured_record_releases_claims_and_closes(bdrepo, tmp_p
     git(wt, "add", "x.py")
     git(wt, "commit", "-q", "-m", "work")
     lifecycle.on_end(r, {"session_id": ME, "reason": "prompt_input_exit"}, background=False)
-    lifecycle.bg_end(r, ME)
+    lifecycle.bg_end(r)
     bead = bd_json(bdrepo, "show", "df-sess-aaaaaaaa")[0]
     assert bead["status"] == "closed"
     end = bead["metadata"]["end"]
@@ -269,7 +289,7 @@ def test_end_writes_a_structured_record_releases_claims_and_closes(bdrepo, tmp_p
     issue = bd_json(bdrepo, "show", held)[0]
     assert (issue["status"], issue.get("assignee")) == ("open", None)
     assert actor in issue["notes"]
-    assert not (r.registry / state.ENDING_DIR / f"{ME}.json").exists()
+    assert list((r.registry / state.ENDING_DIR).iterdir()) == []
     owner = board.build(bdrepo, use_pr=False)["worktrees"][1]["owner"]
     assert owner["state"] == "past"
     assert owner["last"]["actor"] == actor
@@ -284,11 +304,11 @@ def test_a_session_whose_process_died_is_reaped_and_its_claims_released(bdrepo, 
     entry = state.load_entries(r)[OTHER_SESSION]
     entry.update({"pid": dead_pid(), "pid_start": None})
     state.write_json(state.entry_path(r, OTHER_SESSION), entry)
-    lifecycle.bg_start(r, OTHER_SESSION)  # creates its bead with the dead PID
+    lifecycle.bg_start(r)  # creates its bead with the dead PID
     claimed = bd_run(bdrepo, "create", "abandoned work", "--silent")
     bd_run(bdrepo, "update", claimed, "--claim", actor="claude-bbbbbbbb")
     lifecycle.on_start(r, start_event(bdrepo), {"CLAUDE_ENV_FILE": str(tmp_path / "e2")}, background=False)
-    lifecycle.bg_start(r, ME)  # I start: the reaper runs
+    lifecycle.bg_start(r)  # I start: the reaper runs
     dead = bd_json(bdrepo, "show", "df-sess-bbbbbbbb")[0]
     assert dead["status"] == "closed"
     assert dead["metadata"]["end_reason"] == "abandoned"

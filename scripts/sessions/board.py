@@ -20,6 +20,7 @@ import concurrent.futures
 import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import state
@@ -141,32 +142,45 @@ def owner(worktree: Path, is_main: bool, entries: dict[str, dict], past: list[di
     return {"state": "unknown", "note": "no session registered here" + ("" if past is not None else " (bd not read)")}
 
 
+@dataclass(frozen=True)
+class Options:
+    base: str = DEFAULT_BASE
+    use_bd: bool = True
+    use_pr: bool = True
+
+
+def lookups(repo: state.Repo, rows: list[dict], opts: Options,
+            full: bool) -> tuple[list[dict], dict, dict, list[dict] | None]:
+    """The slow parts, in parallel: git facts per worktree, open PRs, issues, past sessions.
+    An owner lookup (`full` False) needs only the past sessions."""
+    prefix = repo.bead_prefix()
+    bd = Bd(repo.main)
+    ids = sorted({b for r in rows if (b := bead_of(r, prefix))})
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        facts = pool.map(lambda r: inspect(Path(r["path"]), opts.base), rows) if full else iter([{}] * len(rows))
+        prs = pool.submit(open_prs, repo) if opts.use_pr and full else None
+        found = pool.submit(issues, bd, ids) if opts.use_bd and full else None
+        past = pool.submit(past_sessions, bd) if opts.use_bd else None
+        return (list(facts), prs.result() if prs else {}, found.result() if found else {},
+                past.result() if past else None)
+
+
 def build(project: Path, *, base: str = DEFAULT_BASE, use_bd: bool = True, use_pr: bool = True,
           only: Path | None = None) -> dict:
     repo = state.Repo(project)
     entries = state.load_entries(repo)
-    prefix = repo.bead_prefix()
     rows = worktree_list(repo)
     for r in rows:
         r["is_main"] = Path(r["path"]) == repo.main
     if only is not None:
         target = repo.worktree_of(only) or repo.main
         rows = [r for r in rows if Path(r["path"]) == target]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
-        facts = list(pool.map(lambda r: inspect(Path(r["path"]), base), rows)) if only is None else [{}] * len(rows)
-        prs = pool.submit(open_prs, repo) if use_pr and only is None else None
-        bd = Bd(repo.main)
-        ids = sorted({b for r in rows if (b := bead_of(r, prefix))})
-        found_issues = pool.submit(issues, bd, ids) if use_bd and only is None else None
-        past = pool.submit(past_sessions, bd) if use_bd else None
-        prs, found_issues, past = (f.result() if f else None for f in (prs, found_issues, past))
+    facts, prs, found, past = lookups(repo, rows, Options(base, use_bd, use_pr), full=only is None)
     out = []
     for r, f in zip(rows, facts, strict=True):
-        path, bead = Path(r["path"]), bead_of(r, prefix)
-        out.append({**r, **f, "name": path.name, "bead": bead,
-                    "issue": (found_issues or {}).get(bead) if bead else None,
-                    "pr": (prs or {}).get(r.get("branch") or ""),
-                    "owner": owner(path, r["is_main"], entries, past)})
+        path, bead = Path(r["path"]), bead_of(r, repo.bead_prefix())
+        out.append({**r, **f, "name": path.name, "bead": bead, "issue": found.get(bead),
+                    "pr": prs.get(r.get("branch") or ""), "owner": owner(path, r["is_main"], entries, past)})
     return {"generated_at": state.now_iso(), "main": str(repo.main), "base": base,
             "registered_sessions": len(entries), "worktrees": out}
 
@@ -193,29 +207,38 @@ def owner_line(o: dict) -> str:
     return f"{o['state']}: {o.get('note', '')}"
 
 
+def headline(w: dict) -> str:
+    name = "main checkout" if w["is_main"] else w["name"]
+    head = f"{name}  [{w.get('branch') or 'detached'}]"
+    issue = w.get("issue")
+    if w.get("bead"):
+        head += f"  {w['bead']}"
+    if issue:
+        head += f" {issue.get('status')}/{issue.get('assignee') or '-'}"
+    if w.get("pr"):
+        head += f"  PR #{w['pr']['number']}"
+    return head
+
+
+def file_line(kind: str, files: list[str]) -> str:
+    more = f" +{len(files) - SHOW_FILES}" if len(files) > SHOW_FILES else ""
+    return f"  {kind}: {', '.join(files[:SHOW_FILES])}{more}"
+
+
+def block(w: dict) -> list[str]:
+    """One worktree's lines in the text board."""
+    lines = [headline(w), f"  owner: {owner_line(w['owner'])}"]
+    hist = w.get("history") or {"ok": True}
+    if not hist.get("ok"):
+        lines.append(f"  WARNING: {hist['why']}; do not push this branch as is")
+    lines += [file_line(kind, w[kind]) for kind in ("uncommitted", "committed") if w.get(kind)]
+    if w.get("last_commit"):
+        lines.append(f"  last commit: {w['last_commit']}")
+    return lines
+
+
 def text(board: dict) -> str:
-    lines = []
-    for w in board["worktrees"]:
-        name = "main checkout" if w["is_main"] else w["name"]
-        issue = w.get("issue") or {}
-        head = f"{name}  [{w.get('branch') or 'detached'}]"
-        if w.get("bead"):
-            head += f"  {w['bead']}" + (f" {issue.get('status')}/{issue.get('assignee') or '-'}" if issue else "")
-        if w.get("pr"):
-            head += f"  PR #{w['pr']['number']}"
-        lines.append(head)
-        lines.append(f"  owner: {owner_line(w['owner'])}")
-        hist = w.get("history") or {}
-        if hist and not hist.get("ok"):
-            lines.append(f"  WARNING: {hist['why']}; do not push this branch as is")
-        for kind in ("uncommitted", "committed"):
-            files = w.get(kind) or []
-            if files:
-                more = f" +{len(files) - SHOW_FILES}" if len(files) > SHOW_FILES else ""
-                lines.append(f"  {kind}: {', '.join(files[:SHOW_FILES])}{more}")
-        if w.get("last_commit"):
-            lines.append(f"  last commit: {w['last_commit']}")
-    return "\n".join(lines)
+    return "\n".join(line for w in board["worktrees"] for line in block(w))
 
 
 def main(argv: list[str] | None = None) -> int:
