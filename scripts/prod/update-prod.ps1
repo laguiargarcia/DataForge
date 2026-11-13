@@ -5,11 +5,16 @@ Update or roll back a NON-editable DataForge install in a Windows venv (df-qryy)
   update-prod.ps1 -VenvPath <venv> -Ref <git ref> [-Repo <git repo>]
   update-prod.ps1 -VenvPath <venv> -Rollback
 
+  Add -Constraints <file> to pin the dependencies (scripts\prod\constraints-win.txt holds the
+  versions prod runs) and -Requirements <file>[,<file>...] for packages the workspaces need
+  that are not DataForge dependencies (e.g. workspaces\GetFinance\requirements.txt).
+
 What it does:
   1. Refuses while DataForge is in use: a process running from the venv, or a job_runs row
      still 'running'/'pending' in <DataForgeHome>\dataforge.db.
   2. Records what is installed now (pip freeze, source of the dataforge distribution).
-  3. Installs the wheel non-editable, then lets pip add whatever dependency is missing.
+  3. Installs the wheel non-editable, then lets pip add whatever dependency is missing,
+     together with the -Requirements files, in one resolve under the same -Constraints.
   4. Keeps every installed wheel under <StateDir>\releases, with current.json and
      previous.json naming the active release and the one -Rollback returns to.
 
@@ -36,6 +41,7 @@ param(
     [string]$DataForgeHome = $env:DATAFORGE_HOME,
     [string]$StateDir,
     [string]$Constraints,
+    [string[]]$Requirements = @(),
     [switch]$IgnoreRunRows
 )
 $ErrorActionPreference = "Stop"
@@ -171,11 +177,12 @@ function Build-WheelFromRef([string]$OutDir) {
 function Install-Wheel([string]$WheelPath) {
     $extra = @()
     if ($Constraints) { $extra = @("-c", (Resolve-Path -LiteralPath $Constraints).Path) }
+    foreach ($req in $Requirements) { $extra += @("-r", (Resolve-Path -LiteralPath $req).Path) }
     # The version never changes, so pip would keep the installed copy without --force-reinstall.
     Invoke-Native "pip install (dataforge only)" {
         & $py -m pip install --disable-pip-version-check --force-reinstall --no-deps $WheelPath
     }
-    Invoke-Native "pip install (dependencies)" {
+    Invoke-Native "pip install (dependencies and -Requirements)" {
         & $py -m pip install --disable-pip-version-check @extra $WheelPath
     }
 }
@@ -273,6 +280,8 @@ $id = if ($commit) { $commit.Substring(0, 12) } else { "sha256-" + $sha.Substrin
 $current = [ordered]@{
     id = $id; kind = "wheel"; source = $null; wheel = $wheelPath; commit = $commit
     sha256 = $sha; ref = $Ref; freeze = $freezeAfter; installed_at = (Get-Date).ToString("s")
+    constraints = $(if ($Constraints) { (Resolve-Path -LiteralPath $Constraints).Path } else { $null })
+    requirements = @($Requirements | ForEach-Object { (Resolve-Path -LiteralPath $_).Path })
 }
 Write-Json $currentFile $current
 if ($previous) { Write-Json $previousFile $previous }
