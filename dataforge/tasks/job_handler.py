@@ -12,7 +12,7 @@ class JobHandler:
         if not task.job:
             raise ValueError(f"Task '{task.name}' type=job requires 'job:'")
         from ..parser import load_job
-        from ..engine import run_job
+        from ..engine import run_job, run_status
         referenced_job = load_job(workspace_dir, task.job)
         results = run_job(referenced_job, workspace_dir, db_url, run_id=run_id)
-        return 0 if all(rc == 0 for rc in results.values() if rc is not None) else 1
+        return 0 if run_status(referenced_job, results) == "success" else 1

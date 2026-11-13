@@ -361,3 +361,32 @@ def test_real_deptry_reports_an_undeclared_import_and_nothing_on_a_clean_tree(tm
     _write(tmp_path / "scripts" / "c.py", "import undeclared_pkg_df\n")
     found = gate.dependencies([*clean, "scripts/c.py"])
     assert gate.count(found) == {"scripts/c.py": {"deptry:DEP001": 1}}
+
+
+# ---------------------------------------------------------------- a private workspace's own tests (df-rt6w)
+
+
+def test_vulture_findings_in_a_workspace_tests_dir_are_dropped_but_its_scripts_are_kept(monkeypatch):
+    """A workspace's tests feed vulture as callers; their fixtures and mocks are not dead code."""
+    seen = []
+    def fake_vulture(files):
+        seen.append(sorted(files))
+        return [finding(f, "vulture:unused-function") for f in files]
+    monkeypatch.setattr(gate, "vulture", fake_vulture)
+    monkeypatch.setattr(gate, "ruff", lambda files: [])
+    monkeypatch.setattr(gate, "project_rules", lambda files: [])
+    monkeypatch.setattr(gate, "import_contracts", lambda: [])
+    monkeypatch.setattr(gate, "dependencies", lambda files: [])
+    private = ["workspaces/Priv/scripts/a.py", "workspaces/Priv/tests/test_a.py", "workspaces/Priv/tools/t.py"]
+    found = gate.collect_full([], private)
+    assert sorted(f.file for f in found) == ["workspaces/Priv/scripts/a.py", "workspaces/Priv/tools/t.py"]
+    assert ["workspaces/Priv/scripts/a.py", "workspaces/Priv/tests/test_a.py", "workspaces/Priv/tools/t.py"] in seen
+
+
+@pytest.mark.parametrize(("rel", "expected"), [("workspaces/Priv/tests/test_a.py", True),
+                                               ("workspaces/Priv/tests/sub/x.py", True),
+                                               ("workspaces/Priv/scripts/tests.py", False),
+                                               ("workspaces/tests/x.py", False),
+                                               ("tests/workspaces/x.py", False)])
+def test_what_counts_as_a_workspace_test(rel, expected):
+    assert gate._is_workspace_test(rel) is expected

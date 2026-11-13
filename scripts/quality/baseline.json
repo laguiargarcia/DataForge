@@ -182,7 +182,7 @@
     "PLW1510": 2
   },
   "tests/test_triggers.py": {
-    "F841": 2,
+    "F841": 1,
     "RUF059": 1
   },
   "workspaces/GetFinance-Show/scripts/cleansed2curated/cleansed2curated_investments.py": {

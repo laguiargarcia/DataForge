@@ -254,8 +254,16 @@ def collect_full(public: list[str], private: list[str]) -> list[Finding]:
         if rel.startswith("workspaces/"):
             workspaces[rel.split("/")[1]].append(rel)
     for group in workspaces.values():  # each private workspace sees only its own functions.py
-        found += vulture(group)
+        # Its own tests (workspaces/<ws>/tests/) count as callers too, and are not dead code either.
+        found += [f for f in vulture(group) if not _is_workspace_test(f.file)]
     return found
+
+
+def _is_workspace_test(rel: str) -> bool:
+    """workspaces/<ws>/tests/<...>: a file inside a private workspace's own tests/ directory."""
+    root, _, rest = rel.partition("/")
+    _, _, inside = rest.partition("/")
+    return root == "workspaces" and inside.startswith("tests/")
 
 
 # ---------------------------------------------------------------------------- baseline

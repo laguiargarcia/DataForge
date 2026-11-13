@@ -136,3 +136,92 @@ def test_retry_waits_between_attempts_but_not_after_the_last(tmp_path, db_url, m
     assert run_task_with_retry(t, job(t), tmp_path, db_url) == 7
     assert len(calls) == 3
     assert sleeps == [5, 5]
+
+
+# --- df-h864: a failure nobody takes over fails the run ------------------------------------------
+# The run is failed when a task fails and no dependent with a `failed` condition on it ran (a
+# failed leaf is the simplest case: it has no dependents at all), or when an error task failed.
+# Skipped tasks stay neutral: they never fail the run themselves.
+
+
+def test_a_failed_root_whose_dependents_are_all_skipped_fails_the_run(
+        tmp_path, db_url, run_row, outcomes):
+    """The 2026-11-12 incident: fetch fails, its whole chain is skipped, an independent root
+    succeeds. Every leaf is skipped, yet nothing handled the failure."""
+    outcomes["fetch"] = 1
+    transform = task("transform", depends_on=["fetch"])
+    report = task("report", depends_on=["transform", "calendar"])
+    results = run_job(job(task("fetch"), task("calendar"), transform, report),
+                      tmp_path, db_url, run_id=run_row())
+    assert results == {"fetch": 1, "calendar": 0, "transform": "skipped", "report": "skipped"}
+    assert run_row.read().status == "failed"
+
+
+def test_a_failure_a_when_failed_dependent_takes_over_keeps_the_run_successful(
+        tmp_path, db_url, run_row, outcomes):
+    """The alert pattern (D10): the main chain is skipped, the handler runs and succeeds."""
+    outcomes["fetch"] = 1
+    transform = task("transform", depends_on=["fetch"])
+    notify = task("notify", depends_on=[{"task": "fetch", "when": "failed"}])
+    results = run_job(job(task("fetch"), transform, notify), tmp_path, db_url, run_id=run_row())
+    assert results == {"fetch": 1, "transform": "skipped", "notify": 0}
+    assert run_row.read().status == "success"
+
+
+def test_a_when_completed_dependent_takes_over_a_failure(tmp_path, db_url, run_row, outcomes):
+    """`completed` is [succeeded, failed]: a dependent that runs either way handles the failure."""
+    outcomes["t1"] = 1
+    t2 = task("t2", depends_on=[{"task": "t1", "when": "completed"}])
+    t3 = task("t3", depends_on=["t2"])
+    assert run_job(job(task("t1"), t2, t3), tmp_path, db_url, run_id=run_row()) == {
+        "t1": 1, "t2": 0, "t3": 0}
+    assert run_row.read().status == "success"
+
+
+def test_a_when_failed_dependent_that_was_skipped_does_not_take_over(
+        tmp_path, db_url, run_row, outcomes):
+    """The handler also needs t0 to fail (match: all); t0 succeeded, so it never ran."""
+    outcomes["t1"] = 1
+    handler = task("handler", depends_on=[{"task": "t1", "when": "failed"},
+                                          {"task": "t0", "when": "failed"}])
+    results = run_job(job(task("t0"), task("t1"), handler), tmp_path, db_url, run_id=run_row())
+    assert results == {"t0": 0, "t1": 1, "handler": "skipped"}
+    assert run_row.read().status == "failed"
+
+
+def test_a_when_skipped_dependent_does_not_take_over_a_failure(
+        tmp_path, db_url, run_row, outcomes):
+    outcomes["t1"] = 1
+    t2 = task("t2", depends_on=["t1"])
+    t3 = task("t3", depends_on=[{"task": "t2", "when": "skipped"}])
+    assert run_job(job(task("t1"), t2, t3), tmp_path, db_url, run_id=run_row()) == {
+        "t1": 1, "t2": "skipped", "t3": 0}
+    assert run_row.read().status == "failed"
+
+
+def test_a_handler_that_fails_in_turn_fails_the_run(tmp_path, db_url, run_row, outcomes):
+    """The handler took over t1, but its own failure is not taken over by anyone."""
+    outcomes.update(t1=1, handler=1)
+    handler = task("handler", depends_on=[{"task": "t1", "when": "failed"}])
+    after = task("after", depends_on=["handler"])
+    assert run_job(job(task("t1"), handler, after), tmp_path, db_url, run_id=run_row()) == {
+        "t1": 1, "handler": 1, "after": "skipped"}
+    assert run_row.read().status == "failed"
+
+
+def test_an_inactive_handler_does_not_take_over_a_failure(tmp_path, db_url, run_row, outcomes):
+    outcomes["t1"] = 1
+    handler = task("handler", depends_on=[{"task": "t1", "when": "failed"}], active=False)
+    assert run_job(job(task("t1"), handler), tmp_path, db_url, run_id=run_row()) == {
+        "t1": 1, "handler": None}
+    assert run_row.read().status == "failed"
+
+
+def test_run_status_reads_the_outcome_from_the_job_and_its_results():
+    """The pure function the CLI uses for its exit code agrees with the recorded status."""
+    t2 = task("t2", depends_on=["t1"])
+    notify = task("notify", depends_on=[{"task": "t1", "when": "failed"}])
+    assert engine.run_status(job(task("t1"), t2), {"t1": 1, "t2": "skipped"}) == "failed"
+    assert engine.run_status(job(task("t1"), t2, notify),
+                             {"t1": 1, "t2": "skipped", "notify": 0}) == "success"
+    assert engine.run_status(job(task("t1"), t2), {"t1": 0, "t2": 0}) == "success"
