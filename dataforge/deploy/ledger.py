@@ -70,21 +70,26 @@ class Ledger:
             f.write(entry.model_dump_json() + "\n")
 
     def entries(self) -> list[DeployEntry]:
-        if not self.log.exists():
-            return []
-        return [DeployEntry.model_validate_json(line)
-                for line in self.log.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [entry for _, entry in self._read()]
 
     def last(self) -> DeployEntry | None:
         es = self.entries()
         return es[-1] if es else None
 
     def drop_last(self) -> None:
-        es = self.entries()[:-1]
-        self.root.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "w", encoding="utf-8") as f:
-            for e in es:
-                f.write(e.model_dump_json() + "\n")
+        """Remove the last entry (LIFO). The log is rewritten whole, never truncated in place, so
+        a crash keeps either the old or the new log (df-ahua.5.3)."""
+        self._rewrite([raw for raw, _ in self._read()[:-1]])
+
+    def _rewrite(self, raw_lines: list[bytes]) -> None:
+        atomic_write(self.log, b"".join(line + b"\n" for line in raw_lines))
+
+    def _read(self) -> list[tuple[bytes, DeployEntry]]:
+        """(raw line, entry) for every entry in the log."""
+        if not self.log.exists():
+            return []
+        raw = [line.strip() for line in self.log.read_bytes().split(b"\n") if line.strip()]
+        return [(line, DeployEntry.model_validate_json(line)) for line in raw]
 
 
 def _hex(sha: str) -> str:

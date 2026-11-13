@@ -20,9 +20,10 @@ _SOURCE = {"scripts/mod.py": _NEW["scripts/mod.py"], "scripts/new/add.py": _NEW[
 _OUTSIDE = b"outside both workspaces\n"
 _TARGETS = ("scripts/mod.py", "scripts/new/add.py", "scripts/gone.py")
 
-# What makes deploy state durable: the temp file and the ledger blobs (write_bytes), the swap
-# into place (os.replace), deletes (unlink, rmdir) and the deploy log, which the ledger writes
-# through open(): "a" appends an entry, "w" truncates it and rewrites all but the last.
+# What makes deploy state durable: the temp files of targets, blobs and the rewritten deploy log
+# (write_bytes), the swap into place (os.replace), deletes (unlink, rmdir) and the log append,
+# which the ledger writes through open(..., "a"). Dropping the last entry rewrites the whole log
+# through a temp file + os.replace.
 _LOG_OPEN = "dataforge.deploy.ledger.open"
 _POINTS = WritePoints(["pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink",
                        "pathlib.Path.rmdir", _LOG_OPEN],
@@ -218,8 +219,10 @@ def rollback_sweep(tmp_path_factory) -> _Findings:
 
 
 def test_rollback_sweep_reaches_every_kind_of_write(rollback_sweep):
-    assert {"pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink", "pathlib.Path.rmdir",
-            _LOG_OPEN} <= {s.point for s in rollback_sweep.steps}
+    # Rollback never appends to the log: it drops the entry with a whole-log rewrite, so it
+    # reaches no _LOG_OPEN.
+    assert {"pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink",
+            "pathlib.Path.rmdir"} <= {s.point for s in rollback_sweep.steps}
     dry = rollback_sweep.root / "dry/Prod"   # the uncrashed run did the whole rollback
     assert (_tree(dry), len(_log_ids(dry))) == (_OLD, 1)
 
@@ -241,10 +244,8 @@ def test_rerunning_rollback_after_a_crash_restores_the_pre_deploy_state(rollback
     rollback_sweep.assert_holds("rerun")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.3: Ledger.drop_last truncates the log with "
-                   "open('w') before rewriting it, so a kill there loses every earlier entry")
 def test_rollback_crash_keeps_the_earlier_deploys_in_the_log(rollback_sweep):
-    # Ledger: "append-only deploy log"; rollback_last drops only the entry it undid (LIFO), and
+    # df-ahua.5.3. Ledger: "append-only deploy log"; rollback_last drops only the entry it undid (LIFO), and
     # law #4 needs the earlier entries to undo the earlier deploys.
     rollback_sweep.assert_holds("history")
 

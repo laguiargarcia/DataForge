@@ -46,6 +46,10 @@ def test_drop_last(tmp_path):
 
 # --- crash safety (df-ahua.5) ---
 
+def _entry(eid: str, **kw) -> DeployEntry:
+    return DeployEntry(id=eid, ts="t", source="D", target="P", pipeline="p", **kw)
+
+
 def _blob_file(led: Ledger, sha: str):
     hexd = sha.split(":")[-1]
     return led.objects / hexd[:2] / hexd
@@ -85,3 +89,27 @@ def test_has_blob_accepts_a_bare_hex_digest(tmp_path):
     sha = led.write_blob(b"y")
     assert led.has_blob(sha.split(":")[1]) is True
     assert led.has_blob("sha256:" + "0" * 64) is False
+
+
+def test_drop_last_never_truncates_the_log_in_place(tmp_path, monkeypatch):
+    # df-ahua.5.3: if the rewrite fails, the old log is still all there.
+    import os
+    led = Ledger(tmp_path)
+    led.append(_entry("dpl_1"))
+    led.append(_entry("dpl_2"))
+    before = led.log.read_bytes()
+    monkeypatch.setattr(os, "replace", lambda *a: (_ for _ in ()).throw(OSError("killed")))
+    with pytest.raises(OSError):
+        led.drop_last()
+    assert led.log.read_bytes() == before
+    assert [p.name for p in led.root.iterdir()] == ["deploylog.jsonl"]   # no temp left either
+
+
+def test_drop_last_keeps_earlier_lines_byte_for_byte(tmp_path):
+    led = Ledger(tmp_path)
+    old = b'{"id":"dpl_old","ts":"t","source":"D","target":"P","pipeline":"p","items":[]}'
+    led.root.mkdir(parents=True)
+    led.log.write_bytes(old + b"\n")
+    led.append(_entry("dpl_2"))
+    led.drop_last()
+    assert led.log.read_bytes() == old + b"\n"
