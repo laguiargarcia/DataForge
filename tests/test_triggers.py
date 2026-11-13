@@ -895,3 +895,22 @@ def test_an_unexpected_error_while_registering_is_not_hidden(test_client, worksp
     payload = {"name": "daily", "cron": "0 9 * * *", "enabled": True, "jobs": []}
     with pytest.raises(KeyError):
         test_client.post("/api/workspaces/test_ws/triggers", json=payload)
+
+
+def test_utc_cron_to_local_moves_a_day_list_across_midnight(monkeypatch):
+    """Registration shifts the stored UTC cron to local time, days included (df-vo3x.5)."""
+    from datetime import datetime, timedelta, timezone
+    import dataforge.cli as cli
+
+    class _Now:   # datetime.now() whose .astimezone() is UTC-3 whatever the machine's zone
+        def astimezone(self):
+            return datetime(2026, 1, 1, tzinfo=timezone(timedelta(hours=-3)))
+
+    class _BRT:
+        @staticmethod
+        def now():
+            return _Now()
+
+    monkeypatch.setattr(cli, "datetime", _BRT)
+    assert cli._utc_cron_to_local("0 1 * * 2,4") == "0 22 * * 1,3"
+    assert cli._utc_cron_to_local("0 1 * * TUE-SAT") == "0 22 * * 1,2,3,4,5"
