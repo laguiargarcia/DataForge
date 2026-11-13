@@ -1,9 +1,11 @@
 import hashlib
+import logging
 import os
 from pathlib import Path
 from .models import DeployEntry
 
 TEMP_SUFFIX = ".deploytmp"   # atomic_write's temp file: '.<name>.deploytmp' next to the file
+_log = logging.getLogger(__name__)
 
 
 def atomic_write(path: Path, data: bytes) -> None:
@@ -35,6 +37,10 @@ class Ledger:
 
     Borrows git's idea (objects keyed by content hash + an append-only log of "commits")
     with no git dependency, no branches, no merge.
+
+    Crash safety (df-ahua.5): a blob name only ever holds its full content; the log is appended
+    one line per entry and every rewrite (drop_last) swaps a whole new file in; a
+    last line cut short by a dying append is left out of entries() and dropped by the next write.
     """
 
     def __init__(self, target_dir: Path):
@@ -65,12 +71,15 @@ class Ledger:
 
     # --- append-only deploy log ---
     def append(self, entry: DeployEntry) -> None:
+        lines, clean = self._read()
+        if not clean:   # never glue the new line onto a torn one (df-ahua.5.4)
+            self._rewrite([raw for raw, _ in lines])
         self.root.mkdir(parents=True, exist_ok=True)
-        with open(self.log, "a", encoding="utf-8") as f:
-            f.write(entry.model_dump_json() + "\n")
+        with open(self.log, "ab") as f:
+            f.write(entry.model_dump_json().encode("utf-8") + b"\n")
 
     def entries(self) -> list[DeployEntry]:
-        return [entry for _, entry in self._read()]
+        return [entry for _, entry in self._read()[0]]
 
     def last(self) -> DeployEntry | None:
         es = self.entries()
@@ -79,17 +88,31 @@ class Ledger:
     def drop_last(self) -> None:
         """Remove the last entry (LIFO). The log is rewritten whole, never truncated in place, so
         a crash keeps either the old or the new log (df-ahua.5.3)."""
-        self._rewrite([raw for raw, _ in self._read()[:-1]])
+        self._rewrite([raw for raw, _ in self._read()[0][:-1]])
 
     def _rewrite(self, raw_lines: list[bytes]) -> None:
         atomic_write(self.log, b"".join(line + b"\n" for line in raw_lines))
 
-    def _read(self) -> list[tuple[bytes, DeployEntry]]:
-        """(raw line, entry) for every entry in the log."""
+    def _read(self) -> tuple[list[tuple[bytes, DeployEntry]], bool]:
+        """(raw line, entry) for every entry in the log, and whether the log ends clean (every
+        line whole and newline-terminated). Only an append can cut a line short and it writes the
+        last one, so a last line that does not parse is ignored, with a warning (df-ahua.5.4). A
+        bad line before it is not a torn append: it raises."""
         if not self.log.exists():
-            return []
-        raw = [line.strip() for line in self.log.read_bytes().split(b"\n") if line.strip()]
-        return [(line, DeployEntry.model_validate_json(line)) for line in raw]
+            return [], True
+        data = self.log.read_bytes()
+        raw = [line.strip() for line in data.split(b"\n") if line.strip()]
+        parsed: list[tuple[bytes, DeployEntry]] = []
+        for n, line in enumerate(raw, start=1):
+            try:
+                parsed.append((line, DeployEntry.model_validate_json(line)))
+            except ValueError:   # pydantic's ValidationError and UnicodeDecodeError both are
+                if n < len(raw):
+                    raise
+                _log.warning("%s: ignoring its last line, cut short by a deploy that died while "
+                             "writing it; the next deploy or rollback drops it", self.log)
+                return parsed, False
+        return parsed, data.endswith(b"\n") or not data
 
 
 def _hex(sha: str) -> str:

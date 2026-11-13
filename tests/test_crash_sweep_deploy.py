@@ -22,7 +22,7 @@ _TARGETS = ("scripts/mod.py", "scripts/new/add.py", "scripts/gone.py")
 
 # What makes deploy state durable: the temp files of targets, blobs and the rewritten deploy log
 # (write_bytes), the swap into place (os.replace), deletes (unlink, rmdir) and the log append,
-# which the ledger writes through open(..., "a"). Dropping the last entry rewrites the whole log
+# which the ledger writes through open(..., "ab"). Dropping the last entry rewrites the whole log
 # through a temp file + os.replace.
 _LOG_OPEN = "dataforge.deploy.ledger.open"
 _POINTS = WritePoints(["pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink",
@@ -250,10 +250,8 @@ def test_rollback_crash_keeps_the_earlier_deploys_in_the_log(rollback_sweep):
     rollback_sweep.assert_holds("history")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.4: Ledger.entries parses every line, so a "
-                   "half-written last line makes every later apply and rollback raise")
 def test_a_torn_last_log_line_does_not_wedge_rollback_or_deploy(tmp_path):
-    # A crash or a full disk while Ledger.append writes can leave half a JSON line. D18: rollback
+    # df-ahua.5.4. A crash or a full disk while Ledger.append writes can leave half a JSON line. D18: rollback
     # "must not wedge"; D16: the laws hold under failure. The deploy after must still work. Not swept: the line is written by a
     # file object, which the sweep cannot cut, so the torn state is written here directly.
     workdir = _after_apply(tmp_path, "w")

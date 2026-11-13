@@ -91,6 +91,57 @@ def test_has_blob_accepts_a_bare_hex_digest(tmp_path):
     assert led.has_blob("sha256:" + "0" * 64) is False
 
 
+def test_a_torn_last_line_is_ignored_with_a_warning(tmp_path, caplog):
+    # df-ahua.5.4: what an append that died half-way leaves must not wedge every later read.
+    led = Ledger(tmp_path)
+    led.append(_entry("dpl_1"))
+    whole = _entry("dpl_2").model_dump_json().encode()
+    with open(led.log, "ab") as f:
+        f.write(whole[: len(whole) // 2])
+    with caplog.at_level("WARNING", logger="dataforge.deploy.ledger"):
+        assert [e.id for e in led.entries()] == ["dpl_1"]
+    assert "last line" in caplog.text
+
+
+def test_a_last_line_torn_inside_a_utf8_character_is_ignored(tmp_path):
+    led = Ledger(tmp_path)
+    led.append(_entry("dpl_1"))
+    with open(led.log, "ab") as f:
+        f.write('{"id":"relatório'.encode("utf-8")[:-1])   # half of 'ó'
+    assert [e.id for e in led.entries()] == ["dpl_1"]
+
+
+def test_append_after_a_torn_line_drops_it_instead_of_gluing_onto_it(tmp_path):
+    led = Ledger(tmp_path)
+    led.append(_entry("dpl_1"))
+    with open(led.log, "ab") as f:
+        f.write(b'{"id":"dpl_tor')
+    led.append(_entry("dpl_2"))
+    assert [e.id for e in led.entries()] == ["dpl_1", "dpl_2"]
+    assert led.log.read_bytes().count(b"\n") == 2
+    assert b"dpl_tor" not in led.log.read_bytes()
+
+
+def test_append_after_a_whole_last_line_without_newline_starts_a_new_line(tmp_path):
+    led = Ledger(tmp_path)
+    led.root.mkdir(parents=True)
+    led.log.write_bytes(_entry("dpl_1").model_dump_json().encode())   # no trailing newline
+    led.append(_entry("dpl_2"))
+    assert [e.id for e in led.entries()] == ["dpl_1", "dpl_2"]
+
+
+def test_a_corrupt_line_before_the_last_still_fails_loudly(tmp_path):
+    # Only an append can cut a line, and it writes the last one: a bad middle line is not that.
+    led = Ledger(tmp_path)
+    led.root.mkdir(parents=True)
+    led.log.write_bytes(b"\n".join([_entry("dpl_1").model_dump_json().encode(), b'{"id":"dpl_bad',
+                                     _entry("dpl_2").model_dump_json().encode(), b""]))
+    with pytest.raises(ValueError):
+        led.entries()
+    with pytest.raises(ValueError):
+        led.append(_entry("dpl_3"))   # and nothing is written over it
+
+
 def test_drop_last_never_truncates_the_log_in_place(tmp_path, monkeypatch):
     # df-ahua.5.3: if the rewrite fails, the old log is still all there.
     import os
@@ -113,3 +164,14 @@ def test_drop_last_keeps_earlier_lines_byte_for_byte(tmp_path):
     led.append(_entry("dpl_2"))
     led.drop_last()
     assert led.log.read_bytes() == old + b"\n"
+
+
+def test_drop_last_also_drops_a_torn_tail(tmp_path):
+    led = Ledger(tmp_path)
+    led.append(_entry("dpl_1"))
+    led.append(_entry("dpl_2"))
+    with open(led.log, "ab") as f:
+        f.write(b'{"id":"dpl_3')
+    led.drop_last()   # undoes dpl_2, the last entry there is
+    assert [e.id for e in led.entries()] == ["dpl_1"]
+    assert led.log.read_bytes().endswith(b"\n")
