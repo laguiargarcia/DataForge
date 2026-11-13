@@ -81,9 +81,8 @@ min_score = 0.9572
 [targets."dataforge/db.py"]
 tests = ["tests/test_db*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 6 survivors, all equivalent: init_db's SQL lower-cased (and PRAGMA table_info(job_runs) upper-cased),
-# which SQLite reads the same, keywords and identifiers alike. mutmut does not mutate the ORM class
-# bodies, only init_db and utcnow.
+# No survivors. The schema SQL lives in the module constant _ADDED_COLUMNS, which mutmut does not mutate
+# (nor the ORM class bodies): it mutates only the functions.
 min_score = 1.0
 
 [targets."dataforge/deploy/ledger.py"]
