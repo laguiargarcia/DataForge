@@ -84,7 +84,7 @@
   "dataforge/models.py": {
     "SIM114": 1,
     "TRY004": 2,
-    "vulture:unused-variable": 3
+    "vulture:unused-variable": 2
   },
   "dataforge/tasks/__init__.py": {
     "B904": 1

@@ -67,3 +67,21 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # six open() calls (the UTF-8 tests catch them in the Windows test job), and sort_keys=None, which
 # PyYAML reads as False.
 min_score = 0.9233
+
+[targets."dataforge/compat.py"]
+tests = ["tests/test_compat*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 5 survivors. Equivalent: parents=True/None/omitted on resolve_db's mkdir of <workspace>/data, since
+# every caller passes a workspace that exists (resolve_workspace checked its workspace.yaml).
+# Declined: the wording of the "not in a workspace" message (tests only check it names --workspace).
+# No platform-only survivor: the Windows default home is tested by running platformdirs' Windows rule
+# with its folder probe patched.
+min_score = 0.9572
+
+[targets."dataforge/db.py"]
+tests = ["tests/test_db*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 6 survivors, all equivalent: init_db's SQL lower-cased (and PRAGMA table_info(job_runs) upper-cased),
+# which SQLite reads the same, keywords and identifiers alike. mutmut does not mutate the ORM class
+# bodies, only init_db and utcnow.
+min_score = 0.8983
