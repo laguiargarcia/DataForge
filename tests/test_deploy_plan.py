@@ -123,6 +123,22 @@ def test_prune_on_marks_extra_target_files_for_delete(tmp_path):
     assert d.source_path is None
 
 
+def test_prune_leaves_the_temp_file_of_a_killed_apply_alone(tmp_path):
+    # df-ahua.5.5: '.a.py.deploytmp' is what a deploy killed before its os.replace leaves. It is
+    # not a definition, so no DELETE for it; the write it belonged to replaces it. A file merely
+    # ending in .deploytmp (no leading dot) is an ordinary file and is pruned.
+    src, tgt = tmp_path / "Dev", tmp_path / "Prod"
+    _mk(src, "scripts/a.py", "a\n")
+    _mk(tgt, "scripts/.a.py.deploytmp", "half")
+    _mk(tgt, "scripts/sub/.b.py.deploytmp", "half")
+    _mk(tgt, "scripts/notes.deploytmp", "mine\n")
+    _mk(tgt, "scripts/.hidden.py", "old\n")
+    p = _pipeline_prune(src, prune=True)
+    plan = build_plan(src, tgt, p, "p", DeployIgnore.load(src), resolve_pairs(src, p))
+    assert sorted(i.target_path for i in plan.items if i.action == Action.delete) == [
+        "scripts/.hidden.py", "scripts/notes.deploytmp"]
+
+
 # --- df-gl6: prune must compare against the SOURCE set, not the set of CHANGES ---
 def test_prune_keeps_in_sync_files_and_deletes_only_source_absent(tmp_path):
     """N source files identical in target + 2 target-only files -> exactly the 2 are deleted.

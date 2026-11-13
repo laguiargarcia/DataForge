@@ -128,15 +128,9 @@ def _rollback_restores(workdir: Path) -> str:
 
 
 def _redeploy_converges(workdir: Path) -> str:
-    """Deploying again reaches _NEW. Only when the crash left a .deploytmp is one failed deploy
-    tolerated: the next prune deploy then raises once (open question, df-ahua.5.5)."""
-    if _files(workdir / "Prod") == _tree(workdir / "Prod"):
-        deploy(workdir)
-    else:
-        try:
-            deploy(workdir)
-        except FileNotFoundError:
-            deploy(workdir)
+    """Deploying once more reaches _NEW, a leftover .deploytmp included: prune leaves it alone and
+    the write it belonged to replaces it (df-ahua.5.5)."""
+    deploy(workdir)
     return _differs(_tree(workdir / "Prod"), _NEW)
 
 
