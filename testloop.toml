@@ -110,3 +110,88 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # 2 survivors, both equivalent: applied=0 and entry_id=None dropped from the nothing-to-apply result,
 # which are AutoDeployResult's defaults.
 min_score = 0.989
+
+[targets."dataforge/tasks/python_handler.py"]
+tests = ["tests/test_python_handler*.py", "tests/test_env_file*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 6 survivors. Equivalent: inicio=utcnow() set to None or left out (the column's default is utcnow,
+# called at the insert a moment later), and the env file read with encoding "UTF-8" or None (one codec;
+# None is UTF-8 under Linux's locale, and the env-file property's 'café' line catches it in the Windows
+# test job). Declined: the wording of the missing-row log line (the test checks it names the row).
+min_score = 0.9387
+
+[targets."dataforge/tasks/job_handler.py"]
+tests = ["tests/test_job_handler*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/tasks/error_handler.py"]
+tests = ["tests/test_error_handler*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 2 survivors, both declined: the wording of the default message (tests check it is not empty).
+min_score = 0.9428
+
+[targets."dataforge/tasks/message/render.py"]
+tests = ["tests/test_message_render*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/tasks/message/dispatch.py"]
+tests = ["tests/test_message_dispatch*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 1 survivor, declined: the wording of the no-channel error (the test checks it says so).
+min_score = 0.9565
+
+[targets."dataforge/tasks/message/handler.py"]
+tests = ["tests/test_message_handler*.py", "tests/test_env_file*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 11 survivors. Equivalent: 7 mutants of the rc given to a succeeded or skipped task (only a failed
+# task's rc is rendered, in {failed_tasks_summary}), and the env file read with encoding "UTF-8" or
+# None (as in python_handler). Declined: the wording of the success output and of the no-channel
+# error (tests check they name the channels). 4 mutants of _run_summary time out instead of failing
+# fast (Hypothesis shrinks the failing example), which counts as caught.
+min_score = 0.9519
+
+[targets."dataforge/tasks/message/channels/__init__.py"]
+tests = ["tests/test_message_channels*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/tasks/message/channels/email.py"]
+tests = ["tests/test_message_email*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 4 survivors, all equivalent: the From and To header names in lower or upper case (header field names
+# are case-insensitive, RFC 5322). The SMTP connection is a mock: no test touches the network.
+min_score = 0.9402
+
+[targets."dataforge/tasks/message/channels/twilio_sms.py"]
+tests = ["tests/test_message_twilio*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/tasks/message/channels/twilio_whatsapp.py"]
+tests = ["tests/test_message_twilio*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/deploy/models.py"]
+tests = ["tests/test_deploy_models*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/liveness.py"]
+tests = ["tests/test_liveness*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py", "tests/process_owners.py"]
+# 15 survivors, none Linux can see. Windows-only code: process_start's win32 branch (3) and the
+# empty boot and pid namespace recorded off Linux (2; the Windows test job checks both). Equivalent:
+# the 'if linux' guards forced true (2; /proc does not exist elsewhere, so the readers give "" anyway),
+# the boot-id and stat reads with "UTF-8", None or no encoding (5; ASCII files, UTF-8 locale).
+# Declined: Owner.dumps without sort_keys (3; parse_owner reads any key order, nothing compares the text).
+min_score = 0.8897
+
+[targets."dataforge/orphans.py"]
+tests = ["tests/test_orphans*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py", "tests/process_owners.py"]
+# 5 survivors. Equivalent: reconcile's `me` dropped or None (4; owner_is_gone then asks current_owner(),
+# the same value, cached per process). Declined: the wording of the failure log line.
+min_score = 0.9431
