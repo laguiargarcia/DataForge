@@ -79,7 +79,9 @@ jobs:
         shell: bash
         env: { QT_QPA_PLATFORM: offscreen }
         run: |
-          python -m pytest tests/test_gui_*.py -p no:cacheprovider \
+          # Fixed order (-p no:randomly) until df-3yh is fixed: shuffled, the GUI tests segfault
+          # intermittently (the uvicorn daemon thread of test_gui_daemon dies mid-import).
+          python -m pytest tests/test_gui_*.py -p no:cacheprovider -p no:randomly \
             --cov=dataforge --cov-branch --cov-append --cov-report= 2>&1 | tee report/tests-gui.txt
       - name: Coverage report (both runs merged, for the sonar job)
         if: always()
