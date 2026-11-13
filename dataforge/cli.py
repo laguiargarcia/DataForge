@@ -146,6 +146,10 @@ _DOW_NAMES = {
     "1": "Monday", "2": "Tuesday", "3": "Wednesday",
     "4": "Thursday", "5": "Friday", "6": "Saturday",
 }
+
+# Fields of a standard cron expression: minute, hour, day of month, month, day of week.
+_CRON_FIELDS = 5
+
 _DOW_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 
@@ -170,7 +174,7 @@ def _expand_dow(field: str) -> list[str]:
 def _cron_to_ps_trigger(cron: str) -> str:
     """Translate a cron expression to a New-ScheduledTaskTrigger argument string."""
     parts = cron.strip().split()
-    if len(parts) != 5:
+    if len(parts) != _CRON_FIELDS:
         raise ValueError(f"Invalid cron expression (need 5 fields): {cron!r}")
     minute, hour, dom, month, dow = parts
     if not minute.isdigit() or not hour.isdigit():
@@ -461,7 +465,7 @@ def _utc_cron_to_local(cron: str) -> str:
     month-dependent and is not handled.
     """
     parts = cron.strip().split()
-    if len(parts) != 5:
+    if len(parts) != _CRON_FIELDS:
         return cron
     minute, hour, dom, month, dow = parts
     if not (minute.isdigit() and hour.isdigit()):
@@ -480,6 +484,24 @@ def _utc_cron_to_local(cron: str) -> str:
         dow = str((int(dow) + day_shift) % 7)
 
     return f"{new_minute} {new_hour} {dom} {month} {dow}"
+
+
+def _platform_check_cron(cron: str) -> None:
+    """Raise ValueError when this machine's OS scheduler cannot run *cron* (stored in UTC) as
+    written, so a caller can refuse it before saving or deregistering anything (df-vo3x.3).
+
+    Only a 5-field cron can be shifted from UTC to local time, and only what the platform's
+    translator accepts can be registered: Task Scheduler takes daily and weekly, launchd one
+    StartCalendarInterval, crontab any 5-field cron.
+    """
+    if len(cron.strip().split()) != _CRON_FIELDS:
+        raise ValueError(f"Unsupported cron expression: {cron!r}. "
+                         "The OS scheduler needs the 5 fields 'M H DOM MON DOW'.")
+    local = _utc_cron_to_local(cron)
+    if platform.system() == "Windows" or _is_wsl():
+        _cron_to_ps_trigger(local)
+    elif platform.system() == "Darwin":
+        _cron_to_launchd_interval(local)
 
 
 def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> str | None:
