@@ -1,5 +1,6 @@
 python = ".venv/bin/python"
-pytest_args = ["-o", "addopts=", "-p", "no:cacheprovider"]
+# no:randomly: mutation and check need the same test order on every run (pytest-randomly shuffles it).
+pytest_args = ["-o", "addopts=", "-p", "no:cacheprovider", "-p", "no:randomly"]
 check_args = ["--hypothesis-profile=deterministic"]
 env = { QT_QPA_PLATFORM = "offscreen" }
 

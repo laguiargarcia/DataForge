@@ -1,4 +1,4 @@
-"""Quality gate: lint, dead-code and import-contract findings must not grow.
+"""Quality gate: lint, dead-code, import-contract and dependency-drift findings must not grow.
 
 Existing findings live in a baseline, counted per file and rule. `check` fails when a count rises
 above the baseline. When a count falls, `check` lowers the baseline itself, so it only ever goes
@@ -8,7 +8,7 @@ A legitimate exception is a suppression comment with a reason, on the line itsel
 `# noqa: PLC0415 -- lazy, keeps CLI startup fast`.
 
 Usage:
-  gate.py check                  full gate: ruff, vulture, import contracts, project rules
+  gate.py check                  full gate: ruff, vulture, import contracts, deptry, project rules
   gate.py check FILE...          fast gate for these files: ruff and project rules only
   gate.py check --full FILE...   full gate, judging only these files (others' work in progress is ignored)
   gate.py check --base-ref REF   also fail if the committed baseline rose against git REF
@@ -28,6 +28,7 @@ import re
 import subprocess
 import sys
 import sysconfig
+import tempfile
 import tokenize
 from collections import defaultdict
 from dataclasses import dataclass
@@ -48,7 +49,9 @@ TESTS = "tests/"
 # Only compat may spell a SQLite URL (docs/subsystems/compat.md); this file names it to find it.
 SQLITE_URL_HOMES = {"dataforge/compat.py", Path(__file__).resolve().relative_to(ROOT).as_posix()}
 # Findings that only the full gate produces; the fast gate leaves their counts alone.
-FULL_ONLY_PREFIXES = ("vulture:", "import-contract")
+FULL_ONLY_PREFIXES = ("vulture:", "import-contract", "deptry:")
+# The installed package: its files import each other by package name, never as bare siblings.
+PACKAGE = "dataforge/"
 
 SUPPRESSION = re.compile(r"#\s*(?:noqa\b|ruff:\s*ignore\b|type:\s*ignore\b|pragma:\s*no\s*cover\b)(?P<rest>.*)", re.IGNORECASE)
 REASON = re.compile(r"\s--\s*\S")
@@ -186,6 +189,37 @@ def import_contracts() -> list[Finding]:
     return [Finding("pyproject.toml", "import-contract", 0, "an import contract is broken:\n" + report)]
 
 
+def _sibling_modules(files: list[str]) -> list[str]:
+    """Names that scripts import from their own folder (scripts/testloop, a workspace's scripts/).
+
+    They reach each other through sys.path, so deptry would call each one a missing dependency.
+    """
+    names = set()
+    for rel in files:
+        if not rel.startswith((PACKAGE, TESTS)):
+            p = Path(rel)
+            names.add(p.parent.name if p.stem == "__init__" else p.stem)
+    return sorted(names - {""})
+
+
+def dependencies(public: list[str]) -> list[Finding]:
+    """Manifest drift (deptry): DEP001 imported but not declared, DEP002 declared but not imported,
+    DEP003 imported but only a transitive dependency. Config and exceptions: [tool.deptry]."""
+    with tempfile.TemporaryDirectory(prefix="quality-gate-") as tmp:
+        out = Path(tmp) / "deptry.json"
+        cmd = [sys.executable, "-m", "deptry", ".", "--no-ansi", "--json-output", str(out)]
+        for name in _sibling_modules(public):
+            cmd += ["--known-first-party", name]
+        r = _run(cmd)
+        if r.returncode not in (0, 1) or not out.is_file():  # 1: issues found
+            sys.exit(f"quality gate: deptry failed\n{r.stdout}{r.stderr}")
+        issues = json.loads(out.read_text(encoding="utf-8"))
+    return [
+        Finding(d["location"]["file"], "deptry:" + d["error"]["code"], d["location"].get("line") or 0, d["error"]["message"])
+        for d in issues
+    ]
+
+
 def project_rules(files: list[str]) -> list[Finding]:
     """DF001 suppression without a reason; DF002 SQLite URL spelled outside dataforge.compat."""
     found = []
@@ -212,7 +246,7 @@ def _token_rule(rel: str, tok: tokenize.TokenInfo, sqlite_allowed: bool) -> Find
 
 def collect_full(public: list[str], private: list[str]) -> list[Finding]:
     every = public + private
-    found = ruff(every) + project_rules(every) + import_contracts()
+    found = ruff(every) + project_rules(every) + import_contracts() + dependencies(public)
     # Tests count as callers, but their own findings are fixtures and mocks, not dead code.
     found += [f for f in vulture(public) if not f.file.startswith(TESTS)]
     workspaces = defaultdict(list)
@@ -290,6 +324,8 @@ def _report_rises(rises: list[tuple[str, str, int, int]], findings: list[Finding
         "\nFix them. If one is a deliberate exception, suppress it on its line with a reason, e.g."
         "\n  # noqa: PLC0415 -- lazy import keeps CLI startup fast"
         "\nFor dead code that a framework calls, add the name to [tool.vulture] in pyproject.toml."
+        "\nFor a dependency finding (deptry:DEP...), fix the dependencies in pyproject.toml, or declare the"
+        "\nexception in [tool.deptry] with a comment saying why."
     )
 
 
@@ -316,7 +352,7 @@ def _judge(paths: list[str], full: bool) -> tuple[list[Finding], Counts, list, l
     files = {r for r in map(_relative, paths) if r in scope}
     if full:
         findings = collect_full(public, private)
-        judged = files | {"pyproject.toml"}  # broken import contracts are reported there
+        judged = files | {"pyproject.toml"}  # broken import contracts and unused dependencies are reported there
         old, now = _only(baseline, judged), _only(count(findings), judged)
         return findings, now, increases(old, now), decreases(old, now)
     findings = ruff(sorted(files)) + project_rules(sorted(files))

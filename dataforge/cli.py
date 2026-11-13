@@ -507,6 +507,7 @@ def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> 
             f"{shlex.quote(workspace)} {shlex.quote(trigger_name)}"
         )
         _register_crontab(workspace, trigger_name, cron, cmd)
+    return None
 
 
 def _platform_deregister_trigger(workspace: str, trigger_name: str) -> None:

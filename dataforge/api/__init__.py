@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from starlette.datastructures import Headers
+from fastapi.datastructures import Headers
 
 from dataforge.db import init_db, JobRunORM
 from dataforge.api import broadcaster as _broadcaster_module

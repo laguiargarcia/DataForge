@@ -1,7 +1,7 @@
 """Tests for scripts/quality/gate.py: the ratchet arithmetic, the project rules and update/check.
 
-The tools themselves (ruff, vulture, import-linter) are replaced by fixed findings, so these tests
-run without them and judge only the gate's own logic.
+The tools themselves (ruff, vulture, import-linter, deptry) are replaced by fixed findings, so these tests
+run without them and judge only the gate's own logic. One deptry test also runs the real tool where installed.
 """
 
 import importlib.util
@@ -282,3 +282,82 @@ def test_private_files_looks_inside_a_workspace_that_is_its_own_repo(tmp_path, m
     monkeypatch.setattr(gate, "ROOT", tmp_path)
 
     assert gate.private_files() == ["workspaces/Nested/scripts/new.py", "workspaces/Nested/scripts/tracked.py"]
+
+
+# ---------------------------------------------------------------------------- deptry
+
+
+def _fake_deptry(monkeypatch, issues, returncode=1):
+    """Replace the deptry run: write `issues` where --json-output points, return `returncode`."""
+    import subprocess
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd)
+        Path(cmd[cmd.index("--json-output") + 1]).write_text(json.dumps(issues), encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, returncode, "", "deptry broke")
+
+    monkeypatch.setattr(gate, "_run", run)
+    return calls
+
+
+def test_deptry_issues_become_findings(monkeypatch):
+    calls = _fake_deptry(monkeypatch, [
+        {"error": {"code": "DEP001", "message": "'nope' imported but missing from the dependency definitions"},
+         "module": "nope", "location": {"file": "scripts/x.py", "line": 3, "column": 8}},
+        {"error": {"code": "DEP002", "message": "'unused' defined as a dependency but not used in the codebase"},
+         "module": "unused", "location": {"file": "pyproject.toml", "line": None, "column": None}},
+    ])
+    found = gate.dependencies(["dataforge/a.py", "scripts/x.py"])
+    assert [(f.file, f.code, f.line) for f in found] == [
+        ("scripts/x.py", "deptry:DEP001", 3),
+        ("pyproject.toml", "deptry:DEP002", 0),
+    ]
+    assert gate.count(found) == {"scripts/x.py": {"deptry:DEP001": 1}, "pyproject.toml": {"deptry:DEP002": 1}}
+    assert calls[0][calls[0].index("--known-first-party") + 1] == "x"
+
+
+def test_deptry_clean_tree_gives_no_findings(monkeypatch):
+    _fake_deptry(monkeypatch, [], returncode=0)
+    assert gate.dependencies(["dataforge/a.py"]) == []
+
+
+@pytest.mark.parametrize("returncode", [2, 101])
+def test_deptry_crash_stops_the_gate(monkeypatch, returncode):
+    _fake_deptry(monkeypatch, [], returncode=returncode)
+    with pytest.raises(SystemExit, match="deptry failed"):
+        gate.dependencies([])
+
+
+def test_sibling_modules_are_script_stems_outside_the_package_and_tests():
+    files = ["dataforge/engine.py", "tests/conftest.py", "scripts/testloop/common.py",
+             "workspaces/S/scripts/report_lib/__init__.py", "setup.py"]
+    assert gate._sibling_modules(files) == ["common", "report_lib", "setup"]
+
+
+def test_a_new_dependency_finding_fails_the_full_check(repo):
+    repo["findings"] = [finding("pyproject.toml", "deptry:DEP002", 0)]
+    assert gate.check([], None, full=True) == 1
+
+
+def test_fast_check_leaves_deptry_counts_alone(repo):
+    write_baseline(gate.BASELINE, {"pub.py": {"deptry:DEP001": 1}})
+    repo["findings"] = []
+    assert gate.check([str(gate.ROOT / "pub.py")], None, full=False) == 0
+    assert gate.load(gate.BASELINE) == {"pub.py": {"deptry:DEP001": 1}}
+
+
+def test_real_deptry_reports_an_undeclared_import_and_nothing_on_a_clean_tree(tmp_path, monkeypatch):
+    """End to end with the pinned deptry: the gate installs it (scripts/quality/requirements.txt);
+    the test jobs do not, so there this one test is skipped and the mocked ones above stand."""
+    pytest.importorskip("deptry")
+    _write(tmp_path / "pyproject.toml", '[project]\nname = "t"\nversion = "0"\ndependencies = []\n')
+    _write(tmp_path / "scripts" / "a.py", "import json\nimport b\n")   # stdlib and a sibling: fine
+    _write(tmp_path / "scripts" / "b.py")
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+    clean = ["scripts/a.py", "scripts/b.py"]
+    assert gate.dependencies(clean) == []
+
+    _write(tmp_path / "scripts" / "c.py", "import undeclared_pkg_df\n")
+    found = gate.dependencies([*clean, "scripts/c.py"])
+    assert gate.count(found) == {"scripts/c.py": {"deptry:DEP001": 1}}
