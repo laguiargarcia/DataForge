@@ -1,10 +1,9 @@
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 import yaml
 from .models import DeployPlan, ItemChange, DeployEntry, Action, Kind
-from .ledger import Ledger
+from .ledger import Ledger, atomic_write
 from .pairing import target_file
 from .plan import _UNDUMPABLE, _load_yaml_dict, _is_ledger_path, trigger_status
 
@@ -20,18 +19,6 @@ def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
         return yaml.safe_dump(sdata, allow_unicode=True, sort_keys=False).encode()
     except _UNDUMPABLE:   # loads but won't dump back (df-886.17): copy it verbatim
         return source_path.read_bytes()
-
-
-def _atomic_write(path: Path, data: bytes) -> None:
-    """Write via a temp file + os.replace so a failed write never leaves a half-written target."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name("." + path.name + ".deploytmp")
-    try:
-        tmp.write_bytes(data)
-        os.replace(tmp, path)
-    finally:
-        if tmp.exists():
-            tmp.unlink()
 
 
 def apply_plan(source_dir: Path, target_dir: Path, plan: DeployPlan, ledger: Ledger) -> DeployEntry:
@@ -65,7 +52,7 @@ def apply_plan(source_dir: Path, target_dir: Path, plan: DeployPlan, ledger: Led
             else:
                 content = (source_dir / item.source_path).read_bytes()
 
-            _atomic_write(tgt, content)
+            atomic_write(tgt, content)
             after = ledger.write_blob(content)
             applied.append(ItemChange(source_path=item.source_path, target_path=item.target_path,
                                       kind=item.kind, action=item.action, reason=item.reason,

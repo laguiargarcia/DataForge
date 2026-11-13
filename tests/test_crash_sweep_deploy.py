@@ -6,7 +6,7 @@ import hashlib
 import shutil
 from pathlib import Path
 import pytest
-from dataforge.deploy.ledger import Ledger
+from dataforge.deploy.ledger import Ledger, is_temp_name
 from dataforge.deploy.models import LEDGER_REL
 from tests.crash_sweep import Step, WritePoints, crash_sweep
 from tests.deploy_crash_scenarios import deploy, rollback
@@ -102,8 +102,12 @@ def _outside(workdir: Path) -> str:
 
 
 def _bad_blobs(tgt: Path) -> str:
+    """Blobs (files named by a hash) whose content is not that hash. A temp file a killed blob
+    write left behind is not a blob: nothing addresses it, and the next write of that content
+    replaces it."""
     bad = [p.name[:8] for p in Ledger(tgt).objects.rglob("*")
-           if p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest() != p.name]
+           if p.is_file() and not is_temp_name(p.name)
+           and hashlib.sha256(p.read_bytes()).hexdigest() != p.name]
     return f"blobs whose content is not their name: {bad}" if bad else ""
 
 
@@ -160,7 +164,7 @@ def test_apply_sweep_reaches_every_kind_of_write(apply_sweep):
 
 
 def test_apply_crash_leaves_each_target_old_or_new(apply_sweep):
-    # Promised by apply._atomic_write ("a failed write never leaves a half-written target") and
+    # Promised by ledger.atomic_write ("a failed write never leaves a half-written file") and
     # D16 ("atomic per-file writes").
     apply_sweep.assert_holds("atomic")
 
@@ -177,10 +181,8 @@ def test_redeploy_after_apply_crash_reaches_the_source_state(apply_sweep):
     apply_sweep.assert_holds("converges")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.2: a torn blob write stays under its hash name "
-                   "and Ledger.write_blob never rewrites it")
 def test_apply_crash_keeps_every_blob_true_to_its_hash(apply_sweep):
-    # Promised by Ledger ("content-addressed blob store"), law #4 (every overwrite/delete is
+    # df-ahua.5.2. Promised by Ledger ("content-addressed blob store"), law #4 (every overwrite/delete is
     # recoverable via the ledger) and D18 (rollback must not partially restore).
     apply_sweep.assert_holds("blobs")
 
@@ -223,7 +225,7 @@ def test_rollback_sweep_reaches_every_kind_of_write(rollback_sweep):
 
 
 def test_rollback_crash_leaves_each_target_old_or_new(rollback_sweep):
-    # Promised by apply._atomic_write, which rollback restores through, and D18 ("must not ...
+    # Promised by ledger.atomic_write, which rollback restores through, and D18 ("must not ...
     # partially restore").
     rollback_sweep.assert_holds("atomic")
 

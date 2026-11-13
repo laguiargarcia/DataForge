@@ -1,6 +1,33 @@
 import hashlib
+import os
 from pathlib import Path
 from .models import DeployEntry
+
+TEMP_SUFFIX = ".deploytmp"   # atomic_write's temp file: '.<name>.deploytmp' next to the file
+
+
+def atomic_write(path: Path, data: bytes) -> None:
+    """Write via a temp file + os.replace so a failed write never leaves a half-written file: the
+    path holds either its old or its new content. A process killed before os.replace leaves the
+    temp file behind (see is_temp_name)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name("." + path.name + TEMP_SUFFIX)
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def is_temp_name(rel: str) -> bool:
+    """True for the temp file atomic_write leaves behind when its process dies before os.replace."""
+    name = rel.rsplit("/", 1)[-1]
+    return name.startswith(".") and name.endswith(TEMP_SUFFIX)
+
+
+def blob_sha(data: bytes) -> str:
+    return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
 class Ledger:
@@ -17,20 +44,23 @@ class Ledger:
 
     # --- content-addressed blobs ---
     def write_blob(self, data: bytes) -> str:
-        hexd = hashlib.sha256(data).hexdigest()
-        path = self._blob_path_for_hex(hexd)
-        if not path.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(data)
-        return "sha256:" + hexd
+        """Store data under its hash. An existing blob is kept only when its content matches its
+        name: one torn by an older, non-atomic write is rewritten (df-ahua.5.2)."""
+        sha = blob_sha(data)
+        if not self.has_blob(sha):
+            atomic_write(self._blob_path(sha), data)
+        return sha
 
     def has_blob(self, sha: str) -> bool:
-        return self._blob_path_for_hex(sha.split(":", 1)[-1]).exists()
+        """True when the blob exists AND holds the content its name says."""
+        path = self._blob_path(sha)
+        return path.is_file() and blob_sha(path.read_bytes()) == "sha256:" + _hex(sha)
 
     def read_blob(self, sha: str) -> bytes:
-        return self._blob_path_for_hex(sha.split(":", 1)[-1]).read_bytes()
+        return self._blob_path(sha).read_bytes()
 
-    def _blob_path_for_hex(self, hexd: str) -> Path:
+    def _blob_path(self, sha: str) -> Path:
+        hexd = _hex(sha)
         return self.objects / hexd[:2] / hexd
 
     # --- append-only deploy log ---
@@ -55,3 +85,7 @@ class Ledger:
         with open(self.log, "w", encoding="utf-8") as f:
             for e in es:
                 f.write(e.model_dump_json() + "\n")
+
+
+def _hex(sha: str) -> str:
+    return sha.split(":", 1)[-1]

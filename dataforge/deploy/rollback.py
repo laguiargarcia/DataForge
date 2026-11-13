@@ -1,7 +1,6 @@
 from pathlib import Path
 from .models import DeployEntry, Action
-from .ledger import Ledger
-from .apply import _atomic_write
+from .ledger import Ledger, atomic_write
 from .pairing import target_file
 
 
@@ -43,7 +42,7 @@ def rollback_last(target_dir: Path, ledger: Ledger) -> DeployEntry | None:
                 tgt.unlink()
             emptied.add(tgt.parent)
         elif item.before_sha:   # MODIFY or DELETE — restore snapshot
-            _atomic_write(tgt, ledger.read_blob(item.before_sha))   # replaces a link, never follows it
+            atomic_write(tgt, ledger.read_blob(item.before_sha))   # replaces a link, never follows it
     # Prune dirs the removed ADDs left empty — deepest first so nested children clear before
     # their parents are tested. Stops at any dir that still holds a file (e.g. a restored MODIFY).
     for d in sorted(emptied, key=lambda p: len(p.parts), reverse=True):
