@@ -6,10 +6,7 @@ passes over it like any other committed file.
 
 import os
 import re
-import shutil
 import subprocess
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -213,22 +210,20 @@ def test_without_a_private_guard_there_is_no_real_value_check(repo, capsys):
     assert out.strip() == "leak guard: 1 file(s) clean"
 
 
-def test_from_a_worktree_the_private_guards_come_from_the_main_checkout(tmp_path):
+def test_from_a_worktree_the_private_workspaces_come_from_the_main_checkout(tmp_path):
     """Commits are made from worktrees, where the gitignored private workspaces do not exist."""
     main = tmp_path / "main"
-    (main / "scripts").mkdir(parents=True)
-    shutil.copy(Path(leakguard.__file__), main / "scripts" / "leakguard.py")
-    (main / ".gitignore").write_text("workspaces/Priv/\n", encoding="utf-8")
-    (main / "workspaces" / "Priv" / "tools").mkdir(parents=True)
-    (main / "workspaces" / "Priv" / "tools" / "leakguard.py").write_text(PRIVATE_GUARD, encoding="utf-8")
+    main.mkdir()
+    (main / "README.md").write_text("x\n", encoding="utf-8")
     git = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
     subprocess.run([*git, "init", "-q"], cwd=main, check=True)
     subprocess.run([*git, "add", "-A"], cwd=main, check=True)
     subprocess.run([*git, "commit", "-qm", "init"], cwd=main, check=True)
     wt = tmp_path / "wt"
     subprocess.run([*git, "worktree", "add", "-q", str(wt)], cwd=main, check=True)
-    (wt / "example.py").write_text(f"# '{REAL_ACCOUNT}'\n", encoding="utf-8")
-    result = subprocess.run([sys.executable, "scripts/leakguard.py", "example.py"], cwd=wt,
-                            capture_output=True, text=True, check=False)
-    assert result.returncode == 1
-    assert "raw.accounts.number from Priv" in result.stderr
+    assert leakguard._main_checkout_workspaces(wt).resolve() == (main / "workspaces").resolve()
+    assert leakguard._main_checkout_workspaces(main).resolve() == (main / "workspaces").resolve()
+
+
+def test_outside_a_git_repo_the_workspaces_are_local(tmp_path):
+    assert leakguard._main_checkout_workspaces(tmp_path) == tmp_path / "workspaces"

@@ -30,9 +30,9 @@ import sys
 from pathlib import Path
 
 
-def _main_checkout_workspaces():
-    """workspaces/ of the main checkout: private workspaces are gitignored, so a worktree has none."""
-    here = Path(__file__).resolve().parent.parent
+def _main_checkout_workspaces(here):
+    """workspaces/ of the main checkout of the repo at `here`: private workspaces are gitignored,
+    so a worktree has none."""
     try:
         common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
                                 cwd=here, capture_output=True, text=True, check=True).stdout.strip()
@@ -41,7 +41,7 @@ def _main_checkout_workspaces():
     return Path(common).parent / "workspaces"
 
 
-WORKSPACES = _main_checkout_workspaces()
+WORKSPACES = _main_checkout_workspaces(Path(__file__).resolve().parent.parent)
 # In the attribution files the owner's name is intended (see NAME_EXEMPT_PATHS); only values whose
 # source is an owner column are let through there, never an account number or an id.
 ATTRIBUTION_SOURCES = (".owner",)
