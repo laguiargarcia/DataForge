@@ -5,6 +5,7 @@ scheduled run or one started in a terminal while the daemon starts), and publish
 A run whose process was killed must end `failed`, with the reason, and is not published as
 running. Nothing is ever re-run (df-413)."""
 import os
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from dataforge.compat import db_url
 from dataforge.db import ExecucaoORM, JobRunORM, init_db
+from dataforge.liveness import parse_owner
 
 _ROOT = Path(__file__).resolve().parent.parent
 _JOB = "name: j\ntasks:\n  - {name: t, script: hold.py}\n"
@@ -146,7 +148,10 @@ def test_a_run_whose_process_was_killed_ends_failed_with_the_reason(held_run):
     `failed`, say why, end at the last moment the run was seen alive (the task's start), and the
     run is not published as running."""
     home = held_run.home
-    held_run.proc.kill()
+    # Kill the process the rows name as owner: on Windows a venv's python.exe is a launcher whose
+    # child runs the job, so killing the launcher alone would leave the owner alive.
+    owner = parse_owner(_run_row(home).owner_process)
+    os.kill(owner.pid, getattr(signal, "SIGKILL", signal.SIGTERM))   # TerminateProcess on Windows
     held_run.proc.wait(timeout=_WAIT)
 
     published = _start_daemon()
