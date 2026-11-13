@@ -285,7 +285,7 @@ def test_the_temp_file_of_a_write_that_dies_is_recognized_as_one(dirs, name):
     is_temp_name knows it, so prune never deletes or deploys it as a definition (df-ahua.5.5)."""
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        rel = PurePosixPath(*dirs, name)
+        path = root.joinpath(*PurePosixPath(*dirs, name).parts)
         seen = []
 
         def dies(src, dst):
@@ -293,9 +293,9 @@ def test_the_temp_file_of_a_write_that_dies_is_recognized_as_one(dirs, name):
             raise OSError("killed")
 
         with mock.patch.object(os, "replace", dies), pytest.raises(OSError, match="killed"):
-            atomic_write(root.joinpath(*rel.parts), b"new")
+            atomic_write(path, b"new")
         (tmp,) = seen
-        assert tmp.parent == root.joinpath(*rel.parts).parent
+        assert tmp.parent == path.parent
         assert is_temp_name(tmp.relative_to(root).as_posix())
         assert not tmp.exists()   # the exception path still cleans it up
 
