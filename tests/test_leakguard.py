@@ -25,6 +25,7 @@ def repo(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(leakguard, "NAME_PATTERNS", [re.compile(r"fulano\s+de\s+tal", re.IGNORECASE)])
     monkeypatch.setattr(leakguard, "WORKSPACES", tmp_path / "workspaces")   # no private guard unless a test adds one
+    monkeypatch.setattr(leakguard, "MAIN_ROOT", tmp_path)   # no .leakguard-workspaces unless a test writes one
     monkeypatch.setattr(leakguard, "MAIN_ROOT_ERROR", None)
 
     def write(rel, text):
@@ -325,3 +326,57 @@ def test_a_failing_private_guard_does_not_stop_the_others(repo, capsys):
     assert code == 1
     assert failures[0].startswith("  REAL-VALUES: workspaces/A/tools/leakguard.py could not run")
     assert failures[1].endswith("raw.accounts.number from B)")
+
+
+# ------------------------------------------- private workspaces outside the checkout (df-b86q)
+
+
+def _outside(tmp_path, name, text):
+    """A private workspace in a directory that is not under the repo root (like C: seen from ext4)."""
+    ws = tmp_path.parent / f"{tmp_path.name}-outside" / name
+    (ws / "tools").mkdir(parents=True, exist_ok=True)
+    (ws / "tools" / "leakguard.py").write_text(text, encoding="utf-8")
+    return ws
+
+
+def test_a_listed_workspace_outside_the_checkout_is_checked(repo, capsys, tmp_path):
+    ws = _outside(tmp_path, "Real", _guard({REAL_ACCOUNT: "raw.accounts.number"}))
+    repo(".leakguard-workspaces", f"# the real workspace stays on the Windows drive\n\n  {ws}  \n")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 1
+    assert failures == [f"  REAL: a.py:1 -> '98…' ({len(REAL_ACCOUNT)} chars, raw.accounts.number from Real)"]
+
+
+def test_a_listed_entry_may_be_relative_to_the_root_or_start_with_a_tilde(repo, capsys, tmp_path, monkeypatch):
+    home = str(_outside(tmp_path, "Ws", _guard({REAL_OWNER: "raw.b"})).parent)
+    monkeypatch.setenv("HOME", home)
+    monkeypatch.setenv("USERPROFILE", home)   # what expanduser reads on Windows
+    repo("rel/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.c"}))
+    repo(".leakguard-workspaces", "rel\n~/Ws\n")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\ny = '{REAL_OWNER}'\n"))
+    assert code == 1
+    assert [f.rsplit(" from ", 1)[1] for f in failures] == ["rel)", "Ws)"]
+
+
+def test_a_listed_directory_without_a_guard_fails_closed(repo, capsys, tmp_path):
+    repo(".leakguard-workspaces", f"{tmp_path / 'gone'}\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert failures == [f"  REAL-VALUES: {tmp_path / 'gone'} (listed in .leakguard-workspaces) has no "
+                        "tools/leakguard.py; nothing was checked against it"]
+
+
+def test_a_workspace_both_in_the_tree_and_listed_is_checked_once(repo, capsys):
+    repo("workspaces/A/tools/leakguard.py", _guard({REAL_ACCOUNT: "raw.accounts.number"}))
+    repo(".leakguard-workspaces", "workspaces/A\n")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{REAL_ACCOUNT}'\n"))
+    assert code == 1
+    assert len(failures) == 1
+
+
+def test_a_listed_guard_that_cannot_run_is_named_by_its_full_path(repo, capsys, tmp_path):
+    ws = _outside(tmp_path, "Broken", "import a_module_that_is_not_installed\n")
+    repo(".leakguard-workspaces", f"{ws}\n")
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert failures[0].startswith(f"  REAL-VALUES: {(ws / 'tools' / 'leakguard.py').as_posix()} could not run")
