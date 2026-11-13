@@ -70,6 +70,11 @@ def _history_records_of(data) -> list:
     return data if isinstance(data, list) else []
 
 
+def _status_label(status: str) -> str:
+    """User-facing status text: a pending run is waiting for the workspace queue."""
+    return "aguardando" if status == "pending" else status
+
+
 def _started_at(rec: dict) -> str:
     return rec.get("started_at") or rec.get("start_time") or ""
 
@@ -242,7 +247,7 @@ class Panel(QWidget):
         run_status = snapshot.get("status", "")
 
         # Update header badge
-        self._detail_status_badge.setText(run_status)
+        self._detail_status_badge.setText(_status_label(run_status))
         self._detail_status_badge.setStyleSheet(
             f"background-color: {self._badge_color(run_status)};"
             " color: white; padding: 2px 8px; border-radius: 4px;"
@@ -430,7 +435,7 @@ class Panel(QWidget):
         finished_at = rec.get("finished_at") or rec.get("end_time") or ""
         trigger = rec.get("trigger") or "manual"
 
-        status_item = QTableWidgetItem(status)
+        status_item = QTableWidgetItem(_status_label(status))
         status_item.setForeground(QColor(self._badge_color(status)))
         return [
             QTableWidgetItem(rec.get("job_name") or rec.get("job") or ""),
@@ -590,7 +595,7 @@ class Panel(QWidget):
             row_layout.addWidget(QLabel(job_name))
             row_layout.addStretch()
 
-            badge = QLabel(status or "Never run")
+            badge = QLabel(_status_label(status) if status else "Never run")
             badge.setStyleSheet(
                 f"background-color: {self._badge_color(status)};"
                 " color: white; padding: 2px 8px; border-radius: 4px;"
@@ -631,13 +636,6 @@ class Panel(QWidget):
         req = QNetworkRequest(url)
         req.setHeader(QNetworkRequest.KnownHeaders.ContentTypeHeader, "application/json")
         self._nam.post(req, b"{}")
-        if job_name in self._job_rows:
-            badge = self._job_rows[job_name]
-            badge.setText("running")
-            badge.setStyleSheet(
-                f"background-color: {self._badge_color('running')};"
-                " color: white; padding: 2px 8px; border-radius: 4px;"
-            )
 
     def _subscribe_sse(self, workspace: str | None) -> None:
         if not workspace:
@@ -688,7 +686,7 @@ class Panel(QWidget):
         status = event.get("status")
         if job_name and job_name in self._job_rows:
             badge = self._job_rows[job_name]
-            badge.setText(status or "")
+            badge.setText(_status_label(status) if status else "")
             badge.setStyleSheet(
                 f"background-color: {self._badge_color(status)};"
                 " color: white; padding: 2px 8px; border-radius: 4px;"

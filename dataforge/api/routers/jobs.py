@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from dataforge import instance
 from dataforge.api.broadcaster import get_broadcaster
 from dataforge.db import JobRunORM, ScheduleORM, init_db, utcnow
 from dataforge.engine import run_job
@@ -134,29 +135,50 @@ async def _run_job_background(
     ws_db_url: str,
     global_db_url: str,
     ws: str,
+    counted: bool = False,
 ) -> None:
-    """Run run_job in a thread; always writes a terminal status to JobRunORM."""
-    broadcaster = get_broadcaster(ws)
-    await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": "running"})
-    try:
-        job = load_job(workspace_dir, job_name)
-        await asyncio.to_thread(run_job, job, workspace_dir, ws_db_url, run_id)
+    """Run run_job in a thread; always writes a terminal status to JobRunORM.
 
-        global_engine = init_db(global_db_url)
-        with Session(global_engine) as session:
-            run = session.get(JobRunORM, run_id)
-            terminal_status = run.status if run else "failed"
-        await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": terminal_status})
-    except Exception:
-        logger.exception("Job run %s failed with exception", run_id)
-        global_engine = init_db(global_db_url)
-        with Session(global_engine) as session:
-            run = session.get(JobRunORM, run_id)
-            if run and run.status not in ("success", "failed"):
-                run.status = "failed"
-                run.finished_at = utcnow()
-                session.commit()
-        await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": "failed"})
+    ``counted``: the route already called ``instance.begin_server_job()`` for this run; this
+    function then ends it. Otherwise it counts the run itself.
+    """
+    if not counted:
+        instance.begin_server_job()
+    try:
+        broadcaster = get_broadcaster(ws)
+        await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": "pending"})
+        try:
+            job = load_job(workspace_dir, job_name)
+            loop = asyncio.get_running_loop()
+
+            def _announce_running() -> None:
+                # Called from the worker thread once the workspace lock is ours.
+                asyncio.run_coroutine_threadsafe(
+                    broadcaster.publish(
+                        {"workspace": ws, "job": job_name, "run_id": run_id, "status": "running"}
+                    ),
+                    loop,
+                )
+
+            await asyncio.to_thread(run_job, job, workspace_dir, ws_db_url, run_id, _announce_running)
+
+            global_engine = init_db(global_db_url)
+            with Session(global_engine) as session:
+                run = session.get(JobRunORM, run_id)
+                terminal_status = run.status if run else "failed"
+            await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": terminal_status})
+        except Exception:
+            logger.exception("Job run %s failed with exception", run_id)
+            global_engine = init_db(global_db_url)
+            with Session(global_engine) as session:
+                run = session.get(JobRunORM, run_id)
+                if run and run.status not in ("success", "failed"):
+                    run.status = "failed"
+                    run.finished_at = utcnow()
+                    session.commit()
+            await broadcaster.publish({"workspace": ws, "job": job_name, "run_id": run_id, "status": "failed"})
+    finally:
+        instance.end_server_job()
 
 
 @router.get("/{ws}/jobs")
@@ -232,9 +254,14 @@ async def trigger_job(ws: str, job: str, background_tasks: BackgroundTasks):
         ))
         session.commit()
 
-    background_tasks.add_task(
-        _run_job_background, run_id, job, workspace_dir, ws_db_url, _db_url, ws
-    )
+    instance.begin_server_job()   # counted from now: no gap before the background task starts
+    try:
+        background_tasks.add_task(
+            _run_job_background, run_id, job, workspace_dir, ws_db_url, _db_url, ws, counted=True
+        )
+    except BaseException:
+        instance.end_server_job()
+        raise
 
     return JSONResponse(status_code=202, content={"execution_id": run_id})
 

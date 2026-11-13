@@ -22,6 +22,9 @@ scripts/quality/baseline.local.json
 # Logs / temp
 *.log
 logs/
+# DataForge runtime state under the home (run/start locks, app window web profile)
+/locks/
+/webengine/
 
 # Secrets
 .env

@@ -164,3 +164,88 @@ def test_a_run_whose_process_was_killed_ends_failed_with_the_reason(held_run):
     assert "interrupted" in task.output
     assert run.finished_at == task.inicio
     assert not [e for e in published if e.get("run_id") == run.id]
+
+
+def _runs(home: Path) -> dict[str, tuple]:
+    """{run id: (status, finished_at, reason)} of every run row."""
+    with Session(init_db(db_url(home / "dataforge.db"))) as s:
+        return {r.id: (r.status, r.finished_at, r.reason) for r in s.query(JobRunORM).all()}
+
+
+def _second_run(home: Path) -> subprocess.Popen:
+    """Another `dataforge run w j` of the same workspace: it queues on the run lock (df-1mdh)."""
+    # Its "aguardando…" line is not ASCII: write and read it as UTF-8 whatever the locale.
+    env = {**os.environ, "DATAFORGE_HOME": str(home), "PYTHONDONTWRITEBYTECODE": "1", "PYTHONIOENCODING": "utf-8"}
+    return subprocess.Popen(
+        [sys.executable, "-m", "dataforge.cli", "run", "w", "j"], cwd=_ROOT, env=env,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8")
+
+
+def _wait_for_queued_row(home: Path, first_id: str, proc: subprocess.Popen) -> str:
+    """The id of the second run's row once it exists (it stays `pending` while it waits)."""
+    deadline = time.monotonic() + _WAIT
+    while time.monotonic() < deadline:
+        others = [i for i in _read(home / "dataforge.db", "SELECT id FROM job_runs") if i[0] != first_id]
+        if others:
+            return others[0][0]
+        assert proc.poll() is None, f"the second run ended early:\n{proc.communicate()[0]}"
+        time.sleep(0.1)
+    pytest.fail("the second run never wrote its row")
+
+
+def test_a_run_waiting_for_the_workspace_lock_is_left_alone(held_run):
+    """df-1mdh x df-bw7: a run queued behind another job of its workspace sits `pending` while its
+    process lives. Liveness judges the process, not the age of the row, so neither the daemon start
+    nor the history read may fail it; once the lock is free it runs and ends with its own outcome."""
+    home = held_run.home
+    first_id = _run_row(home).id
+    second = _second_run(home)
+    try:
+        second_id = _wait_for_queued_row(home, first_id, second)
+        time.sleep(1.0)   # well past the lock's first try: the child is in its wait loop
+        published = _start_daemon()
+        from dataforge.api import app
+        with TestClient(app) as client:
+            items = client.get("/api/workspaces/w/executions").json()["items"]
+
+        runs = _runs(home)
+        assert runs[second_id] == ("pending", None, None)
+        assert runs[first_id][0] == "running"
+        assert {i["run_id"]: i["status"] for i in items}[second_id] == "pending"
+        assert not [e for e in published if e.get("run_id") == second_id]   # not shown as running
+
+        held_run.release()
+        assert held_run.proc.wait(timeout=_WAIT) == 0
+        out = second.communicate(timeout=_WAIT)[0]
+        assert second.returncode == 0, out
+        assert "aguardando outro job do workspace terminar…" in out
+        assert {i: s for i, (s, _, _) in _runs(home).items()} == {first_id: "success", second_id: "success"}
+    finally:
+        if second.poll() is None:
+            second.kill()
+            second.communicate(timeout=_WAIT)
+
+
+def test_a_run_killed_while_waiting_for_the_workspace_lock_ends_failed(held_run):
+    """The converse: the queued run's process dies while it waits. Its `pending` row can never
+    finish, so reconciliation fails it with the reason, and the run holding the lock is untouched."""
+    home = held_run.home
+    first_id = _run_row(home).id
+    second = _second_run(home)
+    try:
+        second_id = _wait_for_queued_row(home, first_id, second)
+        with Session(init_db(db_url(home / "dataforge.db"))) as s:
+            owner = parse_owner(s.get(JobRunORM, second_id).owner_process)
+        os.kill(owner.pid, getattr(signal, "SIGKILL", signal.SIGTERM))   # TerminateProcess on Windows
+        second.wait(timeout=_WAIT)
+
+        _start_daemon()
+
+        runs = _runs(home)
+        assert runs[second_id][0] == "failed"
+        assert "interrupted" in runs[second_id][2]
+        assert runs[first_id][:2] == ("running", None)
+    finally:
+        if second.poll() is None:
+            second.kill()
+        second.communicate(timeout=_WAIT)

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 import platformdirs
@@ -42,6 +43,51 @@ def data_dir() -> Path:
     if created:
         print(f"Created DataForge data directory: {path}")
     return path
+
+
+def set_data_dir(path: str | Path) -> None:
+    """Point DataForge at ``path`` ($DATAFORGE_HOME) for this process and its children."""
+    os.environ["DATAFORGE_HOME"] = str(Path(path).expanduser().resolve())
+
+
+def set_api_port(port: int) -> None:
+    """Make ``port`` the API port ($DATAFORGE_PORT) for this process and its children."""
+    os.environ[PORT_ENV] = str(port)
+
+
+def webengine_profile_dir() -> Path:
+    """Folder of the persistent web profile of the app windows (cookies, localStorage...)."""
+    path = data_dir() / "webengine"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def locks_dir() -> Path:
+    """Folder of the OS lock files (workspace run locks, server start), created on demand."""
+    path = data_dir() / "locks"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def logs_dir() -> Path:
+    """Folder of the logs of the detached DataForge processes (background, gui), created on demand."""
+    path = data_dir() / "logs"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def run_lock_path(workspace_dir: Path) -> Path:
+    """Return the per-workspace run-lock file, creating its ``locks/`` directory.
+
+    The lock lives in the ``locks/`` folder of the home that holds this workspace
+    (``<home>/workspaces/<ws>`` -> ``<home>/locks/<ws>.lock``), which is ``locks_dir()``
+    for every real workspace. Deriving it from the workspace path, not from
+    $DATAFORGE_HOME, keeps a workspace outside the configured home (a test's tmp dir)
+    from writing locks into that home.
+    """
+    folder = Path(workspace_dir).resolve().parent.parent / "locks"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / f"{Path(workspace_dir).name}.lock"
 
 
 def db_url(path: Path) -> str:
@@ -136,6 +182,24 @@ def api_port() -> int:
     if not 1 <= port <= _MAX_PORT:
         raise ValueError(f"{PORT_ENV} must be a port number (1-{_MAX_PORT}), got {raw!r}")
     return port
+
+
+GRACE_ENV = "DATAFORGE_GRACE_SECONDS"
+
+
+def grace_seconds(default: float) -> float:
+    """Seconds the server stays up with no window and no job: $DATAFORGE_GRACE_SECONDS, else ``default``."""
+    try:
+        value = float(os.environ.get(GRACE_ENV, default))
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+def force_offscreen_without_display() -> None:
+    """On Linux with no X11/Wayland display, make Qt run headless (QT_QPA_PLATFORM=offscreen)."""
+    if sys.platform.startswith("linux") and not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 
 def global_db_url() -> str:

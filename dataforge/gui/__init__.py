@@ -3,24 +3,27 @@
 run_app() is the sole public symbol. It is referenced by both:
   - pyproject.toml [project.scripts]: dataforge-gui = "dataforge.gui:run_app"
   - dataforge/cli.py gui() command
+
+The admin window is a plain client of the single local server: it asks
+``instance.ensure_server`` for it (starting the background process if needed),
+announces its presence by heartbeat and closes for real.
 """
 import signal
 import sys
 
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QMessageBox
 
+from dataforge import instance
 from dataforge.gui import gc_guard
-from dataforge.gui.daemon import DaemonThread
+from dataforge.gui.presence_client import PresenceHeartbeat
 
 
 def run_app() -> int:
-    """Start the DataForge desktop application.
+    """Start the DataForge admin window.
 
-    Returns the Qt exit code (0 = success).
+    Returns the Qt exit code (0 = success, 1 = no server could be reached).
     """
-    # QApplication must be created before any widget or tray object
     app = QApplication.instance() or QApplication(sys.argv)
 
     # Deliver SIGINT (Ctrl+C) to Qt's event loop so the app can exit cleanly.
@@ -31,27 +34,29 @@ def run_app() -> int:
     _sigint_timer.start(200)
     _sigint_timer.timeout.connect(lambda: None)
 
-    # Only suppress auto-quit when a real system tray is available to take over.
-    if QSystemTrayIcon.isSystemTrayAvailable():
-        QGuiApplication.setQuitOnLastWindowClosed(False)
-
-    # Before the daemon thread exists: a collection it triggers would destroy Qt objects off the
-    # GUI thread and crash (df-3yh). The app owns the timer, so it lives as long as the app.
+    # The cyclic collector runs on this (GUI) thread only, so a collection can never destroy Qt
+    # objects on another thread and crash (df-3yh). No Python thread of ours runs here today (the
+    # server is another process), but any later one would bring the race back. The app owns the
+    # timer, so it lives as long as the app.
     gc_guard.install(app)
 
-    daemon = DaemonThread()
-    daemon.start()
+    try:
+        port = instance.ensure_server()
+    except instance.InstanceError as exc:
+        QMessageBox.critical(None, "DataForge", str(exc))
+        return 1
 
-    # Import MainWindow here — not at module level — because MainWindow
-    # references panel modules that import PySide6 widgets; safe only after
-    # QApplication exists. This is an accepted lazy import for the GUI entry path.
+    # Imported here: MainWindow pulls in the panels, which need a live QApplication.
     from dataforge.gui.main_window import MainWindow  # noqa: PLC0415 -- needs a live QApplication
 
-    window = MainWindow(daemon=daemon)
+    window = MainWindow()
+    heartbeat = PresenceHeartbeat(port, "admin")
+    heartbeat.server_lost.connect(window.show_server_lost)
+    heartbeat.server_ok.connect(window.hide_server_lost)
+    heartbeat.start()
     window.show()
-
-    exit_code = app.exec()
-    # Ensure daemon stops cleanly when Qt exits via SIGINT (which skips _shutdown_and_quit).
-    if daemon.is_alive():
-        daemon.stop()
-    return exit_code
+    try:
+        return app.exec()
+    finally:
+        heartbeat.stop()
+        _sigint_timer.stop()

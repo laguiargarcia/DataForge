@@ -465,3 +465,34 @@ def test_sse_data_parses_only_complete_data_frames(monkeypatch, reply_attr, hand
     assert seen == [{"a": 1}]
     assert getattr(panel, buffer_attr) == b'data: {"b"'
     panel.close()
+
+
+def test_pending_aparece_como_aguardando(monkeypatch):
+    _get_app()
+    from dataforge.gui.panels import jobs as jobs_module
+
+    monkeypatch.setattr(jobs_module.Panel, "_subscribe_sse", lambda self, ws: None)
+    panel = jobs_module.Panel()
+    items = panel._history_row_items(
+        {"id": "abc", "job_name": "ingest", "status": "pending", "started_at": "2026-05-16T10:00:00Z"}
+    )
+    assert items[2].text() == "aguardando"
+    assert jobs_module._status_label("success") == "success"
+    panel.close()
+
+
+def test_evento_running_troca_aguardando_por_running(monkeypatch):
+    from PySide6.QtWidgets import QLabel
+
+    _get_app()
+    from dataforge.gui.panels import jobs as jobs_module
+
+    monkeypatch.setattr(jobs_module.Panel, "_subscribe_sse", lambda self, ws: None)
+    panel = jobs_module.Panel()
+    badge = QLabel("")
+    panel._job_rows["ingest"] = badge
+    panel._handle_workspace_event({"job": "ingest", "status": "pending"})
+    assert badge.text() == "aguardando"
+    panel._handle_workspace_event({"job": "ingest", "status": "running"})
+    assert badge.text() == "running"
+    panel.close()

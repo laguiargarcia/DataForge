@@ -1,4 +1,5 @@
 import time
+from collections.abc import Callable
 import uuid
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,6 +12,7 @@ from .conditions import should_run
 from .dag import topological_levels
 from .db import ExecucaoORM, JobRunORM, init_db, utcnow
 from .models import Job, Task
+from .runlock import workspace_run_lock
 from .tasks import get_handler
 
 
@@ -147,15 +149,14 @@ def _run_parallel(run: _JobRun, runnable: list[Task]) -> None:
             run.parent_status[t.name] = "success" if rc == 0 else "failed"
 
 
-def run_job(
+def run_job(  # noqa: PLR0913 -- on_running and on_wait are the two optional caller hooks
     job: Job,
     workspace_dir: Path,
     db_url: str,
     run_id: str | None = None,
+    on_running: Callable[[], None] | None = None,
+    on_wait: Callable[[], None] | None = None,
 ) -> dict[str, TaskResult]:
-    db_engine = init_db(db_url)
-    global_engine = init_db(global_db_url())
-
     # Synthesize run_id when caller didn't provide one (B-F1). Allows handlers
     # to filter ExecucaoORM rows by run_id even on local CLI runs. JobRunORM
     # creation remains caller's responsibility — the finalize block silently
@@ -163,12 +164,28 @@ def run_job(
     if run_id is None:
         run_id = f"local-{uuid.uuid4().hex[:12]}"
 
+    # on_wait: called once if another job of this workspace holds the run lock (the CLI says so).
+    with workspace_run_lock(workspace_dir, run_id, on_wait=on_wait):
+        return _run_job_locked(job, workspace_dir, db_url, run_id, on_running)
+
+
+def _run_job_locked(
+    job: Job,
+    workspace_dir: Path,
+    db_url: str,
+    run_id: str,
+    on_running: Callable[[], None] | None = None,
+) -> dict[str, TaskResult]:
+    db_engine = init_db(db_url)
+    global_engine = init_db(global_db_url())
     inactive, active_tasks = _prune_inactive(job)
     levels = topological_levels(active_tasks)
 
     run = _JobRun(job, workspace_dir, db_url, run_id, results=dict.fromkeys(inactive))
 
     _set_run_status(global_engine, run_id, "running")
+    if on_running is not None:
+        on_running()
 
     for level in levels:
         runnable, skipped_in_level = _split_level(level, run.parent_status)

@@ -13,7 +13,6 @@ the automatic garbage collector off, so it never destroys a widget off the GUI t
 import time
 import types
 from typing import ClassVar
-from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -213,7 +212,7 @@ def test_edit_opens_the_job_in_the_editor_with_its_tasks_and_pickers(jobs_panel,
 
 
 def test_main_window_lists_the_workspaces_and_hands_the_first_to_the_panels(gui, live, reads):
-    window = gui.main_window.MainWindow(daemon=MagicMock())
+    window = gui.main_window.MainWindow()
     jobs = window._stack.widget(0)
     try:
         _wait_for(lambda: window._ws_combo.count() == 1, "the workspace list")
@@ -225,7 +224,7 @@ def test_main_window_lists_the_workspaces_and_hands_the_first_to_the_panels(gui,
         for i in range(window._stack.count()):
             _drop_streams(window._stack.widget(i))
         _settle()
-        window.close()   # no tray offscreen: closes for real, stopping the (mock) daemon
+        window.close()   # the admin window is a plain client of the server: it closes for real
         window.deleteLater()
         _settle()
 
