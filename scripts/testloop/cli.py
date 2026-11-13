@@ -1,7 +1,8 @@
-"""Test loop CLI. Usage: cli.py <command> <module> [options]
+"""Test loop CLI. Usage: cli.py <command> <module> [options], or cli.py diff-cover [--compare-branch REF]
 
 Run from the repo root. Exit codes: 0 measured (and, for check and gate, passed);
-1 check: tests failed, gate: score below min_score; 2 usage or tool error. Prints the result JSON path.
+1 check: tests failed, gate: score below min_score, diff-cover: changed lines not covered;
+2 usage or tool error. The module commands print the result JSON path.
 """
 
 import argparse
@@ -12,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import ToolError, clear_result, load_config
 import check_cmd
+import diffcover_cmd
 import gate_cmd
 import map_cmd
 import mutate_cmd
@@ -25,6 +27,11 @@ COMMANDS = {
         help="wall-clock budget for the whole run; exceeded = partial result, exit 2")),
     "gate": (gate_cmd, lambda parser: None),
 }
+# command name -> (module with main(config, **options) -> exit code, option adder); no module, no result file
+REPO_COMMANDS = {
+    "diff-cover": (diffcover_cmd, lambda parser: parser.add_argument(
+        "--compare-branch", default="origin/main", help="git ref the change is measured against")),
+}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -34,13 +41,22 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name)
         p.add_argument("module", help="repo-relative path, e.g. dataforge/deploy/plan.py")
         add_options(p)
+    for name, (_, add_options) in REPO_COMMANDS.items():
+        add_options(sub.add_parser(name))
     return parser
+
+
+def _repo_command(args: argparse.Namespace) -> int:
+    options = {k: v for k, v in vars(args).items() if k != "command"}
+    return REPO_COMMANDS[args.command][0].main(load_config(Path.cwd()), **options)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    handler = COMMANDS[args.command][0]
     try:
+        if args.command in REPO_COMMANDS:
+            return _repo_command(args)
+        handler = COMMANDS[args.command][0]
         clear_result(Path.cwd(), args.command, args.module)
         config = load_config(Path.cwd())
         options = {k: v for k, v in vars(args).items() if k not in ("command", "module")}
@@ -48,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     except ToolError as exc:
         print(f"testloop: {exc}", file=sys.stderr)
         return 2
-    except Exception as exc:  # any tool breakage is exit 2; exit 1 is reserved for check and gate failures
+    except Exception as exc:  # any tool breakage is exit 2; exit 1 is reserved for check, gate and diff-cover failures
         print(f"testloop: unexpected {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     out, code = result if isinstance(result, tuple) else (result, 0)

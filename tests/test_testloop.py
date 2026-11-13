@@ -439,3 +439,47 @@ def test_gate_refuses_a_partial_result(sample_repo_strong):
     assert proc.returncode == 2
     assert "partial" in proc.stderr
 
+
+# ---------------------------------------------------------------------------- diff-cover
+
+
+def _git(repo, *args):
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=repo, check=True, capture_output=True)
+
+
+@pytest.fixture
+def change_repo(tmp_path):
+    """A git repo whose branch `main` holds dataforge/mod.py and a test reaching half of it."""
+    (tmp_path / "dataforge").mkdir()
+    (tmp_path / "dataforge" / "__init__.py").write_text("")
+    (tmp_path / "dataforge" / "mod.py").write_text(MOD_SRC)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_mod.py").write_text(TEST_POS.replace("sample.mod", "dataforge.mod"))
+    (tmp_path / "conftest.py").write_text("")  # puts the repo root first on sys.path: this dataforge, not ours
+    (tmp_path / "testloop.toml").write_text(TOML)
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "init")
+    return tmp_path
+
+
+def test_diff_cover_judges_only_changed_lines(change_repo):
+    """The old uncovered branch (return "nonpos") is not judged; the new function is, until a test runs it."""
+    mod = change_repo / "dataforge" / "mod.py"
+    mod.write_text(MOD_SRC + "\n\ndef added(x):\n    return x + 1\n")
+    proc = run(change_repo, "diff-cover", "--compare-branch", "main")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "dataforge/mod.py" in proc.stdout
+
+    (change_repo / "tests" / "test_added.py").write_text(
+        "from dataforge.mod import added\n\n\ndef test_added():\n    assert added(1) == 2\n"
+    )
+    proc = run(change_repo, "diff-cover", "--compare-branch", "main")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_diff_cover_with_failing_tests_exits_2(change_repo):
+    (change_repo / "tests" / "test_broken.py").write_text("def test_broken():\n    assert False\n")
+    proc = run(change_repo, "diff-cover", "--compare-branch", "main")
+    assert proc.returncode == 2
+    assert "engine tests failed" in proc.stderr
