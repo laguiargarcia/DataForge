@@ -5,7 +5,7 @@ import json
 from datetime import datetime, timezone
 
 from PySide6.QtCore import QSettings, QTimer, QUrl
-from PySide6.QtGui import QColor, QTextCharFormat
+from PySide6.QtGui import QColor, QTextCharFormat, QTextCursor
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -51,10 +51,11 @@ def _append_log_line(text_edit: QTextEdit, line: str) -> None:
     elif "warn" in lower:
         fmt.setBackground(QColor(_WARN_BG))
         fmt.setForeground(QColor(_WARN_FG))
-    cursor = text_edit.textCursor()
-    cursor.movePosition(cursor.MoveOperation.End)
+    # A document cursor, not the widget's: moving the widget's cursor would scroll the view to
+    # the end, and the caller decides whether the view follows the log (df-8i31).
+    cursor = QTextCursor(text_edit.document())
+    cursor.movePosition(QTextCursor.MoveOperation.End)
     cursor.insertText(line + "\n", fmt)
-    text_edit.setTextCursor(cursor)
 
 
 # Qt property on each run-detail log pane holding its task name, the key tabs are found by.
@@ -281,13 +282,20 @@ class Panel(QWidget):
             self._replace_log(log_pane, task_name, task_output)
 
     def _replace_log(self, log_pane: QTextEdit, task_name: str, output: str) -> None:
-        log_pane.clear()
-        for log_line in output.splitlines():
-            _append_log_line(log_pane, log_line)
-        # Auto-scroll after appending
-        if self._tab_auto_scroll.get(task_name, True):
-            sb = log_pane.verticalScrollBar()
-            sb.setValue(sb.maximum())
+        """Rewrite the log with *output*: follow the end while auto-scroll is on, otherwise keep
+        the position the user scrolled to. The rewrite's own scrollbar moves are not the user
+        scrolling, so they must not toggle auto-scroll (df-8i31)."""
+        sb = log_pane.verticalScrollBar()
+        follow = self._tab_auto_scroll.get(task_name, True)
+        position = sb.value()
+        sb.blockSignals(True)
+        try:
+            log_pane.clear()
+            for log_line in output.splitlines():
+                _append_log_line(log_pane, log_line)
+            sb.setValue(sb.maximum() if follow else position)
+        finally:
+            sb.blockSignals(False)
 
     def _close_run_stream(self) -> None:
         """Disconnect and abort the per-run SSE reply, if one is open."""
