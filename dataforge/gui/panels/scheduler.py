@@ -10,7 +10,8 @@ from croniter import croniter as _croniter
 from dataforge.compat import api_port
 from dataforge.db import utcnow
 
-from PySide6.QtCore import QByteArray, QDate, QUrl
+from PySide6.QtCore import QByteArray, QDate, QRegularExpression, QUrl
+from PySide6.QtGui import QRegularExpressionValidator
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from shiboken6 import isValid
 from PySide6.QtWidgets import (
@@ -29,7 +30,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
-    QSpinBox,
     QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -374,15 +374,24 @@ _PARAM_TYPES = ["string", "int", "float", "bool", "date", "json"]
 # Typed value widgets of JobParamsDialog, one factory per parameter type. Each pre-fills the
 # widget with *value* when it is given and parses; otherwise the widget keeps its default.
 
-def _int_widget(value) -> QSpinBox:
-    w = QSpinBox()
-    w.setRange(-2_147_483_648, 2_147_483_647)
-    if value is not None:
-        try:
-            w.setValue(int(value))
-        except (ValueError, TypeError):
-            pass
+def _int_widget(value) -> QLineEdit:
+    """An int parameter has no fixed range and QSpinBox stops at int32, which crashed on larger
+    saved values and could not hold them (df-dqg1), so ints are edited as digits."""
+    w = QLineEdit()
+    w.setValidator(QRegularExpressionValidator(QRegularExpression(r"-?\d*"), w))
+    try:
+        w.setText(str(int(value)))
+    except (ValueError, TypeError, OverflowError):   # OverflowError: int(float("inf"))
+        w.setText("0")
     return w
+
+
+def _int_value(widget: QLineEdit) -> int:
+    """The int typed in an int widget; 0 while it is blank or just a minus sign."""
+    try:
+        return int(widget.text())
+    except ValueError:
+        return 0
 
 
 def _float_widget(value) -> QDoubleSpinBox:
@@ -541,7 +550,7 @@ class JobParamsDialog(QDialog):
     def _read_value_widget(self, widget: QWidget, type_str: str):
         """Extract the typed Python value from a typed widget."""
         if type_str == "int":
-            return widget.value()
+            return _int_value(widget)
         if type_str == "float":
             return widget.value()
         if type_str == "bool":

@@ -80,7 +80,7 @@
     "PLR0915": 1,
     "PLR2004": 3,
     "RUF012": 2,
-    "SIM105": 2,
+    "SIM105": 1,
     "SIM108": 1
   },
   "dataforge/models.py": {
