@@ -1,4 +1,5 @@
 import logging
+import subprocess
 
 import croniter as croniter_module
 from fastapi import APIRouter, HTTPException
@@ -40,14 +41,29 @@ def _validate_cron(cron: str) -> None:
         ) from exc
 
 
+# What a failing OS scheduler command raises: crontab or launchctl exiting non-zero, a missing
+# binary or an unwritable plist (OSError), Task Scheduler's RuntimeError, a translator's ValueError.
+_OS_SCHEDULER_ERRORS = (subprocess.CalledProcessError, OSError, RuntimeError, ValueError)
+
+
 def _register_os_trigger(ws: str, trigger: TriggerModel) -> str | None:
-    """Dispatch to platform-specific OS registration. Returns an optional warning."""
+    """Dispatch to platform-specific OS registration. Returns an optional warning.
+
+    Callers save the trigger file first, and the file is the source of truth: when the OS
+    scheduler command fails, the result is a warning that the task is missing, not an error that
+    hides the saved trigger behind a 500 (df-vo3x.6)."""
     logger.info("_register_os_trigger: ws=%s trigger=%s", ws, trigger.name)
-    return _platform_register_trigger(ws, trigger.name, trigger.cron)
+    try:
+        return _platform_register_trigger(ws, trigger.name, trigger.cron)
+    except _OS_SCHEDULER_ERRORS as exc:
+        logger.warning("_register_os_trigger: the OS scheduler failed (%s)", type(exc).__name__)
+        return (f"Trigger saved, but the OS scheduler did not register it: {exc}. It will not "
+                "run on schedule until it is saved again or reconciled.")
 
 
 def _deregister_os_trigger(ws: str, trigger_name: str) -> None:
-    """Dispatch to platform-specific OS deregistration. Errors are logged, not raised."""
+    """Dispatch to platform-specific OS deregistration. A failure is raised before the caller
+    changes the trigger file, so a failed delete or update leaves both as they were."""
     logger.info("_deregister_os_trigger: ws=%s trigger=%s", ws, trigger_name)
     _platform_deregister_trigger(ws, trigger_name)
 

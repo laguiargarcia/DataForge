@@ -175,6 +175,9 @@ class _FakeResp:
     def raise_for_status(self):
         pass
 
+    def json(self):
+        return {"reconciled": True}
+
 
 class _FakeClient:
     """Records the URLs a deploy POSTs to the daemon's trigger-reconcile endpoint."""
@@ -353,3 +356,26 @@ def test_run_all_protected_message_not_up_to_date(dataforge_home):
     assert "PROTECTED" in r.stdout
     assert "untouched" in r.stdout.lower()
     assert "up to date" not in r.stdout.lower()       # must not claim up-to-date when laws blocked it
+
+
+def test_run_prints_the_daemon_reconcile_warnings(dataforge_home, monkeypatch):
+    """The daemon's reconcile warning (the OS scheduler did not take a trigger) reaches the
+    operator instead of being dropped (df-vo3x.6)."""
+    dev = _ws(dataforge_home, "Dev"); prod = _ws(dataforge_home, "Prod")
+    _mk(dev, "triggers/daily.yaml", "name: daily\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
+    _mk(prod, "triggers/daily.yaml", "name: daily\ncron: '0 5 * * *'\nenabled: true\njobs: []\n")
+    _mk(dev, "deploy/to-prod.yaml",
+        "target: Prod\npairs:\n  - {source: 'triggers/**', target: 'triggers/'}\n")
+
+    class _WarnResp(_FakeResp):
+        def json(self):
+            return {"reconciled": True, "trigger": "daily", "warnings": ["access denied"]}
+
+    class _WarnClient(_FakeClient):
+        def post(self, url, *a, **k):
+            return _WarnResp()
+
+    monkeypatch.setattr("dataforge.deploy.cli.httpx.Client", _WarnClient)
+    r = runner.invoke(app, ["deploy", "run", "to-prod", "-w", "Dev"])
+    assert r.exit_code == 0
+    assert "access denied" in r.output

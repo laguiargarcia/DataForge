@@ -438,3 +438,34 @@ def test_buttons_call_deploy_and_rollback(monkeypatch):
     panel._rollback_btn.click()
     assert calls == ["deploy", "rollback"]
     panel.close()
+
+
+@pytest.mark.parametrize("handler", ["_on_apply_finished", "_on_rollback_finished"])
+def test_deploy_shows_trigger_schedule_warnings(monkeypatch, handler):
+    """A deployed trigger the OS scheduler did not take is shown, not dropped (df-vo3x.6)."""
+    from dataforge.gui.panels import deploy as deploy_module
+    panel = _make_panel(monkeypatch)
+    monkeypatch.setattr(panel, "_load_plan", lambda: None)
+    monkeypatch.setattr(panel, "_load_status", lambda: None, raising=False)
+    mock_box = MagicMock()
+    monkeypatch.setattr(deploy_module, "QMessageBox", mock_box)
+    body = {"applied": True, "entry": _FAKE_ENTRY,
+            "trigger_warnings": ["trigger 'daily': access denied"]}
+    getattr(panel, handler)(_fake_reply(body))
+    mock_box.warning.assert_called_once()
+    assert "trigger 'daily': access denied" in mock_box.warning.call_args.args[2]
+    panel.close()
+
+
+@pytest.mark.parametrize("body", [{"applied": True, "entry": None, "trigger_warnings": []},
+                                  {"applied": True, "entry": None}, ["not", "a", "dict"]])
+def test_deploy_without_trigger_warnings_shows_none(monkeypatch, body):
+    from dataforge.gui.panels import deploy as deploy_module
+    panel = _make_panel(monkeypatch)
+    monkeypatch.setattr(panel, "_load_plan", lambda: None)
+    monkeypatch.setattr(panel, "_load_status", lambda: None, raising=False)
+    mock_box = MagicMock()
+    monkeypatch.setattr(deploy_module, "QMessageBox", mock_box)
+    panel._on_rollback_finished(_fake_reply(body))
+    mock_box.warning.assert_not_called()
+    panel.close()
