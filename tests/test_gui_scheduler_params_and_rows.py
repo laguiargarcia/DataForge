@@ -39,6 +39,8 @@ def _dialog(sched, declared=(), values=None):
     ("int", 2**70, 2**70),
     ("int", True, 1),
     ("int", 2.7, 2),
+    ("int", float("inf"), 0),
+    ("int", float("nan"), 0),
     ("float", 2.5, 2.5),
     ("float", "1.25", 1.25),
     ("float", None, 0.0),

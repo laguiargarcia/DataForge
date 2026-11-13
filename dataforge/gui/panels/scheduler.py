@@ -381,7 +381,7 @@ def _int_widget(value) -> QLineEdit:
     w.setValidator(QRegularExpressionValidator(QRegularExpression(r"-?\d*"), w))
     try:
         w.setText(str(int(value)))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):   # OverflowError: int(float("inf"))
         w.setText("0")
     return w
 
