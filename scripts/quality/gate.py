@@ -72,11 +72,19 @@ Counts = dict[str, dict[str, int]]
 # ---------------------------------------------------------------------------- files
 
 
-def _git_files(*args: str) -> list[str]:
+def _git_paths(cwd: Path, *args: str) -> list[str]:
     out = subprocess.run(
-        ["git", "ls-files", "-z", *args], cwd=ROOT, capture_output=True, check=True, encoding="utf-8"
+        ["git", "ls-files", "-z", *args], cwd=cwd, capture_output=True, check=True, encoding="utf-8"
     ).stdout
-    return [p for p in out.split("\0") if p.endswith(".py") and not SKIP_PARTS & set(p.split("/")) and (ROOT / p).is_file()]
+    return [p for p in out.split("\0") if p]
+
+
+def _python_files(paths: list[str]) -> list[str]:
+    return [p for p in paths if p.endswith(".py") and not SKIP_PARTS & set(p.split("/")) and (ROOT / p).is_file()]
+
+
+def _git_files(*args: str) -> list[str]:
+    return _python_files(_git_paths(ROOT, *args))
 
 
 def public_files() -> list[str]:
@@ -85,7 +93,15 @@ def public_files() -> list[str]:
 
 def private_files() -> list[str]:
     roots = [r for r in PRIVATE_ROOTS if (ROOT / r).is_dir()]
-    return sorted(set(_git_files("--others", "--ignored", "--exclude-standard", "--", *roots))) if roots else []
+    if not roots:
+        return []
+    paths = _git_paths(ROOT, "--others", "--ignored", "--exclude-standard", "--", *roots)
+    # git lists a workspace that is its own repository (e.g. a private workspace checkout) as one
+    # "dir/" entry; take its files from that repository instead, minus what it ignores itself.
+    for nested in [p for p in paths if p.endswith("/") and (ROOT / p / ".git").exists()]:
+        inner = _git_paths(ROOT / nested, "--cached", "--others", "--exclude-standard")
+        paths += [nested + p for p in inner]
+    return sorted(set(_python_files(paths)))
 
 
 def _relative(path: str) -> str | None:
