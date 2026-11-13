@@ -617,6 +617,10 @@ def test_ordinary_dots_in_a_target_are_fine(target):
     check_target_inside(target)
 
 
+@pytest.mark.skipif(sys.platform == "win32",
+                    reason="NTFS cannot hold these names (Win32 reads '\\' as a separator and ':' as a "
+                           "stream, and drops a trailing dot or space), so the planted source file never "
+                           "exists there; the guard is for a source on a POSIX disk such as WSL ext4")
 @pytest.mark.parametrize("name", ["a\\b.py", "C:notes.py", "trail.py.", "trail.py "])
 def test_a_source_file_with_a_windows_invalid_name_is_skipped_not_fatal(name):
     """df-886.20: one odd file name must not block the whole deploy; it is skipped, and the

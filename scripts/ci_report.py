@@ -23,8 +23,13 @@ STATUS = re.compile(r"quality gate:|testloop: |\b\d+ (passed|failed|errors?)\b")
 TAIL_LINES = 60
 
 
-def outputs(job: str) -> list[Path]:
-    return sorted(REPORT_DIR.glob(f"{job}.txt")) + sorted(REPORT_DIR.glob(f"{job}-*.txt"))
+def outputs(job: str, jobs: tuple[str, ...] = ()) -> list[Path]:
+    """<job>.txt and <job>-<part>.txt, minus the files of another job named '<job>-...': job
+    `tests` must not take `tests-windows.txt` as one of its parts."""
+    others = [j for j in jobs if j.startswith(job + "-")]
+    parts = [p for p in sorted(REPORT_DIR.glob(f"{job}-*.txt"))
+             if not any(p.stem == o or p.stem.startswith(o + "-") for o in others)]
+    return sorted(REPORT_DIR.glob(f"{job}.txt")) + parts
 
 
 def summary(text: str) -> str:
@@ -41,7 +46,7 @@ def build(results: dict, run_url: str, sha: str) -> str:
     rows, details = [], []
     for job, info in results.items():
         result = info.get("result", "unknown")
-        files = outputs(job)
+        files = outputs(job, tuple(results))
         texts = {part_name(job, f): f.read_text(encoding="utf-8", errors="replace") for f in files}
         line = "<br>".join(f"**{name}**: {summary(t)}" if len(texts) > 1 else summary(t) for name, t in texts.items())
         rows.append(f"| `{job}` | {ICONS.get(result, '❔')} {result} | {line} |")
