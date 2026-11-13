@@ -75,8 +75,9 @@ def test_a_missing_smtp_variable_is_named_and_nothing_connects(missing):
     """Without one of the five SMTP variables the channel raises ValueError naming it (and the
     channel) before it opens any connection."""
     env = {k: v for k, v in _base_env("587").items() if k != missing}
+    channel = EmailChannel()
     with patch(_SSL) as ssl_cls, patch(_PLAIN) as plain_cls, pytest.raises(ValueError) as info:
-        EmailChannel().send("alice@example.com", "s", "b", env=env)
+        channel.send("alice@example.com", "s", "b", env=env)
     assert missing in str(info.value)
     assert "email" in str(info.value)
     ssl_cls.assert_not_called()

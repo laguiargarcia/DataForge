@@ -68,8 +68,9 @@ def test_a_missing_variable_is_named_and_nothing_is_sent(cls, client_path, _send
     variable and its channel, before it builds a client."""
     missing = _sender if missing == "SENDER" else missing
     env = {k: v for k, v in _ENV.items() if k != missing}
+    channel = cls()
     with patch(client_path) as client_cls, pytest.raises(ValueError) as info:
-        cls().send("+5511999999999", "s", "b", env=env)
+        channel.send("+5511999999999", "s", "b", env=env)
     assert missing in str(info.value)
     assert cls.name in str(info.value)
     client_cls.assert_not_called()
