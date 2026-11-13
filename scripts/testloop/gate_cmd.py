@@ -52,6 +52,7 @@ def main(config, module: str):
         print("surviving mutants (show one with `mutmut show <id>`):", file=sys.stderr)
         for mutant in survived:
             print(f"  {mutant}", file=sys.stderr)
-    elif score > min_score:
-        print(f"score is above min_score; raise min_score to {four_places_down(score)} to keep it", file=sys.stderr)
+    elif float(suggested := four_places_down(score)) > min_score:
+        # Only a real raise: a score just above min_score can round down to min_score itself (df-ahua.25).
+        print(f"score is above min_score; raise min_score to {suggested} to keep it", file=sys.stderr)
     return out, 0 if passed else 1

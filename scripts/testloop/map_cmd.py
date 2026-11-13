@@ -1,12 +1,11 @@
 """`map`: uncovered branches of a module and which tests execute each line."""
 
 import json
-import os
 import subprocess
 import tempfile
 from pathlib import Path
 
-from common import Config, ToolError, resolve_tests, write_result
+from common import Config, ToolError, pytest_args, resolve_tests, test_env, write_result
 
 
 def _dotted(module: str) -> str:
@@ -33,10 +32,10 @@ def run(config: Config, module: str) -> dict:
     tests = resolve_tests(config, module)
 
     with tempfile.TemporaryDirectory(prefix="testloop-") as tmp:
-        env = {**os.environ, **config.env, "COVERAGE_FILE": str(Path(tmp) / ".coverage")}
+        env = test_env(config, COVERAGE_FILE=str(Path(tmp) / ".coverage"))
         report = Path(tmp) / "coverage.json"
         pytest_cmd = [
-            config.python, "-m", "pytest", *config.pytest_args, *config.check_args, *tests,
+            config.python, "-m", "pytest", *pytest_args(config), *tests,
             f"--cov={_dotted(module)}", "--cov-branch", "--cov-context=test",
             "--cov-report=",
         ]

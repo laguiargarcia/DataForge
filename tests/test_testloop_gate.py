@@ -20,3 +20,29 @@ def test_a_suggested_min_score_never_exceeds_the_score_it_came_from(killed, tota
 
 def test_29_of_31_is_shown_as_0_9354_not_0_9355():
     assert four_places_down(29 / 31) == "0.9354"
+
+
+def _gate(tmp_path, capsys, score, min_score):
+    """Run gate on a complete mutate result with this score; return its stderr."""
+    import gate_cmd
+    from common import Config, write_result
+
+    (tmp_path / "mod.py").write_text("x = 1\n")
+    write_result(tmp_path, "mutate", "mod.py", {
+        "complete": True, "score": score, "killed": 0, "total": 0, "survived": [],
+    })
+    config = Config(repo=tmp_path, targets={"mod.py": {"min_score": min_score}})
+    _, code = gate_cmd.main(config, "mod.py")
+    assert code == 0
+    return capsys.readouterr().err
+
+
+@pytest.mark.parametrize("score,min_score", [(0.94562, 0.9456), (0.9456, 0.9456), (1.0, 1.0)])
+def test_no_raise_hint_when_the_rounded_score_is_min_score(tmp_path, capsys, score, min_score):
+    """df-ahua.25: a score just above min_score rounds down to it; suggesting it again is a no-op."""
+    assert "raise min_score" not in _gate(tmp_path, capsys, score, min_score)
+
+
+def test_raise_hint_names_the_rounded_down_score(tmp_path, capsys):
+    err = _gate(tmp_path, capsys, 26 / 27, 0.9259)
+    assert "raise min_score to 0.9629 " in err
