@@ -474,7 +474,7 @@ def test_platform_register_trigger_returns_history_warning():
 
     with patch("dataforge.cli.platform.system", return_value="Windows"), \
          patch("dataforge.cli._is_wsl", return_value=False), \
-         patch("dataforge.cli._register_windows_trigger"), \
+         patch("dataforge.cli._register_windows_trigger", return_value=None), \
          patch("dataforge.cli._ensure_task_scheduler_history", return_value="WARN-XYZ"):
         result = _platform_register_trigger("ws", "trig", "0 6 * * *")
 
