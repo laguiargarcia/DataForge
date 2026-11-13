@@ -23,8 +23,11 @@ def rollback_last(target_dir: Path, ledger: Ledger) -> DeployEntry | None:
     """Undo the most recent deploy: ADDs are removed (and any directories they leave empty are
     pruned), MODIFY/DELETE are restored from the snapshotted 'before' blob, then the entry is
     dropped (LIFO). Pre-flights that every needed snapshot blob exists, so a missing blob aborts
-    before any file is touched (never a partial restore). Returns the rolled-back entry, or None
-    if the log was empty."""
+    before any file is touched (never a partial restore). An unfinished (in_progress) entry left
+    by an apply that died is undone the same way: each of its targets holds either its old or its
+    new content, and restoring the old content, or removing an ADD that is not there, is a no-op
+    on a target the apply never reached (df-ahua.5.1). Returns the rolled-back entry, or None if
+    the log was empty."""
     entry = ledger.last()
     if entry is None:
         return None

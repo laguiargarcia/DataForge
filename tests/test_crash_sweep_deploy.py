@@ -22,8 +22,8 @@ _TARGETS = ("scripts/mod.py", "scripts/new/add.py", "scripts/gone.py")
 
 # What makes deploy state durable: the temp files of targets, blobs and the rewritten deploy log
 # (write_bytes), the swap into place (os.replace), deletes (unlink, rmdir) and the log append,
-# which the ledger writes through open(..., "ab"). Dropping the last entry rewrites the whole log
-# through a temp file + os.replace.
+# which the ledger writes through open(..., "ab"). Every other log write (completing the entry,
+# dropping the last one) rewrites the whole log through a temp file + os.replace.
 _LOG_OPEN = "dataforge.deploy.ledger.open"
 _POINTS = WritePoints(["pathlib.Path.write_bytes", "os.replace", "pathlib.Path.unlink",
                        "pathlib.Path.rmdir", _LOG_OPEN],
@@ -188,10 +188,8 @@ def test_apply_crash_keeps_every_blob_true_to_its_hash(apply_sweep):
     apply_sweep.assert_holds("blobs")
 
 
-@pytest.mark.xfail(strict=True, reason="df-ahua.5.1: the ledger entry is appended only after the "
-                   "last write, so a killed apply has none and rollback undoes the deploy before it")
 def test_apply_crash_stays_rollback_recoverable(apply_sweep):
-    # Promised by apply_plan's docstring ("a partial apply stays rollback-recoverable", law #4)
+    # df-ahua.5.1. Promised by apply_plan's docstring ("a partial apply stays rollback-recoverable", law #4)
     # and D16 ("Crash-safe apply").
     apply_sweep.assert_holds("rollback")
 

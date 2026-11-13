@@ -1,5 +1,5 @@
 import pytest
-from dataforge.deploy.models import DeployEntry, ItemChange, Kind, Action
+from dataforge.deploy.models import DeployEntry, EntryStatus, ItemChange, Kind, Action
 from dataforge.deploy.ledger import Ledger
 
 
@@ -91,6 +91,14 @@ def test_has_blob_accepts_a_bare_hex_digest(tmp_path):
     assert led.has_blob("sha256:" + "0" * 64) is False
 
 
+def test_an_entry_from_before_the_status_field_reads_as_complete(tmp_path):
+    led = Ledger(tmp_path)
+    led.root.mkdir(parents=True)
+    led.log.write_bytes(b'{"id":"dpl_old","ts":"t","source":"D","target":"P","pipeline":"p",'
+                        b'"parent":null,"items":[]}\r\n')   # old format, CRLF as Windows wrote it
+    assert [(e.id, e.status) for e in led.entries()] == [("dpl_old", EntryStatus.complete)]
+
+
 def test_a_torn_last_line_is_ignored_with_a_warning(tmp_path, caplog):
     # df-ahua.5.4: what an append that died half-way leaves must not wedge every later read.
     led = Ledger(tmp_path)
@@ -175,3 +183,23 @@ def test_drop_last_also_drops_a_torn_tail(tmp_path):
     led.drop_last()   # undoes dpl_2, the last entry there is
     assert [e.id for e in led.entries()] == ["dpl_1"]
     assert led.log.read_bytes().endswith(b"\n")
+
+
+def test_replace_last_swaps_the_last_entry_for_its_new_version(tmp_path):
+    led = Ledger(tmp_path)
+    led.append(_entry("dpl_1"))
+    led.append(_entry("dpl_2", status=EntryStatus.in_progress))
+    led.replace_last(_entry("dpl_2", status=EntryStatus.complete))
+    assert [(e.id, e.status) for e in led.entries()] == [
+        ("dpl_1", EntryStatus.complete), ("dpl_2", EntryStatus.complete)]
+
+
+@pytest.mark.parametrize("ids", [[], ["dpl_1"]])
+def test_replace_last_refuses_an_entry_that_is_not_the_last(tmp_path, ids):
+    led = Ledger(tmp_path)
+    for eid in ids:
+        led.append(_entry(eid))
+    before = led.log.read_bytes() if led.log.exists() else None
+    with pytest.raises(ValueError, match="dpl_2 is not the last entry"):
+        led.replace_last(_entry("dpl_2"))
+    assert (led.log.read_bytes() if led.log.exists() else None) == before

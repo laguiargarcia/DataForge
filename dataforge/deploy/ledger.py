@@ -39,7 +39,7 @@ class Ledger:
     with no git dependency, no branches, no merge.
 
     Crash safety (df-ahua.5): a blob name only ever holds its full content; the log is appended
-    one line per entry and every rewrite (drop_last) swaps a whole new file in; a
+    one line per entry and every rewrite (drop_last, replace_last) swaps a whole new file in; a
     last line cut short by a dying append is left out of entries() and dropped by the next write.
     """
 
@@ -89,6 +89,13 @@ class Ledger:
         """Remove the last entry (LIFO). The log is rewritten whole, never truncated in place, so
         a crash keeps either the old or the new log (df-ahua.5.3)."""
         self._rewrite([raw for raw, _ in self._read()[0][:-1]])
+
+    def replace_last(self, entry: DeployEntry) -> None:
+        """Replace the last entry with a new version of it (same id), rewriting the log whole."""
+        lines = self._read()[0]
+        if not lines or lines[-1][1].id != entry.id:
+            raise ValueError(f"{entry.id} is not the last entry of {self.log}")
+        self._rewrite([raw for raw, _ in lines[:-1]] + [entry.model_dump_json().encode("utf-8")])
 
     def _rewrite(self, raw_lines: list[bytes]) -> None:
         atomic_write(self.log, b"".join(line + b"\n" for line in raw_lines))
