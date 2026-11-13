@@ -1,3 +1,5 @@
+import gc
+
 import pytest
 from pathlib import Path
 from hypothesis import settings
@@ -62,6 +64,33 @@ def test_client(dataforge_home):
     """FastAPI TestClient with DATAFORGE_HOME set before app is used."""
     from dataforge.api import app
     return TestClient(app)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def gc_on_main_thread_only():
+    """Run the cyclic garbage collector on the main thread only, between tests (df-3yh).
+
+    The automatic collector runs in whichever thread crosses the allocation threshold: the
+    daemon thread of test_gui_daemon or the portal thread of a TestClient. A collection there
+    that frees a widget left over by a GUI test destroys it off the GUI thread, and the process
+    segfaults. The desktop app applies the same rule (dataforge/gui/gc_guard.py); its helper is
+    not imported here because importing dataforge.gui loads Qt into every test run.
+    """
+    gc.disable()
+    yield
+    gc.collect()    # every leftover widget dies here, on the main thread
+    gc.enable()
+
+
+@pytest.fixture(autouse=True)
+def collect_garbage_after_test(gc_on_main_thread_only):
+    """The main-thread half of gc_on_main_thread_only: CPython's own policy, run at teardown."""
+    yield
+    counts, thresholds = gc.get_count(), gc.get_threshold()
+    for generation in (2, 1, 0):
+        if 0 < thresholds[generation] < counts[generation]:
+            gc.collect(generation)
+            break
 
 
 @pytest.fixture(autouse=True)

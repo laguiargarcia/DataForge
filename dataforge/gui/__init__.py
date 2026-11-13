@@ -11,6 +11,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 
+from dataforge.gui import gc_guard
 from dataforge.gui.daemon import DaemonThread
 
 
@@ -33,6 +34,10 @@ def run_app() -> int:
     # Only suppress auto-quit when a real system tray is available to take over.
     if QSystemTrayIcon.isSystemTrayAvailable():
         QGuiApplication.setQuitOnLastWindowClosed(False)
+
+    # Before the daemon thread exists: a collection it triggers would destroy Qt objects off the
+    # GUI thread and crash (df-3yh). The app owns the timer, so it lives as long as the app.
+    gc_guard.install(app)
 
     daemon = DaemonThread()
     daemon.start()
