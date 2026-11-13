@@ -79,6 +79,8 @@ max-complexity = 10
 # Workspace scripts load functions.py with exec(open(...).read()) (docs/scripts-conventions.md):
 # its names are invisible to pyflakes, and the open() is the sanctioned loader.
 "workspaces/**" = ["TID251", "F821", "SIM115"]
+# A private workspace's own tests (df-rt6w) get the same allowances as tests/ (ruff unions the matches).
+"workspaces/*/tests/**" = ["TID251", "PLR2004", "ARG", "PLC0415", "S108", "DTZ"]
 
 [tool.vulture]
 min_confidence = 60
