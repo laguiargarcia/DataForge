@@ -81,7 +81,32 @@ min_score = 0.9572
 [targets."dataforge/db.py"]
 tests = ["tests/test_db*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 6 survivors, all equivalent: init_db's SQL lower-cased (and PRAGMA table_info(job_runs) upper-cased),
-# which SQLite reads the same, keywords and identifiers alike. mutmut does not mutate the ORM class
-# bodies, only init_db and utcnow.
+# No survivors. The schema SQL lives in the module constant _ADDED_COLUMNS, which mutmut does not mutate
+# (nor the ORM class bodies): it mutates only the functions.
 min_score = 1.0
+
+[targets."dataforge/deploy/ledger.py"]
+tests = ["tests/test_deploy_ledger*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 11 survivors. Equivalent: split(":") variants in _hex (no sha the ledger writes or reads has a second
+# ':'), rsplit("/") variants in is_temp_name (still the last segment), a missing log read as not clean
+# (append rewrites an empty log first: same bytes), and encode "UTF-8" for "utf-8" (one codec; the
+# encoding is explicit, so no locale case for the Windows job). Declined: the torn-line warning's
+# wording (tests check it names the log file and the last line).
+min_score = 0.9333
+
+[targets."dataforge/deploy/rollback.py"]
+tests = ["tests/test_deploy_rollback*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 6 survivors, all equivalent: break -> return in _prune_empty_dirs (nothing follows the loop), and the
+# order rollback prunes emptied folders in (5 sort variants): each walk climbs while a folder is empty,
+# so the last walk through a shared parent removes it whatever the order (the LIFO property and the
+# several-folders test cover nested and sibling folders). The crash sweep adds nothing here.
+min_score = 0.85
+
+[targets."dataforge/deploy/service.py"]
+tests = ["tests/test_deploy_service*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 2 survivors, both equivalent: applied=0 and entry_id=None dropped from the nothing-to-apply result,
+# which are AutoDeployResult's defaults.
+min_score = 0.989

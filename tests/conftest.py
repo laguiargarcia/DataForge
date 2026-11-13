@@ -6,6 +6,13 @@ from dataforge.db import init_db
 from dataforge.compat import db_url as make_db_url
 
 settings.register_profile("deterministic", derandomize=True, database=None, deadline=None)
+# Ordinary runs: the profile Hypothesis picked on its own ("default" locally: random, with the example
+# database; "ci" when it detects CI, which already has no deadline), without the 200 ms per-example
+# deadline, so a property on a slow disk fails on its rule, never on time. Hypothesis's pytest plugin
+# loads a profile named on the command line (--hypothesis-profile, as `testloop check` passes) after
+# this file is imported, so that one still wins.
+settings.register_profile("no-deadline", settings.default, deadline=None)
+settings.load_profile("no-deadline")
 
 
 def pytest_configure(config):
