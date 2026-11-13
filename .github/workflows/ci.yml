@@ -92,6 +92,37 @@ jobs:
         if: always()
         # Read by the sonar job.
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
+  tests-windows:
+    # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
+    # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). A separate
+    # job, not a matrix on `tests`: the repo ruleset requires a check named exactly `tests`. No
+    # coverage (the sonar job reads the ubuntu run) and no GUI tests.
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          # pip download cache, keyed on the files that pin the dependencies (df-0jhm).
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            scripts/testloop/requirements.txt
+      - name: Install
+        run: pip install -e . pytest==9.2.0 httpx2==2.16.0 -r scripts/testloop/requirements.txt
+      - name: Engine tests
+        shell: bash   # pipefail: pytest's exit code survives the tee
+        # Only stdout/stderr become UTF-8, so the report file is readable. PYTHONUTF8 stays unset:
+        # open() without encoding= must keep the cp1252 default that production has.
+        env: { PYTHONIOENCODING: utf-8 }
+        run: |
+          mkdir -p report
+          python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider 2>&1 | tee report/tests-windows.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-tests-windows, path: report/, if-no-files-found: ignore }
   sonar:
     # SonarQube Cloud (df-ahua.1): coverage of new code, cognitive complexity, duplication, history.
     # A complement to the quality job, not a replacement. Required on main (repo ruleset,
@@ -250,7 +281,7 @@ jobs:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
-    needs: [leak-scan, quality, tests, mutation-targets, mutation, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-windows, mutation-targets, mutation, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
