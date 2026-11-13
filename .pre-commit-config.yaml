@@ -13,6 +13,7 @@ repos:
         language: python
         additional_dependencies: ["polars==1.41.2"]
         pass_filenames: true
+        require_serial: true   # one process: each run loads every private guard's real values
         always_run: false
       - id: quality-gate
         name: quality gate (lint, dead code, import contracts against the baseline)

@@ -12,10 +12,13 @@ PII patterns: Brazilian CPF (11-digit), bank agency/account short codes, owner n
 variants, personal email addresses.
 
 Real values (df-k37o): a private workspace on this machine that ships tools/leakguard.py (e.g. the
-GetFinance-Workspace checkout) lists the real values in its data (account numbers, names, ids) via
-real_values(); any committed file holding one fails, masked to its first two characters. A pattern
-cannot recognize a real account number in a docstring example; that list can. No private workspace
-in CI, so CI runs without it; a private guard that is present but cannot run fails the check.
+GetFinance-Workspace checkout) lists the real values in its data (account numbers, names, ids). Any
+committed file holding one fails, masked to its first two characters. A pattern cannot recognize a
+real account number in a docstring example; that list can. The private guard's public API is used,
+so the matching (separators between digits, names wrapped across lines) lives in one place:
+real_values(workspace), allowed(), real_value_hits(text, values). No private workspace in CI, so
+CI runs without it. Fails closed: a private guard that cannot run, or a worktree whose main checkout
+(where the gitignored private workspaces and .leakguard-local live) cannot be found, fails the check.
 
 ALLOWLIST: synthetic document literals emitted by
 workspaces/GetFinance-Show/scripts/generate_synthetic_data.py.  These are fabricated
@@ -30,21 +33,29 @@ import sys
 from pathlib import Path
 
 
-def _main_checkout_workspaces(here):
-    """workspaces/ of the main checkout of the repo at `here`: private workspaces are gitignored,
-    so a worktree has none."""
+def _main_checkout(here):
+    """(root of the main checkout of the repo at `here`, error). Gitignored files (the private
+    workspaces, .leakguard-local) exist only there, never in a worktree. The error is set when `here`
+    is a worktree whose main checkout cannot be found: checking without them would pass silently."""
     try:
         common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
                                 cwd=here, capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
-        return here / "workspaces"
-    return Path(common).parent / "workspaces"
+        common = ""
+    if common and Path(common).is_dir():   # an old git echoes the unknown flag instead of failing
+        return Path(common).parent, None
+    if (here / ".git").is_file():
+        return here, ("this is a worktree and its main checkout could not be found, so the private "
+                      "workspaces and .leakguard-local were not checked")
+    return here, None
 
 
-WORKSPACES = _main_checkout_workspaces(Path(__file__).resolve().parent.parent)
-# In the attribution files the owner's name is intended (see NAME_EXEMPT_PATHS); only values whose
-# source is an owner column are let through there, never an account number or an id.
+MAIN_ROOT, MAIN_ROOT_ERROR = _main_checkout(Path(__file__).resolve().parent.parent)
+WORKSPACES = MAIN_ROOT / "workspaces"
+# In the attribution files the owner's name is intended (see NAME_EXEMPT_PATHS); only a value that
+# some private workspace sources from an owner column is let through there, never an account or an id.
 ATTRIBUTION_SOURCES = (".owner",)
+MIN_REAL_VALUE_LENGTH = 6   # a shorter value would match everywhere, and its 2-character mask would show it
 
 # ---------------------------------------------------------------------------
 # Private-path prefixes — any staged file under these surfaces is hard-blocked.
@@ -90,15 +101,16 @@ EMAILS = re.compile(r"(?i)\b[\w.+-]+@(gmail|outlook)\.com\b")
 # (that would put the owner's name into the committed source AND make the guard /
 # leak-audit flag themselves). They are loaded at runtime from, in order:
 #   1. the LEAKGUARD_NAME_PATTERNS env var (os.pathsep-separated regexes), and
-#   2. a gitignored '.leakguard-local' file at the repo root (one regex per line; '#' comments).
+#   2. a gitignored '.leakguard-local' file at the main checkout's root (one regex per line; '#'
+#      comments), also when the commit is made from a worktree, which has none of its own.
 # On a fresh public clone both are absent and the NAME check is simply skipped — the
 # generic CPF/ACCT/EMAIL rules and the private-path block still apply. The owner keeps
 # their name patterns in the gitignored '.leakguard-local' for full local protection.
-def _load_owner_name_patterns():
+def _load_owner_name_patterns(root=None):
     raw = []
     env = os.environ.get("LEAKGUARD_NAME_PATTERNS", "")
     raw += [s for s in env.split(os.pathsep) if s.strip()]
-    local = Path(__file__).resolve().parent.parent / ".leakguard-local"
+    local = (root or MAIN_ROOT) / ".leakguard-local"
     if local.is_file():
         for line in local.read_text(encoding="utf-8", errors="ignore").splitlines():
             line = line.strip()
@@ -136,34 +148,51 @@ def _is_exempt(hit):
     return bare in ALLOWLIST or hit in ALLOWLIST   # synthetic literal — exempt
 
 
+def _private_guard(ws):
+    """(module, its usable real values) for one private workspace; each workspace's allow-list filters
+    only its own values, and only strings long enough to match safely are kept."""
+    guard = ws / "tools" / "leakguard.py"
+    spec = importlib.util.spec_from_file_location(f"private_leakguard_{ws.name}", guard)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    allowed = {a.lower() for a in module.allowed()}
+    values = {v.lower(): src for v, src in module.real_values(ws).items()
+              if isinstance(v, str) and len(v.strip()) >= MIN_REAL_VALUE_LENGTH and v.lower() not in allowed}
+    return module, values
+
+
 def load_real_values():
-    """({lowercased value: (source, workspace)}, allowed values, failures) from every private guard."""
-    values, allowed, failures = {}, set(), []
+    """([(workspace name, its guard module, its real values)], failures) for every private guard."""
+    guards, failures = [], []
+    if MAIN_ROOT_ERROR:
+        failures.append(f"REAL-VALUES: {MAIN_ROOT_ERROR}")
     for guard in sorted(WORKSPACES.glob("*/tools/leakguard.py")):
         ws = guard.parent.parent
-        rel = guard.relative_to(WORKSPACES.parent).as_posix()
         try:
-            spec = importlib.util.spec_from_file_location(f"private_leakguard_{ws.name}", guard)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            for value, source in module.real_values(ws).items():
-                values.setdefault(value.lower(), (source, ws.name))
-            allowed |= {a.lower() for a in module._allowed()}
+            module, values = _private_guard(ws)
         except Exception as e:  # noqa: BLE001 -- any failure of a private guard must fail closed rather than pass
+            rel = guard.relative_to(WORKSPACES.parent).as_posix()
             failures.append(f"REAL-VALUES: {rel} could not run ({type(e).__name__}: {e}); nothing was checked against it")
-    return {v: src for v, src in values.items() if v not in allowed}, failures
+            continue
+        guards.append((ws.name, module, values))
+    return guards, failures
 
 
-def _real_value_failures(norm, text, real):
-    lowered = text.lower()
-    present = [(v, src) for v, src in real.items() if v in lowered
-               and not (norm in NAME_EXEMPT_PATHS and src[0].endswith(ATTRIBUTION_SOURCES))]
-    return [f"REAL: {norm}:{n} -> '{v[:2]}…' ({len(v)} chars, {src} from {ws})"
-            for n, line in enumerate(lowered.splitlines(), start=1)
-            for v, (src, ws) in present if v in line]
+def _owner_values(guards):
+    """Values that any private workspace sources from an owner column: attribution in LICENSE/README."""
+    return {v for _, _, values in guards for v, src in values.items() if src.endswith(ATTRIBUTION_SOURCES)}
 
 
-def _file_failures(f, real=None):
+def _real_value_failures(norm, text, guards):
+    exempt = _owner_values(guards) if norm in NAME_EXEMPT_PATHS else set()
+    failures = []
+    for ws, module, values in guards:
+        for n, v, src in module.real_value_hits(text, {k: s for k, s in values.items() if k not in exempt}):
+            failures.append(f"REAL: {norm}:{n} -> '{v[:2]}…' ({len(v)} chars, {src} from {ws})")
+    return failures
+
+
+def _file_failures(f, guards=()):
     p = Path(f)
     norm = p.as_posix()
     # --- path-block check -------------------------------------------
@@ -176,13 +205,13 @@ def _file_failures(f, real=None):
     return [f"{label}: {norm} -> {m.group(0)!r}"
             for label, rx in _content_checks(norm)
             for m in rx.finditer(text)
-            if not _is_exempt(m.group(0))] + _real_value_failures(norm, text, real or {})
+            if not _is_exempt(m.group(0))] + _real_value_failures(norm, text, guards)
 
 
 def main(argv):
     files = argv[1:]
-    real, failures = load_real_values()
-    failures += [msg for f in files for msg in _file_failures(f, real)]
+    guards, failures = load_real_values()
+    failures += [msg for f in files for msg in _file_failures(f, guards)]
 
     if failures:
         print("LEAK GUARD FAILED:\n  " + "\n  ".join(failures), file=sys.stderr)
