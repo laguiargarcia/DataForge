@@ -160,15 +160,45 @@ def test_snapshot_scrolls_the_log_to_the_bottom(panel):
     assert sb.value() > sb.maximum() // 2
 
 
-@pytest.mark.xfail(strict=True, reason="df-8i31: _append_log_line's setTextCursor scrolls to the end "
-                   "whatever the auto-scroll state")
-def test_snapshot_keeps_position_when_auto_scroll_is_paused(panel):
+def _paused_at(panel, sb, position):
+    """Fill tab 'a' with a long log, then scroll it like the user would."""
+    from PySide6.QtWidgets import QApplication
+    panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "output": _MANY_LINES}]})
+    QApplication.processEvents()
+    sb.setValue(position(sb))
+    assert panel._tab_auto_scroll["a"] is False
+
+
+@pytest.mark.parametrize("position", [lambda sb: 0, lambda sb: sb.maximum() // 2],
+                         ids=["top", "middle"])
+def test_snapshot_keeps_position_when_auto_scroll_is_paused(panel, position):
+    from PySide6.QtWidgets import QApplication
     sb = _shown_log_scrollbar(panel)
+    _paused_at(panel, sb, position)
+    kept = sb.value()
     panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "output": _MANY_LINES}]})
-    sb.setValue(0)
-    panel._tab_auto_scroll["a"] = False   # setValue fired the scroll slot; pin the paused state
-    panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "output": _MANY_LINES}]})
-    assert sb.value() == 0
+    QApplication.processEvents()
+    assert sb.value() == kept
+    assert panel._tab_auto_scroll["a"] is False
+
+
+def test_snapshot_while_paused_still_replaces_the_log(panel):
+    sb = _shown_log_scrollbar(panel)
+    _paused_at(panel, sb, lambda sb: 0)
+    panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "output": "new\n"}]})
+    assert _log(panel, 0) == ["new"]
+
+
+def test_scrolling_back_to_the_bottom_resumes_auto_scroll(panel):
+    from PySide6.QtWidgets import QApplication
+    sb = _shown_log_scrollbar(panel)
+    _paused_at(panel, sb, lambda sb: 0)
+    sb.setValue(sb.maximum())
+    assert panel._tab_auto_scroll["a"] is True
+    more = _MANY_LINES + "".join(f"more {n}\n" for n in range(300))
+    panel._handle_run_snapshot({"status": "running", "tasks": [{"name": "a", "output": more}]})
+    QApplication.processEvents()
+    assert sb.value() > sb.maximum() * 3 // 4
 
 
 @pytest.mark.parametrize("status", ["success", "failed"])
