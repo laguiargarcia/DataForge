@@ -56,6 +56,8 @@ MAIN_ROOT, MAIN_ROOT_ERROR = _main_checkout(Path(__file__).resolve().parent.pare
 WORKSPACES = MAIN_ROOT / "workspaces"
 # Private workspaces outside the checkout (see _listed_workspaces); gitignored, like .leakguard-local.
 LISTED_WORKSPACES_FILE = ".leakguard-workspaces"
+# Where a private workspace keeps its guard, relative to the workspace.
+PRIVATE_GUARD = Path("tools", "leakguard.py")
 # In the attribution files the owner's name is intended (see NAME_EXEMPT_PATHS); only a value that
 # some private workspace sources from an owner column is let through there, never an account or an id.
 ATTRIBUTION_SOURCES = (".owner",)
@@ -155,7 +157,7 @@ def _is_exempt(hit):
 def _private_guard(ws):
     """(module, its usable real values) for one private workspace; each workspace's allow-list filters
     only its own values, and only strings long enough to match safely are kept."""
-    guard = ws / "tools" / "leakguard.py"
+    guard = ws / PRIVATE_GUARD
     spec = importlib.util.spec_from_file_location(f"private_leakguard_{ws.name}", guard)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -180,7 +182,7 @@ def _listed_workspaces():
         if not entry or entry.startswith("#"):
             continue
         ws = MAIN_ROOT / Path(entry).expanduser()   # an absolute entry replaces the root
-        if (ws / "tools" / "leakguard.py").is_file():
+        if (ws / PRIVATE_GUARD).is_file():
             dirs.append(ws)
         else:
             failures.append(f"REAL-VALUES: {entry} (listed in {LISTED_WORKSPACES_FILE}) has no "
@@ -190,7 +192,7 @@ def _listed_workspaces():
 
 def _guard_label(ws):
     """The private guard's path as the failure shows it: relative inside this checkout, else as listed."""
-    guard = ws / "tools" / "leakguard.py"
+    guard = ws / PRIVATE_GUARD
     try:
         return guard.relative_to(WORKSPACES.parent).as_posix()
     except ValueError:
@@ -204,7 +206,7 @@ def load_real_values():
         failures.append(f"REAL-VALUES: {MAIN_ROOT_ERROR}")
     listed, listing_failures = _listed_workspaces()
     failures += listing_failures
-    in_tree = [guard.parent.parent for guard in sorted(WORKSPACES.glob("*/tools/leakguard.py"))]
+    in_tree = [guard.parent.parent for guard in sorted(WORKSPACES.glob(f"*/{PRIVATE_GUARD.as_posix()}"))]
     seen = set()
     for ws in in_tree + listed:
         if ws.resolve() in seen:

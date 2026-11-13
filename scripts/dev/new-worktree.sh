@@ -9,7 +9,7 @@
 # takes about a second. Remove with: git worktree remove .worktrees/<name> && git branch -D <branch>
 set -euo pipefail
 
-if [ $# -lt 2 ]; then
+if [[ $# -lt 2 ]]; then
     echo "usage: $0 <name> <branch> [<base>]" >&2
     exit 2
 fi
@@ -21,7 +21,7 @@ uv=${UV:-uv}
 common=$(git rev-parse --path-format=absolute --git-common-dir)
 root=$(dirname "$common")
 wt="$root/.worktrees/$name"
-if [ ! -x "$root/.venv/bin/python" ]; then
+if [[ ! -x "$root/.venv/bin/python" ]]; then
     echo "no venv at $root/.venv: build the clone's venv first (see docs/commands.md)" >&2
     exit 1
 fi
