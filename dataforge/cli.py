@@ -17,6 +17,7 @@ from dataforge.compat import (
     ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, resolve_workspace, resolve_db, data_dir, db_url,
     list_workspaces, valid_name,
 )
+from dataforge.cron import CRON_FIELDS, shift_cron
 from dataforge.dag import topological_levels
 from dataforge.deploy.cli import deploy_app
 from dataforge.parser import load_connections, load_jobs, load_workspace
@@ -147,9 +148,6 @@ _DOW_NAMES = {
     "4": "Thursday", "5": "Friday", "6": "Saturday",
 }
 
-# Fields of a standard cron expression: minute, hour, day of month, month, day of week.
-_CRON_FIELDS = 5
-
 _DOW_ORDER = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 
@@ -174,7 +172,7 @@ def _expand_dow(field: str) -> list[str]:
 def _cron_to_ps_trigger(cron: str) -> str:
     """Translate a cron expression to a New-ScheduledTaskTrigger argument string."""
     parts = cron.strip().split()
-    if len(parts) != _CRON_FIELDS:
+    if len(parts) != CRON_FIELDS:
         raise ValueError(f"Invalid cron expression (need 5 fields): {cron!r}")
     minute, hour, dom, month, dow = parts
     if not minute.isdigit() or not hour.isdigit():
@@ -454,36 +452,16 @@ def _ensure_task_scheduler_history() -> str | None:
 
 
 def _utc_cron_to_local(cron: str) -> str:
-    """Shift cron minute/hour fields from UTC to current OS-local time.
+    """Shift a cron from UTC to the current OS-local time (dataforge.cron.shift_cron).
 
     DataForge stores cron in UTC, but OS schedulers (schtasks, launchd, crond)
     interpret cron fields in local time, so we materialize the offset into the
     fields at registration time. Re-register after DST transitions to stay accurate.
-
-    Plain-integer minute/hour are shifted; wildcards/ranges/lists pass through.
-    Weekly DOW is shifted when the hour wraps past midnight. DOM wraparound is
-    month-dependent and is not handled.
     """
-    parts = cron.strip().split()
-    if len(parts) != _CRON_FIELDS:
-        return cron
-    minute, hour, dom, month, dow = parts
-    if not (minute.isdigit() and hour.isdigit()):
-        return cron
-
     offset = datetime.now().astimezone().utcoffset()
     if offset is None:
         return cron
-    offset_min = int(offset.total_seconds() // 60)
-
-    total = int(hour) * 60 + int(minute) + offset_min
-    day_shift, total = divmod(total, 24 * 60)
-    new_hour, new_minute = divmod(total, 60)
-
-    if day_shift != 0 and dow.isdigit():
-        dow = str((int(dow) + day_shift) % 7)
-
-    return f"{new_minute} {new_hour} {dom} {month} {dow}"
+    return shift_cron(cron, offset)
 
 
 def _platform_check_cron(cron: str) -> None:
@@ -494,7 +472,7 @@ def _platform_check_cron(cron: str) -> None:
     translator accepts can be registered: Task Scheduler takes daily and weekly, launchd one
     StartCalendarInterval, crontab any 5-field cron.
     """
-    if len(cron.strip().split()) != _CRON_FIELDS:
+    if len(cron.strip().split()) != CRON_FIELDS:
         raise ValueError(f"Unsupported cron expression: {cron!r}. "
                          "The OS scheduler needs the 5 fields 'M H DOM MON DOW'.")
     local = _utc_cron_to_local(cron)

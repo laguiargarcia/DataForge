@@ -834,3 +834,18 @@ def test_reconcile_of_an_os_unsupported_cron_removes_the_stale_task_and_warns(
     assert "0 12 1 * *" in response.json()["warnings"][0]
     triggers._platform_register_trigger.assert_not_called()
     triggers._platform_deregister_trigger.assert_called_once_with("test_ws", "monthly")
+
+
+def test_utc_cron_to_local_moves_a_day_list_across_midnight(monkeypatch):
+    """Registration shifts the stored UTC cron to local time, days included (df-vo3x.5)."""
+    from datetime import datetime, timedelta, timezone
+    import dataforge.cli as cli
+
+    class _BRT(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 1, 1, tzinfo=timezone(timedelta(hours=-3)))
+
+    monkeypatch.setattr(cli, "datetime", _BRT)
+    assert cli._utc_cron_to_local("0 1 * * 2,4") == "0 22 * * 1,3"
+    assert cli._utc_cron_to_local("0 1 * * TUE-SAT") == "0 22 * * 1,2,3,4,5"

@@ -8,6 +8,7 @@ from typing import Optional
 from croniter import croniter as _croniter
 
 from dataforge.compat import api_port
+from dataforge.cron import shift_cron
 from dataforge.db import utcnow
 
 from PySide6.QtCore import QByteArray, QDate, QRegularExpression, QUrl
@@ -81,29 +82,12 @@ def utc_to_local_dt(dt: datetime) -> datetime:
     return dt + _local_offset()
 
 
-def _shift_cron(cron: str, offset: timedelta) -> str:
-    """Shift cron minute/hour by *offset*. Wildcards/ranges/lists pass through."""
-    parts = cron.strip().split()
-    if len(parts) != 5:
-        return cron
-    minute, hour, dom, month, dow = parts
-    if not (minute.isdigit() and hour.isdigit()):
-        return cron
-    delta_min = int(offset.total_seconds() // 60)
-    total = int(hour) * 60 + int(minute) + delta_min
-    day_shift, total = divmod(total, 24 * 60)
-    new_hour, new_minute = divmod(total, 60)
-    if day_shift != 0 and dow.isdigit():
-        dow = str((int(dow) + day_shift) % 7)
-    return f"{new_minute} {new_hour} {dom} {month} {dow}"
-
-
 def utc_to_local_cron(cron: str) -> str:
-    return _shift_cron(cron, _local_offset())
+    return shift_cron(cron, _local_offset())
 
 
 def local_to_utc_cron(cron: str) -> str:
-    return _shift_cron(cron, -_local_offset())
+    return shift_cron(cron, -_local_offset())
 
 
 def preset_to_cron(
