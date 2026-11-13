@@ -2,31 +2,27 @@
 
 Shell layout: QVBoxLayout wrapping header (workspace combo) + QHBoxLayout with
 QListWidget sidebar (180px) + QStackedWidget content area.
-Tray integration: minimize-to-tray on close, restore on double-click, quit via menu.
+The window is a plain client of the local server; the background process owns the tray.
 """
 from __future__ import annotations
 
 import json
 
 from PySide6.QtCore import QSettings, QTimer, QUrl, Signal
-from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWidgets import (
-    QApplication,
     QComboBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QMainWindow,
-    QMenu,
     QStackedWidget,
-    QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
 
 from dataforge.compat import DEFAULT_API_PORT, api_port
-from dataforge.gui.daemon import DaemonThread
+from dataforge.gui.server_lost_banner import ServerLostBanner
 
 SETTINGS_ORG = "DataForge"
 SETTINGS_APP = "DataForge"
@@ -34,21 +30,19 @@ KEY_LAST_WS = "main/last_workspace"
 
 
 class MainWindow(QMainWindow):
-    """Main application window with sidebar navigation and system tray."""
+    """Main application window with sidebar navigation."""
 
     workspace_changed = Signal(str)
 
     SECTIONS: list[str] = ["Jobs", "Scheduler", "SQL", "Dashboards", "Deploy", "Settings"]
 
-    def __init__(self, daemon: DaemonThread) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self._daemon = daemon
         self._port = DEFAULT_API_PORT
         self._nam = QNetworkAccessManager(self)
         self.setWindowTitle("DataForge")
         self.resize(1200, 800)
         self._build_ui()
-        self._setup_tray()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -60,6 +54,13 @@ class MainWindow(QMainWindow):
         root_layout = QVBoxLayout(central)
         root_layout.setContentsMargins(0, 0, 0, 0)
         root_layout.setSpacing(0)
+
+        # Notice shown while the local server does not answer (hidden otherwise)
+        self._lost_banner = ServerLostBanner()
+        self._lost_label = self._lost_banner.label
+        self._restart_btn = self._lost_banner.restart_btn
+        self._lost_banner.restarted.connect(lambda: self._load_workspaces())
+        root_layout.addWidget(self._lost_banner)
 
         # Header bar with workspace selector
         header = QWidget()
@@ -172,64 +173,16 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(index)
 
     # ------------------------------------------------------------------
-    # System tray
-    # ------------------------------------------------------------------
-
-    def _setup_tray(self) -> None:
-        if not QSystemTrayIcon.isSystemTrayAvailable():
-            self._tray = None
-            return
-
-        self._tray = QSystemTrayIcon(self)
-
-        icon = QIcon.fromTheme("applications-engineering")
-        if icon.isNull():
-            icon = QIcon.fromTheme("application-x-executable")
-        if icon.isNull():
-            # No desktop theme available (e.g. WSL2) — create a minimal placeholder.
-            pixmap = QPixmap(16, 16)
-            pixmap.fill(QColor("#4A90D9"))
-            icon = QIcon(pixmap)
-        self._tray.setIcon(icon)
-        self._tray.setToolTip("DataForge")
-
-        menu = QMenu()
-        restore_action = QAction("Restore", self)
-        restore_action.triggered.connect(self._on_restore)
-        quit_action = QAction("Quit", self)
-        quit_action.triggered.connect(lambda: self._shutdown_and_quit())
-        menu.addAction(restore_action)
-        menu.addSeparator()
-        menu.addAction(quit_action)
-        self._tray.setContextMenu(menu)
-
-        self._tray.activated.connect(self._on_tray_activated)
-        self._tray.show()
-
-    def _on_restore(self) -> None:
-        self.show()
-        self.raise_()
-        self.activateWindow()
-
-    def _on_tray_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
-        if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
-            self._on_restore()
-
-    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def closeEvent(self, event) -> None:
-        """Minimize to tray instead of quitting when tray is active."""
-        if self._tray is not None and self._tray.isVisible():
-            self.hide()
-            event.ignore()  # MUST ignore — otherwise Qt destroys the window
-        else:
-            self._shutdown_and_quit(event=event)
+    def show_server_lost(self) -> None:
+        """Non-blocking notice, with a button, that the local server stopped answering."""
+        self._lost_banner.show()
 
-    def _shutdown_and_quit(self, event=None) -> None:
-        """Stop daemon and exit Qt application."""
-        self._daemon.stop()
-        if event is not None:
-            event.accept()
-        QApplication.quit()
+    def hide_server_lost(self) -> None:
+        self._lost_banner.hide()
+
+    def closeEvent(self, event) -> None:
+        """The admin window is a plain client: closing it really closes it."""
+        event.accept()

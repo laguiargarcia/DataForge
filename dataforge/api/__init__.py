@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,10 +11,13 @@ from fastapi.datastructures import Headers
 
 from dataforge.db import init_db, JobRunORM
 from dataforge.api import broadcaster as _broadcaster_module
+from dataforge import instance
+from dataforge.app_backends import supervisor
+from dataforge.presence import registry
 from dataforge.apps import discover_apps
 from dataforge.compat import allowed_hosts, global_db_url
 from dataforge.orphans import reconcile_or_log
-from .routers import workspaces, jobs, executions, stream, triggers, deploy, apps, tables
+from .routers import workspaces, jobs, executions, stream, triggers, deploy, apps, tables, instance as instance_router
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +59,19 @@ class HostOriginMiddleware:
         await self.app(scope, receive, send)
 
 
+SWEEP_SECONDS = 10
+
+
+async def _sweep_backends() -> None:
+    """Every SWEEP_SECONDS stop app backends whose windows closed or that sat idle."""
+    while True:
+        await asyncio.sleep(SWEEP_SECONDS)
+        try:
+            await asyncio.to_thread(supervisor.sweep, time.time(), registry)
+        except Exception:
+            logger.exception("App backend sweep failed")
+
+
 @asynccontextmanager
 async def lifespan(app):
     """FastAPI lifespan: on startup, fail the runs whose process provably died (df-bw7), then
@@ -79,8 +97,14 @@ async def lifespan(app):
     except Exception:
         logger.exception("App discovery failed — daemon boot continues")
 
-    yield
-    # No shutdown work needed
+    sweeper = asyncio.create_task(_sweep_backends())
+    try:
+        yield
+    finally:
+        sweeper.cancel()
+        await asyncio.gather(sweeper, return_exceptions=True)
+        await apps.close_client()
+        await asyncio.to_thread(supervisor.stop_all)
 
 
 _WORKSPACES_PREFIX = "/api/workspaces"
@@ -96,11 +120,12 @@ app.include_router(triggers.router, prefix=_WORKSPACES_PREFIX, tags=["triggers"]
 app.include_router(deploy.router, prefix=_WORKSPACES_PREFIX, tags=["deploy"])
 app.include_router(apps.router, prefix="/apps", tags=["apps"])
 app.include_router(tables.router, prefix=_WORKSPACES_PREFIX, tags=["tables"])
+app.include_router(instance_router.router, prefix="/api/instance", tags=["instance"])
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return instance.health_payload()
 
 
 @app.post("/api/triggers/notify")

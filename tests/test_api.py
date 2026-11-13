@@ -1,16 +1,21 @@
 """Orchestration API tests."""
 import pytest
 from fastapi.testclient import TestClient
+from dataforge import compat
 from dataforge.api import app
 
 _client = TestClient(app)
 
 
-def test_health():
-    """GET /health returns 200 with status ok."""
+def test_health_identifica_o_dataforge(dataforge_home):
+    """GET /health says which DataForge this is: service, code version and home."""
     response = _client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "dataforge"
+    assert body["version"]
+    assert body["home"] == str(compat.data_dir().resolve())
 
 
 # ---------------------------------------------------------------------------
@@ -242,8 +247,43 @@ def test_background_run_that_raises_marks_the_run_failed(dataforge_home, workspa
         finally:
             broadcaster.unsubscribe(q)
 
-    assert asyncio.run(_run()) == ["running", "failed"]
+    assert asyncio.run(_run()) == ["pending", "failed"]
     with Session(init_db(global_url)) as session:
         run = session.get(JobRunORM, "r1")
         assert run.status == "failed"
         assert run.finished_at is not None
+
+
+def test_background_run_publishes_pending_running_then_terminal(dataforge_home, workspace_dir):
+    import asyncio
+    from sqlalchemy.orm import Session
+    from dataforge.api.broadcaster import get_broadcaster
+    from dataforge.api.routers import jobs as jobs_router
+    from dataforge.compat import db_url
+    from dataforge.db import JobRunORM, init_db
+
+    (workspace_dir / "logs").mkdir(exist_ok=True)
+    (workspace_dir / "scripts" / "ok.py").write_text("print('ok')\n", encoding="utf-8")
+    (workspace_dir / "jobs" / "okjob").mkdir()
+    (workspace_dir / "jobs" / "okjob" / "job.yaml").write_text(
+        "name: okjob\ntasks:\n  - name: t1\n    script: ok.py\n"
+        "    retry:\n      attempts: 1\n      delay_seconds: 0\n",
+        encoding="utf-8",
+    )
+    global_url = db_url(dataforge_home / "dataforge.db")
+    with Session(init_db(global_url)) as session:
+        session.add(JobRunORM(id="r9", workspace="test_ws", job="okjob", status="pending"))
+        session.commit()
+
+    async def _run():
+        broadcaster = get_broadcaster("test_ws")
+        q = broadcaster.subscribe()
+        try:
+            await jobs_router._run_job_background(
+                "r9", "okjob", workspace_dir, db_url(workspace_dir / "dataforge.db"), global_url, "test_ws")
+            await asyncio.sleep(0.1)
+            return [q.get_nowait()["status"] for _ in range(q.qsize())]
+        finally:
+            broadcaster.unsubscribe(q)
+
+    assert asyncio.run(_run()) == ["pending", "running", "success"]

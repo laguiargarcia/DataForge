@@ -62,6 +62,20 @@ If you change the app sources in `workspaces/GetFinance-Show/apps/financas/src/`
 `npm install` and `npm run build` in that folder to regenerate `dist/`. Before committing, run
 `npm run build` and check whether `dist/` changed.
 
+### Workspace apps (own window)
+
+A workspace app can also open in its own window, without a browser, and can ship an optional Python
+backend. With the Show workspace:
+
+```bash
+dataforge app GetFinance-Show financas            # opens the window (starts the local server if needed)
+dataforge app GetFinance-Show financas --atalho   # Windows: creates a Desktop shortcut instead
+dataforge stop                                    # shuts the local server down
+```
+
+`dataforge gui` and `dataforge app` share one local server, which stops by itself about a minute after
+the last window closes. Details: `docs/commands.md`, `docs/workspace-layout.md`.
+
 ---
 
 ## Bring your own bank (optional)

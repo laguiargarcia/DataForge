@@ -116,7 +116,8 @@ type = "forbidden"
 source_modules = [
     "dataforge.engine", "dataforge.parser", "dataforge.dag", "dataforge.db", "dataforge.models",
     "dataforge.compat", "dataforge.tasks", "dataforge.conditions", "dataforge.deploy", "dataforge.apps",
-    "dataforge.cron",
+    "dataforge.cron", "dataforge.runlock", "dataforge.instance", "dataforge.presence",
+    "dataforge.app_backends", "dataforge.app_guard", "dataforge.shortcut",
 ]
 forbidden_modules = ["dataforge.cli", "dataforge.api", "dataforge.gui"]
 
@@ -148,7 +149,8 @@ type = "forbidden"
 source_modules = [
     "dataforge.engine", "dataforge.parser", "dataforge.dag", "dataforge.db", "dataforge.models",
     "dataforge.compat", "dataforge.tasks", "dataforge.conditions", "dataforge.deploy",
-    "dataforge.api", "dataforge.apps", "dataforge.cron",
+    "dataforge.api", "dataforge.apps", "dataforge.cron", "dataforge.runlock", "dataforge.instance", "dataforge.presence",
+    "dataforge.app_backends", "dataforge.app_guard", "dataforge.shortcut",
 ]
 forbidden_modules = ["PySide6"]
 # The API reaches Qt only through the known API -> CLI import above (cli lazily imports the GUI).

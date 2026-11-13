@@ -116,7 +116,7 @@ def test_star_disables_only_the_host_check(test_client, monkeypatch):
 def test_serve_on_all_interfaces_warns_and_prints_loopback_url(workspace_dir, make_app, monkeypatch, host):
     make_app(workspace_dir, "demo")
     calls = []
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: calls.append(k))
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: calls.append({"host": self.config.host}))
     out = CliRunner().invoke(cli_app, ["serve", "--host", host, "--port", "8123"]).output
     warnings = [line for line in out.splitlines() if "sem login" in line]
     assert len(warnings) == 1
@@ -129,7 +129,7 @@ def test_serve_on_all_interfaces_warns_and_prints_loopback_url(workspace_dir, ma
 
 def test_serve_with_named_host_keeps_existing_values(monkeypatch):
     monkeypatch.setenv("DATAFORGE_ALLOWED_HOSTS", "ja-existia")
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: None)
     out = CliRunner().invoke(cli_app, ["serve", "--host", "minha-maquina.lan"]).output
     assert "sem login" not in out
     assert "http://minha-maquina.lan:8000" in out
@@ -139,6 +139,6 @@ def test_serve_with_named_host_keeps_existing_values(monkeypatch):
 
 def test_serve_without_previous_value_sets_only_the_host(monkeypatch):
     monkeypatch.delenv("DATAFORGE_ALLOWED_HOSTS")
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: None)
     CliRunner().invoke(cli_app, ["serve", "--host", "minha-maquina.lan"])
     assert os.environ["DATAFORGE_ALLOWED_HOSTS"] == "minha-maquina.lan"

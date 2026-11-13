@@ -102,7 +102,7 @@ def test_core_has_no_finance_terms():
 
 def test_serve_prints_app_urls(workspace_dir, make_app, monkeypatch):
     make_app(workspace_dir, "demo", title="Demo [v0]")
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: None)
     out = CliRunner().invoke(cli_app, ["serve", "--port", "8123"]).output
     assert "Demo [v0]" in out
     assert "http://127.0.0.1:8123/apps/test_ws/demo/" in out
@@ -112,7 +112,7 @@ def test_serve_prints_app_urls(workspace_dir, make_app, monkeypatch):
 def test_serve_warns_when_no_workspace_is_found(tmp_path, monkeypatch):
     # df-pr6: with DATAFORGE_HOME on the wrong folder, serve must say where it looked.
     monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: None)
     out = CliRunner().invoke(cli_app, ["serve"]).output
     assert "nenhum workspace encontrado" in out
     assert str(tmp_path / "workspaces") in out.replace("\n", "")
@@ -123,7 +123,7 @@ def test_serve_binds_dataforge_port_when_no_port_is_given(tmp_path, monkeypatch)
     monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
     monkeypatch.setenv("DATAFORGE_PORT", "8123")
     seen = {}
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: seen.update(k))
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: seen.update(port=self.config.port))
     CliRunner().invoke(cli_app, ["serve"])
     assert seen["port"] == 8123
 
@@ -132,7 +132,49 @@ def test_serve_explains_an_invalid_dataforge_port(tmp_path, monkeypatch):
     # df-yvgx: a clear message and exit 1, not a traceback.
     monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
     monkeypatch.setenv("DATAFORGE_PORT", "abc")
-    monkeypatch.setattr("uvicorn.run", lambda *a, **k: None)
+    monkeypatch.setattr("uvicorn.Server.run", lambda self: None)
     result = CliRunner().invoke(cli_app, ["serve"])
     assert result.exit_code == 1
     assert "DATAFORGE_PORT must be a port number" in result.output
+
+
+def test_backend_valido_e_lido(workspace_dir, make_app):
+    make_app(workspace_dir, "demo", raw_yaml="name: demo\nbackend: backend.main:app\n")
+    info = load_app(workspace_dir, "demo")
+    assert info is not None
+    assert info.backend == "backend.main:app"
+    assert info.app_dir == workspace_dir / "apps" / "demo"
+
+
+def test_backend_invalido_pula_o_app(workspace_dir, make_app, caplog):
+    make_app(workspace_dir, "demo", raw_yaml='name: demo\nbackend: "python -m x"\n')
+    with caplog.at_level(logging.WARNING):
+        assert load_app(workspace_dir, "demo") is None
+    assert "demo" in caplog.text
+
+
+def test_icon_existente_e_lido(workspace_dir, make_app):
+    app_dir = make_app(workspace_dir, "demo", raw_yaml="name: demo\nicon: icon.ico\n")
+    (app_dir / "icon.ico").write_bytes(b"ico")
+    info = load_app(workspace_dir, "demo")
+    assert info is not None
+    assert info.icon == (app_dir / "icon.ico").resolve()
+
+
+@pytest.mark.parametrize("icon", ["nao.ico", "../../workspace.yaml"])
+def test_icon_ausente_ou_fora_da_pasta_vira_none(workspace_dir, make_app, caplog, icon):
+    (workspace_dir / "workspace.yaml").write_text("name: x\n", encoding="utf-8")
+    make_app(workspace_dir, "demo", raw_yaml=f"name: demo\nicon: {icon}\n")
+    with caplog.at_level(logging.WARNING):
+        info = load_app(workspace_dir, "demo")
+    assert info is not None
+    assert info.icon is None
+    assert "demo" in caplog.text
+
+
+def test_app_sem_campos_novos_continua_igual(workspace_dir, make_app):
+    make_app(workspace_dir, "demo")
+    info = load_app(workspace_dir, "demo")
+    assert info is not None
+    assert info.backend is None
+    assert info.icon is None

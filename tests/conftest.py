@@ -1,4 +1,5 @@
 import gc
+import os
 
 import pytest
 from pathlib import Path
@@ -107,6 +108,17 @@ def allowed_test_hosts(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def restore_api_port():
+    """``dataforge serve`` writes DATAFORGE_PORT into os.environ: put the value back after each test."""
+    before = os.environ.get("DATAFORGE_PORT")
+    yield
+    if before is None:
+        os.environ.pop("DATAFORGE_PORT", None)
+    else:
+        os.environ["DATAFORGE_PORT"] = before
+
+
+@pytest.fixture(autouse=True)
 def no_os_scheduler(monkeypatch):
     """Block all tests from touching the real OS scheduler (crontab / Task Scheduler)."""
     from unittest.mock import MagicMock
@@ -175,4 +187,52 @@ def make_app():
             (app_dir / "dist").mkdir(exist_ok=True)
             (app_dir / "dist" / "index.html").write_text("<html></html>", encoding="utf-8")
         return app_dir
+    return _make
+
+
+_BACKEND_MAIN = '''\
+import os
+from fastapi import FastAPI, Request
+from dataforge.app_guard import AppTokenMiddleware
+
+app = FastAPI()
+app.add_middleware(AppTokenMiddleware)
+
+
+@app.api_route("/eco", methods=["GET", "POST"])
+async def eco(request: Request):
+    return {"method": request.method, "query": request.url.query,
+            "body": (await request.body()).decode(), "headers": dict(request.headers)}
+
+
+@app.get("/pid")
+def pid():
+    return {"pid": os.getpid()}
+
+
+@app.get("/env")
+def env():
+    names = ["DATAFORGE_HOME", "DATAFORGE_WORKSPACE", "DATAFORGE_WORKSPACE_DIR",
+             "DATAFORGE_API", "DATAFORGE_APP_TOKEN"]
+    out = {n: os.environ.get(n) for n in names}
+    out["DATAFORGE_APP_TOKEN"] = "***" if out["DATAFORGE_APP_TOKEN"] else None
+    out["SEGREDO_DO_BANCO"] = os.environ.get("SEGREDO_DO_BANCO")
+    return out
+'''
+
+
+@pytest.fixture
+def make_backend_app(make_app, monkeypatch):
+    """Factory: an app with ``backend: backend.main:app`` (guarded FastAPI echo app); returns AppInfo.
+
+    The backend runs in a child uvicorn that imports ``dataforge.app_guard``: PYTHONPATH points it
+    at this checkout's package, whatever the cwd."""
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parent.parent))
+
+    def _make(ws: Path, pasta: str = "painel"):
+        from dataforge.apps import load_app
+        app_dir = make_app(ws, pasta, raw_yaml=f"name: {pasta}\ntitle: App\nbackend: backend.main:app\n")
+        (app_dir / "backend").mkdir(exist_ok=True)
+        (app_dir / "backend" / "main.py").write_text(_BACKEND_MAIN, encoding="utf-8")
+        return load_app(ws, pasta)
     return _make

@@ -5,6 +5,8 @@ import shlex
 import subprocess
 import sys
 import sysconfig
+import time
+import httpx
 import typer
 from datetime import datetime
 from xml.sax.saxutils import escape as xml_escape
@@ -14,10 +16,11 @@ from pydantic import ValidationError
 from rich.console import Console
 from rich import print as rprint
 from rich.markup import escape as rich_escape
+from dataforge import instance
 from dataforge.apps import discover_apps
 from dataforge.compat import (
-    ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, resolve_workspace, resolve_db, data_dir, db_url,
-    list_workspaces, valid_name,
+    ALLOWED_HOSTS_ENV, DEFAULT_API_PORT, PORT_ENV, api_port, set_api_port, resolve_workspace, resolve_db, data_dir, db_url,
+    list_workspaces, set_data_dir, valid_name,
 )
 from dataforge.cron import CRON_FIELDS, shift_cron
 from dataforge.dag import topological_levels
@@ -639,6 +642,56 @@ def gui() -> None:
     sys.exit(run_app())
 
 
+@app.command("app")
+def app_window_cmd(
+    workspace: str = typer.Argument(..., help="Nome do workspace"),
+    name: str = typer.Argument(..., help="Nome do app"),
+    home: Optional[str] = typer.Option(None, "--home", help="Pasta de dados do DataForge (DATAFORGE_HOME)"),
+    atalho: bool = typer.Option(
+        False, "--atalho", help="Cria um atalho na Área de Trabalho (Windows) em vez de abrir a janela",
+    ),
+) -> None:
+    """Abre um app do workspace em janela própria, sem navegador."""
+    if home is not None:  # before anything resolves a path
+        set_data_dir(home)
+    if atalho:
+        _app_shortcut(workspace, name)
+        return
+    from dataforge.gui.app_window import run_app_window  # noqa: PLC0415 -- Qt only when this command runs
+    sys.exit(run_app_window(workspace, name))
+
+
+def _app_shortcut(workspace: str, name: str) -> None:
+    """``dataforge app --atalho``: validate the app, then create the Desktop shortcut."""
+    from dataforge import shortcut  # noqa: PLC0415 -- only this command needs it
+    from dataforge.apps import load_app  # noqa: PLC0415 -- only this command needs it
+    console = Console()
+    try:
+        info = load_app(resolve_workspace(workspace), name)
+    except ValueError as exc:
+        console.print(f"[red]{rich_escape(str(exc))}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
+    if info is None:
+        console.print(f"[red]App '{rich_escape(name)}' não encontrado no workspace '{rich_escape(workspace)}'.[/red]", soft_wrap=True)
+        raise typer.Exit(1)
+    home_dir = data_dir().resolve()  # a relative DATAFORGE_HOME would break the .lnk
+    if sys.platform != "win32":
+        args = shortcut.app_arguments(info, home_dir)
+        console.print("O atalho só é criado no Windows. Para abrir o app, rode:", soft_wrap=True)
+        console.print(rich_escape(" ".join(shlex.quote(a) for a in [sys.executable, *args])), soft_wrap=True)
+        return
+    try:
+        lnk = shortcut.create_app_shortcut(info, home_dir)
+    except RuntimeError as exc:
+        console.print(f"[red]{rich_escape(str(exc))}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from exc
+    console.print(f"Atalho criado: {rich_escape(str(lnk))}", soft_wrap=True)
+    if info.icon is not None and not shortcut.has_usable_icon(info):
+        console.print(
+            "Nota: o atalho usa o ícone padrão; use um arquivo .ico para ter o ícone do app.", soft_wrap=True,
+        )
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Bind host"),
@@ -655,7 +708,9 @@ def serve(
         except ValueError as e:   # df-yvgx
             Console().print(f"[red]{rich_escape(str(e))}[/red]", soft_wrap=True)
             raise typer.Exit(1) from e
-    # An environment variable, so the value survives the --reload subprocess.
+    # Environment variables, so the values survive the --reload subprocess. The port also reaches
+    # the app backends (DATAFORGE_API) and every client this process starts.
+    set_api_port(port)
     url_host = host
     if host in ("0.0.0.0", "::"):
         os.environ[ALLOWED_HOSTS_ENV] = "*"
@@ -679,7 +734,85 @@ def serve(
             f"  {rich_escape(info.title)}: http://{url_host}:{port}{info.url_path}",
             soft_wrap=True,
         )
-    uvicorn.run("dataforge.api:app", host=host, port=port, reload=reload)
+    if reload:   # reload runs the server in a child process: nothing here can stop it, so no handler
+        uvicorn.run("dataforge.api:app", host=host, port=port, reload=True)
+        return
+    server = uvicorn.Server(uvicorn.Config("dataforge.api:app", host=host, port=port))
+
+    def _request_stop() -> None:   # runs on a request thread: only signal
+        server.should_exit = True
+
+    instance.set_shutdown_handler(_request_stop)
+    try:
+        server.run()
+    except KeyboardInterrupt:   # as uvicorn.run: Ctrl+C is a normal stop
+        pass
+    finally:
+        instance.set_shutdown_handler(None)
+    if not server.started:   # as uvicorn.run: startup failed
+        raise typer.Exit(3)
+
+
+@app.command(hidden=True)
+def background() -> None:
+    """Processo de segundo plano: servidor, bandeja e desligamento automático."""
+    from dataforge.gui.background import run_background  # noqa: PLC0415 -- keeps Qt out of CLI startup
+    sys.exit(run_background())
+
+
+_STOP_WAIT_SECONDS = 10
+
+
+@app.command()
+def stop(
+    force: bool = typer.Option(False, "--force", help="Desliga mesmo com job rodando"),
+) -> None:
+    """Desliga o DataForge que está rodando (servidor ou segundo plano)."""
+    try:
+        port = api_port()
+    except ValueError as e:
+        Console().print(f"[red]{rich_escape(str(e))}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from e
+    kind, body = instance.probe(port)
+    if kind is instance.Probe.NONE:
+        rprint("nenhum DataForge rodando")
+        return
+    # An older DataForge of this same home still has to be stoppable; a stranger must not be POSTed to.
+    if kind is not instance.Probe.OTHER_VERSION:
+        try:
+            instance.refuse(kind, body, port)
+        except instance.InstanceError as e:
+            Console().print(f"[red]{rich_escape(str(e))}[/red]", soft_wrap=True)
+            raise typer.Exit(1) from e
+    try:
+        response = httpx.post(
+            f"http://127.0.0.1:{port}/api/instance/shutdown",
+            params={"force": "true" if force else "false"},
+            timeout=5.0,
+            trust_env=False,
+        )
+    except httpx.HTTPError as e:
+        Console().print(f"[red]falha ao falar com o DataForge: {rich_escape(str(e) or type(e).__name__)}[/red]", soft_wrap=True)
+        raise typer.Exit(1) from e
+    if response.status_code != httpx.codes.ACCEPTED:
+        try:
+            detail = response.json().get("detail", response.text)
+        except ValueError:
+            detail = response.text
+        Console().print(f"[red]{rich_escape(str(detail))}[/red]", soft_wrap=True)
+        raise typer.Exit(1)
+    deadline = time.monotonic() + _STOP_WAIT_SECONDS
+    while instance.probe(port)[0] is not instance.Probe.NONE:
+        if time.monotonic() >= deadline:
+            Console().print(f"[red]o DataForge ainda responde na porta {port}[/red]", soft_wrap=True)
+            raise typer.Exit(1)
+        time.sleep(0.25)
+    rprint("DataForge desligado")
+
+
+def _say_waiting() -> None:
+    """A CLI run blocked on the workspace run lock tells the user why it does not start."""
+    rprint("[yellow]aguardando outro job do workspace terminar…[/yellow]")
 
 
 def _report_results(results: dict, status: str) -> None:
@@ -734,7 +867,7 @@ def run(
         session.commit()
 
     loaded_job = load_job(workspace_path, job)
-    results = run_job(loaded_job, workspace_path, ws_db_url, run_id)
+    results = run_job(loaded_job, workspace_path, ws_db_url, run_id, on_wait=_say_waiting)
     _report_results(results, run_status(loaded_job, results))
 
 
@@ -943,7 +1076,7 @@ def jobs_run(
     db_url = resolve_db(db, workspace_path)
 
     job = load_job(workspace_path, job_name)
-    results = run_job(job, workspace_path, db_url)
+    results = run_job(job, workspace_path, db_url, on_wait=_say_waiting)
     _report_results(results, run_status(job, results))
 
 

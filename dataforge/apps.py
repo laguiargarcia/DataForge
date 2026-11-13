@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 # Same rule as workspace names. `name` comes from the URL: on Windows a drive or UNC
 # value would replace the base path, so it is checked before any disk access.
 _APP_NAME = re.compile(r"[A-Za-z0-9_-]+")
+# `backend` is an ASGI object as `module:object`, never a command line.
+_BACKEND = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*")
 
 
 @dataclass(frozen=True)
@@ -21,18 +23,34 @@ class AppInfo:
     name: str
     title: str
     dist: Path
+    app_dir: Path
+    icon: Path | None = None
+    backend: str | None = None
 
     @property
     def url_path(self) -> str:
         return f"/apps/{self.workspace}/{self.name}/"
 
 
-def load_app(workspace_path: Path, name: str) -> AppInfo | None:
-    """Load one app or return None. A problem with an existing folder logs a warning
-    naming it; an invalid name logs nothing, since any URL can produce one."""
-    if not _APP_NAME.fullmatch(name):
+def _resolve_icon(app_path: Path, value: object) -> Path | None:
+    """The icon file, resolved and confined to the app folder; None (with a warning) if
+    it is missing, not a path, or escapes the folder."""
+    if not isinstance(value, str) or not value.strip():
+        logger.warning("app %s: icon must be a path string — ignored", app_path)
         return None
-    app_path = apps_dir(workspace_path) / name
+    root = app_path.resolve()
+    icon = (root / value).resolve()
+    if not icon.is_relative_to(root):
+        logger.warning("app %s: icon %r is outside the app folder — ignored", app_path, value)
+        return None
+    if not icon.is_file():
+        logger.warning("app %s: icon %r not found — ignored", app_path, value)
+        return None
+    return icon
+
+
+def _read_manifest(app_path: Path, name: str) -> dict | None:
+    """The parsed app.yaml if it is a mapping naming this folder, else None (warned)."""
     try:
         data = yaml.safe_load((app_path / "app.yaml").read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError, UnicodeDecodeError) as exc:
@@ -45,16 +63,37 @@ def load_app(workspace_path: Path, name: str) -> AppInfo | None:
         logger.warning("app %s: name %r does not match directory %r — skipped",
                        app_path, data.get("name"), name)
         return None
+    return data
+
+
+def load_app(workspace_path: Path, name: str) -> AppInfo | None:
+    """Load one app or return None. A problem with an existing folder logs a warning
+    naming it; an invalid name logs nothing, since any URL can produce one."""
+    if not _APP_NAME.fullmatch(name):
+        return None
+    app_path = apps_dir(workspace_path) / name
+    data = _read_manifest(app_path, name)
+    if data is None:
+        return None
     dist = app_path / "dist"
     if not (dist / "index.html").is_file():
         logger.warning("app %s: dist/index.html not found — skipped", app_path)
         return None
+    backend = data.get("backend")
+    if backend is not None and not (isinstance(backend, str) and _BACKEND.fullmatch(backend)):
+        logger.warning("app %s: backend %r must look like module:object — skipped",
+                       app_path, backend)
+        return None
+    icon = _resolve_icon(app_path, data["icon"]) if data.get("icon") is not None else None
     title = data.get("title")
     return AppInfo(
         workspace=workspace_path.name,
         name=name,
         title=str(title) if title else name,
         dist=dist,
+        app_dir=app_path,
+        icon=icon,
+        backend=backend,
     )
 
 
