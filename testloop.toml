@@ -195,3 +195,8 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py", "tests/pr
 # 5 survivors. Equivalent: reconcile's `me` dropped or None (4; owner_is_gone then asks current_owner(),
 # the same value, cached per process). Declined: the wording of the failure log line.
 min_score = 0.9431
+
+[targets."dataforge/tasks/__init__.py"]
+tests = ["tests/test_tasks_registry*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
