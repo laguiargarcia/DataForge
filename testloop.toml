@@ -103,3 +103,10 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # so the last walk through a shared parent removes it whatever the order (the LIFO property and the
 # several-folders test cover nested and sibling folders). The crash sweep adds nothing here.
 min_score = 0.85
+
+[targets."dataforge/deploy/service.py"]
+tests = ["tests/test_deploy_service*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 2 survivors, both equivalent: applied=0 and entry_id=None dropped from the nothing-to-apply result,
+# which are AutoDeployResult's defaults.
+min_score = 0.989
