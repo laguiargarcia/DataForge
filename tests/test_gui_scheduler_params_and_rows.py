@@ -553,3 +553,20 @@ def test_late_jobs_answer_for_a_removed_row_is_ignored(panel, pending):
     _remove_job_row_and_delete_its_widgets(panel, 0)
     pending["jobs"][0](_JOBS)
     assert panel._jobs_table.rowCount() == 0
+
+
+# ---------------------------------------------------------------------------
+# local <-> UTC cron in the GUI (df-vo3x.5): days of week move with a midnight crossing
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(("local", "utc"), [
+    ("0 22 * * 1,3", "0 1 * * 2,4"),
+    ("0 22 * * MON-FRI", "0 1 * * 2,3,4,5,6"),
+    ("0 22 * * 6", "0 1 * * 0"),
+    ("0 9 * * 1-5", "0 12 * * 1-5"),
+])
+def test_gui_cron_moves_days_of_week_across_midnight(monkeypatch, sched, local, utc):
+    monkeypatch.setattr(sched, "_local_offset", lambda: timedelta(hours=-3))
+    assert sched.local_to_utc_cron(local) == utc
+    back = sched.utc_to_local_cron(utc)
+    assert sched.local_to_utc_cron(back) == utc
