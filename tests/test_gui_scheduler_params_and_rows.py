@@ -34,11 +34,11 @@ def _dialog(sched, declared=(), values=None):
     ("int", None, 0),
     ("int", "abc", 0),
     ("int", [1], 0),
-    pytest.param("int", 3_000_000_000, 0, marks=[
-        pytest.mark.xfail(strict=True, raises=OverflowError,
-                          reason="df-dqg1: QSpinBox.setValue overflows past int32, not caught"),
-        pytest.mark.filterwarnings("ignore:libshiboken"),
-    ]),
+    ("int", 3_000_000_000, 3_000_000_000),    # past int32 (df-dqg1)
+    ("int", -3_000_000_000, -3_000_000_000),
+    ("int", 2**70, 2**70),
+    ("int", True, 1),
+    ("int", 2.7, 2),
     ("float", 2.5, 2.5),
     ("float", "1.25", 1.25),
     ("float", None, 0.0),
@@ -77,7 +77,7 @@ def test_json_widget_falls_back_to_str_for_unserializable_values(sched):
 
 
 @pytest.mark.parametrize(("type_str", "cls_name"), [
-    ("int", "QSpinBox"), ("float", "QDoubleSpinBox"), ("bool", "QCheckBox"),
+    ("int", "QLineEdit"), ("float", "QDoubleSpinBox"), ("bool", "QCheckBox"),
     ("date", "QDateEdit"), ("json", "QPlainTextEdit"), ("string", "QLineEdit"),
     ("other", "QLineEdit"),
 ])
@@ -87,13 +87,36 @@ def test_value_widget_class_per_type(sched, type_str, cls_name):
 
 def test_value_widget_settings(sched):
     d = _dialog(sched)
-    i = d._make_value_widget("int")
-    assert (i.minimum(), i.maximum()) == (-2_147_483_648, 2_147_483_647)
     f = d._make_value_widget("float")
     assert (f.minimum(), f.maximum(), f.decimals()) == (-1e15, 1e15, 6)
     assert d._make_value_widget("date").calendarPopup() is True
     j = d._make_value_widget("json")
     assert (j.minimumHeight(), j.maximumHeight()) == (60, 60)
+
+
+@pytest.mark.parametrize(("text", "accepted"), [
+    ("12", True), ("-12", True), ("0", True), ("30000000000000000000", True),
+    ("", True), ("-", True),               # intermediate input while typing
+    ("1.5", False), ("abc", False), ("1e3", False), ("--1", False), (" 1", False),
+])
+def test_int_widget_only_takes_digits(sched, text, accepted):
+    from PySide6.QtGui import QValidator
+    widget = _dialog(sched)._make_value_widget("int")   # keep it: it owns the validator
+    state = widget.validator().validate(text, 0)[0]
+    assert (state != QValidator.State.Invalid) is accepted
+
+
+@pytest.mark.parametrize("text", ["", "-"])
+def test_int_widget_reads_unfinished_input_as_zero(sched, text):
+    d = _dialog(sched)
+    w = d._make_value_widget("int", 5)
+    w.setText(text)
+    assert d._read_value_widget(w, "int") == 0
+
+
+def test_declared_int_past_int32_survives_the_dialog(sched):
+    d = _dialog(sched, [{"name": "n", "type": "int"}], {"n": 3_000_000_000})
+    assert d.result_params() == {"n": 3_000_000_000}
 
 
 # ---------------------------------------------------------------------------
@@ -190,8 +213,8 @@ def test_result_params_reads_free_rows(sched):
         ("  a  ", "string", lambda w: w.setText("v")),
         ("j", "json", lambda w: w.setPlainText('{"x": 1}')),
         ("", "string", lambda w: w.setText("dropped")),
-        ("   ", "int", lambda w: w.setValue(4)),
-        ("n", "int", lambda w: w.setValue(4)),
+        ("   ", "int", lambda w: w.setText("4")),
+        ("n", "int", lambda w: w.setText("4")),
     ]:
         d._add_free_row()
         row = d._table.rowCount() - 1
