@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from dataforge.db import JobRunORM, init_db
 from dataforge.parser import load_jobs
 from dataforge.compat import global_db_url, list_workspaces
+from dataforge.orphans import reconcile_or_log
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,6 +38,7 @@ async def list_workspaces_endpoint():
     No separate /names endpoint is added — the GUI ignores the embedded ``jobs``
     field and avoids API surface bloat.
     """
+    reconcile_or_log()   # a run whose process died must not show as last 'running' (df-bw7)
     workspace_paths = list_workspaces()
     global_engine = init_db(global_db_url())
 
@@ -64,7 +66,9 @@ async def list_executions(
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ):
-    """Return paginated execution history for a workspace, newest first."""
+    """Return paginated execution history for a workspace, newest first. Runs whose process died
+    are failed first (df-bw7), so the history never shows them in progress."""
+    reconcile_or_log(ws)
     global_engine = init_db(global_db_url())
 
     with Session(global_engine) as session:
@@ -89,6 +93,7 @@ async def list_executions(
                 "finished_at": _serialize_dt(run.finished_at),
                 "duration_seconds": duration,
                 "trigger": run.trigger,
+                "reason": run.reason,
             })
 
     return {"items": items, "total": total}
