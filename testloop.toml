@@ -85,3 +85,13 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # which SQLite reads the same, keywords and identifiers alike. mutmut does not mutate the ORM class
 # bodies, only init_db and utcnow.
 min_score = 1.0
+
+[targets."dataforge/deploy/ledger.py"]
+tests = ["tests/test_deploy_ledger*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 11 survivors. Equivalent: split(":") variants in _hex (no sha the ledger writes or reads has a second
+# ':'), rsplit("/") variants in is_temp_name (still the last segment), a missing log read as not clean
+# (append rewrites an empty log first: same bytes), and encode "UTF-8" for "utf-8" (one codec; the
+# encoding is explicit, so no locale case for the Windows job). Declined: the torn-line warning's
+# wording (tests check it names the log file and the last line).
+min_score = 0.9333
