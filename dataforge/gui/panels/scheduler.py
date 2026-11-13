@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -394,16 +393,26 @@ def _int_value(widget: QLineEdit) -> int:
         return 0
 
 
-def _float_widget(value) -> QDoubleSpinBox:
-    w = QDoubleSpinBox()
-    w.setRange(-1e15, 1e15)
-    w.setDecimals(6)
-    if value is not None:
-        try:
-            w.setValue(float(value))
-        except (ValueError, TypeError):
-            pass
+def _float_widget(value) -> QLineEdit:
+    """A QDoubleSpinBox clamped floats to its range and rounded them to its decimals, so saving
+    the dialog could change a value nobody touched (df-vo3x.4). Floats are edited as text: the
+    saved value shows as Python writes it (exact round trip), and a comma decimal is accepted."""
+    w = QLineEdit()
+    w.setValidator(QRegularExpressionValidator(
+        QRegularExpression(r"-?\d*([.,]\d*)?([eE][-+]?\d*)?"), w))
+    try:
+        w.setText(str(float(value)))
+    except (ValueError, TypeError, OverflowError):   # OverflowError: float(10**400)
+        w.setText("0.0")
     return w
+
+
+def _float_value(widget: QLineEdit) -> float:
+    """The float typed in a float widget; 0.0 while it is not a number yet (blank, '-', '1e')."""
+    try:
+        return float(widget.text().replace(",", "."))
+    except ValueError:
+        return 0.0
 
 
 def _bool_widget(value) -> QCheckBox:
@@ -552,7 +561,7 @@ class JobParamsDialog(QDialog):
         if type_str == "int":
             return _int_value(widget)
         if type_str == "float":
-            return widget.value()
+            return _float_value(widget)
         if type_str == "bool":
             return widget.isChecked()
         if type_str == "date":
