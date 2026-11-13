@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, text
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
+import threading
 
 
 _EXECUCOES_COLUMNS_SQL = "PRAGMA table_info(execucoes)"
@@ -60,8 +61,20 @@ class ScheduleORM(Base):
     owner_id    = Column(String, nullable=False, default="system")
 
 
+# create_all and the column migrations below check, then create: two threads initialising the same
+# new database (two jobs of one trigger, two API runs) both see the table missing and the second
+# CREATE fails. One lock per process serialises them (df-h864).
+_SCHEMA_LOCK = threading.Lock()
+
+
 def init_db(db_url: str):
     engine = create_engine(db_url)
+    with _SCHEMA_LOCK:
+        _create_schema(engine)
+    return engine
+
+
+def _create_schema(engine) -> None:
     Base.metadata.create_all(engine)
 
     # Idempotent owner_id migration — SQLite has no ALTER TABLE ... ADD COLUMN IF NOT EXISTS
@@ -93,5 +106,3 @@ def init_db(db_url: str):
         if "trigger" not in columns:
             conn.execute(text("ALTER TABLE job_runs ADD COLUMN trigger TEXT"))
             conn.commit()
-
-    return engine
