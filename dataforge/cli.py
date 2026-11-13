@@ -1,13 +1,15 @@
+import base64
 import os
 import platform
 import shlex
 import subprocess
-import shutil
+import sys
+import sysconfig
 import typer
 from datetime import datetime
 from xml.sax.saxutils import escape as xml_escape
 from pathlib import Path
-from typing import Optional
+from typing import Annotated, Optional
 from pydantic import ValidationError
 from rich.console import Console
 from rich import print as rprint
@@ -20,7 +22,7 @@ from dataforge.compat import (
 from dataforge.cron import CRON_FIELDS, shift_cron
 from dataforge.dag import topological_levels
 from dataforge.deploy.cli import deploy_app
-from dataforge.parser import load_connections, load_jobs, load_workspace
+from dataforge.parser import load_connections, load_jobs, load_triggers, load_workspace
 
 app = typer.Typer(help="DataForge — workspace local de engenharia de dados")
 jobs_app = typer.Typer(help="Gerenciar jobs")
@@ -280,7 +282,7 @@ def _cron_to_launchd_interval(cron: str) -> dict[str, int]:
 
 
 def _register_launchd(
-    workspace: str, trigger_name: str, cron: str, dataforge_bin: str, home: str
+    workspace: str, trigger_name: str, cron: str, dataforge_bin: str | list[str], home: str
 ) -> None:
     """Register a trigger with macOS launchd. Delete+recreate contract (D-05)."""
     _check_scheduler_names(workspace=workspace, trigger=trigger_name)
@@ -290,6 +292,8 @@ def _register_launchd(
         f"                <key>{k}</key>\n                <integer>{v}</integer>"
         for k, v in cal.items()
     )
+    program = "\n".join(f"        <string>{xml_escape(t)}</string>"
+                         for t in _command_tokens(dataforge_bin))
     label = f"com.dataforge.{workspace}.{trigger_name}"
     plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -299,7 +303,7 @@ def _register_launchd(
     <string>{xml_escape(label)}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{dataforge_bin}</string>
+{program}
         <string>scheduled-run</string>
         <string>{xml_escape(workspace)}</string>
         <string>{xml_escape(trigger_name)}</string>
@@ -334,50 +338,146 @@ def _deregister_launchd(workspace: str, trigger_name: str) -> None:
     plist_path.unlink(missing_ok=True)
 
 
+def _dataforge_command() -> list[str]:
+    """The command an OS scheduler runs to start THIS DataForge installation.
+
+    The console script installed next to the running interpreter (its venv's Scripts/ or bin/),
+    or, without one, the interpreter itself with ``-m dataforge.cli``. Not ``shutil.which``: the
+    first ``dataforge`` on PATH can belong to another venv, so re-registering from a shell with
+    a different PATH would silently repoint the OS task at that venv (df-18s6). Returned as separate
+    tokens so a shell never reads ``python -m dataforge.cli`` as one file name (df-3ul).
+    """
+    script = Path(sysconfig.get_path("scripts")) / ("dataforge.exe" if os.name == "nt" else "dataforge")
+    if script.is_file():
+        return [str(script)]
+    return [sys.executable, "-m", "dataforge.cli"]
+
+
+def _command_tokens(dataforge_bin: str | list[str]) -> list[str]:
+    """A single executable path, or the token list of :func:`_dataforge_command`."""
+    return [dataforge_bin] if isinstance(dataforge_bin, str) else list(dataforge_bin)
+
+
+def _ps_literal(value: str) -> str:
+    """A PowerShell single-quoted string literal: nothing inside it is expanded."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+# Task Scheduler logon for every DataForge task (df-18s6). S4U runs the task as the registering
+# user whether or not that user is logged on, without storing or asking for a password, in a
+# non-interactive session (no console window a user can close: the 0xC000013A exit of
+# 2026-11-11). It has no network credentials (SMB shares, mapped drives, Windows-integrated auth)
+# and no DPAPI/EFS: a task that needs those must not run under it. Plain HTTPS and local files work.
+_S4U = "S4U"
+_INTERACTIVE = "Interactive"
+# The HRESULT Register-ScheduledTask reports when the caller may not register the task as asked;
+# an administrator under UAC gets it for S4U from a non-elevated process. Not localised.
+_ACCESS_DENIED = "0x80070005"
+_CURRENT_USER_PS = "([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
+# Battery flags: df-413. No -RestartCount/-RestartInterval: Task Scheduler does not restart a task
+# whose action exits non-zero (checked on Windows 11, df-muzy), so it would not retry a failed run.
+_WINDOWS_TASK_SETTINGS = (
+    "$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable "
+    "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries"
+)
+
+
+def _windows_action_line(dataforge_bin: str | list[str], home: str, args: list[str]) -> str:
+    """The New-ScheduledTaskAction line that runs ``dataforge <args>`` with DATAFORGE_HOME=home:
+    through wsl.exe + bash when DataForge lives in WSL, else through powershell.exe."""
+    tokens = _command_tokens(dataforge_bin)
+    if _is_wsl():
+        wsl_cmd = f"DATAFORGE_HOME={shlex.quote(str(home))} {shlex.join([*tokens, *args])}"
+        executable, argument = "wsl.exe", f'-e bash -c "{wsl_cmd}"'
+    else:
+        call = " ".join(["&", *(_ps_literal(t) for t in tokens), *args])
+        win_cmd = f"$env:DATAFORGE_HOME={_ps_literal(str(home))}; {call}"
+        executable, argument = "powershell.exe", f'-NoProfile -NonInteractive -Command "{win_cmd}"'
+    return (f"$action = New-ScheduledTaskAction -Execute '{executable}' "
+            f"-Argument {_ps_literal(argument)}")
+
+
+def _windows_register_script(task_name: str, action_line: str, trigger_args: str, logon: str) -> str:
+    return "\n".join([
+        action_line,
+        f"$trigger = New-ScheduledTaskTrigger {trigger_args}",
+        _WINDOWS_TASK_SETTINGS,
+        f"$principal = New-ScheduledTaskPrincipal -UserId {_CURRENT_USER_PS} "
+        f"-LogonType {logon} -RunLevel Limited",
+        f"Register-ScheduledTask -TaskName {_ps_literal(task_name)} -Action $action "
+        "-Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null",
+    ])
+
+
+def _run_powershell(script: str) -> subprocess.CompletedProcess:
+    return subprocess.run([_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", script],
+                          capture_output=True, text=True, check=False)
+
+
+def _run_powershell_elevated(script: str) -> bool:
+    """Run *script* in an elevated PowerShell after the UAC consent prompt (the same prompt
+    _ensure_task_scheduler_history uses). False when declined, unavailable or failed."""
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    launcher = (
+        "$ErrorActionPreference='Stop'; try { "
+        "$p = Start-Process -FilePath 'powershell.exe' "
+        f"-ArgumentList @('-NoProfile','-NonInteractive','-EncodedCommand','{encoded}') "
+        "-Verb RunAs -Wait -PassThru -WindowStyle Hidden; "
+        "exit $p.ExitCode } catch { exit 1 }"
+    )
+    return _run_powershell(launcher).returncode == 0
+
+
+def _register_windows_scheduled_task(
+    task_name: str, action_line: str, trigger_args: str, rerun_hint: str
+) -> str | None:
+    """Register (or replace) a Task Scheduler task that runs whether or not the user is logged
+    on (S4U, df-18s6). Returns a warning, or None when the task got the S4U logon.
+
+    An administrator under UAC may not register S4U from a non-elevated process: then the UAC
+    consent prompt is shown once; if it is declined or there is no desktop, the task is still
+    registered, as 'only when the user is logged on', and the warning says how to fix it. Never
+    a password. From WSL the task runs wsl.exe, which is not known to work in a non-interactive
+    S4U session, so it keeps the interactive logon and says so.
+    """
+    if _is_wsl():
+        result = _run_powershell(_windows_register_script(task_name, action_line, trigger_args,
+                                                          _INTERACTIVE))
+        if result.returncode != 0:
+            raise RuntimeError(f"Task Scheduler registration failed:\n{result.stderr}")
+        return (f"Task '{task_name}' was registered from WSL, so it runs only while you are "
+                "logged on to Windows. Register it from DataForge installed on Windows to run it "
+                "when you are logged off.")
+    s4u = _windows_register_script(task_name, action_line, trigger_args, _S4U)
+    result = _run_powershell(s4u)
+    if result.returncode == 0:
+        return None
+    if _ACCESS_DENIED not in result.stderr:
+        raise RuntimeError(f"Task Scheduler registration failed:\n{result.stderr}")
+    if _run_powershell_elevated(s4u):
+        return None
+    fallback = _run_powershell(_windows_register_script(task_name, action_line, trigger_args,
+                                                        _INTERACTIVE))
+    if fallback.returncode != 0:
+        raise RuntimeError(f"Task Scheduler registration failed:\n{fallback.stderr}")
+    return (f"Task '{task_name}' runs only while you are logged on: Windows needs administrator "
+            "permission to register it to run when you are logged off, and the elevation prompt "
+            f"was declined or unavailable. To fix it, run in an elevated terminal:\n    {rerun_hint}")
+
+
 def _register_windows_trigger(
-    workspace: str, trigger_name: str, cron: str, dataforge_bin: str, home: str
-) -> None:
-    """Register a trigger with Windows Task Scheduler. Delete+recreate (D-05)."""
+    workspace: str, trigger_name: str, cron: str, dataforge_bin: str | list[str], home: str
+) -> str | None:
+    """Register a trigger with Windows Task Scheduler. Delete+recreate (D-05). Returns a warning
+    (see _register_windows_scheduled_task) or None."""
     _check_scheduler_names(workspace=workspace, trigger=trigger_name)
     trigger_args = _cron_to_ps_trigger(cron)
     task_name = f"DataForge\\{workspace}\\trigger\\{trigger_name}"
-
-    if _is_wsl():
-        wsl_cmd = (
-            f"DATAFORGE_HOME={shlex.quote(str(home))} "
-            f"{shlex.quote(dataforge_bin)} scheduled-run "
-            f"{shlex.quote(workspace)} {shlex.quote(trigger_name)}"
-        )
-        ps_arg = f'-e bash -c "{wsl_cmd}"'.replace("'", "''")
-        action_line = (
-            f"$action = New-ScheduledTaskAction -Execute 'wsl.exe' "
-            f"-Argument '{ps_arg}'"
-        )
-    else:
-        win_cmd = (
-            f"$env:DATAFORGE_HOME='{home}'; "
-            f"{dataforge_bin} scheduled-run {workspace} {trigger_name}"
-        )
-        ps_arg = f'-NoProfile -NonInteractive -Command "{win_cmd}"'.replace("'", "''")
-        action_line = (
-            f"$action = New-ScheduledTaskAction -Execute 'powershell.exe' "
-            f"-Argument '{ps_arg}'"
-        )
-
-    ps_script = "\n".join([
-        action_line,
-        f"$trigger = New-ScheduledTaskTrigger {trigger_args}",
-        "$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable "
-        "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
-        f"Register-ScheduledTask -TaskName '{task_name}' -Action $action -Trigger $trigger "
-        "-Settings $settings -Force | Out-Null",
-    ])
-    result = subprocess.run(
-        [_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", ps_script],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Task Scheduler trigger registration failed:\n{result.stderr}")
+    action_line = _windows_action_line(dataforge_bin, home,
+                                       ["scheduled-run", workspace, trigger_name])
+    rerun = " ".join([*_command_tokens(dataforge_bin), "register-triggers", workspace,
+                      "--trigger", trigger_name])
+    return _register_windows_scheduled_task(task_name, action_line, trigger_args, rerun)
 
 
 def _deregister_windows_trigger(workspace: str, trigger_name: str) -> None:
@@ -488,24 +588,20 @@ def _platform_register_trigger(workspace: str, trigger_name: str, cron: str) -> 
     Cron is stored in UTC; OS schedulers fire in local time, so shift at the boundary.
     Returns a non-fatal warning string (or None) for the caller to surface.
     """
-    import sys
-
     _check_scheduler_names(workspace=workspace, trigger=trigger_name)
-    dataforge_bin = shutil.which("dataforge") or f"{sys.executable} -m dataforge"
+    command = _dataforge_command()
     home = str(data_dir())
     cron = _utc_cron_to_local(cron)
 
     if platform.system() == "Windows" or _is_wsl():
-        _register_windows_trigger(workspace, trigger_name, cron, dataforge_bin, home)
-        return _ensure_task_scheduler_history()
-    elif platform.system() == "Darwin":
-        _register_launchd(workspace, trigger_name, cron, dataforge_bin, home)
+        warnings = [_register_windows_trigger(workspace, trigger_name, cron, command, home),
+                    _ensure_task_scheduler_history()]
+        return "\n\n".join(w for w in warnings if w) or None
+    if platform.system() == "Darwin":
+        _register_launchd(workspace, trigger_name, cron, command, home)
     else:  # Linux
-        cmd = (
-            f"DATAFORGE_HOME={shlex.quote(str(home))} "
-            f"{shlex.quote(dataforge_bin)} scheduled-run "
-            f"{shlex.quote(workspace)} {shlex.quote(trigger_name)}"
-        )
+        cmd = (f"DATAFORGE_HOME={shlex.quote(str(home))} "
+               f"{shlex.join([*command, 'scheduled-run', workspace, trigger_name])}")
         _register_crontab(workspace, trigger_name, cron, cmd)
     return None
 
@@ -521,41 +617,15 @@ def _platform_deregister_trigger(workspace: str, trigger_name: str) -> None:
         _deregister_crontab(workspace, trigger_name)
 
 
-def _register_windows_task(workspace: str, job_name: str, cron: str) -> None:
+def _register_windows_task(workspace: str, job_name: str, cron: str) -> str | None:
+    """Register a job schedule (schedule-sync) with the same logon and settings as a trigger."""
     _check_scheduler_names(workspace=workspace, job=job_name)
-    import sys
-
-    dataforge_bin = shutil.which("dataforge") or f"{sys.executable} -m dataforge"
-    home = str(data_dir())
+    command = _dataforge_command()
     trigger_args = _cron_to_ps_trigger(cron)
     task_name = f"DataForge\\{workspace}\\{job_name}"
-
-    if _is_wsl():
-        wsl_cmd = (
-            f"DATAFORGE_HOME={shlex.quote(str(home))} "
-            f"{shlex.quote(dataforge_bin)} run "
-            f"{shlex.quote(workspace)} {shlex.quote(job_name)}"
-        )
-        ps_arg = f'-e bash -c "{wsl_cmd}"'.replace("'", "''")
-        action_line = f"$action = New-ScheduledTaskAction -Execute 'wsl.exe' -Argument '{ps_arg}'"
-    else:
-        win_cmd = f"$env:DATAFORGE_HOME='{home}'; {dataforge_bin} run {workspace} {job_name}"
-        ps_arg = f'-NoProfile -NonInteractive -Command "{win_cmd}"'.replace("'", "''")
-        action_line = f"$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '{ps_arg}'"
-
-    ps_script = "\n".join([
-        action_line,
-        f"$trigger = New-ScheduledTaskTrigger {trigger_args}",
-        "$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable "
-        "-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries",
-        f"Register-ScheduledTask -TaskName '{task_name}' -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null",
-    ])
-    result = subprocess.run(
-        [_POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", ps_script],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"Task Scheduler registration failed:\n{result.stderr}")
+    action_line = _windows_action_line(command, str(data_dir()), ["run", workspace, job_name])
+    rerun = " ".join([*command, "schedule-sync"])
+    return _register_windows_scheduled_task(task_name, action_line, trigger_args, rerun)
 
 
 @app.command()
@@ -746,14 +816,59 @@ def schedule_sync():
                 continue
 
             try:
-                _register_windows_task(ws_dir.name, job.name, job.schedule)
+                warning = _register_windows_task(ws_dir.name, job.name, job.schedule)
                 rprint(f"[green]✓[/green] {ws_dir.name}/{job.name} [{job.schedule}]")
+                if warning:
+                    rprint(f"[yellow]{rich_escape(warning)}[/yellow]")
                 registered += 1
             except (RuntimeError, ValueError) as e:   # ValueError: unsafe name (df-utq8)
                 rprint(f"[red]✗[/red] {rich_escape(ws_dir.name)}/{rich_escape(job.name)}: "
                        f"{rich_escape(str(e))}")
 
     rprint(f"\n{registered} task(s) registered in Windows Task Scheduler.")
+
+
+@app.command("register-triggers")
+def register_triggers(
+    workspace: str = typer.Argument(..., help=_WORKSPACE_HELP),
+    trigger: Annotated[Optional[list[str]], typer.Option(
+        "--trigger", "-t", help="Only this trigger (repeatable); default: all of them")] = None,
+):
+    """(Re)register the workspace's triggers with the OS scheduler, from their files.
+
+    Enabled triggers are registered with the command of the DataForge running this, disabled ones
+    are removed. On Windows, run it from an elevated terminal so the tasks run whether or not you
+    are logged on (df-18s6)."""
+    try:
+        workspace_path = resolve_workspace(workspace)
+    except ValueError as e:
+        rprint(f"[red]{rich_escape(str(e))}[/red]")
+        raise typer.Exit(1) from e
+    triggers = load_triggers(workspace_path)
+    unknown = sorted(set(trigger or []) - {t.name for t in triggers})
+    if unknown:
+        rprint(f"[red]Unknown trigger(s): {rich_escape(', '.join(unknown))}[/red]")
+        raise typer.Exit(1)
+    rprint(f"[dim]command: {rich_escape(' '.join(_dataforge_command()))}[/dim]")
+    failed = False
+    for t in (t for t in triggers if not trigger or t.name in trigger):
+        label = rich_escape(f"{workspace}/{t.name}")
+        try:
+            if not t.enabled:
+                _platform_deregister_trigger(workspace, t.name)
+                rprint(f"[dim]removed (disabled)[/dim] {label}")
+                continue
+            _platform_check_cron(t.cron)
+            warning = _platform_register_trigger(workspace, t.name, t.cron)
+        except (RuntimeError, ValueError, OSError, subprocess.CalledProcessError) as e:
+            rprint(f"[red]✗[/red] {label}: {rich_escape(str(e))}")
+            failed = True
+            continue
+        rprint(f"[green]✓[/green] {label} [{rich_escape(t.cron)} UTC]")
+        if warning:
+            rprint(f"[yellow]{rich_escape(warning)}[/yellow]")
+    if failed:
+        raise typer.Exit(1)
 
 
 @jobs_app.command("list")
