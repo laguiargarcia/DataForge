@@ -309,3 +309,73 @@ def test_compact_job_dict_keeps_type_when_nothing_can_be_inferred():
     from dataforge.parser import _compact_job_dict
     job = Job(name="j", tasks=[Task(name="e", type="error")])
     assert _compact_job_dict(job)["tasks"] == [{"name": "e", "type": "error"}]
+
+
+# --- df-ahua.23: loaders with no test before (load_jobs, triggers, connections) ---
+
+
+def test_job_yaml_without_tasks_loads_as_a_job_with_no_tasks(workspace_dir):
+    """`tasks:` is optional in job.yaml, as it is in the Job model (default [])."""
+    write_job_yaml(workspace_dir / "jobs" / "empty", "name: empty\n")
+    assert load_job(workspace_dir, "empty").tasks == []
+
+
+def test_workspace_yaml_is_read_as_utf8(tmp_path):
+    """workspace.yaml is UTF-8 on every OS, also under Windows' cp1252 default (df-ahua.24)."""
+    (tmp_path / "workspace.yaml").write_bytes("name: finanças\n".encode("utf-8"))
+    assert load_workspace(tmp_path).name == "finanças"
+
+
+def test_load_jobs_reads_every_job_dir_in_name_order(workspace_dir):
+    """load_jobs returns one job per jobs/<name>/ directory, sorted by name; loose files are not jobs."""
+    from dataforge.parser import load_jobs
+    for name in ("zeta", "alpha"):
+        write_job_yaml(workspace_dir / "jobs" / name, f"name: {name}\ntasks:\n  - name: t\n    script: a.py\n")
+    (workspace_dir / "jobs" / "README.md").write_text("not a job")
+    assert [j.name for j in load_jobs(workspace_dir)] == ["alpha", "zeta"]
+
+
+def test_load_jobs_without_jobs_dir_is_empty(tmp_path):
+    """A fresh workspace with no jobs/ directory has no jobs (not an error)."""
+    from dataforge.parser import load_jobs
+    assert load_jobs(tmp_path) == []
+
+
+def test_triggers_dir_lists_yaml_files_in_name_order(tmp_path):
+    """Saving a second trigger reuses triggers/; load_triggers lists only *.yaml, sorted by file name."""
+    from dataforge.models import TriggerModel
+    from dataforge.parser import load_triggers, save_trigger
+    for name in ("night", "morning"):
+        save_trigger(tmp_path, TriggerModel(name=name, cron="0 2 * * *"))
+    (tmp_path / "triggers" / "notes.txt").write_text("not a trigger")
+    assert [t.name for t in load_triggers(tmp_path)] == ["morning", "night"]
+
+
+def test_load_triggers_without_triggers_dir_is_empty(tmp_path):
+    """No triggers/ directory means no triggers."""
+    from dataforge.parser import load_triggers
+    assert load_triggers(tmp_path) == []
+
+
+def test_delete_trigger_removes_only_that_file_and_is_idempotent(tmp_path):
+    """delete_trigger removes triggers/<name>.yaml, leaves the others, and a second call does not raise."""
+    from dataforge.models import TriggerModel
+    from dataforge.parser import delete_trigger, load_triggers, save_trigger
+    for name in ("a", "b"):
+        save_trigger(tmp_path, TriggerModel(name=name, cron="0 2 * * *"))
+    delete_trigger(tmp_path, "a")
+    delete_trigger(tmp_path, "a")
+    assert [t.name for t in load_triggers(tmp_path)] == ["b"]
+
+
+def test_load_connections_maps_each_name_to_its_connection(tmp_path):
+    """connections/connections.yaml becomes {name: Connection}, keeping type and path (UTF-8)."""
+    from dataforge.parser import load_connections
+    (tmp_path / "connections").mkdir()
+    (tmp_path / "connections" / "connections.yaml").write_bytes(
+        "connections:\n  raw:\n    type: duckdb\n    path: data/relatório.duckdb\n"
+        "  mem:\n    type: duckdb\n".encode("utf-8"))
+    conns = load_connections(tmp_path)
+    assert set(conns) == {"raw", "mem"}
+    assert (conns["raw"].type, conns["raw"].path) == ("duckdb", "data/relatório.duckdb")
+    assert (conns["mem"].type, conns["mem"].path) == ("duckdb", None)
