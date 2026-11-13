@@ -12,7 +12,7 @@ breaks mutmut, which runs pytest in its own process and reads the sources and wr
 files with the locale's encoding. The previous locale comes back when the session ends.
 
 Python's UTF-8 mode ignores the locale (the default from Python 3.15, PEP 686), so the tool runs
-the tests with PYTHONUTF8=0, and this plugin stops the run if the encoding is still not ASCII.
+the tests with PYTHONUTF8=0, and this plugin stops the run if the encoding is still UTF-8.
 """
 
 import codecs
@@ -25,10 +25,11 @@ def pytest_configure():
     _saved.append(locale.setlocale(locale.LC_CTYPE))
     locale.setlocale(locale.LC_CTYPE, "C")
     encoding = locale.getpreferredencoding(False)
-    if codecs.lookup(encoding).name != "ascii":
+    # ASCII on Linux and macOS; Windows takes it from the ANSI code page (cp1252), which also serves.
+    if codecs.lookup(encoding).name == "utf-8":
         pytest_unconfigure()
         raise RuntimeError(  # pytest exits 3 (internal error): every testloop command reads it as a tool error
-            f"testloop: the C locale gives encoding {encoding!r}, not ASCII (UTF-8 mode on? run with "
+            "testloop: the default encoding stays UTF-8 under the C locale (UTF-8 mode on? run with "
             "PYTHONUTF8=0); encoding= mutants would survive unseen"
         )
 

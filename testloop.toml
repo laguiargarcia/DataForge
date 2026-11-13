@@ -8,7 +8,7 @@ env = { QT_QPA_PLATFORM = "offscreen" }
 tests = ["tests/test_deploy_plan*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # Lowest mutation score `gate` accepts; CI fails below it. Raise it when the score rises.
-min_score = 0.9437
+min_score = 0.945
 
 [targets."dataforge/deploy/apply.py"]
 tests = ["tests/test_deploy_apply*.py"]
@@ -33,7 +33,7 @@ min_score = 0.9197
 [targets."scripts/leakguard.py"]
 tests = ["tests/test_leakguard.py"]
 copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-min_score = 0.8823
+min_score = 0.8841
 
 
 [targets."dataforge/apps.py"]
@@ -62,10 +62,9 @@ min_score = 0.9629
 [targets."dataforge/parser.py"]
 tests = ["tests/test_parser*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 19 survivors, all equivalent under Linux's UTF-8 locale: encoding "UTF-8", None or left out on the
-# six open() calls (the UTF-8 tests catch them in the Windows test job), and sort_keys=None, which
-# PyYAML reads as False.
-min_score = 0.9233
+# 7 survivors, all equivalent: encoding "UTF-8" for "utf-8" on the six open() calls (one codec), and
+# sort_keys=None, which PyYAML reads as False.
+min_score = 0.9717
 
 [targets."dataforge/compat.py"]
 tests = ["tests/test_compat*.py"]
@@ -113,11 +112,10 @@ min_score = 0.989
 [targets."dataforge/tasks/python_handler.py"]
 tests = ["tests/test_python_handler*.py", "tests/test_env_file*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 6 survivors. Equivalent: inicio=utcnow() set to None or left out (the column's default is utcnow,
-# called at the insert a moment later), and the env file read with encoding "UTF-8" or None (one codec;
-# None is UTF-8 under Linux's locale, and the env-file property's 'café' line catches it in the Windows
-# test job). Declined: the wording of the missing-row log line (the test checks it names the row).
-min_score = 0.9387
+# 5 survivors. Equivalent: inicio=utcnow() set to None or left out (the column's default is utcnow,
+# called at the insert a moment later), and the env file read with encoding "UTF-8" (one codec).
+# Declined: the wording of the missing-row log line (2; the test checks it names the row).
+min_score = 0.9489
 
 [targets."dataforge/tasks/job_handler.py"]
 tests = ["tests/test_job_handler*.py"]
@@ -144,12 +142,12 @@ min_score = 0.9565
 [targets."dataforge/tasks/message/handler.py"]
 tests = ["tests/test_message_handler*.py", "tests/test_env_file*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 11 survivors. Equivalent: 7 mutants of the rc given to a succeeded or skipped task (only a failed
-# task's rc is rendered, in {failed_tasks_summary}), and the env file read with encoding "UTF-8" or
-# None (as in python_handler). Declined: the wording of the success output and of the no-channel
+# 10 survivors. Equivalent: 7 mutants of the rc given to a succeeded or skipped task (only a failed
+# task's rc is rendered, in {failed_tasks_summary}), and the env file read with encoding "UTF-8" (one
+# codec). Declined: the wording of the success output and of the no-channel
 # error (tests check they name the channels). 4 mutants of _run_summary time out instead of failing
 # fast (Hypothesis shrinks the failing example), which counts as caught.
-min_score = 0.9519
+min_score = 0.9563
 
 [targets."dataforge/tasks/message/channels/__init__.py"]
 tests = ["tests/test_message_channels*.py"]
@@ -184,7 +182,8 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py", "tests/pr
 # 15 survivors, none Linux can see. Windows-only code: process_start's win32 branch (3) and the
 # empty boot and pid namespace recorded off Linux (2; the Windows test job checks both). Equivalent:
 # the 'if linux' guards forced true (2; /proc does not exist elsewhere, so the readers give "" anyway),
-# the boot-id and stat reads with "UTF-8", None or no encoding (5; ASCII files, UTF-8 locale).
+# the boot-id and stat reads with "UTF-8", "ASCII", None or no encoding (5; the kernel writes these
+# files in ASCII, so every codec, the test loop's ASCII locale included, reads them the same).
 # Declined: Owner.dumps without sort_keys (3; parse_owner reads any key order, nothing compares the text).
 min_score = 0.8897
 
