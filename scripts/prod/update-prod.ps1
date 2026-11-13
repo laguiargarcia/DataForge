@@ -93,7 +93,7 @@ print(json.dumps({
     'sha256': info.get('archive_info', {}).get('hashes', {}).get('sha256'),
 }))
 '@
-    $out = @(Get-NativeLines "read installed dataforge" { & $py -c $code })
+    $out = @(Get-NativeLines "read installed dataforge" { & $py -P -c $code })
     return ($out -join "`n") | ConvertFrom-Json
 }
 
@@ -133,7 +133,7 @@ if 'job_runs' in tables:
     for row in conn.execute(query, ('running', 'pending')):
         print(' | '.join(str(v) for v in row))
 '@
-    $rows = @(Get-NativeLines "read job_runs" { & $py -c $code $db })
+    $rows = @(Get-NativeLines "read job_runs" { & $py -P -c $code $db })
     if ($rows.Count -eq 0) {
         Write-Host "No 'running'/'pending' row in $db"
         return
@@ -147,7 +147,7 @@ if 'job_runs' in tables:
 }
 
 function Save-Freeze([string]$Path) {
-    $lines = @(Get-NativeLines "pip freeze" { & $py -m pip freeze --disable-pip-version-check })
+    $lines = @(Get-NativeLines "pip freeze" { & $py -P -m pip freeze --disable-pip-version-check })
     [System.IO.File]::WriteAllLines($Path, [string[]]$lines, $utf8)
 }
 
@@ -164,7 +164,7 @@ function Build-WheelFromRef([string]$OutDir) {
         Invoke-Native "git archive $commit" { & git -C $repoPath archive --format=zip -o $zip $commit }
         Expand-Archive -LiteralPath $zip -DestinationPath (Join-Path $work "src")
         Invoke-Native "pip wheel" {
-            & $py -m pip wheel (Join-Path $work "src") --no-deps --disable-pip-version-check -w (Join-Path $work "dist")
+            & $py -P -m pip wheel (Join-Path $work "src") --no-deps --disable-pip-version-check -w (Join-Path $work "dist")
         }
         $built = @(Get-ChildItem (Join-Path $work "dist") -Filter "dataforge-*.whl")
         if ($built.Count -ne 1) { throw "expected one dataforge wheel, found $($built.Count)" }
@@ -180,10 +180,10 @@ function Install-Wheel([string]$WheelPath) {
     foreach ($req in $Requirements) { $extra += @("-r", (Resolve-Path -LiteralPath $req).Path) }
     # The version never changes, so pip would keep the installed copy without --force-reinstall.
     Invoke-Native "pip install (dataforge only)" {
-        & $py -m pip install --disable-pip-version-check --force-reinstall --no-deps $WheelPath
+        & $py -P -m pip install --disable-pip-version-check --force-reinstall --no-deps $WheelPath
     }
     Invoke-Native "pip install (dependencies and -Requirements)" {
-        & $py -m pip install --disable-pip-version-check @extra $WheelPath
+        & $py -P -m pip install --disable-pip-version-check @extra $WheelPath
     }
 }
 
@@ -193,12 +193,12 @@ function Restore-Freeze([string]$FreezePath) {
             Where-Object { $_ -and $_ -notmatch "^(-e |dataforge[ =@])" })
     $tmp = Join-Path $env:TEMP ("dataforge-freeze-" + $stamp + ".txt")
     [System.IO.File]::WriteAllLines($tmp, [string[]]$deps, $utf8)
-    try { Invoke-Native "pip install (dependencies of the release)" { & $py -m pip install --disable-pip-version-check -r $tmp } }
+    try { Invoke-Native "pip install (dependencies of the release)" { & $py -P -m pip install --disable-pip-version-check -r $tmp } }
     finally { Remove-Item -Force $tmp -ErrorAction SilentlyContinue }
 }
 
 function Assert-Installed([bool]$ExpectEditable) {
-    Invoke-Native "pip check" { & $py -m pip check --disable-pip-version-check }
+    Invoke-Native "pip check" { & $py -P -m pip check --disable-pip-version-check }
     $src = Get-InstalledSource
     $want = if ($ExpectEditable) { "editable" } else { "wheel" }
     if ($src.kind -ne $want) { throw "dataforge is installed as '$($src.kind)', expected '$want'" }
@@ -225,10 +225,10 @@ if ($Rollback) {
     $current = Read-Json $currentFile
     Write-Host "Rolling back to $($target.id) ($($target.kind), installed $($target.installed_at))"
     if ($target.kind -eq "editable") {
-        Invoke-Native "pip install -e" { & $py -m pip install --disable-pip-version-check --no-deps -e $target.source }
+        Invoke-Native "pip install -e" { & $py -P -m pip install --disable-pip-version-check --no-deps -e $target.source }
     } else {
         Invoke-Native "pip install (dataforge only)" {
-            & $py -m pip install --disable-pip-version-check --force-reinstall --no-deps $target.wheel
+            & $py -P -m pip install --disable-pip-version-check --force-reinstall --no-deps $target.wheel
         }
     }
     Restore-Freeze $target.freeze
