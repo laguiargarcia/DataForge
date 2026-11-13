@@ -95,3 +95,12 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # encoding is explicit, so no locale case for the Windows job). Declined: the torn-line warning's
 # wording (tests check it names the log file and the last line).
 min_score = 0.9333
+
+[targets."dataforge/deploy/rollback.py"]
+tests = ["tests/test_deploy_rollback*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 6 survivors, all equivalent: break -> return in _prune_empty_dirs (nothing follows the loop), and the
+# order rollback prunes emptied folders in (5 sort variants): each walk climbs while a folder is empty,
+# so the last walk through a shared parent removes it whatever the order (the LIFO property and the
+# several-folders test cover nested and sibling folders). The crash sweep adds nothing here.
+min_score = 0.85
