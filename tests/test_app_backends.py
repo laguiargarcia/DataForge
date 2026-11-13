@@ -98,8 +98,9 @@ def test_backend_morto_sobe_de_novo(sup, info):
 def test_backend_que_nao_sobe(sup, info):
     (info.app_dir / "backend" / "main.py").write_text("def (:\n", encoding="utf-8")
     start = time.monotonic()
+    starting = sup.target(info)
     with pytest.raises(BackendUnavailable) as err:
-        run(sup.target(info))
+        run(starting)
     assert time.monotonic() - start < 20
     assert err.value.log_path.exists()
     assert "SyntaxError" in err.value.log_path.read_text()
@@ -194,8 +195,9 @@ def test_timeout_de_subida_mata_o_processo(sup, info, monkeypatch):
     spawned = []
     real = app_backends._spawn
     monkeypatch.setattr(app_backends, "_spawn", lambda *a: spawned.append(real(*a)) or spawned[-1])
+    starting = sup.target(info)
     with pytest.raises(BackendUnavailable) as err:
-        run(sup.target(info))
+        run(starting)
     assert "2 s" in err.value.reason
     assert isinstance(err.value.log_path, Path)
     assert err.value.log_path == app_backends.log_path(info)
@@ -223,8 +225,9 @@ def test_popen_com_oserror_vira_backend_unavailable(sup, info, monkeypatch):
     def boom(*a, **k):
         raise OSError("sem permissão")
     monkeypatch.setattr(app_backends.subprocess, "Popen", boom)
+    starting = sup.target(info)
     with pytest.raises(BackendUnavailable) as err:
-        run(sup.target(info))
+        run(starting)
     assert "sem permissão" in err.value.reason
 
 

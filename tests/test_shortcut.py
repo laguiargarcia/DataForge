@@ -90,8 +90,9 @@ def test_desktop_com_acentos_round_trip(monkeypatch):
 @pytest.mark.parametrize("res", [(1, "x"), (0, "  \n")])
 def test_desktop_falha(tmp_path, monkeypatch, res):
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, res[0], res[1], ""))
+    info = _info(tmp_path)
     with pytest.raises(RuntimeError, match="Área de Trabalho"):
-        shortcut.create_app_shortcut(_info(tmp_path), HOME)
+        shortcut.create_app_shortcut(info, HOME)
 
 
 def test_pythonw_ao_lado_ou_fallback(tmp_path, monkeypatch):

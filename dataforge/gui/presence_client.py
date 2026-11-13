@@ -80,7 +80,7 @@ class PresenceHeartbeat(QObject):
             return
         self._stopped = True
         self._timer.stop()
-        for pending in list(self._inflight):  # abort beats still on the wire; their slot must not fire late
+        for pending in self._inflight:  # abort beats still on the wire; their slot must not fire late
             pending.finished.disconnect()
             pending.abort()
             pending.deleteLater()

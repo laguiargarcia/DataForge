@@ -43,7 +43,7 @@ def app_profile() -> QWebEngineProfile:
     """The one persistent web profile of the app windows (localStorage, IndexedDB and cookies
     survive a restart). Created once per process, parented to the QApplication so it outlives
     every page that uses it."""
-    global _profile  # noqa: PLW0603 -- one profile per process, created lazily after QApplication
+    global _profile  # noqa: PLW0603 -- one profile per process and created lazily after QApplication
     if _profile is None:
         _profile = QWebEngineProfile("dataforge-apps", QApplication.instance())
         _profile.setPersistentStoragePath(str(webengine_profile_dir()))

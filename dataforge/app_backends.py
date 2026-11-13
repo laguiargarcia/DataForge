@@ -90,11 +90,16 @@ def _log_tail(path: Path) -> str:
 async def _accepts(port: int) -> bool:
     try:
         _, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", port), 1)
-    except (OSError, asyncio.TimeoutError):
+    except OSError:  # asyncio.TimeoutError is TimeoutError, an OSError since Python 3.11
         return False
     writer.close()
     await writer.wait_closed()
     return True
+
+
+def _exited(process: subprocess.Popen) -> bool:
+    """Whether the process ended (Popen.poll never blocks)."""
+    return process.poll() is not None
 
 
 def _terminate(process: subprocess.Popen) -> None:
@@ -112,7 +117,7 @@ _AFTER_ACCEPT_SECONDS = 0.3  # a foreign listener on the port makes our uvicorn 
 
 def _spawn(info: AppInfo, port: int, token: str, logfile: Path) -> subprocess.Popen:
     env = {
-        **os.environ,  # noqa: TID251 -- the backend inherits the user's environment (PYTHONPATH, PATH...), not the workspace .env
+        **os.environ,  # noqa: TID251 -- the backend inherits the user's environment and not the workspace .env
         "DATAFORGE_HOME": str(compat.data_dir()),
         "DATAFORGE_WORKSPACE": info.workspace,
         "DATAFORGE_WORKSPACE_DIR": str(_workspace_dir(info)),
@@ -183,11 +188,11 @@ class BackendSupervisor:
     async def _wait_ready(self, process: subprocess.Popen, port: int, logfile: Path) -> None:
         deadline = time.monotonic() + START_TIMEOUT_SECONDS
         while True:
-            if process.poll() is not None:
+            if _exited(process):
                 raise BackendUnavailable(f"o backend terminou ao subir: {_log_tail(logfile)}", logfile)
             if await _accepts(port):
                 await asyncio.sleep(_AFTER_ACCEPT_SECONDS)
-                if process.poll() is not None:
+                if _exited(process):
                     raise BackendUnavailable(f"o backend terminou ao subir: {_log_tail(logfile)}", logfile)
                 return
             if time.monotonic() >= deadline:
@@ -204,15 +209,16 @@ class BackendSupervisor:
         """Stop backends whose windows all closed (after one was seen) or that sat idle."""
         due: list[tuple[tuple[str, str], _Running]] = []
         with self._state:
-            for key, current in list(self._running.items()):
+            for key, current in self._running.items():
                 if presence.app_windows(key[0], key[1], now) > 0:
                     current.window_seen = True
                     closed = False
                 else:
                     closed = current.window_seen
                 if closed or now - current.last_call > IDLE_SECONDS:
-                    del self._running[key]
                     due.append((key, current))
+            for key, _ in due:
+                del self._running[key]
         for _, current in due:  # terminating can take seconds: not under the lock
             _terminate(current.process)
         return [key for key, _ in due]

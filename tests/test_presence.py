@@ -228,8 +228,9 @@ def test_rota_desfaz_a_contagem_se_add_task_falha(dataforge_home, workspace_dir,
         def add_task(self, *_a, **_k):
             raise RuntimeError("no queue")
 
+    triggering = jobs_router.trigger_job(workspace_dir.name, "test_job", Broken())
     with pytest.raises(RuntimeError):
-        asyncio.run(jobs_router.trigger_job(workspace_dir.name, "test_job", Broken()))
+        asyncio.run(triggering)
     assert instance.server_jobs() == 0
 
 

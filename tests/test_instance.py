@@ -31,8 +31,9 @@ def test_fingerprint_muda_quando_um_arquivo_muda(tmp_path: Path):
 
 
 def test_fingerprint_do_pacote_e_guardado():
-    assert instance.code_fingerprint() == instance.code_fingerprint()
-    assert instance.code_fingerprint()
+    first = instance.code_fingerprint()
+    assert first
+    assert instance.code_fingerprint() is first   # the cached object, not a recomputed equal string
 
 
 def test_health_payload(dataforge_home):

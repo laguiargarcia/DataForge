@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 
 # Same rule as workspace names. `name` comes from the URL: on Windows a drive or UNC
 # value would replace the base path, so it is checked before any disk access.
-_APP_NAME = re.compile(r"[A-Za-z0-9_-]+")
+_APP_NAME = re.compile(r"[\w-]+", re.ASCII)
 # `backend` is an ASGI object as `module:object`, never a command line.
-_BACKEND = re.compile(r"[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*")
+_BACKEND = re.compile(r"[A-Za-z_][\w.]*:[A-Za-z_]\w*", re.ASCII)
 
 
 @dataclass(frozen=True)
