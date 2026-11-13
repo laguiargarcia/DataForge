@@ -146,8 +146,9 @@ def test_a_corrupt_line_before_the_last_still_fails_loudly(tmp_path):
                                      _entry("dpl_2").model_dump_json().encode(), b""]))
     with pytest.raises(ValueError):
         led.entries()
+    third = _entry("dpl_3")
     with pytest.raises(ValueError):
-        led.append(_entry("dpl_3"))   # and nothing is written over it
+        led.append(third)   # and nothing is written over it
 
 
 def test_drop_last_never_truncates_the_log_in_place(tmp_path, monkeypatch):
@@ -200,6 +201,7 @@ def test_replace_last_refuses_an_entry_that_is_not_the_last(tmp_path, ids):
     for eid in ids:
         led.append(_entry(eid))
     before = led.log.read_bytes() if led.log.exists() else None
+    other = _entry("dpl_2")
     with pytest.raises(ValueError, match="dpl_2 is not the last entry"):
-        led.replace_last(_entry("dpl_2"))
+        led.replace_last(other)
     assert (led.log.read_bytes() if led.log.exists() else None) == before

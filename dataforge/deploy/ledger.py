@@ -16,7 +16,10 @@ def atomic_write(path: Path, data: bytes) -> None:
     tmp = path.with_name("." + path.name + TEMP_SUFFIX)
     try:
         tmp.write_bytes(data)
-        os.replace(tmp, path)
+        # Sonar S2083 (path traversal) is a false positive: callers pass a blob path built from a
+        # hash, the log path, or a target path checked by pairing.target_file (df-m1dk). It was
+        # marked so on apply._atomic_write before this helper moved here.
+        os.replace(tmp, path)   # NOSONAR
     finally:
         if tmp.exists():
             tmp.unlink()

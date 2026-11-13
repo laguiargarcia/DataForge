@@ -571,6 +571,7 @@ def test_apply_whose_first_write_fails_records_nothing(tmp_path, monkeypatch):
     _mk(src, "scripts/a.py", "a2\n")
     monkeypatch.setattr("dataforge.deploy.apply.atomic_write",
                         lambda *a: (_ for _ in ()).throw(OSError("disk full")))
+    plan = _plan(src, tgt, _SCRIPTS)
     with pytest.raises(OSError, match="disk full"):
-        apply_plan(src, tgt, _plan(src, tgt, _SCRIPTS), led)
+        apply_plan(src, tgt, plan, led)
     assert led.entries() == [e1]
