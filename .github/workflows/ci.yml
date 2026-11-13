@@ -180,6 +180,23 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: "report-mutation-${{ strategy.job-index }}", path: report/, if-no-files-found: ignore }
+  mutation-ok:
+    # One fixed name for the repo ruleset to require (df-ahua.19): the matrix jobs are named per
+    # module and are skipped when no target is picked, so none of them can be a required check.
+    # Passes when every picked target passed or none was picked; fails when the pick itself failed
+    # (which leaves mutation skipped) or any target failed or was cancelled.
+    needs: [mutation-targets, mutation]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the mutation jobs
+        env:
+          PICK: ${{ needs.mutation-targets.result }}
+          MUTATION: ${{ needs.mutation.result }}
+        run: |
+          echo "mutation-targets: $PICK, mutation: $MUTATION"
+          [ "$PICK" = "success" ] || exit 1
+          [ "$MUTATION" = "success" ] || [ "$MUTATION" = "skipped" ] || exit 1
   testloop-tools:
     # Tests of the test loop tools themselves (map, check, mutate, gate).
     runs-on: ubuntu-latest
