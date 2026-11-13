@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 from rich import print as rprint
+from rich.markup import escape as rich_escape
 from dataforge.compat import api_port
 from dataforge.deploy import service
 from dataforge.deploy.service import DeployServiceError
@@ -14,6 +15,7 @@ from dataforge.deploy.models import DeployPlan, Action, PipelineModel
 
 deploy_app = typer.Typer(help="Deploy workspace definitions from one workspace to another")
 console = Console()
+_stderr = Console(stderr=True)
 
 _WORKSPACE_HELP = "Source workspace name"
 _PIPELINE_HELP = "Pipeline name"
@@ -28,12 +30,19 @@ def _reconcile_via_daemon(target_ws: str, names: List[str], quiet: bool = False)
         return
     port = api_port()
     base = f"http://127.0.0.1:{port}/api/workspaces/{target_ws}/triggers"
+    warnings: List[str] = []
     try:
         with httpx.Client(timeout=5.0) as client:
             for name in names:
-                client.post(f"{base}/{name}/reconcile").raise_for_status()
+                response = client.post(f"{base}/{name}/reconcile")
+                response.raise_for_status()
+                warnings += [f"trigger '{name}': {w}" for w in response.json().get("warnings") or []]
         if not quiet:
             rprint(f"[dim]reconciled {len(names)} live OS schedule(s): {', '.join(names)}[/dim]")
+        # The OS scheduler did not take a trigger (df-vo3x.6). stderr, so `run --json` keeps
+        # stdout machine-parseable; escaped, since rich drops '[...]' it reads as markup.
+        for warning in warnings:
+            _stderr.print(f"[yellow]⚠ {rich_escape(warning)}[/yellow]")
     except Exception as e:
         if not quiet:
             rprint(f"[yellow]⚠ {len(names)} trigger(s) deployed but the live OS schedule was not "

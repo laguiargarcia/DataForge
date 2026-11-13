@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -834,6 +835,66 @@ def test_reconcile_of_an_os_unsupported_cron_removes_the_stale_task_and_warns(
     assert "0 12 1 * *" in response.json()["warnings"][0]
     triggers._platform_register_trigger.assert_not_called()
     triggers._platform_deregister_trigger.assert_called_once_with("test_ws", "monthly")
+
+
+# ---------------------------------------------------------------------------
+# The OS scheduler command itself fails (df-vo3x.6): the trigger file is saved and is the source of
+# truth, so the response says the OS task is missing instead of a 500.
+# ---------------------------------------------------------------------------
+
+
+_OS_FAILURES = [
+    subprocess.CalledProcessError(1, ["crontab", "-"]),
+    FileNotFoundError(2, "No such file or directory", "crontab"),
+    PermissionError(13, "Permission denied", "plist"),
+    RuntimeError("Task Scheduler trigger registration failed:\naccess denied"),
+    ValueError("invalid trigger name for the OS scheduler"),
+]
+
+
+@pytest.mark.parametrize("failure", _OS_FAILURES, ids=lambda e: type(e).__name__)
+def test_create_trigger_saves_and_warns_when_the_os_scheduler_fails(test_client, workspace_dir,
+                                                                    failure):
+    from dataforge.api.routers import triggers
+    triggers._platform_register_trigger.side_effect = failure
+    payload = {"name": "daily", "cron": "0 9 * * *", "enabled": True, "jobs": []}
+    response = test_client.post("/api/workspaces/test_ws/triggers", json=payload)
+    assert response.status_code == 201
+    assert (workspace_dir / "triggers" / "daily.yaml").exists()
+    [warning] = response.json()["warnings"]
+    assert "not register" in warning
+    assert str(failure) in warning
+
+
+def test_update_trigger_saves_and_warns_when_the_os_scheduler_fails(test_client, workspace_dir):
+    from dataforge.api.routers import triggers
+    write_trigger_yaml(workspace_dir, "daily",
+                       "name: daily\ncron: '0 6 * * *'\nenabled: true\njobs: []\n")
+    triggers._platform_register_trigger.side_effect = subprocess.CalledProcessError(1, ["crontab"])
+    payload = {"name": "daily", "cron": "0 9 * * *", "enabled": True, "jobs": []}
+    response = test_client.put("/api/workspaces/test_ws/triggers/daily", json=payload)
+    assert response.status_code == 200
+    import yaml
+    assert yaml.safe_load((workspace_dir / "triggers" / "daily.yaml").read_text())["cron"] == "0 9 * * *"
+    assert "not register" in response.json()["warnings"][0]
+
+
+def test_reconcile_warns_when_the_os_scheduler_fails(test_client, workspace_dir):
+    from dataforge.api.routers import triggers
+    write_trigger_yaml(workspace_dir, "daily",
+                       "name: daily\ncron: '0 9 * * *'\nenabled: true\njobs: []\n")
+    triggers._platform_register_trigger.side_effect = RuntimeError("access denied")
+    response = test_client.post("/api/workspaces/test_ws/triggers/daily/reconcile")
+    assert response.status_code == 200
+    assert "access denied" in response.json()["warnings"][0]
+
+
+def test_an_unexpected_error_while_registering_is_not_hidden(test_client, workspace_dir):
+    from dataforge.api.routers import triggers
+    triggers._platform_register_trigger.side_effect = KeyError("bug")
+    payload = {"name": "daily", "cron": "0 9 * * *", "enabled": True, "jobs": []}
+    with pytest.raises(KeyError):
+        test_client.post("/api/workspaces/test_ws/triggers", json=payload)
 
 
 def test_utc_cron_to_local_moves_a_day_list_across_midnight(monkeypatch):
