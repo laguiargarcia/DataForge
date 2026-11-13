@@ -47,3 +47,23 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # 5 survivors, all equivalent or declined (df-d3dy): split/rsplit on a span with 2+ '-' (any variant
 # fails and passes through), the internal ValueError message, and // vs / on a sub-minute offset.
 min_score = 0.9456
+
+[targets."dataforge/conditions.py"]
+tests = ["tests/test_conditions*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+min_score = 1.0
+
+[targets."dataforge/deploy/ignore.py"]
+tests = ["tests/test_deploy_ignore*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 2 survivors, both equivalent here: encoding "UTF-8" for "utf-8", and encoding=None, which is UTF-8
+# under Linux's locale (test_ignore_file_is_read_as_utf8 catches it in the Windows test job).
+min_score = 0.9259
+
+[targets."dataforge/parser.py"]
+tests = ["tests/test_parser*.py"]
+copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 19 survivors, all equivalent under Linux's UTF-8 locale: encoding "UTF-8", None or left out on the
+# six open() calls (the UTF-8 tests catch them in the Windows test job), and sort_keys=None, which
+# PyYAML reads as False.
+min_score = 0.9233
