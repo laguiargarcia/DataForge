@@ -4,6 +4,8 @@ S3776 split of _make_value_widget, _on_ok, result_params, _render_trigger_rows, 
 from datetime import datetime, timedelta
 
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 pytest.importorskip("PySide6")
 
@@ -45,6 +47,14 @@ def _dialog(sched, declared=(), values=None):
     ("float", "1.25", 1.25),
     ("float", None, 0.0),
     ("float", "x", 0.0),
+    ("float", 1e20, 1e20),                 # past the old ±1e15 spin box range (df-vo3x.4)
+    ("float", -1e20, -1e20),
+    ("float", 1e-9, 1e-9),                 # under its 6 decimals
+    ("float", 0.1234567891, 0.1234567891),
+    ("float", float("inf"), float("inf")),  # a saved inf is kept, though it cannot be typed
+    ("float", 3, 3.0),
+    ("float", True, 1.0),
+    ("float", 10**400, 0.0),
     ("bool", True, True),
     ("bool", 0, False),
     ("bool", "yes", True),
@@ -79,7 +89,7 @@ def test_json_widget_falls_back_to_str_for_unserializable_values(sched):
 
 
 @pytest.mark.parametrize(("type_str", "cls_name"), [
-    ("int", "QLineEdit"), ("float", "QDoubleSpinBox"), ("bool", "QCheckBox"),
+    ("int", "QLineEdit"), ("float", "QLineEdit"), ("bool", "QCheckBox"),
     ("date", "QDateEdit"), ("json", "QPlainTextEdit"), ("string", "QLineEdit"),
     ("other", "QLineEdit"),
 ])
@@ -89,8 +99,6 @@ def test_value_widget_class_per_type(sched, type_str, cls_name):
 
 def test_value_widget_settings(sched):
     d = _dialog(sched)
-    f = d._make_value_widget("float")
-    assert (f.minimum(), f.maximum(), f.decimals()) == (-1e15, 1e15, 6)
     assert d._make_value_widget("date").calendarPopup() is True
     j = d._make_value_widget("json")
     assert (j.minimumHeight(), j.maximumHeight()) == (60, 60)
@@ -108,12 +116,40 @@ def test_int_widget_only_takes_digits(sched, text, accepted):
     assert (state != QValidator.State.Invalid) is accepted
 
 
+@pytest.mark.parametrize(("text", "accepted"), [
+    ("12", True), ("-1.5", True), (".5", True), ("1e-9", True), ("1E+20", True), ("2,5", True),
+    ("", True), ("-", True), (".", True), ("1e", True), ("1e-", True),   # while typing
+    ("abc", False), ("1.2.3", False), ("inf", False), ("1e5e5", False), ("--1", False),
+])
+def test_float_widget_only_takes_a_decimal_number(sched, text, accepted):
+    from PySide6.QtGui import QValidator
+    widget = _dialog(sched)._make_value_widget("float")   # keep it: it owns the validator
+    state = widget.validator().validate(text, 0)[0]
+    assert (state != QValidator.State.Invalid) is accepted
+
+
+@pytest.mark.parametrize(("text", "value"), [
+    ("2,5", 2.5), ("-1.5", -1.5), ("1e-9", 1e-9), ("", 0.0), ("-", 0.0), (".", 0.0), ("1e", 0.0),
+])
+def test_float_widget_reads_comma_decimals_and_unfinished_input(sched, text, value):
+    d = _dialog(sched)
+    w = d._make_value_widget("float", 5.0)
+    w.setText(text)
+    assert d._read_value_widget(w, "float") == value
+
+
 @pytest.mark.parametrize("text", ["", "-"])
 def test_int_widget_reads_unfinished_input_as_zero(sched, text):
     d = _dialog(sched)
     w = d._make_value_widget("int", 5)
     w.setText(text)
     assert d._read_value_widget(w, "int") == 0
+
+
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])   # sched is the module
+@given(value=st.floats(allow_nan=False))
+def test_any_saved_float_survives_the_dialog(sched, value):
+    assert sched._float_value(sched._float_widget(value)) == value
 
 
 def test_declared_int_past_int32_survives_the_dialog(sched):
