@@ -153,8 +153,6 @@ def test_resolve_failures_are_service_errors_that_name_the_culprit(dataforge_hom
     assert named in str(ei.value)
 
 
-@pytest.mark.xfail(strict=True, raises=UnicodeDecodeError,
-                   reason="df-ahua.23.10: a pipeline file that is not UTF-8 escapes as a raw error")
 def test_a_pipeline_file_that_is_not_utf8_is_an_invalid_pipeline(dataforge_home):
     """resolve's promise: any failure is a DeployServiceError. A pipeline saved as ANSI (cp1252) by a
     Windows editor is invalid, like malformed YAML, not a crash of the front-end."""
@@ -165,6 +163,21 @@ def test_a_pipeline_file_that_is_not_utf8_is_an_invalid_pipeline(dataforge_home)
     with pytest.raises(DeployServiceError) as ei:
         service.resolve("Dev", "ansi")
     assert ei.value.kind == "invalid"
+    assert "ansi" in str(ei.value)
+    assert "UTF-8" in str(ei.value)
+
+
+def test_a_pipeline_path_that_is_a_folder_is_an_invalid_pipeline(dataforge_home):
+    """A folder named like a pipeline file exists, so it is not "not found" (404): it is a pipeline
+    that cannot be read. Opening it raises IsADirectoryError on Linux and PermissionError on
+    Windows; both reach the front-ends as the same DeployServiceError (df-ahua.23.10)."""
+    _ws(dataforge_home, "Dev")
+    (dataforge_home / "workspaces/Dev/deploy/folder.yaml").mkdir(parents=True)
+    with pytest.raises(DeployServiceError) as ei:
+        service.resolve("Dev", "folder")
+    assert ei.value.kind == "invalid"
+    assert "folder" in str(ei.value)
+    assert "cannot be read" in str(ei.value)
 
 
 def test_build_failure_says_why_the_pipeline_is_invalid(dataforge_home):
