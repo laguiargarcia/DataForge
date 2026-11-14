@@ -263,14 +263,13 @@ def test_list_workspaces_does_not_look_deeper_than_one_level(tmp_path, monkeypat
     assert list_workspaces() == []
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="df-ahua.23.6: list_workspaces lists folders whose name resolve_workspace refuses")
-def test_every_listed_workspace_resolves_by_its_name(tmp_path, monkeypatch):
+def test_every_listed_workspace_resolves_by_its_name(tmp_path, monkeypatch, caplog):
     """The GUI and API list workspaces and then address them by name: a folder 'meu ws' holding a
     workspace.yaml must not be listed when resolve_workspace refuses that name."""
     monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path))
     _plant(tmp_path, ["meu ws", "ok"], [True, True])
     assert [ws.name for ws in list_workspaces()] == ["ok"]
+    assert "meu ws" in caplog.text   # skipped with a warning, not silently
 
 
 @pytest.mark.parametrize("name", ["", "etl\n", ".", "..", "a\\b", "C:x", "a b", "relatório"])
@@ -365,8 +364,6 @@ def test_a_number_outside_the_port_range_names_the_variable(port):
             api_port()
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="df-ahua.23.5: '²'.isdigit() is True, so int() raises its own message")
 def test_a_unicode_digit_that_is_not_a_number_names_the_variable(monkeypatch):
     """DATAFORGE_PORT='²' is not a port: the error names the variable like every other bad value."""
     monkeypatch.setenv(compat.PORT_ENV, "²")
