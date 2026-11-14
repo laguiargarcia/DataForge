@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import sys
@@ -7,6 +8,8 @@ import platformdirs
 
 # fullmatch, not ^...$: '$' also matches before a trailing newline, so 'Prod\n' passed (df-utq8).
 _VALID_NAME = re.compile(r"[A-Za-z0-9_-]+")
+
+logger = logging.getLogger(__name__)
 
 ALLOWED_HOSTS_ENV = "DATAFORGE_ALLOWED_HOSTS"
 PORT_ENV = "DATAFORGE_PORT"
@@ -148,13 +151,20 @@ def list_workspaces() -> list[Path]:
     """
     Return all workspace directories found under data_dir() / workspaces/.
 
-    A valid workspace directory contains a workspace.yaml file.
+    A valid workspace directory contains a workspace.yaml file and has a name resolve_workspace
+    accepts; a folder with any other name is skipped with a warning (df-ahua.23.6).
     Returns an empty list if the workspaces/ directory does not exist.
     """
     workspaces_dir = data_dir() / "workspaces"
     if not workspaces_dir.is_dir():
         return []
-    return sorted(p.parent for p in workspaces_dir.glob("*/workspace.yaml"))
+    found: list[Path] = []
+    for d in sorted(p.parent for p in workspaces_dir.glob("*/workspace.yaml")):
+        if not valid_name(d.name):
+            logger.warning("workspace %s: folder name must match [A-Za-z0-9_-]+ — skipped", d)
+            continue
+        found.append(d)
+    return found
 
 
 def allowed_hosts() -> set[str] | None:
@@ -178,7 +188,9 @@ def api_port() -> int:
     raw = os.environ.get(PORT_ENV)
     if raw is None:
         return DEFAULT_API_PORT
-    port = int(raw) if raw.strip().isdigit() else 0
+    text = raw.strip()
+    # isascii: '²'.isdigit() is True, yet int('²') raises its own message (df-ahua.23.5).
+    port = int(text) if text.isascii() and text.isdigit() else 0
     if not 1 <= port <= _MAX_PORT:
         raise ValueError(f"{PORT_ENV} must be a port number (1-{_MAX_PORT}), got {raw!r}")
     return port
