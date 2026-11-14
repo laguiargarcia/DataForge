@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 from typer.testing import CliRunner
 from dataforge.cli import app
+from dataforge.deploy import service
 from dataforge.deploy.ledger import Ledger
 
 runner = CliRunner()
@@ -98,6 +99,30 @@ def test_rollback_with_no_history_is_clean(dataforge_home):
     r = runner.invoke(app, ["deploy", "rollback", "to-prod", "-w", "Dev", "--yes"])
     assert r.exit_code == 0
     assert "No deploy to roll back" in r.stdout
+
+
+def test_rollback_is_clean_when_the_ledger_empties_during_the_prompt(dataforge_home, monkeypatch):
+    # Another actor (GUI panel, API, a second CLI) rolls the same target back while this command
+    # waits at the confirmation prompt: there is nothing left to undo (df-ahua.9.1).
+    _, prod = _setup(dataforge_home)
+    runner.invoke(app, ["deploy", "apply", "to-prod", "-w", "Dev", "--yes"])
+    seen = []
+
+    def confirm_after_someone_else_rolled_back(*args, **kwargs):
+        seen.append(service.rollback(prod))
+        return True
+
+    monkeypatch.setattr("typer.confirm", confirm_after_someone_else_rolled_back)
+    r = runner.invoke(app, ["deploy", "rollback", "to-prod", "-w", "Dev"])
+    assert len(seen) == 1      # the prompt ran...
+    assert seen[0] is not None  # ...and the other actor did roll back
+    # An unguarded AttributeError also exits non-zero with nothing in the output; it only shows
+    # in result.exception.
+    assert r.exception is None
+    assert r.exit_code == 0
+    assert "No deploy to roll back" in r.stdout
+    assert "Rolled back entry" not in r.stdout
+    assert not (prod / "scripts/a.py").exists()
 
 
 def test_status_pending_then_up_to_date(dataforge_home):
