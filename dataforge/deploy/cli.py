@@ -155,6 +155,10 @@ def rollback(
     except FileNotFoundError as e:
         rprint(f"[red]{e}[/red]")
         raise typer.Exit(1)
+    if entry is None:
+        # Someone else (GUI, API, another CLI) rolled this target back while the prompt was open.
+        rprint("[dim]No deploy to roll back.[/dim]")
+        raise typer.Exit(0)
     rprint(f"[green]✓[/green] Rolled back entry {entry.id}")
     _reconcile_via_daemon(entry.target, service.trigger_names(entry))
 
