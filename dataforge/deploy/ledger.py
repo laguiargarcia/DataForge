@@ -134,5 +134,6 @@ class Ledger:
                 return parsed, False
         return parsed, data.endswith(b"\n") or not data
 
+
 def _hex(sha: str) -> str:
     return sha.split(":", 1)[-1]
