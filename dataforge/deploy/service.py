@@ -46,6 +46,12 @@ def resolve(workspace: Optional[str], pipeline_name: str) -> Tuple[Path, Pipelin
     except FileNotFoundError:
         raise DeployServiceError(
             f"Pipeline '{pipeline_name}' not found in {source_dir}/deploy/", "not_found")
+    except UnicodeDecodeError as e:   # e.g. saved as ANSI (cp1252) by a Windows editor
+        raise DeployServiceError(
+            f"Pipeline '{pipeline_name}' is invalid: the file is not UTF-8 text ({e})", "invalid") from e
+    except OSError as e:   # a folder named <pipeline>.yaml, no read permission, ...
+        raise DeployServiceError(
+            f"Pipeline '{pipeline_name}' is invalid: the file cannot be read ({e})", "invalid") from e
     except (yaml.YAMLError, ValidationError, TypeError) as e:
         raise DeployServiceError(f"Pipeline '{pipeline_name}' is invalid: {e}", "invalid")
     try:
