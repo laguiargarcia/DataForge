@@ -44,6 +44,8 @@ class Ledger:
     Crash safety (df-ahua.5): a blob name only ever holds its full content; the log is appended
     one line per entry and every rewrite (drop_last, replace_last) swaps a whole new file in; a
     last line cut short by a dying append is left out of entries() and dropped by the next write.
+    A whole (newline-terminated) line that is not a valid entry is never dropped: every read and
+    write raises until someone looks at the log (df-ahua.23.7).
     """
 
     def __init__(self, target_dir: Path):
@@ -105,25 +107,32 @@ class Ledger:
 
     def _read(self) -> tuple[list[tuple[bytes, DeployEntry]], bool]:
         """(raw line, entry) for every entry in the log, and whether the log ends clean (every
-        line whole and newline-terminated). Only an append can cut a line short and it writes the
-        last one, so a last line that does not parse is ignored, with a warning (df-ahua.5.4). A
-        bad line before it is not a torn append: it raises."""
+        line whole and newline-terminated). Only an append can cut a line short, and it writes the
+        line and its newline together: what it cuts is the bytes after the last newline, so only
+        those are ignored when they do not parse, with a warning (df-ahua.5.4). A bad line that
+        ends in a newline was written whole and is not a torn append, wherever it is: it raises,
+        naming the log and the line, so no write drops that deploy's record (df-ahua.23.7)."""
         if not self.log.exists():
             return [], True
         data = self.log.read_bytes()
-        raw = [line.strip() for line in data.split(b"\n") if line.strip()]
+        segments = data.split(b"\n")   # the last one is what follows the last newline
         parsed: list[tuple[bytes, DeployEntry]] = []
-        for n, line in enumerate(raw, start=1):
+        for n, segment in enumerate(segments, start=1):
+            line = segment.strip()
+            if not line:
+                continue
             try:
                 parsed.append((line, DeployEntry.model_validate_json(line)))
-            except ValueError:   # pydantic's ValidationError and UnicodeDecodeError both are
-                if n < len(raw):
-                    raise
+            except ValueError as e:   # pydantic's ValidationError and UnicodeDecodeError both are
+                if n < len(segments):
+                    raise ValueError(
+                        f"{self.log}: line {n} is not a valid deploy entry and was not cut short "
+                        f"by a dying deploy (it ends in a newline). Nothing was changed; fix or "
+                        f"remove that line by hand before the next deploy or rollback. {e}") from e
                 _log.warning("%s: ignoring its last line, cut short by a deploy that died while "
                              "writing it; the next deploy or rollback drops it", self.log)
                 return parsed, False
         return parsed, data.endswith(b"\n") or not data
-
 
 def _hex(sha: str) -> str:
     return sha.split(":", 1)[-1]

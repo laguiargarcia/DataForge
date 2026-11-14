@@ -4,7 +4,6 @@
 Each example works in its own temporary directory created inside the example, because a
 test-scoped fixture would be shared between examples.
 """
-import contextlib
 import hashlib
 import logging
 import os
@@ -198,22 +197,44 @@ def test_the_torn_line_warning_names_the_log_file(tmp_path, caplog):
     assert str(led.log) in caplog.text
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="df-ahua.23.7: a whole last line that does not validate is taken for a "
-                          "torn append and dropped by the next write")
-def test_a_whole_last_line_that_does_not_validate_is_never_dropped(tmp_path):
+_UNKNOWN_STATUS = (b'{"id":"dpl_2","ts":"t","source":"D","target":"P","pipeline":"p","items":[],'
+                   b'"status":"rolled_back"}')
+
+
+@pytest.mark.parametrize("bad", [_UNKNOWN_STATUS, b'{"id":"dpl_2"', b"not json", b"\xff\xfe"])
+@pytest.mark.parametrize("end", [b"\n", b"\r\n", b"\n \t", b"\n\n"])
+def test_a_whole_last_line_that_does_not_validate_is_never_dropped(tmp_path, caplog, bad, end):
     """Only an append can cut a line short, and the line it cuts has no newline. A newline-terminated
-    line that does not validate (a status another version wrote, a hand edit) is not a torn append:
-    the next write must not delete that deploy's record."""
+    line that does not validate (a status another version wrote, a hand edit) is not a torn append
+    (df-ahua.23.7): no read passes over it and no write deletes that deploy's record. The error
+    names the log and the line."""
     led = Ledger(tmp_path)
     led.append(DeployEntry(id="dpl_1", ts="t", source="D", target="P", pipeline="p"))
-    unknown = (b'{"id":"dpl_2","ts":"t","source":"D","target":"P","pipeline":"p","items":[],'
-               b'"status":"rolled_back"}')
     with open(led.log, "ab") as f:
-        f.write(unknown + b"\n")
-    with contextlib.suppress(ValueError):   # refusing to write over it keeps the record too
-        led.append(DeployEntry(id="dpl_3", ts="t", source="D", target="P", pipeline="p"))
-    assert unknown in led.log.read_bytes()
+        f.write(bad + end)
+    before = led.log.read_bytes()
+    new = DeployEntry(id="dpl_3", ts="t", source="D", target="P", pipeline="p")
+    calls = [led.entries, led.last, led.drop_last, lambda: led.append(new),
+             lambda: led.replace_last(new)]
+    with caplog.at_level("WARNING", logger="dataforge.deploy.ledger"):
+        for call in calls:
+            with pytest.raises(ValueError) as err:
+                call()
+            assert str(led.log) in str(err.value)
+            assert "line 2 " in str(err.value)
+            assert led.log.read_bytes() == before
+    assert "cut short" not in caplog.text   # not reported as a torn append either
+    assert [p.name for p in led.root.iterdir()] == [led.log.name]
+
+
+def test_the_bad_line_error_counts_blank_lines_like_an_editor_does(tmp_path):
+    """The line number in the error is the one an editor shows, blank lines included."""
+    led = Ledger(tmp_path)
+    led.root.mkdir(parents=True)
+    led.log.write_bytes(b"\n" + _line(DeployEntry(id="dpl_1", ts="t", source="D", target="P",
+                                                  pipeline="p")) + b"\n\nnot json\n")
+    with pytest.raises(ValueError, match="line 4 "):
+        led.entries()
 
 
 # --- blobs -----------------------------------------------------------------------------------------
