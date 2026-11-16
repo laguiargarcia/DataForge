@@ -56,7 +56,8 @@ def prod(tmp_path):
     (home / "workspaces" / "GetFinance" / "requirements.txt").write_text("x\n", encoding="utf-8")
     config = tmp_path / "prod.env"
     config.write_text(f"PROD_HOME={home}\nPROD_TMP={tmp_path / 'ctmp'}\n", encoding="utf-8")
-    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+    # UV: `uv run` exports the real uv's path, which deploy.sh prefers to PATH (df-n8ac.28).
+    env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}", "UV": str(bin_dir / "uv"),
            "DATAFORGE_PROD_CONFIG": str(config), "STUB_LOG": str(tmp_path / "calls.log"), "STUB_RCS": "0"}
     return {"repo": repo, "env": env, "log": tmp_path / "calls.log", "home": home, "tmp": tmp_path}
 
