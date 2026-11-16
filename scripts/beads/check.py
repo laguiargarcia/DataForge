@@ -31,12 +31,15 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: shellwords
+
+from shellwords import split_commands, strip_prefix
 
 CUTOFF = "2026-11-16"  # ISO date: beads created from this day on get every check
 WAIVER = "fechamento:dispensado"
@@ -60,10 +63,6 @@ BD_WORD = re.compile(r"(?:^|[\s;&|(`])bd(?:$|\s)")
 BEAD_ID = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:\.\d+)*$")
 NOTE_MARK = re.compile(r"\b(n[ãa]o\s+conferi|conferi|assumi)\s*:", re.IGNORECASE)
 NOTE_NAMES = {"conferi": "Conferi:", "nao conferi": "Não conferi:", "assumi": "Assumi:"}
-ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
-OPERATOR_CHARS = ";&|()<>\n"
-PREFIX_WORDS = frozenset({"env", "command", "exec", "nohup", "time", "nice", "sudo", "do", "then",
-                          "else", "{", "!"})
 GLOBAL_BOOL_FLAGS = frozenset({"--global", "--json", "--profile", "-q", "--quiet", "--readonly",
                                "--sandbox", "-v", "--verbose", "-h", "--help"})
 SUBCOMMAND_BOOL_FLAGS = {
@@ -77,41 +76,6 @@ LABEL_ADD_WORDS = 3  # `label add <id> <label>`: add, at least one id, the label
 
 
 # --------------------------------------------------------------------------- reading the command
-
-
-def split_commands(command: str) -> list[list[str]]:
-    """Simple commands of a shell line, as word lists. Operators and newlines split them;
-    redirections are dropped. Raises ValueError on a line shlex cannot read.
-
-    shlex cannot tell a quoted argument made only of operators (`';'`) from the operator itself;
-    such an argument splits the command. For a reason that only makes the check stricter."""
-    lex = shlex.shlex(command.replace("\\\n", " "), posix=True, punctuation_chars=OPERATOR_CHARS)
-    lex.whitespace = " \t\r"
-    lex.whitespace_split = True
-    out, cur, skip = [], [], False
-    for tok in lex:
-        operator = bool(tok) and set(tok) <= set(OPERATOR_CHARS)
-        if skip:
-            skip = False
-        elif operator and ("<" in tok or ">" in tok):
-            if cur and cur[-1].isdigit():
-                cur.pop()  # the fd of `2>&1`, split off by shlex
-            skip = True
-        elif operator:
-            out.append(cur)
-            cur = []
-        else:
-            cur.append(tok)
-    out.append(cur)
-    return [c for c in out if c]
-
-
-def strip_prefix(words: list[str]) -> list[str]:
-    """Drop leading VAR=value assignments, wrappers like `env` and shell keywords like `do`."""
-    i = 0
-    while i < len(words) and (ASSIGNMENT.match(words[i]) or words[i] in PREFIX_WORDS):
-        i += 1
-    return words[i:]
 
 
 @dataclass

@@ -27,13 +27,15 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: shellwords
+
 import state
+from shellwords import split_commands, strip_prefix
 
 MODE_ENV = "DF_GUARD_MODE"
 MODES = frozenset({"warn", "block", "off"})
@@ -43,11 +45,8 @@ MUTATING_GIT = frozenset(
      "cherry-pick", "revert", "am"}
 )
 FILE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
-WRAPPERS = frozenset({"env", "command", "exec", "nohup", "time", "nice", "sudo"})
 GIT_OPTS_WITH_VALUE = frozenset({"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
 WORKTREE_ADD_OPTS_WITH_VALUE = frozenset({"-b", "-B", "--reason", "--orphan"})
-ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
-OPERATOR_CHARS = ";&|()<>\n"
 CHECK_IGNORE_TIMEOUT = 3
 
 
@@ -59,43 +58,6 @@ def git_check_ignore(main: Path, path: Path) -> bool | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return {0: True, 1: False}.get(r.returncode)
-
-
-def split_commands(command: str) -> list[list[str]]:
-    """Simple commands of a shell line, as word lists. Operators and newlines split them;
-    redirections are dropped. Raises ValueError on a line shlex cannot read.
-
-    Only a token made of operator characters is an operator: a quoted `"a -> b"` stays a word.
-    shlex cannot tell a quoted argument made only of operators (`';'`) from the operator itself;
-    such an argument splits the command, which can only make the guard look at more commands."""
-    lex = shlex.shlex(command.replace("\\\n", " "), posix=True, punctuation_chars=OPERATOR_CHARS)
-    lex.whitespace = " \t\r"
-    lex.whitespace_split = True
-    out, cur, skip = [], [], False
-    for tok in lex:
-        operator = bool(tok) and set(tok) <= set(OPERATOR_CHARS)
-        if skip:
-            skip = False
-        elif operator and ("<" in tok or ">" in tok):
-            if cur and cur[-1].isdigit():
-                cur.pop()  # the fd of `2>&1`, split off by shlex
-            skip = True
-        elif operator:
-            out.append(cur)
-            cur = []
-        else:
-            cur.append(tok)
-    out.append(cur)
-    return [c for c in out if c]
-
-
-def strip_prefix(words: list[str]) -> list[str]:
-    """Drop leading VAR=value assignments and wrappers like `env` or `nohup`."""
-    i = 0
-    while i < len(words) and (ASSIGNMENT.match(words[i]) or words[i] in WRAPPERS
-                              or (i and words[i - 1] == "env" and words[i].startswith("-"))):
-        i += 1
-    return words[i:]
 
 
 def is_pytest(words: list[str]) -> bool:
