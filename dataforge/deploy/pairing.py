@@ -99,8 +99,8 @@ def resolve_pairs(source_dir: Path, pipeline: PipelineModel) -> list[tuple[str, 
 
 def _matched_files(source_dir: Path, source: str) -> list[str]:
     """Relative POSIX paths of the regular files (not symlinks) a pair's source glob matches."""
-    pattern = source + "/*" if source.endswith("**") else source
-    return [p.relative_to(source_dir).as_posix() for p in sorted(source_dir.glob(pattern))
+    # A trailing '**' matches files at any depth too (Python 3.13+; 3.12 matched directories only).
+    return [p.relative_to(source_dir).as_posix() for p in sorted(source_dir.glob(source))
             if not p.is_symlink() and p.is_file()]
 
 

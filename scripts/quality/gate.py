@@ -221,7 +221,7 @@ def dependencies(public: list[str]) -> list[Finding]:
             sys.exit(f"quality gate: deptry failed\n{r.stdout}{r.stderr}")
         issues = json.loads(out.read_text(encoding="utf-8"))
     return [
-        Finding(d["location"]["file"], "deptry:" + d["error"]["code"], d["location"].get("line") or 0, d["error"]["message"])
+        Finding(Path(d["location"]["file"]).as_posix(), "deptry:" + d["error"]["code"], d["location"].get("line") or 0, d["error"]["message"])
         for d in issues
     ]
 
