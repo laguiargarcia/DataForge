@@ -57,7 +57,7 @@ BD_TIMEOUT = 20
 GIT_TIMEOUT = 10
 
 BD_WORD = re.compile(r"(?:^|[\s;&|(`])bd(?:$|\s)")
-BEAD_ID = re.compile(r"^[a-z][a-z0-9]*-[a-z0-9]+(?:\.[0-9]+)*$")
+BEAD_ID = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:\.\d+)*$")
 NOTE_MARK = re.compile(r"\b(n[ãa]o\s+conferi|conferi|assumi)\s*:", re.IGNORECASE)
 NOTE_NAMES = {"conferi": "Conferi:", "nao conferi": "Não conferi:", "assumi": "Assumi:"}
 ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
@@ -73,6 +73,7 @@ SUBCOMMAND_BOOL_FLAGS = {
 }
 SHORT_FLAGS = {"-r": "--reason", "-s": "--status", "-f": "--force"}
 LABEL_FLAGS = ("--add-label", "--set-labels")
+LABEL_ADD_WORDS = 3  # `label add <id> <label>`: add, at least one id, the label
 
 
 # --------------------------------------------------------------------------- reading the command
@@ -126,35 +127,34 @@ class BdCall:
         return flag in self.options
 
 
+def _read_args(call: BdCall, rest: list[str]) -> None:
+    """Fill the call's positionals and options from the words after its subcommand."""
+    bool_flags = SUBCOMMAND_BOOL_FLAGS.get(call.sub, frozenset()) | GLOBAL_BOOL_FLAGS
+    words = iter(rest)
+    for word in words:
+        if word == "--":
+            call.positionals += list(words)
+        elif not word.startswith("-") or word == "-":
+            call.positionals.append(word)
+        else:
+            flag, eq, value = word.partition("=")
+            flag = SHORT_FLAGS.get(flag, flag)
+            if not eq and flag not in bool_flags:
+                value = next(words, "")
+            call.options.setdefault(flag, []).append(value)
+
+
 def parse_bd(words: list[str]) -> BdCall | None:
     """The subcommand, positionals and options of a `bd ...` word list; None if it is not bd."""
     if not words or os.path.basename(words[0]) != "bd":
         return None
     i = 1
-    while i < len(words) and words[i].startswith("-"):
-        flag = words[i]
-        i += 1 if flag in GLOBAL_BOOL_FLAGS or "=" in flag else 2
+    while i < len(words) and words[i].startswith("-"):  # global flags before the subcommand
+        i += 1 if words[i] in GLOBAL_BOOL_FLAGS or "=" in words[i] else 2
     if i >= len(words):
         return None
     call = BdCall(words[i])
-    bool_flags = SUBCOMMAND_BOOL_FLAGS.get(call.sub, frozenset()) | GLOBAL_BOOL_FLAGS
-    rest = words[i + 1 :]
-    j = 0
-    while j < len(rest):
-        word = rest[j]
-        j += 1
-        if word == "--":
-            call.positionals += rest[j:]
-            break
-        if not word.startswith("-") or word == "-":
-            call.positionals.append(word)
-            continue
-        flag, eq, value = word.partition("=")
-        flag = SHORT_FLAGS.get(flag, flag)
-        if not eq and flag not in bool_flags:
-            value = rest[j] if j < len(rest) else ""
-            j += 1
-        call.options.setdefault(flag, []).append(value)
+    _read_args(call, words[i + 1 :])
     return call
 
 
@@ -224,7 +224,7 @@ class LineState:
             self.step("close", bead, reason=reason)
 
     def feed(self, call: BdCall) -> None:
-        if call.sub == "label" and call.positionals[:1] == ["add"] and len(call.positionals) >= 3:  # noqa: PLR2004 -- add, one id, one label
+        if call.sub == "label" and call.positionals[:1] == ["add"] and len(call.positionals) >= LABEL_ADD_WORDS:
             self.add_labels(call.positionals[1:-1], [call.positionals[-1]])
         elif call.sub == "update":
             self.update(call)
@@ -358,9 +358,11 @@ class Bd:
     def __init__(self, cwd: Path):
         self.cwd = cwd
 
-    def _json(self, *args: str):
+    def _json(self, sub: str, bead: str):
+        if not BEAD_ID.match(bead):
+            return None  # not an id bd could know; never passed on, so it cannot read as a flag
         try:
-            r = subprocess.run(["bd", *args, "--json", "--readonly"], cwd=self.cwd, capture_output=True,
+            r = subprocess.run(["bd", sub, "--json", "--readonly", "--", bead], cwd=self.cwd, capture_output=True,
                                text=True, timeout=BD_TIMEOUT, check=False)
         except (OSError, subprocess.SubprocessError):
             return None
@@ -397,7 +399,7 @@ def _git(cwd: Path, *args: str) -> str:
 def cites(bead: str) -> re.Pattern[str]:
     """Bead ids with the prefix of `bead`, matched whole (df-886.1 is not df-886.14)."""
     prefix = re.escape(bead.split("-", 1)[0])
-    return re.compile(rf"(?<![\w.-]){prefix}-[a-z0-9]+(?:\.[0-9]+)*(?![\w-]|\.[0-9])")
+    return re.compile(rf"(?<![\w.-]){prefix}-[a-z0-9]+(?:\.\d+)*(?![\w-]|\.\d)")
 
 
 def _bead_worktrees(repo: Path, bead: str) -> list[Path]:

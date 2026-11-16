@@ -442,3 +442,16 @@ def test_end_to_end_close_of_a_bug(bdrepo):
                             f"bd close {bead} --reason {reason}") is None
     bd_json(bdrepo, "label", "add", bead, check.WAIVER)
     assert run_hook(bdrepo, f"bd close {bead} --reason feito") is None
+
+
+@pytest.mark.parametrize("bead", ["--db=/tmp/other", "-x", "df x", "DF-1", ""])
+def test_a_word_that_is_not_a_bead_id_never_reaches_bd(bead, monkeypatch, tmp_path):
+    def no_run(*_a, **_k):
+        raise AssertionError("bd was called")
+    monkeypatch.setattr(check.subprocess, "run", no_run)
+    assert check.Bd(tmp_path).show(bead) is None
+
+
+@pytest.mark.parametrize("bead", ["df-m60c", "df-ahua.23.4", "df-sess-1a2b3c4d"])
+def test_bead_ids_bd_writes_are_valid(bead):
+    assert check.BEAD_ID.match(bead)
