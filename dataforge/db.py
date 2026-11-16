@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import DeclarativeBase
 from datetime import datetime, timezone
 import threading
@@ -90,10 +91,28 @@ _ADDED_COLUMNS = {
 }
 
 
+# What SQLite says when another process created the table or column between our check and our
+# CREATE/ALTER: the schema is there, so checking again is enough (df-n8ac.23).
+_CREATED_MEANWHILE = ("already exists", "duplicate column name")
+_SCHEMA_ATTEMPTS = 3
+
+
 def init_db(db_url: str):
+    """The engine for *db_url*, its schema created or brought up to date.
+
+    _SCHEMA_LOCK serializes the threads of this process; another process (the API server and a
+    scheduled job, say) may still create the same table or column between create_all's check and
+    its CREATE. That race is retried: the next check finds the schema the other process made."""
     engine = create_engine(db_url)
     with _SCHEMA_LOCK:
-        _create_schema(engine)
+        for attempt in range(_SCHEMA_ATTEMPTS):
+            try:
+                _create_schema(engine)
+                break
+            except OperationalError as exc:
+                raced = any(m in str(exc.orig) for m in _CREATED_MEANWHILE)
+                if not raced or attempt == _SCHEMA_ATTEMPTS - 1:
+                    raise
     return engine
 
 
