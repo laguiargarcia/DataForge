@@ -3,7 +3,7 @@
 default_install_hook_types: [pre-commit, post-merge]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.24.3   # same as GITLEAKS_VERSION in .github/workflows/ci.yml: bump both together
+    rev: v8.24.3   # same as GITLEAKS_VERSION in .github/workflows/ci.yml; Renovate bumps both together
     hooks:
       - id: gitleaks
   - repo: local

@@ -1,0 +1,35 @@
+// Dependency upgrades (df-n8ac.27). uv.lock is the one list of versions dev, CI and prod install, so
+// nothing moves unless a PR moves it: once a week Renovate opens them, the full CI tests each one,
+// and a green one merges by itself; the next `git pull` in the main checkout deploys it to prod.
+// A red one stays open: that is the signal to look. The Dependency Dashboard issue lists what is
+// pending.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended", "customManagers:githubActionsVersions"],
+  timezone: "America/Sao_Paulo",
+  schedule: ["before 6am on monday"],
+  // A release yanked or found malicious in its first days never reaches the lock.
+  minimumReleaseAge: "3 days",
+  automerge: true,
+  platformAutomerge: true,
+  // The ruleset requires a PR to be up to date with main.
+  rebaseWhen: "behind-base-branch",
+  // The whole lock, transitive dependencies included, re-resolved within pyproject's ranges.
+  lockFileMaintenance: { enabled: true, automerge: true, schedule: ["before 6am on monday"] },
+  // Security fixes skip the schedule and the release age (Renovate's default), from GitHub's
+  // alerts and from OSV.
+  osvVulnerabilityAlerts: true,
+  "pre-commit": { enabled: true },
+  packageRules: [
+    // One PR for every minor and patch; each major alone, so one that breaks holds back nothing else.
+    { matchUpdateTypes: ["minor", "patch"], groupName: "dependencies" },
+    { matchManagers: ["github-actions"], groupName: "github actions" },
+    // .python-version moves dev, CI and prod (deploy.sh makes a new venv): always its own PR.
+    { matchManagers: ["pyenv"], groupName: "python" },
+    // The pre-commit hook and the CI action run the same gitleaks.
+    { matchPackageNames: ["gitleaks/gitleaks"], groupName: "gitleaks" },
+    // The quality gate's tools: the baseline counts their findings, so moving one is a deliberate
+    // change made by hand (docs/quality-gate.md).
+    { matchPackageNames: ["ruff", "vulture", "import-linter", "deptry"], enabled: false },
+  ],
+}

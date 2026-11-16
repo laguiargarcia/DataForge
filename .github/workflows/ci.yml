@@ -21,7 +21,8 @@ jobs:
         uses: gitleaks/gitleaks-action@v3
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
-          # Same version as the pre-commit hook (.pre-commit-config.yaml): bump both together.
+          # Same version as the pre-commit hook (.pre-commit-config.yaml); Renovate bumps both together.
+          # renovate: datasource=github-releases depName=gitleaks/gitleaks extractVersion=^v(?<version>.*)$
           GITLEAKS_VERSION: 8.24.3
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: astral-sh/setup-uv@v10.3.3

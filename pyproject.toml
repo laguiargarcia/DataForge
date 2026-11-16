@@ -31,7 +31,7 @@ dependencies = [
 
 # Everything else the repo's tooling needs: tests, the test loop (scripts/testloop/) and coverage. One
 # uv.lock pins these and the runtime dependencies for dev, CI and prod (`uv sync` installs both;
-# prod skips this group). Dependabot proposes the upgrades (.github/dependabot.yml).
+# prod skips this group). Renovate proposes the upgrades (.github/renovate.json5).
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",
