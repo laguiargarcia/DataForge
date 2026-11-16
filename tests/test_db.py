@@ -96,14 +96,17 @@ def test_init_db_survives_another_process_creating_the_schema_meanwhile(db_url, 
     assert {"job_runs", "execucoes"} <= tables
 
 
-def test_init_db_does_not_hide_other_operational_errors(db_url, monkeypatch):
+def test_init_db_does_not_retry_or_hide_other_operational_errors(db_url, monkeypatch):
+    calls = []
 
     def broken(engine, **kw):
+        calls.append(1)
         raise OperationalError("CREATE TABLE x", {}, Exception("disk I/O error"))
 
     monkeypatch.setattr(db.Base.metadata, "create_all", broken)
     with pytest.raises(OperationalError, match="disk I/O error"):
         init_db(db_url)
+    assert len(calls) == 1
 
 
 def test_init_db_gives_up_when_the_race_never_settles(db_url, monkeypatch):

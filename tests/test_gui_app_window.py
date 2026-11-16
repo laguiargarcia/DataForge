@@ -29,6 +29,12 @@ def _module_home(tmp_path_factory):
     mp.undo()
 
 
+@pytest.fixture(autouse=True)
+def isolated_dataforge_home(_module_home):
+    """Overrides the conftest fixture of the same name: this module keeps the one DATAFORGE_HOME of
+    _module_home for every test, since the web profile it checks is created once per process."""
+
+
 @pytest.fixture
 def info(tmp_path):
     return AppInfo(workspace="ws", name="painel", title="Painel", dist=tmp_path,
