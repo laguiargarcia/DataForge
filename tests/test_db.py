@@ -1,5 +1,11 @@
+import sqlite3
+
+import pytest
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
+import dataforge.db as db
 from dataforge.db import init_db, ExecucaoORM
 
 
@@ -59,3 +65,56 @@ def test_concurrent_init_db_on_a_fresh_database_does_not_race(tmp_path):
 
         with ThreadPoolExecutor(threads) as ex:
             list(ex.map(init, range(threads)))   # re-raises the first thread's exception
+
+
+def test_init_db_survives_another_process_creating_the_schema_meanwhile(db_url, monkeypatch):
+    """Another process creates the tables between create_all's check and its CREATE (df-n8ac.23):
+    init_db checks again instead of failing with 'table already exists'."""
+
+    path = make_url(db_url).database
+    original = db.Base.metadata.create_all
+    raced = []
+
+    def create_all_after_the_other_process(engine, **kw):
+        if not raced:
+            raced.append(True)
+            other = sqlite3.connect(path)   # the other process wins the race
+            other.execute("CREATE TABLE job_runs (id VARCHAR NOT NULL PRIMARY KEY)")
+            other.commit()
+            other.close()
+            return original(engine, checkfirst=False)   # our CREATE, from a stale check
+        return original(engine, **kw)
+
+    monkeypatch.setattr(db.Base.metadata, "create_all", create_all_after_the_other_process)
+    engine = init_db(db_url)
+    try:
+        with engine.connect() as conn:
+            tables = {r[0] for r in conn.exec_driver_sql("SELECT name FROM sqlite_master WHERE type='table'")}
+    finally:
+        engine.dispose()
+    assert raced == [True]
+    assert {"job_runs", "execucoes"} <= tables
+
+
+def test_init_db_does_not_hide_other_operational_errors(db_url, monkeypatch):
+
+    def broken(engine, **kw):
+        raise OperationalError("CREATE TABLE x", {}, Exception("disk I/O error"))
+
+    monkeypatch.setattr(db.Base.metadata, "create_all", broken)
+    with pytest.raises(OperationalError, match="disk I/O error"):
+        init_db(db_url)
+
+
+def test_init_db_gives_up_when_the_race_never_settles(db_url, monkeypatch):
+
+    calls = []
+
+    def always_raced(engine, **kw):
+        calls.append(1)
+        raise OperationalError("CREATE TABLE job_runs", {}, Exception("table job_runs already exists"))
+
+    monkeypatch.setattr(db.Base.metadata, "create_all", always_raced)
+    with pytest.raises(OperationalError, match="already exists"):
+        init_db(db_url)
+    assert len(calls) == db._SCHEMA_ATTEMPTS

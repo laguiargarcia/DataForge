@@ -158,12 +158,7 @@ jobs:
         id: durations
         shell: bash
         run: |
-          shopt -s nullglob
-          files=(durations/*/.test_durations)
-          if [ "${#files[@]}" -gt 0 ]; then
-            uv run --no-project python scripts/ci_durations.py .test_durations "${files[@]}"
-            echo "merged=true" >> "$GITHUB_OUTPUT"
-          fi
+          if uv run --no-project python scripts/ci_durations.py; then echo "merged=true" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/cache/save@v6
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
@@ -224,12 +219,7 @@ jobs:
         id: durations
         shell: bash
         run: |
-          shopt -s nullglob
-          files=(durations/*/.test_durations)
-          if [ "${#files[@]}" -gt 0 ]; then
-            uv run --no-project python scripts/ci_durations.py .test_durations "${files[@]}"
-            echo "merged=true" >> "$GITHUB_OUTPUT"
-          fi
+          if uv run --no-project python scripts/ci_durations.py; then echo "merged=true" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/cache/save@v6
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-windows-${{ github.run_id }}", enableCrossOsArchive: true }

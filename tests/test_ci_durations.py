@@ -7,27 +7,29 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "ci_durations.py"
 
 
-def _write(path: Path, data: dict) -> Path:
+def _shard(root: Path, name: str, data: dict) -> None:
+    path = root / "durations" / name / ".test_durations"
+    path.parent.mkdir(parents=True)
     path.write_text(json.dumps(data), encoding="utf-8")
-    return path
+
+
+def _run(cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(SCRIPT)], cwd=cwd, capture_output=True, text=True, check=False)
 
 
 def test_merges_disjoint_shards_into_one_sorted_file(tmp_path):
-    a = _write(tmp_path / "a.json", {"tests/t.py::b": 2.0, "tests/t.py::a": 1.0})
-    b = _write(tmp_path / "b.json", {"tests/u.py::c": 3.5})
-    out = tmp_path / "out" / ".test_durations"
-    out.parent.mkdir()
-    r = subprocess.run([sys.executable, str(SCRIPT), str(out), str(a), str(b)],
-                       capture_output=True, text=True, check=False)
+    _shard(tmp_path, "durations-linux-1", {"tests/t.py::b": 2.0, "tests/t.py::a": 1.0})
+    _shard(tmp_path, "durations-linux-2", {"tests/u.py::c": 3.5})
+    r = _run(tmp_path)
     assert r.returncode == 0, r.stderr
-    merged = json.loads(out.read_text(encoding="utf-8"))
+    merged = json.loads((tmp_path / ".test_durations").read_text(encoding="utf-8"))
     assert merged == {"tests/t.py::a": 1.0, "tests/t.py::b": 2.0, "tests/u.py::c": 3.5}
     assert list(merged) == sorted(merged)
     assert "3 tests from 2 shard file(s)" in r.stdout
 
 
-def test_without_files_it_prints_usage_and_fails(tmp_path):
-    r = subprocess.run([sys.executable, str(SCRIPT), str(tmp_path / "out")], capture_output=True, text=True,
-                       check=False)
-    assert r.returncode == 2
-    assert "SHARD_FILE" in r.stderr
+def test_without_shard_files_it_writes_nothing_and_fails(tmp_path):
+    r = _run(tmp_path)
+    assert r.returncode == 1
+    assert "nothing to merge" in r.stderr
+    assert not (tmp_path / ".test_durations").exists()

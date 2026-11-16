@@ -30,6 +30,17 @@ def pytest_configure(config):
     )
 
 
+@pytest.fixture(autouse=True)
+def isolated_dataforge_home(request, tmp_path_factory, monkeypatch):
+    """Every test gets its own DATAFORGE_HOME (df-n8ac.22): code that reaches the global database or
+    data_dir() on its own never touches the real one (the user's data folder, or the clone that the
+    shell's DATAFORGE_HOME names), nor another xdist worker's. Tests that need a layout use the
+    `dataforge_home` fixture, which sets its own; `integration` tests read the real workspaces."""
+    if request.node.get_closest_marker("integration"):
+        return
+    monkeypatch.setenv("DATAFORGE_HOME", str(tmp_path_factory.mktemp("dataforge_home_default")))
+
+
 @pytest.fixture
 def db_url(tmp_path):
     """Isolated SQLite DB per test. Never use a real path."""
