@@ -9,13 +9,16 @@ Update or roll back a NON-editable DataForge install in a Windows venv (df-qryy)
   versions, exported with uv export) and -Requirements <file>[,<file>...] for packages the
   workspaces need that are not DataForge dependencies (e.g. workspaces\GetFinance\requirements.txt).
   Add -Python <major.minor> (the release's .python-version) to move the venv to that Python: when
-  the venv runs another one, it is renamed to <venv>.py<old>-<stamp> and a new one is made with uv
-  (uv venv --seed); the release history moves into the new venv. -Rollback does not cross a Python
-  change: rename the old venv back by hand.
+  the venv runs another one, uv updates itself and installs that Python, the venv is renamed to
+  <venv>.py<old>-<stamp> and a new one is made (uv venv --seed); the release history moves into
+  the new venv. Any failure along that move puts the old venv back as it was and exits 4, so the
+  caller does not roll back (df-n8ac.30). -Rollback does not cross a Python change: rename the old
+  venv back by hand.
 
 What it does:
   1. Refuses while DataForge is in use (exit 3, nothing changed): a process running from the
      venv, or a job_runs row still 'running'/'pending' in <DataForgeHome>\dataforge.db.
+     Exit 4: a Python move failed and the old venv is back, nothing changed either.
   2. Records what is installed now (pip freeze, source of the dataforge distribution).
   3. Installs the wheel non-editable, then lets pip add whatever dependency is missing,
      together with the -Requirements files, in one resolve under the same -Constraints.
@@ -103,20 +106,38 @@ print(json.dumps({
     return ($out -join "`n") | ConvertFrom-Json
 }
 
-function Use-Python([string]$Version) {
-    # site-packages belong to one Python version, so another version means another venv.
-    $have = @(Get-NativeLines "read the venv's Python" {
+function Get-VenvPython {
+    @(Get-NativeLines "read the venv's Python" {
         & $py -P -c "import sys; print('%d.%d' % sys.version_info[:2])"
     })[0].Trim()
-    if ($have -eq $Version) { return }
-    $backup = "$venv.py$have-$stamp"
-    Write-Host "==> the venv runs Python $have, the release needs $Version; the old venv moves to $backup"
-    Move-Item -LiteralPath $venv -Destination $backup
-    Invoke-Native "uv venv" { & $Uv venv --seed --python $Version $venv }
-    $oldState = Join-Path $backup "dataforge-releases"
+}
+
+function Use-Python([string]$Version, [string]$Backup) {
+    # site-packages belong to one Python version, so another version means another venv. uv comes
+    # first: the release may need a newer uv than prod has, and a failure here changes nothing.
+    Invoke-Native "uv self update" { & $Uv self update }
+    Invoke-Native "uv python install $Version" { & $Uv python install $Version }
+    Write-Host "==> the venv moves to $Backup"
+    Move-Item -LiteralPath $venv -Destination $Backup
+    # --no-project: uv must not read the pyproject.toml of whatever folder this runs from.
+    Invoke-Native "uv venv" { & $Uv venv --no-project --seed --python $Version $venv }
+    $oldState = Join-Path $Backup "dataforge-releases"
     if (Test-Path -LiteralPath $oldState) {
         Move-Item -LiteralPath $oldState -Destination (Join-Path $venv "dataforge-releases")
     }
+}
+
+function Restore-Venv([string]$Backup) {
+    # Undo Use-Python: the release history back into the old venv, minus this run's release, and
+    # the old venv back in place of the new one.
+    if (-not (Test-Path -LiteralPath $Backup)) { return }
+    $newState = Join-Path $venv "dataforge-releases"
+    if (Test-Path -LiteralPath $newState) {
+        Remove-Item -Recurse -Force (Join-Path $releases $stamp) -ErrorAction SilentlyContinue
+        Move-Item -LiteralPath $newState -Destination (Join-Path $Backup "dataforge-releases")
+    }
+    if (Test-Path -LiteralPath $venv) { Remove-Item -Recurse -Force -LiteralPath $venv }
+    Move-Item -LiteralPath $Backup -Destination $venv
 }
 
 function Assert-NotRunning {
@@ -264,53 +285,71 @@ if ($Rollback) {
     exit 0
 }
 
+# A Python move is undone on any failure until the release is recorded: the old venv comes back
+# whole and the exit code is 4, so deploy.sh does not roll back a prod that did not change.
+$backup = $null
 if ($Python) {
-    Use-Python $Python
-    New-Item -ItemType Directory -Force -Path $releases | Out-Null
-}
-
-$releaseDir = Join-Path $releases $stamp
-New-Item -ItemType Directory -Path $releaseDir | Out-Null
-$before = Get-InstalledSource
-$freezeBefore = Join-Path $releaseDir "freeze-before.txt"
-Save-Freeze $freezeBefore
-Write-Host "Installed now: $($before.kind) $($before.version) $($before.url)"
-
-$commit = $null
-if ($Ref) {
-    $builtWheel = Build-WheelFromRef $releaseDir
-    $wheelPath = $builtWheel.Path
-    $commit = $builtWheel.Commit
-} else {
-    $src = (Resolve-Path -LiteralPath $Wheel).Path
-    Copy-Item -LiteralPath $src -Destination $releaseDir
-    $wheelPath = Join-Path $releaseDir (Split-Path $src -Leaf)
-}
-$sha = (Get-FileHash -LiteralPath $wheelPath -Algorithm SHA256).Hash.ToLower()
-
-# What -Rollback returns to: the release recorded as current, or, on the first run, the
-# install found in the venv (an editable one is restored with pip install -e).
-$previous = Read-Json $currentFile
-if (-not $previous -and $before.kind -eq "editable") {
-    $source = ([System.Uri]$before.url).LocalPath
-    $previous = [ordered]@{
-        id = "editable"; kind = "editable"; source = $source; wheel = $null; commit = $null
-        sha256 = $null; ref = $null; freeze = $freezeBefore; installed_at = $null
+    $have = Get-VenvPython
+    if ($have -ne $Python) {
+        Write-Host "==> the venv runs Python $have, the release needs $Python"
+        $backup = "$venv.py$have-$stamp"
     }
 }
+try {
+    if ($backup) {
+        Use-Python $Python $backup
+        New-Item -ItemType Directory -Force -Path $releases | Out-Null
+    }
 
-Install-Wheel $wheelPath
-$after = Assert-Installed $false
-if ($after.sha256 -ne $sha) { throw "installed wheel sha256 $($after.sha256) differs from $sha" }
-$freezeAfter = Join-Path $releaseDir "freeze.txt"
-Save-Freeze $freezeAfter
+    $releaseDir = Join-Path $releases $stamp
+    New-Item -ItemType Directory -Path $releaseDir | Out-Null
+    $before = Get-InstalledSource
+    $freezeBefore = Join-Path $releaseDir "freeze-before.txt"
+    Save-Freeze $freezeBefore
+    Write-Host "Installed now: $($before.kind) $($before.version) $($before.url)"
 
-$id = if ($commit) { $commit.Substring(0, 12) } else { "sha256-" + $sha.Substring(0, 12) }
-$current = [ordered]@{
-    id = $id; kind = "wheel"; source = $null; wheel = $wheelPath; commit = $commit
-    sha256 = $sha; ref = $Ref; freeze = $freezeAfter; installed_at = (Get-Date).ToString("s")
-    constraints = $(if ($Constraints) { (Resolve-Path -LiteralPath $Constraints).Path } else { $null })
-    requirements = @($Requirements | ForEach-Object { (Resolve-Path -LiteralPath $_).Path })
+    $commit = $null
+    if ($Ref) {
+        $builtWheel = Build-WheelFromRef $releaseDir
+        $wheelPath = $builtWheel.Path
+        $commit = $builtWheel.Commit
+    } else {
+        $src = (Resolve-Path -LiteralPath $Wheel).Path
+        Copy-Item -LiteralPath $src -Destination $releaseDir
+        $wheelPath = Join-Path $releaseDir (Split-Path $src -Leaf)
+    }
+    $sha = (Get-FileHash -LiteralPath $wheelPath -Algorithm SHA256).Hash.ToLower()
+
+    # What -Rollback returns to: the release recorded as current, or, on the first run, the
+    # install found in the venv (an editable one is restored with pip install -e).
+    $previous = Read-Json $currentFile
+    if (-not $previous -and $before.kind -eq "editable") {
+        $source = ([System.Uri]$before.url).LocalPath
+        $previous = [ordered]@{
+            id = "editable"; kind = "editable"; source = $source; wheel = $null; commit = $null
+            sha256 = $null; ref = $null; freeze = $freezeBefore; installed_at = $null
+        }
+    }
+
+    Install-Wheel $wheelPath
+    $after = Assert-Installed $false
+    if ($after.sha256 -ne $sha) { throw "installed wheel sha256 $($after.sha256) differs from $sha" }
+    $freezeAfter = Join-Path $releaseDir "freeze.txt"
+    Save-Freeze $freezeAfter
+
+    $id = if ($commit) { $commit.Substring(0, 12) } else { "sha256-" + $sha.Substring(0, 12) }
+    $current = [ordered]@{
+        id = $id; kind = "wheel"; source = $null; wheel = $wheelPath; commit = $commit
+        sha256 = $sha; ref = $Ref; freeze = $freezeAfter; installed_at = (Get-Date).ToString("s")
+        constraints = $(if ($Constraints) { (Resolve-Path -LiteralPath $Constraints).Path } else { $null })
+        requirements = @($Requirements | ForEach-Object { (Resolve-Path -LiteralPath $_).Path })
+    }
+} catch {
+    if (-not $backup) { throw }
+    Write-Host "FAILED: $_"
+    Restore-Venv $backup
+    Write-Host "The venv is back on Python $have, as it was; nothing changed."
+    exit 4
 }
 Write-Json $currentFile $current
 if ($previous) { Write-Json $previousFile $previous }
