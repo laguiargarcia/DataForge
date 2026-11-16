@@ -50,7 +50,7 @@ LEVELS = ("1", "2", "3")
 ORIGENS = ("planejado", "descoberto", "defeito")
 # The check that should have caught a bug: the claudemain base list (DataForge adds none). The kind
 # of error (dados, crash, windows...) goes in the free `erro:` label.
-CAMADAS = ("teste", "propriedade", "gui", "estatica", "tipos", "mutacao", "fim-a-fim", "ci", "nenhuma")
+CAMADAS = ("teste", "propriedade", "gui", "estatica", "tipos", "mutacao", "fim-a-fim", "sonar", "nenhuma")
 ACHADO_POR = ("teste", "portao", "ci", "sonar", "revisao", "leitura", "lucas", "uso")
 ETAPAS = ("investigacao", "plano", "implementacao", "revisao", "teste")
 NO_FURO = "nenhum"
