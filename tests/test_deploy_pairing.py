@@ -1,7 +1,10 @@
+import re
 import pytest
 from pathlib import Path
 from dataforge.deploy.models import PipelineModel
-from dataforge.deploy.pairing import load_pipeline, resolve_pairs, source_base, source_equivalents
+from dataforge.deploy.pairing import (
+    check_folder_inside, load_pipeline, resolve_pairs, source_base, source_equivalents,
+)
 
 
 def _mk(ws: Path, rel: str, content: str) -> Path:
@@ -23,6 +26,38 @@ def test_load_pipeline(tmp_path):
     p = load_pipeline(tmp_path, "to-prod")
     assert p.target == "Prod"
     assert p.pairs[0].source == "scripts/**"
+
+
+def test_load_pipeline_reads_utf8_whatever_the_locale(tmp_path):
+    """A pipeline file is UTF-8 (the GUI writes it so); a cp1252 or ASCII default must not misread it."""
+    path = tmp_path / "deploy" / "p.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_bytes("target: Produção\npairs:\n  - {source: 'relatórios/**', target: 'relatórios/'}\n".encode())
+    p = load_pipeline(tmp_path, "p")
+    assert p.target == "Produção"
+    assert p.pairs[0].source == "relatórios/**"
+
+
+def test_check_folder_inside_names_a_folder_outside_by_its_full_path(tmp_path):
+    target, outside = tmp_path / "target", tmp_path / "outside"
+    target.mkdir()
+    outside.mkdir()
+    check_folder_inside(target, target)
+    with pytest.raises(ValueError, match=re.escape(f"deploy target folder {str(outside)!r} resolves outside")):
+        check_folder_inside(target, outside)
+
+
+def test_check_folder_inside_names_a_linked_folder_by_its_path_in_the_target(tmp_path):
+    target, outside = tmp_path / "target", tmp_path / "outside"
+    (target / "data").mkdir(parents=True)
+    outside.mkdir()
+    try:
+        (target / "data" / "link").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("creating a symlink needs a privilege this account lacks (Windows)")
+    check_folder_inside(target, target / "data")
+    with pytest.raises(ValueError, match="deploy target folder 'data/link' resolves outside"):
+        check_folder_inside(target, target / "data" / "link")
 
 
 def test_resolve_pairs_maps_globs_to_target(tmp_path):

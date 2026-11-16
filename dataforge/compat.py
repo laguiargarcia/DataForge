@@ -102,7 +102,7 @@ def db_url(path: Path) -> str:
     SQLAlchemy's own URL escapes it: a folder named 'a%20b', 'q?x=1' or 'a#b' stays part of the path
     instead of being decoded or read as a query string (df-ahua.23.4).
     """
-    return URL.create("sqlite", database=path.resolve().as_posix()).render_as_string(hide_password=False)
+    return URL.create("sqlite", database=path.resolve().as_posix()).render_as_string()
 
 
 def resolve_db(db: Optional[str], workspace_path: Path) -> str:
