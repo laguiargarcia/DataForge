@@ -244,6 +244,12 @@ def read_line(command: str) -> list[Step]:
             line.refuse("não consegui ler este comando (aspas sem par?). Passe o motivo entre aspas "
                         "simples ou duplas, sem heredoc: `bd close <id> --reason \"...\"`.")
         return line.steps
+    return read_commands(commands, line)
+
+
+def read_commands(commands: list[list[str]], line: LineState | None = None) -> list[Step]:
+    """The claims and closes of already split simple commands (word lists), in order."""
+    line = line or LineState()
     for words in commands:
         call = parse_bd(strip_prefix(words))
         if call is not None:
@@ -449,8 +455,13 @@ def furo_candidates(repo: Path, bead: str) -> list[str]:
 
 def check_line(command: str, bd: Bd, repo: Path) -> list[str]:
     """Every gap in the line, each prefixed with the command and bead it belongs to."""
+    return check_steps(read_line(command), bd, repo)
+
+
+def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
+    """Every gap of these steps, each prefixed with the command and bead it belongs to."""
     out = []
-    for step in read_line(command):
+    for step in steps:
         if step.kind == "refuse":
             out.append(step.message)
             continue
@@ -501,7 +512,7 @@ def main(argv: list[str]) -> int:
     if not argv:
         sys.stderr.write(__doc__ or "")
         return 2
-    problems = check_line(shlex.join(["bd", *argv]), Bd(Path.cwd()), project)
+    problems = check_steps(read_commands([["bd", *argv]]), Bd(Path.cwd()), project)
     if problems:
         sys.stdout.write(render(problems) + "\n")
         return 1
