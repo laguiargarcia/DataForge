@@ -44,6 +44,8 @@ dev = [
     "diff-cover>=11.0.1",
     # .git/hooks/pre-commit runs the clone's .venv/bin/python -m pre_commit for every worktree.
     "pre-commit>=4.7.0",
+    "pytest-xdist>=3.8",
+    "pytest-split>=0.10",
 ]
 # The quality gate's tools (scripts/quality/gate.py), pinned exactly: the baseline counts their
 # findings, so a new version would move it. The gate refuses to run with other versions installed,
