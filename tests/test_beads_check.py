@@ -20,6 +20,7 @@ _spec = importlib.util.spec_from_file_location("bead_check", SCRIPT)
 check = importlib.util.module_from_spec(_spec)
 sys.modules["bead_check"] = check  # dataclasses look their module up
 _spec.loader.exec_module(check)
+shellwords = sys.modules["shellwords"]  # scripts/shellwords.py, imported by check.py
 
 NEEDS_BD = pytest.mark.skipif(not HAS_BD, reason="needs the bd CLI (not installed in CI)")
 NEW = "2026-11-20T10:00:00Z"
@@ -145,7 +146,7 @@ def test_an_unreadable_line_without_a_close_or_claim_passes():
 
 # Excluded: a backslash-newline (read as a line continuation) and a reason made only of operators
 # (shlex reads it as one; split_commands says why that is on the safe side).
-@given(st.text().filter(lambda r: "\\\n" not in r and not (r and set(r) <= set(check.OPERATOR_CHARS))))
+@given(st.text().filter(lambda r: "\\\n" not in r and not (r and set(r) <= set(shellwords.OPERATOR_CHARS))))
 def test_any_quoted_reason_reaches_the_check_unchanged(reason):
     steps = check.read_line(f"bd close df-x --reason {shlex.quote(reason)}")
     assert steps[0].reason == reason

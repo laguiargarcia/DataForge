@@ -27,13 +27,15 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: shellwords
+
 import state
+from shellwords import split_commands, strip_prefix
 
 MODE_ENV = "DF_GUARD_MODE"
 MODES = frozenset({"warn", "block", "off"})
@@ -43,10 +45,8 @@ MUTATING_GIT = frozenset(
      "cherry-pick", "revert", "am"}
 )
 FILE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
-WRAPPERS = frozenset({"env", "command", "exec", "nohup", "time", "nice", "sudo"})
 GIT_OPTS_WITH_VALUE = frozenset({"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
 WORKTREE_ADD_OPTS_WITH_VALUE = frozenset({"-b", "-B", "--reason", "--orphan"})
-ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
 CHECK_IGNORE_TIMEOUT = 3
 
 
@@ -58,35 +58,6 @@ def git_check_ignore(main: Path, path: Path) -> bool | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return {0: True, 1: False}.get(r.returncode)
-
-
-def split_commands(command: str) -> list[list[str]]:
-    """Simple commands of a shell line, as word lists. Operators split; redirections are dropped."""
-    text = command.replace("\\\n", " ").replace("\n", " ; ")
-    lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()<>")
-    lex.whitespace_split = True
-    out, cur, skip = [], [], False
-    for tok in lex:
-        if skip:
-            skip = False
-        elif "<" in tok or ">" in tok:
-            skip = True  # the redirection target (shlex splits `2>&1` into `2`, `>&`, `1`)
-        elif tok and set(tok) <= set(";&|()"):
-            out.append(cur)
-            cur = []
-        else:
-            cur.append(tok)
-    out.append(cur)
-    return [c for c in out if c]
-
-
-def strip_prefix(words: list[str]) -> list[str]:
-    """Drop leading VAR=value assignments and wrappers like `env` or `nohup`."""
-    i = 0
-    while i < len(words) and (ASSIGNMENT.match(words[i]) or words[i] in WRAPPERS
-                              or (i and words[i - 1] == "env" and words[i].startswith("-"))):
-        i += 1
-    return words[i:]
 
 
 def is_pytest(words: list[str]) -> bool:

@@ -259,22 +259,21 @@ def test_creating_a_worktree_claims_its_path(repo):
     assert str((repo / ".worktrees" / "df-new1").resolve()) in held
 
 
+@pytest.mark.parametrize("command", [
+    'git commit -m "a -> b" && git -C {main} pull',  # df-pabj: the quoted arrow hid the &&
+    "if true; then git -C {main} pull; fi",
+])
+def test_a_command_after_a_quoted_arrow_or_a_shell_keyword_is_checked(repo, command):
+    wt = add_worktree(repo, "df-abc1")
+    assert "main checkout" in context(run(bash(command.format(main=q(repo)), wt), repo))
+
+
 def test_removing_a_live_sessions_worktree_warns(repo):
     wt = add_worktree(repo, "df-abc1")
     register(repo, OTHER_SESSION, worktrees=[wt])
     assert run(bash(f"git worktree remove --force {q(wt)}", repo), repo) is not None
     register(repo, OTHER_SESSION)
     assert run(bash(f"git worktree remove {q(wt)}", repo), repo) is None
-
-
-@pytest.mark.parametrize(("command", "expected"), [
-    ("a && b || c ; d | e & f", [["a"], ["b"], ["c"], ["d"], ["e"], ["f"]]),
-    ("git log > out.txt 2>&1", [["git", "log", "2"]]),
-    ("(cd x; git pull)", [["cd", "x"], ["git", "pull"]]),
-    ("a \\\n b\nc", [["a", "b"], ["c"]]),
-])
-def test_split_commands(command, expected):
-    assert guard.split_commands(command) == expected
 
 
 @pytest.fixture(scope="module")
