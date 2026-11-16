@@ -3,8 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "0 6 * * 1"   # weekly: flaky-hunt and every mutation target (dependency upgrades: Dependabot)
   workflow_dispatch:
 # One run at a time per ref (df-huj7). On main, runs queue instead of overlapping: SonarCloud refuses
 # an analysis of an older commit submitted after a newer one, which failed the sonar job when merges
@@ -54,7 +52,54 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-quality, path: report/, if-no-files-found: ignore }
-  tests:
+  # The engine suite runs split across shards (pytest-split, by each test's duration) and, inside each
+  # shard, across the runner's cores (pytest-xdist): adding tests adds shards, not minutes (df-n8ac.13).
+  # Every shard of a run uses the same shuffle seed (the run id), so the groups are disjoint and cover
+  # the suite; a rerun keeps the seed. Each shard stores its own tests' durations, and the `tests` /
+  # `tests-windows` jobs merge them into the cache the next run splits by. The required checks are
+  # those two jobs, which pass only when every part passed.
+  tests-shard:
+    name: tests-shard (${{ matrix.shard }}/2)
+    strategy:
+      fail-fast: false
+      matrix: { shard: [1, 2] }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true, cache-python: true }
+      - name: Qt system libraries (some engine tests import the GUI modules)
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - name: Install
+        run: uv sync --frozen
+      - name: Durations of the last run
+        uses: actions/cache/restore@v6
+        with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}", restore-keys: test-durations-linux- }
+      - name: Engine tests
+        shell: bash
+        # sys.monitoring tracer: branch coverage at a fraction of the C tracer's cost (Python 3.14+).
+        env: { COVERAGE_CORE: sysmon, SHARD: "${{ matrix.shard }}" }
+        run: |
+          mkdir -p report
+          uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
+            -n auto --randomly-seed=${{ github.run_id }} \
+            --splits 2 --group "$SHARD" --store-durations --clean-durations \
+            --cov=dataforge --cov-branch --cov-report= 2>&1 | tee "report/tests-engine-$SHARD.txt"
+      - name: Name the coverage data after the shard
+        if: always()
+        run: if [ -f .coverage ]; then mv .coverage ".coverage.linux-${{ matrix.shard }}"; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: "coverage-part-linux-${{ matrix.shard }}", path: ".coverage.linux-*", include-hidden-files: true, if-no-files-found: ignore }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: "durations-linux-${{ matrix.shard }}", path: .test_durations, include-hidden-files: true, if-no-files-found: ignore }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: "report-tests-engine-${{ matrix.shard }}", path: report/, if-no-files-found: ignore }
+  tests-gui:
+    # Its own process: the GUI first crashed the full suite (df-t5cg). One job, not split: about 15 s.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -64,36 +109,77 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
       - name: Install
         run: uv sync --frozen
-      - name: Engine tests
-        shell: bash
-        # sys.monitoring tracer: branch coverage at a fraction of the C tracer's cost (Python 3.14+).
-        env: { COVERAGE_CORE: sysmon }
-        run: |
-          mkdir -p report
-          uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
-            --cov=dataforge --cov-branch --cov-report= 2>&1 | tee report/tests-engine.txt
-      - name: GUI tests (separate run; GUI first crashes the full suite)
+      - name: GUI tests
         shell: bash
         env: { QT_QPA_PLATFORM: offscreen, COVERAGE_CORE: sysmon }
         run: |
+          mkdir -p report
           uv run --frozen --no-sync python -m pytest tests/test_gui_*.py -p no:cacheprovider \
-            --cov=dataforge --cov-branch --cov-append --cov-report= 2>&1 | tee report/tests-gui.txt
-      - name: Coverage report (both runs merged, for the sonar job)
+            --cov=dataforge --cov-branch --cov-report= 2>&1 | tee report/tests-gui.txt
+      - name: Name the coverage data after the job
         if: always()
-        run: if [ -f .coverage ]; then uv run --frozen --no-sync python -m coverage xml -o coverage.xml; else echo "no coverage data"; fi
+        run: if [ -f .coverage ]; then mv .coverage .coverage.gui; fi
       - uses: actions/upload-artifact@v7
         if: always()
-        # Read by the report job, which comments on the PR.
-        with: { name: report-tests, path: report/, if-no-files-found: ignore }
+        with: { name: coverage-part-gui, path: .coverage.gui, include-hidden-files: true, if-no-files-found: ignore }
       - uses: actions/upload-artifact@v7
         if: always()
+        with: { name: report-tests-gui, path: report/, if-no-files-found: ignore }
+  tests:
+    # Required check: every engine shard and the GUI job passed. Merges their coverage into the
+    # coverage.xml the sonar job reads, and their durations into the cache the next run splits by.
+    needs: [tests-shard, tests-gui]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true, cache-python: true }
+      - name: Install coverage (the dev group, without the project)
+        run: uv sync --frozen --only-group dev
+      - uses: actions/download-artifact@v8
+        continue-on-error: true   # a part that died before writing coverage leaves no artifact
+        with: { pattern: coverage-part-*, path: coverage-parts, merge-multiple: true }
+      - name: Coverage report (every part merged, for the sonar job)
+        run: |
+          if ls coverage-parts/.coverage.* >/dev/null 2>&1; then
+            uv run --frozen --no-sync python -m coverage combine coverage-parts
+            uv run --frozen --no-sync python -m coverage xml -o coverage.xml
+          else
+            echo "no coverage data"
+          fi
+      - uses: actions/upload-artifact@v7
         # Read by the sonar job.
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
-  tests-windows:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with: { pattern: durations-linux-*, path: durations }
+      - name: Merge the shards' durations
+        id: durations
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(durations/*/.test_durations)
+          if [ "${#files[@]}" -gt 0 ]; then
+            uv run --no-project python scripts/ci_durations.py .test_durations "${files[@]}"
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/cache/save@v6
+        if: steps.durations.outputs.merged == 'true'
+        with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
+      - name: Every part passed
+        env: { SHARDS: "${{ needs.tests-shard.result }}", GUI: "${{ needs.tests-gui.result }}" }
+        run: |
+          echo "tests-shard: $SHARDS, tests-gui: $GUI"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ]
+  tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
-    # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). A separate
-    # job, not a matrix on `tests`: the repo ruleset requires a check named exactly `tests`. No
-    # coverage (the sonar job reads the ubuntu run) and no GUI tests.
+    # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage
+    # (the sonar job reads the ubuntu run) and no GUI tests.
+    name: tests-windows-shard (${{ matrix.shard }}/3)
+    strategy:
+      fail-fast: false
+      matrix: { shard: [1, 2, 3] }
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -102,18 +188,85 @@ jobs:
         with: { enable-cache: true, cache-python: true }
       - name: Install
         run: uv sync --frozen
+      - name: Durations of the last run
+        uses: actions/cache/restore@v6
+        with: { path: .test_durations, key: "test-durations-windows-${{ github.run_id }}", restore-keys: test-durations-windows-, enableCrossOsArchive: true }
       - name: Engine tests
         shell: bash   # pipefail: pytest's exit code survives the tee
         # Only stdout/stderr become UTF-8, so the report file is readable. PYTHONUTF8 stays unset:
         # open() without encoding= must keep the cp1252 default that production has.
-        env: { PYTHONIOENCODING: utf-8 }
+        env: { PYTHONIOENCODING: utf-8, SHARD: "${{ matrix.shard }}" }
         run: |
           mkdir -p report
-          uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider 2>&1 | tee report/tests-windows.txt
+          uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
+            -n auto --randomly-seed=${{ github.run_id }} \
+            --splits 3 --group "$SHARD" --store-durations --clean-durations 2>&1 | tee "report/tests-windows-$SHARD.txt"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: "durations-windows-${{ matrix.shard }}", path: .test_durations, include-hidden-files: true, if-no-files-found: ignore }
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
-        with: { name: report-tests-windows, path: report/, if-no-files-found: ignore }
+        with: { name: "report-tests-windows-${{ matrix.shard }}", path: report/, if-no-files-found: ignore }
+  tests-windows:
+    # Required check: every Windows shard passed. Merges their durations for the next run.
+    needs: [tests-windows-shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true, cache-python: true }
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with: { pattern: durations-windows-*, path: durations }
+      - name: Merge the shards' durations
+        id: durations
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(durations/*/.test_durations)
+          if [ "${#files[@]}" -gt 0 ]; then
+            uv run --no-project python scripts/ci_durations.py .test_durations "${files[@]}"
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/cache/save@v6
+        if: steps.durations.outputs.merged == 'true'
+        with: { path: .test_durations, key: "test-durations-windows-${{ github.run_id }}", enableCrossOsArchive: true }
+      - name: Every shard passed
+        env: { SHARDS: "${{ needs.tests-windows-shard.result }}" }
+        run: |
+          echo "tests-windows-shard: $SHARDS"
+          [ "$SHARDS" = "success" ]
+  orders:
+    # More shuffles of the engine suite on every PR and push, in parallel (df-n8ac.14): an
+    # order-dependent test fails here with its seed in the run summary instead of in a later run.
+    # Reproduce with the same pytest command plus --randomly-seed=<seed> (docs/testing.md).
+    name: orders (${{ matrix.order }}/2)
+    strategy:
+      fail-fast: false
+      matrix: { order: [1, 2] }
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true, cache-python: true }
+      - name: Qt system libraries
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - name: Install
+        run: uv sync --frozen
+      - name: Engine suite in another random order
+        shell: bash
+        env: { ORDER: "${{ matrix.order }}", RUN: "${{ github.run_id }}" }
+        run: |
+          mkdir -p report
+          seed=$(( RUN + ORDER ))
+          echo "orders $ORDER: --randomly-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
+          uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
+            -n auto --randomly-seed="$seed" 2>&1 | tee "report/orders-$ORDER.txt"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: "report-orders-${{ matrix.order }}", path: report/, if-no-files-found: ignore }
   sonar:
     # SonarQube Cloud (df-ahua.1): coverage of new code, cognitive complexity, duplication, history.
     # A complement to the quality job, not a replacement. Required on main (repo ruleset,
@@ -143,7 +296,7 @@ jobs:
   mutation-targets:
     # Which testloop.toml targets to mutate (df-gqke). On a PR, only those whose module, tests or
     # first-party imports changed, or every one when a shared file changed
-    # (scripts/testloop/affected.py). On push to main, weekly and by hand: every target, which also
+    # (scripts/testloop/affected.py). On push to main and by hand: every target, which also
     # audits what PRs skipped.
     runs-on: ubuntu-latest
     outputs: { targets: "${{ steps.pick.outputs.targets }}" }
@@ -255,42 +408,11 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-windows-smoke, path: report/, if-no-files-found: ignore }
-  flaky-hunt:
-    # Order-dependent tests (df-ahua.8): the engine suite five times, each in a fresh random order
-    # (pytest-randomly). Weekly and by hand only. A failed run names its seed; the same command with
-    # --randomly-seed=<seed> reproduces the order locally (docs/testing.md).
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.3
-        with: { enable-cache: true, cache-python: true }
-      - name: Qt system libraries
-        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
-      - name: Install
-        run: uv sync --frozen
-      - name: Engine suite in five random orders
-        shell: bash
-        run: |
-          failed=""
-          for run in 1 2 3 4 5; do
-            seed=$SRANDOM   # bash 5.1+: 32 random bits per read
-            echo "::group::run $run: --randomly-seed=$seed"
-            uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider -q \
-              --randomly-seed="$seed" || failed="$failed $seed"
-            echo "::endgroup::"
-          done
-          if [ -n "$failed" ]; then
-            echo "flaky-hunt: the engine suite failed with --randomly-seed:$failed" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "flaky-hunt: five random orders passed" >> "$GITHUB_STEP_SUMMARY"
   report:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
-    needs: [leak-scan, quality, tests, tests-windows, mutation-targets, mutation, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
