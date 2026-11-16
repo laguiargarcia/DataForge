@@ -30,6 +30,7 @@ import sys
 import sysconfig
 import tempfile
 import tokenize
+import tomllib
 from collections import defaultdict
 from dataclasses import dataclass
 from importlib import metadata
@@ -41,7 +42,7 @@ BASELINE = HERE / "baseline.json"
 # Findings in gitignored (private) files: kept out of the published baseline so that their paths
 # never leave this machine.
 LOCAL_BASELINE = HERE / "baseline.local.json"
-REQUIREMENTS = HERE / "requirements.txt"
+PYPROJECT = ROOT / "pyproject.toml"
 # Gitignored folders that still hold code worth gating: private workspaces and their tests.
 PRIVATE_ROOTS = ("workspaces", "tests")
 SKIP_PARTS = {"node_modules", ".venv", "venv", "__pycache__"}
@@ -119,12 +120,17 @@ def _relative(path: str) -> str | None:
 # ---------------------------------------------------------------------------- tools
 
 
+def tool_pins(pyproject: Path) -> dict[str, str]:
+    """The exact tool versions the baseline was made with: the `quality` dependency group of
+    pyproject.toml, which uv.lock installs into every venv (``name==version`` entries only)."""
+    group = tomllib.loads(pyproject.read_text(encoding="utf-8"))["dependency-groups"]["quality"]
+    pins = (entry.partition("==") for entry in group)
+    return {name.strip(): version.strip() for name, sep, version in pins if sep}
+
+
 def _check_tool_versions() -> None:
     wrong = []
-    for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
-        name, sep, wanted = line.split("#")[0].strip().partition("==")
-        if not sep:
-            continue
+    for name, wanted in tool_pins(PYPROJECT).items():
         try:
             have = metadata.version(name)
         except metadata.PackageNotFoundError:
@@ -133,8 +139,8 @@ def _check_tool_versions() -> None:
             wrong.append(f"{name} {have} (wanted {wanted})")
     if wrong:
         sys.exit(
-            "quality gate: tool versions differ from scripts/quality/requirements.txt, so findings would not "
-            f"match the baseline: {', '.join(wrong)}.\nInstall them: {sys.executable} -m pip install -r {REQUIREMENTS.relative_to(ROOT)}"
+            "quality gate: tool versions differ from the `quality` group in pyproject.toml, so findings "
+            f"would not match the baseline: {', '.join(wrong)}.\nInstall them: uv sync"
         )
 
 

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "dataforge"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "platformdirs>=4.0",
     "pydantic>=2.0",
@@ -28,6 +28,35 @@ dependencies = [
     "requests>=2.31",
     "python-dotenv>=1.0",
 ]
+
+# Everything else the repo's tooling needs: tests, the test loop (scripts/testloop/) and coverage. One
+# uv.lock pins these and the runtime dependencies for dev, CI and prod (`uv sync` installs both;
+# prod skips this group). Dependabot proposes the upgrades (.github/dependabot.yml).
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    # tests/conftest.py loads starlette.testclient, which deprecates plain httpx for httpx2.
+    "httpx2>=2.16.0",
+    "hypothesis>=6.170.14",
+    "pytest-cov>=7.1.0",
+    "pytest-randomly>=5.1.0",
+    "mutmut>=3.8.1",
+    "diff-cover>=11.0.1",
+]
+# The quality gate's tools (scripts/quality/gate.py), pinned exactly: the baseline counts their
+# findings, so a new version would move it. The gate refuses to run with other versions installed,
+# and .pre-commit-config.yaml repeats these pins for its own environment.
+quality = [
+    "ruff==0.17.4",
+    "vulture==2.16",
+    "import-linter==2.16",
+    "deptry==0.25.1",
+]
+
+[tool.uv]
+required-version = ">=0.11.11"
+# `uv sync` installs both groups; prod and the Windows smoke opt out (--no-default-groups).
+default-groups = ["dev", "quality"]
 
 [tool.ruff]
 extend-exclude = ["scripts/testloop/evals"]

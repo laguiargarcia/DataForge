@@ -20,7 +20,7 @@ repos:
         # --stage: when findings were fixed, the lowered baseline goes into this same commit.
         entry: python scripts/quality/gate.py check --stage
         language: python
-        # Same pins as scripts/quality/requirements.txt; the gate fails if they drift apart.
+        # Same pins as the `quality` group in pyproject.toml; the gate fails if they drift apart.
         additional_dependencies: ["ruff==0.17.4", "vulture==2.16", "import-linter==2.16", "deptry==0.25.1"]
         pass_filenames: false
         # pyproject.toml holds the rules, the contracts and the dependencies deptry checks.
