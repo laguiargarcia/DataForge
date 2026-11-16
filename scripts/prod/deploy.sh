@@ -10,6 +10,7 @@
 # (uv export), then scripts/prod/update-prod.ps1 of that same commit, which moves the venv to the
 # release's Python when it changed, installs, runs `pip check` and `dataforge --help`, and records
 # the release. update-prod exit 3 means prod was busy and nothing changed: run this again later.
+# Exit 4 means the move to a new Python failed and update-prod put the old venv back as it was.
 # Any other failure rolls back to the previous release.
 #
 # Paths come from ~/.config/dataforge/prod.env (DATAFORGE_PROD_CONFIG overrides), never from the
@@ -59,6 +60,8 @@ case $rc in
     0) echo "deploy: ${sha:0:12} OK" ;;
     3) echo "deploy: prod is busy, nothing changed; run scripts/prod/deploy.sh again later" >&2
        exit 3 ;;
+    4) echo "deploy: ${sha:0:12} FAILED moving prod to the release's Python; prod is as it was" >&2
+       exit 4 ;;
     *) echo "deploy: ${sha:0:12} FAILED (exit $rc); rolling back to the previous release" >&2
        update_prod -Rollback || echo "deploy: the rollback failed too; prod needs a look" >&2
        exit "$rc" ;;

@@ -94,6 +94,14 @@ def test_a_busy_prod_is_left_alone_not_rolled_back(prod):
     assert len(_ps_calls(prod["log"])) == 1
 
 
+def test_a_failed_python_move_is_not_rolled_back(prod):
+    # update-prod already put the old venv back (exit 4, df-n8ac.30); a rollback would move prod.
+    r = _deploy(prod["repo"], {**prod["env"], "STUB_RCS": "4"})
+    assert r.returncode == 4
+    assert "prod is as it was" in r.stderr
+    assert len(_ps_calls(prod["log"])) == 1
+
+
 def test_a_failed_install_rolls_back(prod):
     r = _deploy(prod["repo"], {**prod["env"], "STUB_RCS": "1 0"})
     assert r.returncode == 1
