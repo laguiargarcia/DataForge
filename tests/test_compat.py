@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 from unittest.mock import patch
+from sqlalchemy.engine import make_url
 from dataforge.compat import (
     DEFAULT_API_PORT, api_port, data_dir, db_url, resolve_workspace, resolve_db, list_workspaces,
 )
@@ -64,7 +65,7 @@ def test_db_url_windows():
     with patch.object(type(win_path), "resolve", return_value=FakeResolved()):
         result = db_url(win_path)
 
-    assert result.startswith("sqlite:///C:/")
+    assert make_url(result).database == win_posix
     assert "\\" not in result
 
 

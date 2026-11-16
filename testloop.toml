@@ -28,7 +28,7 @@ min_score = 0.9777
 [targets."dataforge/deploy/pairing.py"]
 tests = ["tests/test_deploy_pairing*.py", "tests/test_deploy_plan*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-min_score = 0.9197
+min_score = 0.9548
 
 [targets."scripts/leakguard.py"]
 tests = ["tests/test_leakguard.py"]

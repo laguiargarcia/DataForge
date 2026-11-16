@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 import platformdirs
+from sqlalchemy.engine import URL
 
 # fullmatch, not ^...$: '$' also matches before a trailing newline, so 'Prod\n' passed (df-utq8).
 _VALID_NAME = re.compile(r"[A-Za-z0-9_-]+")
@@ -95,12 +96,13 @@ def run_lock_path(workspace_dir: Path) -> Path:
 
 def db_url(path: Path) -> str:
     """
-    Return a cross-platform SQLite URL with forward slashes.
+    Return the SQLite URL of the file at *path*, on any platform and for any folder name.
 
-    Uses path.resolve().as_posix() to guarantee forward slashes on Windows,
-    which SQLAlchemy requires for SQLite URLs.
+    The path is resolved and written with forward slashes (SQLAlchemy requires them on Windows), and
+    SQLAlchemy's own URL escapes it: a folder named 'a%20b', 'q?x=1' or 'a#b' stays part of the path
+    instead of being decoded or read as a query string (df-ahua.23.4).
     """
-    return f"sqlite:///{path.resolve().as_posix()}"
+    return URL.create("sqlite", database=path.resolve().as_posix()).render_as_string()
 
 
 def resolve_db(db: Optional[str], workspace_path: Path) -> str:

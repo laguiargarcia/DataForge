@@ -347,9 +347,20 @@ def test_fast_check_leaves_deptry_counts_alone(repo):
     assert gate.load(gate.BASELINE) == {"pub.py": {"deptry:DEP001": 1}}
 
 
+def test_tool_pins_are_the_exact_entries_of_the_quality_group(tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    _write(pyproject, '[dependency-groups]\nquality = ["ruff==0.17.4", "vulture >= 2", " deptry == 0.25.1 "]\n'
+                      'dev = ["pytest==9.2.0"]\n')
+    assert gate.tool_pins(pyproject) == {"ruff": "0.17.4", "deptry": "0.25.1"}
+
+
+def test_the_repo_pins_every_tool_the_gate_runs():
+    assert set(gate.tool_pins(gate.PYPROJECT)) == {"ruff", "vulture", "import-linter", "deptry"}
+
+
 def test_real_deptry_reports_an_undeclared_import_and_nothing_on_a_clean_tree(tmp_path, monkeypatch):
-    """End to end with the pinned deptry: the gate installs it (scripts/quality/requirements.txt);
-    the test jobs do not, so there this one test is skipped and the mocked ones above stand."""
+    """End to end with the pinned deptry (the `quality` group in pyproject.toml, in every `uv sync`
+    venv); skipped only where deptry is missing, and the mocked ones above stand."""
     pytest.importorskip("deptry")
     _write(tmp_path / "pyproject.toml", '[project]\nname = "t"\nversion = "0"\ndependencies = []\n')
     _write(tmp_path / "scripts" / "a.py", "import json\nimport b\n")   # stdlib and a sibling: fine

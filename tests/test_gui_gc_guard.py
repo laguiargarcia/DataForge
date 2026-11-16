@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import threading
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -85,9 +86,16 @@ def _run_scenario(mode):
                           env=env, timeout=120, check=False)
 
 
+# df-3yh is a PySide6 6.12 regression: on 6.11.1 (uv.lock, as prod) a widget freed off the GUI
+# thread does not crash, even with gc.collect() in the worker; on 6.12.0 it segfaults every time.
+_CRASHES_OFF_THREAD = tuple(int(n) for n in version("PySide6").split(".")[:2]) >= (6, 12)
+
+
+@pytest.mark.skipif(not _CRASHES_OFF_THREAD,
+                    reason="PySide6 before 6.12 does not crash on Qt garbage freed off the GUI thread")
 def test_qt_garbage_freed_by_a_worker_thread_crashes_without_the_guard():
-    # The control: the scenario reproduces df-3yh (30 of 30 local runs crashed), so the guarded
-    # run below passing means something.
+    # The control: where the bug exists the scenario reproduces it (30 of 30 runs crashed on 6.12),
+    # so the guarded run below passing means something.
     assert _run_scenario("noguard").returncode != 0
 
 

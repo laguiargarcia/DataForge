@@ -102,9 +102,9 @@ def test_the_default_home_on_windows_is_local_app_data_dataforge(tmp_path, monke
 
 # --- db_url ---------------------------------------------------------------------------------------
 
-# Characters a real profile or folder name can hold: space, accents, URL metacharacters. '%' and '?'
-# have their own tests below (df-ahua.23.4); ':' cannot be in a Windows folder name.
-_SEGMENT_CHARS = "abc XYZ09_-.éçãü#@&+=,;'()[]!$~" + (":" if sys.platform != "win32" else "")
+# Characters a real profile or folder name can hold: space, accents, URL metacharacters, '%' and
+# (outside Windows, whose folder names cannot hold them) ':' and '?' (df-ahua.23.4).
+_SEGMENT_CHARS = "abc XYZ09_-.éçãü#@&+=,;'()[]!$~%" + (":?" if sys.platform != "win32" else "")
 _SEGMENT = st.text(alphabet=_SEGMENT_CHARS, min_size=1, max_size=8).filter(
     lambda s: s.strip(" .") == s and s not in (".", "..") and s.upper() not in _RESERVED)
 
@@ -145,8 +145,6 @@ def test_a_percent_sign_not_followed_by_hex_is_kept(tmp_path):
     _opens(tmp_path / "100%" / "x.db")
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="df-ahua.23.4: SQLAlchemy decodes '%20' in the URL db_url builds")
 def test_a_percent_escape_in_a_folder_name_is_not_decoded(tmp_path):
     """A folder literally named 'a%20b' holds the database, not a folder 'a b' next to it."""
     (tmp_path / "a%20b").mkdir()
@@ -154,8 +152,6 @@ def test_a_percent_escape_in_a_folder_name_is_not_decoded(tmp_path):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="NTFS cannot hold '?' in a folder name")
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="df-ahua.23.4: '?' in the path starts the URL query string")
 def test_a_question_mark_in_a_folder_name_is_part_of_the_path(tmp_path):
     """A folder named 'q?x=1' holds the database; the '?' does not cut the path short."""
     (tmp_path / "q?x=1").mkdir()
