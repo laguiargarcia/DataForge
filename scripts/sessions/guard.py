@@ -10,7 +10,8 @@ call and reports two kinds of trespass:
   pytest, in the main checkout or in another live session's worktree; and `git worktree remove` of a
   worktree another live session works in.
 
-Not reported: anything outside the repository (scratchpad, temp dirs, the memory directory, other
+Not reported: `git pull --ff-only` in the main checkout, which keeps it equal to origin/main and
+fires the post-merge hook that deploys to prod (df-n8ac.15); anything outside the repository (scratchpad, temp dirs, the memory directory, other
 repos), gitignored files of the main checkout (docs/, CLAUDE.md, .claude/, .beads/...), a separate
 git checkout nested in it (a private workspace with its own rules), the repo's git dir, and the
 session's own worktrees. A worktree nobody alive holds becomes the session's on first use, and so
@@ -188,9 +189,14 @@ class Guard:
             if args[0] in {"remove", "move"} and self.repo.worktree_of(path) == path:
                 return self.worktree(path, f"`git worktree {args[0]}`", claim=False)
             return None
-        if sub in MUTATING_GIT:
+        if sub in MUTATING_GIT and not self.follows_origin(where, sub, args):
             return self.check_dir(where, f"git {sub}")
         return None
+
+    def follows_origin(self, where: Path, sub: str, args: list[str]) -> bool:
+        """`git pull --ff-only` outside any worktree: the main checkout catching up with origin/main,
+        which fires the post-merge hook that deploys to prod (df-n8ac.15)."""
+        return sub == "pull" and "--ff-only" in args and self.repo.worktree_of(where) is None
 
     def check_bash(self, command: str) -> list[str]:
         if ALLOW_RE.search(command):

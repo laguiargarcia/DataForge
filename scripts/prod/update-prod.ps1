@@ -5,13 +5,17 @@ Update or roll back a NON-editable DataForge install in a Windows venv (df-qryy)
   update-prod.ps1 -VenvPath <venv> -Ref <git ref> [-Repo <git repo>]
   update-prod.ps1 -VenvPath <venv> -Rollback
 
-  Add -Constraints <file> to pin the dependencies (scripts\prod\constraints-win.txt holds the
-  versions prod runs) and -Requirements <file>[,<file>...] for packages the workspaces need
-  that are not DataForge dependencies (e.g. workspaces\GetFinance\requirements.txt).
+  Add -Constraints <file> to pin the dependencies (scripts/prod/deploy.sh passes uv.lock's
+  versions, exported with uv export) and -Requirements <file>[,<file>...] for packages the
+  workspaces need that are not DataForge dependencies (e.g. workspaces\GetFinance\requirements.txt).
+  Add -Python <major.minor> (the release's .python-version) to move the venv to that Python: when
+  the venv runs another one, it is renamed to <venv>.py<old>-<stamp> and a new one is made with uv
+  (uv venv --seed); the release history moves into the new venv. -Rollback does not cross a Python
+  change: rename the old venv back by hand.
 
 What it does:
-  1. Refuses while DataForge is in use: a process running from the venv, or a job_runs row
-     still 'running'/'pending' in <DataForgeHome>\dataforge.db.
+  1. Refuses while DataForge is in use (exit 3, nothing changed): a process running from the
+     venv, or a job_runs row still 'running'/'pending' in <DataForgeHome>\dataforge.db.
   2. Records what is installed now (pip freeze, source of the dataforge distribution).
   3. Installs the wheel non-editable, then lets pip add whatever dependency is missing,
      together with the -Requirements files, in one resolve under the same -Constraints.
@@ -42,6 +46,8 @@ param(
     [string]$StateDir,
     [string]$Constraints,
     [string[]]$Requirements = @(),
+    [string]$Python,
+    [string]$Uv = "uv",
     [switch]$IgnoreRunRows
 )
 $ErrorActionPreference = "Stop"
@@ -95,6 +101,22 @@ print(json.dumps({
 '@
     $out = @(Get-NativeLines "read installed dataforge" { & $py -P -c $code })
     return ($out -join "`n") | ConvertFrom-Json
+}
+
+function Use-Python([string]$Version) {
+    # site-packages belong to one Python version, so another version means another venv.
+    $have = @(Get-NativeLines "read the venv's Python" {
+        & $py -P -c "import sys; print('%d.%d' % sys.version_info[:2])"
+    })[0].Trim()
+    if ($have -eq $Version) { return }
+    $backup = "$venv.py$have-$stamp"
+    Write-Host "==> the venv runs Python $have, the release needs $Version; the old venv moves to $backup"
+    Move-Item -LiteralPath $venv -Destination $backup
+    Invoke-Native "uv venv" { & $Uv venv --seed --python $Version $venv }
+    $oldState = Join-Path $backup "dataforge-releases"
+    if (Test-Path -LiteralPath $oldState) {
+        Move-Item -LiteralPath $oldState -Destination (Join-Path $venv "dataforge-releases")
+    }
 }
 
 function Assert-NotRunning {
@@ -217,7 +239,9 @@ $currentFile = Join-Path $StateDir "current.json"
 $previousFile = Join-Path $StateDir "previous.json"
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
-Assert-NotRunning
+# Exit 3: refused, nothing changed (a job or the API is running), so the caller retries later
+# instead of rolling back. Any other failure exits 1, possibly after changing the venv.
+try { Assert-NotRunning } catch { Write-Host "REFUSED: $_"; exit 3 }
 
 if ($Rollback) {
     $target = Read-Json $previousFile
@@ -238,6 +262,11 @@ if ($Rollback) {
     if ($current) { Write-Json $previousFile $current } else { Remove-Item -Force $previousFile }
     Write-Host "ROLLBACK OK: $($target.id)"
     exit 0
+}
+
+if ($Python) {
+    Use-Python $Python
+    New-Item -ItemType Directory -Force -Path $releases | Out-Null
 }
 
 $releaseDir = Join-Path $releases $stamp

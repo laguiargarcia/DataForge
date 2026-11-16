@@ -223,7 +223,7 @@ def test_notebook_edits_are_checked_by_their_path(repo):
 @pytest.mark.parametrize("command", [
     "git pull", "git checkout -b x", "git switch main", "git reset --hard origin/main",
     "git stash", "git -c core.x=y commit -m x", "pytest -q", ".venv/bin/python -m pytest tests",
-    "FOO=1 git pull --ff-only", "echo hi && git rebase origin/main", "cd . ; git merge x",
+    "FOO=1 git pull --rebase", "echo hi && git rebase origin/main", "cd . ; git merge x",
 ])
 def test_working_tree_commands_in_the_main_checkout_warn(repo, command):
     assert "main checkout" in context(run(bash(command, repo), repo))
@@ -232,6 +232,7 @@ def test_working_tree_commands_in_the_main_checkout_warn(repo, command):
 @pytest.mark.parametrize("command", [
     "git status", "git fetch origin", "git log --oneline", "git diff", "echo 'git pull'",
     "git push origin feat/x", "grep -r pytest .", "DF_GUARD_ALLOW=1 git pull",
+    "git pull --ff-only", "FOO=1 git pull --ff-only origin main",
     "cat <<'EOF'\ndon't\nEOF",
 ])
 def test_reading_and_explicitly_allowed_commands_in_the_main_checkout_pass(repo, command):
@@ -243,6 +244,14 @@ def test_commands_follow_cd_and_git_dash_c(repo, tmp_path):
     assert run(bash(f"cd {q(wt)} && git pull && python -m pytest", repo), repo) is None
     assert run(bash(f"git -C {q(repo)} checkout main", wt), repo) is not None
     assert run(bash(f"cd {q(tmp_path)} && git pull", repo), repo) is None
+
+
+def test_a_fast_forward_pull_in_a_live_sessions_worktree_still_warns(repo):
+    """Only the main checkout may follow origin/main by --ff-only (df-n8ac.15); a worktree's branch
+    belongs to the session working in it."""
+    wt = add_worktree(repo, "df-abc1")
+    register(repo, OTHER_SESSION, worktrees=[wt])
+    assert "claude-bbbbbbbb" in context(run(bash("git pull --ff-only", wt), repo))
 
 
 def test_a_mutating_command_in_a_live_sessions_worktree_warns(repo):
