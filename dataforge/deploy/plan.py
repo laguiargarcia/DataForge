@@ -2,6 +2,7 @@ import hashlib
 import warnings
 from pathlib import Path, PurePosixPath
 import yaml
+from .. import yamlio
 from pydantic import TypeAdapter, ValidationError
 from .models import DeployPlan, ItemChange, Action, Kind, PipelineModel, LEDGER_REL
 from .ignore import DeployIgnore
@@ -71,7 +72,7 @@ def _load_yaml_dict(path: Path):
     tag ('!!bool abc' -> KeyError, '!!timestamp abc' -> AttributeError, '!!int ""' -> IndexError)
     or very deep nesting (RecursionError) (df-886.17)."""
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        data = yamlio.load(path.read_text(encoding="utf-8"))
     except _UNPARSEABLE:
         return None
     return data if isinstance(data, dict) else None
@@ -102,7 +103,7 @@ def _trigger_sha(path: Path) -> str:
     data.pop("enabled", None)
     # Keys of mixed types (1 and 'a') can't be sorted; PyYAML then keeps file order, no error.
     try:
-        canon = yaml.safe_dump(data, sort_keys=True, allow_unicode=True)
+        canon = yamlio.dump(data, sort_keys=True, allow_unicode=True)
     except _UNDUMPABLE:   # loads but won't dump back (df-886.17): compare the bytes
         return content_sha(path)
     return "sha256:" + hashlib.sha256(canon.encode()).hexdigest()
