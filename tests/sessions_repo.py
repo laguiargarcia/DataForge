@@ -3,11 +3,13 @@
 Never the real repository or its .beads: everything lives under the test's tmp_path.
 """
 
+import atexit
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts" / "sessions"
@@ -36,12 +38,12 @@ def write(path: Path, text: str) -> None:
     path.write_bytes(text.encode("utf-8"))
 
 
-def make_repo(tmp_path: Path) -> Path:
-    """A main checkout on `main`, cloned from a bare origin, with origin/main fetched."""
-    origin = tmp_path / "origin.git"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
-    main = tmp_path / "repo"
-    git(tmp_path, "clone", "-q", str(origin), str(main))
+def _build_repo(root: Path) -> None:
+    """origin.git (bare) and repo (its clone on `main`, one commit pushed and fetched) under root."""
+    origin = root / "origin.git"
+    git(root, "init", "-q", "--bare", "-b", "main", str(origin))
+    main = root / "repo"
+    git(root, "clone", "-q", str(origin), str(main))
     git(main, "checkout", "-q", "-b", "main")
     write(main / ".gitignore", "ignored/\n.worktrees/\n.beads/\n.claude/\nAGENTS.md\nCLAUDE.md\n")
     write(main / "tracked.txt", "x\n")
@@ -49,6 +51,30 @@ def make_repo(tmp_path: Path) -> Path:
     git(main, "commit", "-q", "-m", "first")
     git(main, "push", "-q", "origin", "main")
     git(main, "fetch", "-q", "origin")
+
+
+_TEMPLATE: Path | None = None
+
+
+def _template() -> Path:
+    """The pair built once per test process: eight git calls each on Windows cost seconds (df-n8ac.4)."""
+    global _TEMPLATE  # noqa: PLW0603 -- one lazily built template per process
+    if _TEMPLATE is None:
+        root = Path(tempfile.mkdtemp(prefix="sessions-repo-"))
+        atexit.register(shutil.rmtree, root, ignore_errors=True)
+        _build_repo(root)
+        _TEMPLATE = root
+    return _TEMPLATE
+
+
+def make_repo(tmp_path: Path) -> Path:
+    """A main checkout on `main`, cloned from a bare origin, with origin/main fetched: a copy of the
+    process's template, its origin pointed at its own copy of the bare repository."""
+    template = _template()
+    shutil.copytree(template / "origin.git", tmp_path / "origin.git", symlinks=True)
+    main = tmp_path / "repo"
+    shutil.copytree(template / "repo", main, symlinks=True)
+    git(main, "remote", "set-url", "origin", str(tmp_path / "origin.git"))
     return main.resolve()
 
 

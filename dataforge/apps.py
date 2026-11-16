@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+from dataforge import yamlio
 
 from dataforge.compat import apps_dir, list_workspaces
 
@@ -52,7 +53,7 @@ def _resolve_icon(app_path: Path, value: object) -> Path | None:
 def _read_manifest(app_path: Path, name: str) -> dict | None:
     """The parsed app.yaml if it is a mapping naming this folder, else None (warned)."""
     try:
-        data = yaml.safe_load((app_path / "app.yaml").read_text(encoding="utf-8"))
+        data = yamlio.load((app_path / "app.yaml").read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError, UnicodeDecodeError) as exc:
         logger.warning("app %s: cannot read app.yaml (%s) — skipped", app_path, exc)
         return None

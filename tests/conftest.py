@@ -243,6 +243,9 @@ def make_backend_app(make_app, monkeypatch):
     The backend runs in a child uvicorn that imports ``dataforge.app_guard``: PYTHONPATH points it
     at this checkout's package, whatever the cwd."""
     monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parent.parent))
+    # The 0.3 s wait after the port accepts exists for a foreign listener on the port, which these
+    # backends never meet; at 0 each start is 0.3 s shorter and still checks the process lives.
+    monkeypatch.setattr("dataforge.app_backends._AFTER_ACCEPT_SECONDS", 0)
 
     def _make(ws: Path, pasta: str = "painel"):
         from dataforge.apps import load_app
