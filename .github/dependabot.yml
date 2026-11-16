@@ -1,11 +1,14 @@
 # Dependency upgrades as pull requests (df-n8ac.12): each one runs the full CI against uv.lock, the
 # one list of versions dev, CI and prod install. This replaces the weekly CI run's old job of catching
-# breakage from new releases.
+# breakage from new releases. One PR per ecosystem a week (df-n8ac.25): the main ruleset requires a
+# PR to be up to date, so separate PRs would each need a full CI again after every merge.
 version: 2
 updates:
   - package-ecosystem: uv
     directory: /
     schedule: { interval: weekly }
+    groups:
+      dependencies: { patterns: ["*"] }
     ignore:
       # The quality gate's tools: the baseline counts their findings, so moving one is a deliberate
       # change made by hand together with .pre-commit-config.yaml (docs/quality-gate.md).
@@ -16,3 +19,5 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
