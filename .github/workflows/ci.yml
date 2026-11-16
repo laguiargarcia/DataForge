@@ -126,9 +126,10 @@ jobs:
         if: always()
         with: { name: report-tests-gui, path: report/, if-no-files-found: ignore }
   tests:
-    # Required check: every engine shard and the GUI job passed. Merges their coverage into the
-    # coverage.xml the sonar job reads, and their durations into the cache the next run splits by.
-    needs: [tests-shard, tests-gui]
+    # Required check: every engine shard, the GUI job and the extra random orders passed (an
+    # order-dependent failure blocks the merge too, df-n8ac.29). Merges the shards' coverage into
+    # the coverage.xml the sonar job reads, and their durations into the cache the next run splits by.
+    needs: [tests-shard, tests-gui, orders]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -163,10 +164,10 @@ jobs:
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
       - name: Every part passed
-        env: { SHARDS: "${{ needs.tests-shard.result }}", GUI: "${{ needs.tests-gui.result }}" }
+        env: { SHARDS: "${{ needs.tests-shard.result }}", GUI: "${{ needs.tests-gui.result }}", ORDERS: "${{ needs.orders.result }}" }
         run: |
-          echo "tests-shard: $SHARDS, tests-gui: $GUI"
-          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ]
+          echo "tests-shard: $SHARDS, tests-gui: $GUI, orders: $ORDERS"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$ORDERS" = "success" ]
   tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
     # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage
@@ -204,8 +205,9 @@ jobs:
         # Read by the report job, which comments on the PR.
         with: { name: "report-tests-windows-${{ matrix.shard }}", path: report/, if-no-files-found: ignore }
   tests-windows:
-    # Required check: every Windows shard passed. Merges their durations for the next run.
-    needs: [tests-windows-shard]
+    # Required check: every Windows shard and the deploy smoke passed. Merges the shards' durations
+    # for the next run.
+    needs: [tests-windows-shard, windows-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -223,11 +225,11 @@ jobs:
       - uses: actions/cache/save@v6
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-windows-${{ github.run_id }}", enableCrossOsArchive: true }
-      - name: Every shard passed
-        env: { SHARDS: "${{ needs.tests-windows-shard.result }}" }
+      - name: Every part passed
+        env: { SHARDS: "${{ needs.tests-windows-shard.result }}", SMOKE: "${{ needs.windows-smoke.result }}" }
         run: |
-          echo "tests-windows-shard: $SHARDS"
-          [ "$SHARDS" = "success" ]
+          echo "tests-windows-shard: $SHARDS, windows-smoke: $SMOKE"
+          [ "$SHARDS" = "success" ] && [ "$SMOKE" = "success" ]
   orders:
     # More shuffles of the engine suite on every PR and push, in parallel (df-n8ac.14): an
     # order-dependent test fails here with its seed in the run summary instead of in a later run.
