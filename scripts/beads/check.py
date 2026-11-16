@@ -5,7 +5,7 @@ Two bd commands are checked, nothing else:
 
 - `bd update <id> --claim`: the bead needs an acceptance criterion (what `bd lint` asks of its type).
 - `bd close <id> --reason "..."`: real difficulty (`vol-real:`, `inc-real:`), `origem:`; for bugs
-  `camada:`, `achado-por:` and `furo-de:` (a bead id or `nenhum`), and `etapa:` whenever `furo-de:`
+  `camada:`, `erro:`, `achado-por:` and `furo-de:` (a bead id or `nenhum`), and `etapa:` whenever `furo-de:`
   names a bead; and a reason carrying the three marks `Conferi:`, `Não conferi:` and `Assumi:`.
   When `furo-de:` is missing, the message suggests the beads cited by the recent commits of the
   files the bug changed.
@@ -13,7 +13,7 @@ Two bd commands are checked, nothing else:
 Passes untouched: session beads and epics at close, a reason starting with `descartado:` or
 `duplicado:`, a bead labelled `fechamento:dispensado` (the escape hatch, counted by the
 measurement). A bead created before CUTOFF is held only to the older rules (real difficulty,
-origem, camada) and its claim is not checked. Labels and the acceptance criterion given earlier in
+origem, camada and erro) and its claim is not checked. Labels and the acceptance criterion given earlier in
 the same command line (`bd label add ... && bd close ...`) count as present.
 
 Usage:
@@ -48,8 +48,9 @@ CLOSE_SKIPPED_TYPES = frozenset({"session", "epic"})
 CLAIM_SKIPPED_TYPES = frozenset({"session"})
 LEVELS = ("1", "2", "3")
 ORIGENS = ("planejado", "descoberto", "defeito")
-CAMADAS = ("propriedade", "dados", "estatica", "crash", "windows", "fim-a-fim", "gui", "instavel",
-           "dependencias", "nenhuma")
+# The check that should have caught a bug: the claudemain base list (DataForge adds none). The kind
+# of error (dados, crash, windows...) goes in the free `erro:` label.
+CAMADAS = ("teste", "propriedade", "gui", "estatica", "tipos", "mutacao", "fim-a-fim", "ci", "nenhuma")
 ACHADO_POR = ("teste", "portao", "ci", "sonar", "revisao", "leitura", "lucas", "uso")
 ETAPAS = ("investigacao", "plano", "implementacao", "revisao", "teste")
 NO_FURO = "nenhum"
@@ -239,6 +240,13 @@ def need(labels, key: str, allowed: tuple[str, ...], bead: str, what: str) -> st
             f"`bd label add {bead} {key}:<valor>`")
 
 
+def need_free(labels, key: str, bead: str, what: str) -> str | None:
+    """A gap if the bead has no `key:<v>` with a non-empty v (any value goes)."""
+    if any(v.strip() for v in label_values(labels, key)):
+        return None
+    return f"`{key}:` — {what}. Valor livre. `bd label add {bead} {key}:<valor>`"
+
+
 def note_problem(reason: str) -> str | None:
     """A gap unless the reason carries Conferi:, Não conferi: and Assumi:, each followed by text."""
     marks = list(NOTE_MARK.finditer(reason))
@@ -294,7 +302,9 @@ def close_problems(issue: dict, reason: str, extra_labels, exists, candidates) -
     found = difficulty_problems(labels, bead)
     found.append(need(labels, "origem", ORIGENS, bead, "de onde veio o bead"))
     if bug:
-        found.append(need(labels, "camada", CAMADAS, bead, "a camada que deveria ter pego o bug"))
+        found.append(need(labels, "camada", CAMADAS, bead,
+                          "a verificação que deveria ter pego o bug (o tipo do erro vai em `erro:`)"))
+        found.append(need_free(labels, "erro", bead, "o tipo do erro (ex.: dados, crash, windows, instavel)"))
     if str(issue.get("created_at") or "")[:10] >= CUTOFF:
         if bug:
             found.append(need(labels, "achado-por", ACHADO_POR, bead, "quem pegou o problema de fato"))

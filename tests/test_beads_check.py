@@ -27,6 +27,7 @@ NEW = "2026-11-20T10:00:00Z"
 OLD = "2026-11-01T10:00:00Z"
 NOTE = "Conferi: os testes. Não conferi: nada. Assumi: que o bd está na versão 1.0.3."
 BUG_LABELS = ["vol:1", "inc:2", "vol-real:1", "inc-real:2", "origem:descoberto", "camada:propriedade",
+              "erro:dados",
               "achado-por:teste", "furo-de:nenhum"]
 
 
@@ -196,6 +197,7 @@ def test_a_bug_with_everything_closes():
     ("achado-por:", "`achado-por:`"),
     ("furo-de:", "`furo-de:`"),
     ("camada:", "`camada:`"),
+    ("erro:", "`erro:`"),
     ("origem:", "`origem:`"),
     ("vol-real:", "`vol-real:`"),
     ("inc-real:", "`inc-real:`"),
@@ -250,9 +252,29 @@ def test_real_difficulty_is_asked_only_of_beads_with_an_estimate():
 
 
 def test_a_bead_older_than_the_cutoff_keeps_only_the_older_rules():
-    old_bug = issue(labels=["origem:descoberto", "camada:dados"], created=OLD)
+    old_bug = issue(labels=["origem:descoberto", "camada:propriedade", "erro:dados"], created=OLD)
     assert close(old_bug, reason="") == []
     assert "`camada:`" in close(issue(labels=["origem:descoberto"], created=OLD), reason="")[0]
+
+
+# df-ygqm: these were layers before; they are kinds of error now, and go in `erro:`.
+@pytest.mark.parametrize("old", ["dados", "crash", "windows", "instavel", "dependencias"])
+def test_an_old_layer_is_refused_as_camada_and_points_to_erro(old):
+    found = close(issue(labels=[*without(BUG_LABELS, "camada:"), f"camada:{old}"]))
+    assert len(found) == 1
+    assert f"`camada:{old}` não vale" in found[0]
+    assert "`erro:`" in found[0]
+
+
+@pytest.mark.parametrize("kind", ["dados", "crash", "qualquer-coisa"])
+def test_erro_takes_any_kind(kind):
+    assert close(issue(labels=[*without(BUG_LABELS, "erro:"), f"erro:{kind}"])) == []
+
+
+def test_an_empty_erro_is_a_gap():
+    found = close(issue(labels=[*without(BUG_LABELS, "erro:"), "erro:"]))
+    assert len(found) == 1
+    assert "`erro:`" in found[0]
 
 
 def test_labels_added_earlier_in_the_line_count_at_close():
@@ -431,7 +453,7 @@ def test_end_to_end_claim_needs_the_acceptance_criterion(bdrepo):
 
 @NEEDS_BD
 def test_end_to_end_close_of_a_bug(bdrepo):
-    bead = bd_create(bdrepo, "Um bug", "-t", "bug", "-l", "origem:descoberto,camada:propriedade")
+    bead = bd_create(bdrepo, "Um bug", "-t", "bug", "-l", "origem:descoberto,camada:propriedade,erro:dados")
     reason = shlex.quote(NOTE)
     refused = run_hook(bdrepo, f"bd close {bead} --reason {reason}")
     assert "`achado-por:`" in refused
