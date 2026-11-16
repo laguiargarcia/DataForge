@@ -1,3 +1,6 @@
+# `pre-commit install` installs both: the commit checks below and, after a merge or pull, the
+# deploy to prod (scripts/prod/deploy.sh does nothing outside the main checkout on main).
+default_install_hook_types: [pre-commit, post-merge]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.3   # same as GITLEAKS_VERSION in .github/workflows/ci.yml: bump both together
@@ -25,3 +28,11 @@ repos:
         pass_filenames: false
         # pyproject.toml holds the rules, the contracts and the dependencies deptry checks.
         files: '\.py$|^pyproject\.toml$'
+      - id: deploy-prod
+        name: deploy main to prod (scripts/prod/deploy.sh, df-n8ac.11)
+        entry: scripts/prod/deploy.sh
+        language: unsupported_script
+        stages: [post-merge]
+        always_run: true
+        pass_filenames: false
+        verbose: true
