@@ -19,7 +19,7 @@ edited="$root/.claude/.quality-edited-$session"
 checkout_of() {
   local top
   top=$(git -C "$(dirname "$1")" rev-parse --show-toplevel 2>/dev/null) || top=""
-  if [ -n "$top" ] && [ -f "$top/scripts/quality/gate.py" ]; then
+  if [[ -n "$top" && -f "$top/scripts/quality/gate.py" ]]; then
     printf '%s\n' "$top"
   else
     printf '%s\n' "$root"
@@ -31,7 +31,7 @@ run_gate() {
   local top=$1 py
   shift
   py="$top/.venv/bin/python"
-  [ -x "$py" ] || py="$root/.venv/bin/python"
+  [[ -x "$py" ]] || py="$root/.venv/bin/python"
   "$py" "$top/scripts/quality/gate.py" check "$@" >&2
 }
 
@@ -43,23 +43,23 @@ case "${1:-}" in
     run_gate "$(checkout_of "$file")" "$file" || exit 2
     ;;
   stop)
-    [ -s "$edited" ] || exit 0
+    [[ -s "$edited" ]] || exit 0
     # Second stop in a row: Claude already had one chance to fix; let the turn end.
-    if [ "$(printf '%s' "$input" | jq -r '.stop_hook_active // false')" = "true" ]; then
+    if [[ "$(printf '%s' "$input" | jq -r '.stop_hook_active // false')" == "true" ]]; then
       rm -f "$edited"
       exit 0
     fi
     mapfile -t files < "$edited"
     declare -A by_checkout=()
     for f in "${files[@]}"; do
-      [ -f "$f" ] && by_checkout["$(checkout_of "$f")"]+="$f"$'\n'
+      [[ -f "$f" ]] && by_checkout["$(checkout_of "$f")"]+="$f"$'\n'
     done
     failed=0
     for top in "${!by_checkout[@]}"; do
       mapfile -t group < <(printf '%s' "${by_checkout[$top]}")
       run_gate "$top" --full "${group[@]}" || failed=1
     done
-    [ "$failed" -eq 0 ] || exit 2
+    [[ "$failed" -eq 0 ]] || exit 2
     rm -f "$edited"
     ;;
 esac
