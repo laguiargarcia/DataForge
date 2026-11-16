@@ -47,6 +47,7 @@ WRAPPERS = frozenset({"env", "command", "exec", "nohup", "time", "nice", "sudo"}
 GIT_OPTS_WITH_VALUE = frozenset({"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
 WORKTREE_ADD_OPTS_WITH_VALUE = frozenset({"-b", "-B", "--reason", "--orphan"})
 ASSIGNMENT = re.compile(r"^[A-Za-z_]\w*=")
+OPERATOR_CHARS = ";&|()<>\n"
 CHECK_IGNORE_TIMEOUT = 3
 
 
@@ -61,17 +62,25 @@ def git_check_ignore(main: Path, path: Path) -> bool | None:
 
 
 def split_commands(command: str) -> list[list[str]]:
-    """Simple commands of a shell line, as word lists. Operators split; redirections are dropped."""
-    text = command.replace("\\\n", " ").replace("\n", " ; ")
-    lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()<>")
+    """Simple commands of a shell line, as word lists. Operators and newlines split them;
+    redirections are dropped. Raises ValueError on a line shlex cannot read.
+
+    Only a token made of operator characters is an operator: a quoted `"a -> b"` stays a word.
+    shlex cannot tell a quoted argument made only of operators (`';'`) from the operator itself;
+    such an argument splits the command, which can only make the guard look at more commands."""
+    lex = shlex.shlex(command.replace("\\\n", " "), posix=True, punctuation_chars=OPERATOR_CHARS)
+    lex.whitespace = " \t\r"
     lex.whitespace_split = True
     out, cur, skip = [], [], False
     for tok in lex:
+        operator = bool(tok) and set(tok) <= set(OPERATOR_CHARS)
         if skip:
             skip = False
-        elif "<" in tok or ">" in tok:
-            skip = True  # the redirection target (shlex splits `2>&1` into `2`, `>&`, `1`)
-        elif tok and set(tok) <= set(";&|()"):
+        elif operator and ("<" in tok or ">" in tok):
+            if cur and cur[-1].isdigit():
+                cur.pop()  # the fd of `2>&1`, split off by shlex
+            skip = True
+        elif operator:
             out.append(cur)
             cur = []
         else:

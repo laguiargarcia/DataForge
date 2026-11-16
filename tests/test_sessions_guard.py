@@ -259,6 +259,12 @@ def test_creating_a_worktree_claims_its_path(repo):
     assert str((repo / ".worktrees" / "df-new1").resolve()) in held
 
 
+def test_a_quoted_arrow_does_not_hide_the_next_command(repo):
+    wt = add_worktree(repo, "df-abc1")
+    out = run(bash(f'git commit -m "a -> b" && git -C {q(repo)} pull', wt), repo)
+    assert "main checkout" in context(out)
+
+
 def test_removing_a_live_sessions_worktree_warns(repo):
     wt = add_worktree(repo, "df-abc1")
     register(repo, OTHER_SESSION, worktrees=[wt])
@@ -269,12 +275,23 @@ def test_removing_a_live_sessions_worktree_warns(repo):
 
 @pytest.mark.parametrize(("command", "expected"), [
     ("a && b || c ; d | e & f", [["a"], ["b"], ["c"], ["d"], ["e"], ["f"]]),
-    ("git log > out.txt 2>&1", [["git", "log", "2"]]),
+    ("git log > out.txt 2>&1", [["git", "log"]]),
+    ("git commit -m 'a -> b' && git pull", [["git", "commit", "-m", "a -> b"], ["git", "pull"]]),
+    ("git commit -m 'x\ny' 2> e", [["git", "commit", "-m", "x\ny"]]),
     ("(cd x; git pull)", [["cd", "x"], ["git", "pull"]]),
     ("a \\\n b\nc", [["a", "b"], ["c"]]),
 ])
 def test_split_commands(command, expected):
     assert guard.split_commands(command) == expected
+
+
+# Excluded, as in scripts/beads/check.py: a backslash-newline (read as a line continuation) and an
+# argument made only of operator characters (shlex reads it as the operator).
+@given(st.text(st.sampled_from("<>&|;()-'\" \t\nab") | st.characters())
+       .filter(lambda a: "\\\n" not in a and not (a and set(a) <= set(guard.OPERATOR_CHARS))))
+def test_any_quoted_argument_reaches_the_guard_unchanged(arg):
+    assert guard.split_commands(f"git commit -m {shlex.quote(arg)} ; git pull") == [
+        ["git", "commit", "-m", arg], ["git", "pull"]]
 
 
 @pytest.fixture(scope="module")
