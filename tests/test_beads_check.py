@@ -266,6 +266,14 @@ def test_an_old_layer_is_refused_as_camada_and_points_to_erro(old):
     assert "`erro:`" in found[0]
 
 
+# df-xm62: CI is where a check runs, not which check it is; SonarQube is one.
+def test_sonar_is_a_layer_and_ci_is_not():
+    assert close(issue(labels=[*without(BUG_LABELS, "camada:"), "camada:sonar"])) == []
+    found = close(issue(labels=[*without(BUG_LABELS, "camada:"), "camada:ci"]))
+    assert len(found) == 1
+    assert "`camada:ci` não vale" in found[0]
+
+
 @pytest.mark.parametrize("kind", ["dados", "crash", "qualquer-coisa"])
 def test_erro_takes_any_kind(kind):
     assert close(issue(labels=[*without(BUG_LABELS, "erro:"), f"erro:{kind}"])) == []
