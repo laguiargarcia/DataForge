@@ -101,9 +101,14 @@ max-complexity = 10
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "os.environ".msg = "Read configuration through dataforge.compat, not os.environ."
 "os.getenv".msg = "Read configuration through dataforge.compat, not os.getenv."
+"yaml.load".msg = "Read YAML through dataforge.yamlio (libyaml), not yaml directly."
+"yaml.safe_load".msg = "Read YAML through dataforge.yamlio (libyaml), not yaml directly."
+"yaml.dump".msg = "Write YAML through dataforge.yamlio (libyaml), not yaml directly."
+"yaml.safe_dump".msg = "Write YAML through dataforge.yamlio (libyaml), not yaml directly."
 
 [tool.ruff.lint.per-file-ignores]
 "dataforge/compat.py" = ["TID251"]
+"dataforge/yamlio.py" = ["TID251"]
 # The banned-api rule is for the package only: scripts and tests read their own environment.
 "scripts/**" = ["TID251"]
 "tests/**" = ["TID251", "PLR2004", "ARG", "PLC0415", "S108", "DTZ"]

@@ -1,6 +1,7 @@
 """Properties of dataforge/parser.py: job.yaml and trigger files written by the GUI/API read back
 as the same model, stay compact (no key a reader would not miss) and keep their documented key order.
 """
+import copy
 import tempfile
 from pathlib import Path
 
@@ -118,7 +119,7 @@ def test_every_key_written_is_needed(job):
     paths = [(k,) for k in data if k not in ("name", "tasks")]
     paths += [(i, k) for i, t in enumerate(data["tasks"]) for k in t if k != "name"]
     for path in paths:
-        trimmed = yaml.safe_load(text)
+        trimmed = copy.deepcopy(data)
         if len(path) == 1:
             del trimmed[path[0]]
         else:

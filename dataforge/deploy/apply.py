@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import yaml
+from .. import yamlio
 from .models import DeployPlan, ItemChange, DeployEntry, Action, Kind, EntryStatus
 from .ledger import Ledger, atomic_write, blob_sha
 from .pairing import target_file
@@ -19,7 +19,7 @@ def _trigger_content(source_path: Path, prior_enabled: bool) -> bytes:
         return source_path.read_bytes()
     sdata["enabled"] = prior_enabled
     try:
-        return yaml.safe_dump(sdata, allow_unicode=True, sort_keys=False).encode()
+        return yamlio.dump(sdata, allow_unicode=True, sort_keys=False).encode()
     except _UNDUMPABLE:   # loads but won't dump back (df-886.17): copy it verbatim
         return source_path.read_bytes()
 
