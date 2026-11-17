@@ -69,6 +69,12 @@ async def _sse_event_generator(run_id: str) -> AsyncGenerator[str, None]:
             )
             tasks_data = [_task_snapshot(row, sent_output) for row in task_rows]
 
+        # The run and its tasks come from two databases, read one after the other. The engine marks
+        # the run running before its first task, so a run read as pending that has a task started
+        # between the two reads (df-ww2o).
+        if run_status == "pending" and tasks_data:
+            run_status = "running"
+
         snapshot = {"run_id": run_id, "status": run_status, "tasks": tasks_data}
         yield f"data: {json.dumps(snapshot)}\n\n"
 

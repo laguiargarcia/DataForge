@@ -107,9 +107,17 @@ def test_a_finished_run_opened_later_gets_one_snapshot_with_the_output_and_close
     assert snapshots[0]["tasks"][0]["output"] == GATED_OUTPUT
 
 
-def _add_run(run_id: str, owner: str | None = None) -> None:
+def _delete_run(run_id: str) -> None:
     with Session(init_db(global_db_url())) as session:
-        session.add(JobRunORM(id=run_id, workspace="test_ws", job=GATED_JOB, status="running",
+        run = session.get(JobRunORM, run_id)
+        if run is not None:
+            session.delete(run)
+            session.commit()
+
+
+def _add_run(run_id: str, owner: str | None = None, status: str = "running") -> None:
+    with Session(init_db(global_db_url())) as session:
+        session.add(JobRunORM(id=run_id, workspace="test_ws", job=GATED_JOB, status=status,
                               started_at=utcnow(), **({"owner_process": owner} if owner else {})))
         session.commit()
 
@@ -117,18 +125,35 @@ def _add_run(run_id: str, owner: str | None = None) -> None:
 def test_deleting_the_run_mid_stream_closes_the_stream(workspace_dir):
     with serve_api() as base:
         _add_run("r-deleted")   # owned by this live process: never reconciled
-
-        def delete_it(_snapshot):
-            with Session(init_db(global_db_url())) as session:
-                run = session.get(JobRunORM, "r-deleted")
-                if run is not None:
-                    session.delete(run)
-                    session.commit()
-
-        snapshots, closed = _follow(base, "r-deleted", delete_it)
+        snapshots, closed = _follow(base, "r-deleted", lambda _snapshot: _delete_run("r-deleted"))
 
     assert closed
     assert [s["status"] for s in snapshots] == ["running"]
+
+
+def test_a_run_read_as_pending_whose_task_already_runs_is_streamed_as_running(workspace_dir):
+    """df-ww2o: the stream reads the run, then its tasks, from two databases. A run that starts
+    between the two reads was read as pending and has a running task: the snapshot says running."""
+    with serve_api() as base:
+        _add_run("r-started", status="pending")
+        with Session(init_db(db_url(workspace_dir / "dataforge.db"))) as session:
+            session.add(ExecucaoORM(job=GATED_JOB, task=GATED_TASK, status="running",
+                                    inicio=utcnow(), run_id="r-started"))
+            session.commit()
+        snapshots, closed = _follow(base, "r-started", lambda _snapshot: _delete_run("r-started"))
+
+    assert closed
+    assert [(s["status"], [t["status"] for t in s["tasks"]]) for s in snapshots] == [
+        ("running", ["running"])]
+
+
+def test_a_pending_run_with_no_task_yet_is_streamed_as_pending(workspace_dir):
+    with serve_api() as base:
+        _add_run("r-queued", status="pending")
+        snapshots, closed = _follow(base, "r-queued", lambda _snapshot: _delete_run("r-queued"))
+
+    assert closed
+    assert [(s["status"], s["tasks"]) for s in snapshots] == [("pending", [])]
 
 
 @pytest.mark.xfail(strict=True, reason=(
