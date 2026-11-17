@@ -71,7 +71,7 @@ def _bank_code(transfer_number):
 
 
 def _credit_level(credit_data):
-    """creditData.level title-cased (repr-parsed), e.g. 'PLATINUM' -> 'Platinum'. None if absent."""
+    """creditData.level title-cased (repr-parsed), e.g. 'GOLD' -> 'Gold'. None if absent."""
     if not credit_data:
         return None
     try:

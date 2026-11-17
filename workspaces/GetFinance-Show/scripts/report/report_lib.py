@@ -184,7 +184,7 @@ _SUFIXO_PARCELA = len("NN/NN")   # "04/12" no fim da descrição de uma parcela
 
 def _strip_parcela_suffix(s: str | None) -> str:
     """Strip a trailing 'NN/NN' installment marker from a description (mirrors the workbook's
-    StripTail). 'ANUIDADE DIFERENCI04/12' -> 'ANUIDADE DIFERENCI'."""
+    StripTail). 'LOJA EXEMPLO03/10' -> 'LOJA EXEMPLO'."""
     if s is None:
         return ""
     t = s.rstrip()
