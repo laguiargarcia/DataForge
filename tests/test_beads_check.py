@@ -1,5 +1,6 @@
-"""scripts/beads/check.py: the bead check (df-m60c) refuses a claim without an acceptance criterion
-and a close without the labels and the note the measurement needs. bd is faked, except in the
+"""scripts/beads/check.py: the bead check (df-m60c) refuses a claim without an acceptance criterion,
+a close without the labels and the note the measurement needs, and a child created with its
+parent's labels. bd is faked, except in the
 end-to-end tests at the bottom (skipped where bd is not installed, as in CI)."""
 
 import importlib.util
@@ -137,6 +138,49 @@ def test_shortcuts_around_the_check_are_refused(command):
     steps = check.read_line(command)
     assert [s.kind for s in steps] == ["refuse"]
     assert steps[0].message
+
+
+@pytest.mark.parametrize("command", [
+    "bd create 'Filha' --parent df-a -l vol:1,inc:1,origem:planejado",
+    "bd create 'Filha' --parent=df-a",
+    "bd new 'Filha' -t bug --silent --parent df-a",
+    "bd create --title 'Filha' --dry-run --parent df-a -f plano.md",
+    'cd ~/src && mk(){ bd create "$1" --parent df-a -l "vol:$2"; }; mk Filha 1',
+    "bd create 'Mãe' && bd create 'Filha' --parent df-a",
+])
+def test_a_child_created_with_the_parent_labels_is_refused(command):
+    steps = check.read_line(command)
+    assert [s.kind for s in steps] == ["refuse"]
+    assert "--no-inherit-labels" in steps[0].message
+    assert "df-a" in steps[0].message
+
+
+@pytest.mark.parametrize("command", [
+    "bd create 'Filha' --parent df-a --no-inherit-labels -l vol:1",
+    "bd create 'Filha' --no-inherit-labels --parent=df-a",
+    "bd new 'Filha' --silent --no-inherit-labels --parent df-a",
+    "bd create 'Sem mãe' -l vol:1,inc:1,origem:planejado",
+    "bd create 'Sem mãe' --parent ''",
+    "bd create 'Fala de --parent df-a no título'",
+    "bd create 'Sem mãe' -d 'criada com --parent df-a'",
+    "bd list --parent df-a",
+])
+def test_a_create_that_copies_no_labels_passes(command):
+    assert check.read_line(command) == []
+
+
+CREATE_FLAGS = st.lists(st.sampled_from([
+    ["-l", "vol:1,inc:2"], ["-t", "bug"], ["-p", "1"], ["--acceptance", "o teste passa"], ["-d", "porque sim"],
+    ["--silent"], ["--dry-run"], ["--validate"], ["--force"], ["--json"], ["-f", "plano.md"],
+]), max_size=6)
+
+
+@given(CREATE_FLAGS, st.booleans(), st.sampled_from(["create", "new"]), st.randoms())
+def test_a_create_with_a_parent_is_refused_exactly_when_it_inherits(flags, own_labels_only, sub, rnd):
+    groups = [["Filha"], ["--parent", "df-a"], *flags, *([["--no-inherit-labels"]] if own_labels_only else [])]
+    rnd.shuffle(groups)
+    command = shlex.join(["bd", sub, *(word for group in groups for word in group)])
+    assert [s.kind for s in check.read_line(command)] == ([] if own_labels_only else ["refuse"])
 
 
 def test_an_unreadable_line_without_a_close_or_claim_passes():
@@ -377,6 +421,15 @@ def test_end_to_end_a_child_that_inherits_the_parent_estimate_cannot_be_claimed(
     assert run_hook(bdrepo, f"bd update {child} --claim") is None
     clean = bd_create(bdrepo, "Outra", "--parent", parent, "--no-inherit-labels", "-l", "vol:1", "--acceptance", "x")
     assert run_hook(bdrepo, f"bd update {clean} --claim") is None
+
+
+@NEEDS_BD
+def test_end_to_end_a_child_is_created_only_without_the_parent_labels(bdrepo):
+    parent = bd_create(bdrepo, "Mãe", "-l", "vol:2,inc:2,origem:descoberto", "--acceptance", "x")
+    assert "--no-inherit-labels" in run_hook(bdrepo, f"bd create Filha --parent {parent} -l vol:1")
+    allowed = ["create", "Filha", "--parent", parent, "--no-inherit-labels", "-l", "vol:1"]
+    assert run_hook(bdrepo, shlex.join(["bd", *allowed])) is None
+    assert bd_json(bdrepo, "show", bd_json(bdrepo, *allowed)["id"])[0]["labels"] == ["vol:1"]
 
 
 # --------------------------------------------------------------------------- the whole line
