@@ -1,8 +1,10 @@
 """Conferência do bead (df-m60c): a bead starts with an acceptance criterion and closes with the
 labels and the note the measurement needs.
 
-Two bd commands are checked, nothing else:
+Three bd commands are checked, nothing else:
 
+- `bd create --parent <id>`: needs `--no-inherit-labels`, so the child carries only the labels its
+  creator typed and a missing estimate shows as missing instead of as the parent's (df-081f).
 - `bd update <id> --claim`: the bead needs an acceptance criterion (what `bd lint` asks of its type).
 - Both: at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:` and `inc-real:` (a child
   made with `bd create --parent` inherits the parent's labels; df-b89w).
@@ -70,11 +72,15 @@ NOTE_NAMES = {"conferi": "Conferi:", "nao conferi": "Não conferi:", "assumi": "
 GLOBAL_BOOL_FLAGS = frozenset({"--global", "--json", "--profile", "-q", "--quiet", "--readonly",
                                "--sandbox", "-v", "--verbose", "-h", "--help"})
 SUBCOMMAND_BOOL_FLAGS = {
+    "create": frozenset({"--dry-run", "--ephemeral", "--force", "--no-history", "--no-inherit-labels",
+                         "--silent", "--stdin", "--validate"}),
     "close": frozenset({"--claim-next", "--continue", "-f", "--force", "--no-auto", "--suggest-next"}),
     "update": frozenset({"--claim", "--allow-empty-description", "--ephemeral", "--history",
                          "--no-history", "--persistent", "--stdin"}),
 }
 SHORT_FLAGS = {"-r": "--reason", "-s": "--status", "-f": "--force"}
+CREATE_SUBCOMMANDS = frozenset({"create", "new"})
+CREATE_SHORT_FLAGS = {"-f": "--file"}  # `-f` is `--force` everywhere else
 LABEL_FLAGS = ("--add-label", "--set-labels")
 LABEL_ADD_WORDS = 3  # `label add <id> <label>`: add, at least one id, the label
 
@@ -97,7 +103,9 @@ class BdCall:
 
 def _read_args(call: BdCall, rest: list[str]) -> None:
     """Fill the call's positionals and options from the words after its subcommand."""
-    bool_flags = SUBCOMMAND_BOOL_FLAGS.get(call.sub, frozenset()) | GLOBAL_BOOL_FLAGS
+    create = call.sub in CREATE_SUBCOMMANDS
+    bool_flags = SUBCOMMAND_BOOL_FLAGS.get("create" if create else call.sub, frozenset()) | GLOBAL_BOOL_FLAGS
+    short_flags = SHORT_FLAGS | CREATE_SHORT_FLAGS if create else SHORT_FLAGS
     words = iter(rest)
     for word in words:
         if word == "--":
@@ -106,7 +114,7 @@ def _read_args(call: BdCall, rest: list[str]) -> None:
             call.positionals.append(word)
         else:
             flag, eq, value = word.partition("=")
-            flag = SHORT_FLAGS.get(flag, flag)
+            flag = short_flags.get(flag, flag)
             if not eq and flag not in bool_flags:
                 value = next(words, "")
             call.options.setdefault(flag, []).append(value)
@@ -177,6 +185,14 @@ class LineState:
             for bead in beads:
                 self.step("claim", bead)
 
+    def create(self, call: BdCall) -> None:
+        parents = [v for v in call.values("--parent") if v.strip()]
+        if parents and not call.has("--no-inherit-labels"):
+            self.refuse(f"`bd create --parent {parents[0]}` sem `--no-inherit-labels`: a filha copia as "
+                        "etiquetas da mãe e a estimativa dela (`vol:`, `inc:`, `origem:`) passa por "
+                        "estimativa da filha. Acrescente `--no-inherit-labels` e dê à filha as "
+                        "etiquetas dela em `-l`.")
+
     def close(self, call: BdCall) -> None:
         if not call.positionals:
             self.refuse("`bd close` sem id fecha o último bead tocado. Diga qual: `bd close <id> ...`.")
@@ -196,6 +212,8 @@ class LineState:
             self.add_labels(call.positionals[1:-1], [call.positionals[-1]])
         elif call.sub == "update":
             self.update(call)
+        elif call.sub in CREATE_SUBCOMMANDS:
+            self.create(call)
         elif call.sub in {"close", "done"}:
             self.close(call)
 
