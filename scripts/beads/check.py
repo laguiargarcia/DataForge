@@ -5,7 +5,8 @@ Three bd commands are checked, nothing else:
 
 - `bd create --parent <id>`: needs `--no-inherit-labels`, so the child carries only the labels its
   creator typed and a missing estimate shows as missing instead of as the parent's (df-081f).
-- `bd update <id> --claim`: the bead needs an acceptance criterion (what `bd lint` asks of its type).
+- `bd update <id> --claim`: the bead needs an acceptance criterion (what `bd lint` asks of its type)
+  and an estimate, `vol:` and `inc:` (df-ugnz): without one it never reaches the measurement.
 - Both: at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:` and `inc-real:` (a child
   made with `bd create --parent` inherits the parent's labels; df-b89w).
 - `bd close <id> --reason "..."`: real difficulty (`vol-real:`, `inc-real:`), `origem:`; for bugs
@@ -305,6 +306,12 @@ def difficulty_problems(labels, bead: str) -> list[str]:
     return out
 
 
+def estimate_problems(labels, bead: str) -> list[str | None]:
+    """A gap for each axis of the estimate (`vol:`, `inc:`) the bead does not have (df-ugnz)."""
+    return [need(labels, axis, LEVELS, bead, what)
+            for axis, what in (("vol", "quanto trabalho deve dar"), ("inc", "quanto deve precisar investigar"))]
+
+
 def furo_problems(labels, bead: str, exists, candidates) -> list[str]:
     """`furo-de:` (a bead id or `nenhum`) on every bug, and `etapa:` when it names a bead."""
     furos = label_values(labels, "furo-de")
@@ -355,8 +362,13 @@ def claim_problems(issue: dict, lint_missing: list[str] | None, acceptance: bool
     if issue.get("issue_type") in CLAIM_SKIPPED_TYPES:
         return []
     bead = issue["id"]
-    found = duplicate_problems(set(issue.get("labels") or ()) | set(extra_labels), bead)
-    if acceptance or lint_missing is None or str(issue.get("created_at") or "")[:10] < CUTOFF:
+    labels = set(issue.get("labels") or ()) | set(extra_labels)
+    found = duplicate_problems(labels, bead)
+    if str(issue.get("created_at") or "")[:10] < CUTOFF:
+        return found
+    if issue.get("issue_type") not in CLOSE_SKIPPED_TYPES:  # an epic is not measured: no real difficulty at close
+        found += [f for f in estimate_problems(labels, bead) if f]
+    if acceptance or lint_missing is None:
         return found
     missing = [m.lstrip("# ").strip() for m in lint_missing if "Criteria" in m]
     if not missing:

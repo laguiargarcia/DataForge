@@ -351,24 +351,50 @@ def test_a_close_without_work_needs_only_the_reason(reason):
 
 
 CRITERIA = ["## Acceptance Criteria"]
+ESTIMATE = ["vol:1", "inc:2"]
 
 
 def test_a_new_bead_without_acceptance_criteria_cannot_be_claimed():
-    found = check.claim_problems(issue("df-f", "feature", []), CRITERIA, acceptance=False)
+    found = check.claim_problems(issue("df-f", "feature", ESTIMATE), CRITERIA, acceptance=False)
     assert len(found) == 1
     assert 'bd update df-f --acceptance "..."' in found[0]
 
 
 @pytest.mark.parametrize(("issue_", "lint", "acceptance"), [
-    (issue("df-f", "feature", []), [], False),                            # lint is happy
-    (issue("df-f", "feature", []), CRITERIA, True),                       # given in the same line
-    (issue("df-f", "feature", []), None, False),                          # lint failed: fail open
+    (issue("df-f", "feature", ESTIMATE), [], False),                      # lint is happy
+    (issue("df-f", "feature", ESTIMATE), CRITERIA, True),                 # given in the same line
+    (issue("df-f", "feature", ESTIMATE), None, False),                    # lint failed: fail open
     (issue("df-f", "feature", [], created=OLD), CRITERIA, False),         # before the cutoff
-    (issue("df-b", "bug", []), ["## Steps to Reproduce"], False),         # only criteria block
+    (issue("df-b", "bug", ESTIMATE), ["## Steps to Reproduce"], False),   # only criteria block
     (issue("df-s", "session", []), CRITERIA, False),
+    (issue("df-e", "epic", []), [], False),                               # an epic is not estimated
 ])
 def test_a_claim_passes(issue_, lint, acceptance):
     assert check.claim_problems(issue_, lint, acceptance) == []
+
+
+LEVEL = st.sampled_from(check.LEVELS)
+NOT_A_LEVEL = st.text(max_size=3).filter(lambda v: v not in check.LEVELS)
+
+
+@given(st.one_of(st.none(), LEVEL, NOT_A_LEVEL), st.one_of(st.none(), LEVEL, NOT_A_LEVEL),
+       st.sampled_from([[], None, CRITERIA]), st.booleans(), st.sampled_from(["task", "bug", "feature", "decision"]))
+def test_a_claim_names_exactly_the_axes_of_the_estimate_that_are_missing(vol, inc, lint, in_the_line, kind):
+    given_ = {"vol": vol, "inc": inc}
+    labels = [f"{axis}:{value}" for axis, value in given_.items() if value is not None]
+    bead = issue("df-t", kind, [] if in_the_line else labels)
+    found = check.claim_problems(bead, lint, True, labels if in_the_line else ())
+    missing = [axis for axis, value in given_.items() if value not in check.LEVELS]
+    assert len(found) == len(missing)
+    for axis, gap in zip(missing, found, strict=True):
+        assert gap.startswith(f"`{axis}:`")
+        assert f"bd label add df-t {axis}:<valor>" in gap
+
+
+def test_an_estimate_given_in_the_claim_itself_counts():
+    bd = FakeBd(issue("df-t", "task", []))
+    assert check.check_line("bd update df-t --add-label vol:1,inc:2 --claim", bd, Path()) == []
+    assert len(check.check_line("bd update df-t --add-label vol:1 --claim", bd, Path())) == 1
 
 
 def test_an_epic_needs_its_success_criteria():
@@ -420,6 +446,8 @@ def test_end_to_end_a_child_that_inherits_the_parent_estimate_cannot_be_claimed(
     bd_json(bdrepo, "label", "remove", child, "vol:2")
     assert run_hook(bdrepo, f"bd update {child} --claim") is None
     clean = bd_create(bdrepo, "Outra", "--parent", parent, "--no-inherit-labels", "-l", "vol:1", "--acceptance", "x")
+    assert "`inc:`" in run_hook(bdrepo, f"bd update {clean} --claim")
+    bd_json(bdrepo, "label", "add", clean, "inc:1")
     assert run_hook(bdrepo, f"bd update {clean} --claim") is None
 
 
@@ -436,7 +464,7 @@ def test_end_to_end_a_child_is_created_only_without_the_parent_labels(bdrepo):
 
 
 def test_check_line_prefixes_each_gap_with_its_command(tmp_path):
-    bd = FakeBd(issue(labels=without(BUG_LABELS, "achado-por:")), issue("df-f", "feature", []),
+    bd = FakeBd(issue(labels=without(BUG_LABELS, "achado-por:")), issue("df-f", "feature", ESTIMATE),
                 lint={"df-f": CRITERIA})
     found = check.check_line(f"bd close df-bug --reason {shlex.quote(NOTE)}; bd update df-f --claim", bd, tmp_path)
     assert [f.split("]")[0] for f in found] == ["[bd close df-bug", "[bd update df-f --claim"]
@@ -554,7 +582,7 @@ def run_hook(repo, command):
 
 @NEEDS_BD
 def test_end_to_end_claim_needs_the_acceptance_criterion(bdrepo):
-    bead = bd_create(bdrepo, "Sem critério", "-t", "feature")
+    bead = bd_create(bdrepo, "Sem critério", "-t", "feature", "-l", "vol:1,inc:1")
     assert "critério de aceite" in run_hook(bdrepo, f"bd update {bead} --claim")
     bd_json(bdrepo, "update", bead, "--acceptance", "o teste X passa")
     assert run_hook(bdrepo, f"bd update {bead} --claim") is None
