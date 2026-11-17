@@ -331,6 +331,54 @@ def test_an_epic_needs_its_success_criteria():
     assert "Success Criteria" in check.claim_problems(issue("df-e", "epic", []), ["## Success Criteria"], False)[0]
 
 
+# --------------------------------------------------------------------------- one value per label (df-b89w)
+
+
+SINGLE = st.sampled_from(check.SINGLE_VALUED)
+VALUE = st.sampled_from(["1", "2", "3", "planejado", "descoberto", "defeito"])
+
+
+@given(SINGLE, st.lists(VALUE, min_size=2, max_size=3, unique=True))
+def test_two_values_of_a_single_valued_label_stop_claim_and_close(key, values):
+    doubled = [*without(BUG_LABELS, key + ":"), *(f"{key}:{v}" for v in values)]
+    for found in (check.claim_problems(issue(labels=doubled), [], False), close(issue(labels=doubled))):
+        named = [f for f in found if "em dobro" in f]
+        assert len(named) == 1
+        assert f"bd label remove df-bug {key}:" in named[0]
+        assert all(f"`{key}:{v}`" in named[0] for v in values)
+
+
+@given(st.lists(st.tuples(SINGLE, VALUE), max_size=8))
+def test_one_value_per_label_is_never_a_duplicate(pairs):
+    labels = [f"{k}:{v}" for k, v in dict(pairs).items()]
+    assert check.duplicate_problems({*labels, "ci", "furo-de:df-a", "furo-de:df-b"}, "df-x") == []
+
+
+def test_a_second_value_set_in_the_same_line_counts_and_old_beads_are_checked_too():
+    labels = ["vol:2", "inc:2", "origem:descoberto"]
+    old = issue("df-t", "task", labels, created=OLD)
+    assert "`vol:` em dobro" in check.claim_problems(old, None, True, {"vol:1"})[0]
+    steps = check.read_line("bd update df-t --add-label inc:1 --claim")
+    assert "`inc:` em dobro" in check.check_steps(steps, FakeBd(issue("df-t", "task", labels)), Path())[0]
+
+
+def test_session_beads_and_the_waiver_skip_the_duplicate_check():
+    doubled = ["vol:1", "vol:2"]
+    assert check.claim_problems(issue("df-s", "session", doubled), [], False) == []
+    assert close(issue(labels=[*doubled, check.WAIVER])) == []
+
+
+@NEEDS_BD
+def test_end_to_end_a_child_that_inherits_the_parent_estimate_cannot_be_claimed(bdrepo):
+    parent = bd_create(bdrepo, "Mãe", "-l", "vol:2,inc:2,origem:descoberto", "--acceptance", "x")
+    child = bd_create(bdrepo, "Filha", "--parent", parent, "-l", "vol:1", "--acceptance", "x")
+    assert "`vol:` em dobro" in run_hook(bdrepo, f"bd update {child} --claim")
+    bd_json(bdrepo, "label", "remove", child, "vol:2")
+    assert run_hook(bdrepo, f"bd update {child} --claim") is None
+    clean = bd_create(bdrepo, "Outra", "--parent", parent, "--no-inherit-labels", "-l", "vol:1", "--acceptance", "x")
+    assert run_hook(bdrepo, f"bd update {clean} --claim") is None
+
+
 # --------------------------------------------------------------------------- the whole line
 
 
