@@ -12,8 +12,9 @@
   minimumReleaseAge: "3 days",
   automerge: true,
   platformAutomerge: true,
-  // The ruleset requires a PR to be up to date with main.
-  rebaseWhen: "behind-base-branch",
+  // The ruleset lets a green PR merge while behind main (df-0ha4), so several merge side by side
+  // instead of one CI round each in a queue. Renovate rebases only a PR that conflicts.
+  rebaseWhen: "conflicted",
   // The whole lock, transitive dependencies included, re-resolved within pyproject's ranges.
   lockFileMaintenance: { enabled: true, automerge: true, schedule: ["before 6am on monday"] },
   // Security fixes skip the schedule and the release age (Renovate's default), from GitHub's
