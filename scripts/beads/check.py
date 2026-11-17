@@ -4,6 +4,8 @@ labels and the note the measurement needs.
 Two bd commands are checked, nothing else:
 
 - `bd update <id> --claim`: the bead needs an acceptance criterion (what `bd lint` asks of its type).
+- Both: at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:` and `inc-real:` (a child
+  made with `bd create --parent` inherits the parent's labels; df-b89w).
 - `bd close <id> --reason "..."`: real difficulty (`vol-real:`, `inc-real:`), `origem:`; for bugs
   `camada:`, `erro:`, `achado-por:` and `furo-de:` (a bead id or `nenhum`), and `etapa:` whenever `furo-de:`
   names a bead; and a reason carrying the three marks `Conferi:`, `Não conferi:` and `Assumi:`.
@@ -48,6 +50,7 @@ CLOSE_SKIPPED_TYPES = frozenset({"session", "epic"})
 CLAIM_SKIPPED_TYPES = frozenset({"session"})
 LEVELS = ("1", "2", "3")
 ORIGENS = ("planejado", "descoberto", "defeito")
+SINGLE_VALUED = ("vol", "inc", "origem", "vol-real", "inc-real")  # two values: the measurement drops the bead
 # The check that should have caught a bug: the claudemain base list (DataForge adds none). The kind
 # of error (dados, crash, windows...) goes in the free `erro:` label.
 CAMADAS = ("teste", "propriedade", "gui", "estatica", "tipos", "mutacao", "fim-a-fim", "sonar", "nenhuma")
@@ -247,6 +250,19 @@ def need_free(labels, key: str, bead: str, what: str) -> str | None:
     return f"`{key}:` — {what}. Valor livre. `bd label add {bead} {key}:<valor>`"
 
 
+def duplicate_problems(labels, bead: str) -> list[str]:
+    """A gap for each single-valued label the bead carries with two different values (df-b89w)."""
+    out = []
+    for key in SINGLE_VALUED:
+        values = sorted(set(label_values(labels, key)))
+        if len(values) > 1:
+            both = ", ".join(f"`{key}:{v}`" for v in values)
+            out.append(f"`{key}:` em dobro ({both}) — fique só com o valor deste bead (uma filha herda as "
+                       f"etiquetas da mãe; crie com `--no-inherit-labels`). Antes, em outro comando: "
+                       f"`bd label remove {bead} {key}:<o que sobra>`")
+    return out
+
+
 def note_problem(reason: str) -> str | None:
     """A gap unless the reason carries Conferi:, Não conferi: and Assumi:, each followed by text."""
     marks = list(NOTE_MARK.finditer(reason))
@@ -299,7 +315,7 @@ def close_problems(issue: dict, reason: str, extra_labels, exists, candidates) -
         return []
     bead = issue["id"]
     bug = issue.get("issue_type") == "bug"
-    found = difficulty_problems(labels, bead)
+    found = duplicate_problems(labels, bead) + difficulty_problems(labels, bead)
     found.append(need(labels, "origem", ORIGENS, bead, "de onde veio o bead"))
     if bug:
         found.append(need(labels, "camada", CAMADAS, bead,
@@ -315,17 +331,19 @@ def close_problems(issue: dict, reason: str, extra_labels, exists, candidates) -
     return [f for f in found if f]
 
 
-def claim_problems(issue: dict, lint_missing: list[str] | None, acceptance: bool) -> list[str]:
+def claim_problems(issue: dict, lint_missing: list[str] | None, acceptance: bool,
+                   extra_labels=()) -> list[str]:
     """Gaps that keep `bd update --claim` of this bead from going ahead."""
-    if issue.get("issue_type") in CLAIM_SKIPPED_TYPES or acceptance or lint_missing is None:
-        return []
-    if str(issue.get("created_at") or "")[:10] < CUTOFF:
-        return []
-    missing = [m.lstrip("# ").strip() for m in lint_missing if "Criteria" in m]
-    if not missing:
+    if issue.get("issue_type") in CLAIM_SKIPPED_TYPES:
         return []
     bead = issue["id"]
-    return [f"critério de aceite — como saber que ficou pronto ({', '.join(missing)}). "
+    found = duplicate_problems(set(issue.get("labels") or ()) | set(extra_labels), bead)
+    if acceptance or lint_missing is None or str(issue.get("created_at") or "")[:10] < CUTOFF:
+        return found
+    missing = [m.lstrip("# ").strip() for m in lint_missing if "Criteria" in m]
+    if not missing:
+        return found
+    return [*found, f"critério de aceite — como saber que ficou pronto ({', '.join(missing)}). "
             f"`bd update {bead} --acceptance \"...\"` e depois reivindique."]
 
 
@@ -443,7 +461,7 @@ def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
         if issue is None:
             continue  # unknown bead or bd unavailable: bd answers that itself
         if step.kind == "claim":
-            found = claim_problems(issue, bd.lint_missing(step.bead), step.acceptance)
+            found = claim_problems(issue, bd.lint_missing(step.bead), step.acceptance, step.labels)
             what = f"bd update {step.bead} --claim"
         else:
             found = close_problems(issue, step.reason, step.labels, bd.exists,
