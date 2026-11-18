@@ -3,8 +3,9 @@ name: finance_demo
 # no schedule, so a fresh clone runs the whole pipeline: dataforge run GetFinance finance_demo
 # Only fetch differs, plus the demo's own seed of the editable tables and its synthetic holdings
 # map; every other task is finance_daily's, and tests/test_finance_demo.py keeps the two equal.
-# Change a task in both files. The synthetic fetch refuses a data/raw/ it did not write, so on the
-# prod checkout this job stops at fetch and touches nothing of the real data.
+# Change a task in both files. The synthetic fetch refuses a data/raw/ it did not write, and every
+# task that writes waits for it, so on a checkout with real data this job stops at fetch, writes
+# nothing and ends failed.
 retry:
   attempts: 2
   delay_seconds: 5
@@ -19,18 +20,23 @@ retry:
 # the data volumes are tiny, so true parallel branches would not add value today.
 tasks:
   # Seeded synthetic Pluggy payloads (scripts/synthetic/generate_synthetic_data.py). No network,
-  # so the engine default retry is enough.
+  # and its refusal of a raw layer it did not write is deterministic, so one attempt: a retry only
+  # repeats the refusal (the job-level `retry:` above does not reach tasks, DataForge df-a16k).
   - name: fetch
     script: synthetic/generate_synthetic_data.py
     params:
       target: raw
     depends_on: []
+    retry:
+      attempts: 1
+      delay_seconds: 0
 
   # Calendar regenerates the dim_calendar Delta table at data/curated/dim_calendar/ —
   # its own Delta directory, no shared lock, floats independently of the medallion branches.
+  # In the demo it waits for fetch (finance_daily's has no edge), so a refused fetch writes nothing.
   - name: calendar
     script: cleansed2curated/dim_calendar.py
-    depends_on: []
+    depends_on: [fetch]
 
   # ── Accounts branch ────────────────────────────────────────────────────────
   - name: transform_accounts

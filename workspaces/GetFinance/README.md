@@ -25,10 +25,19 @@ DATAFORGE_HOME=<DataForge folder> dataforge run GetFinance finance_demo
 ```
 
 It writes `data/` here like the daily job, and the Finanças app then shows the synthetic data. To
-start over on a checkout without real data, delete `data/`. The synthetic fetch writes only into an empty `data/raw/` or one it
-wrote itself (the file `data/raw/SYNTHETIC`), and fails before writing anything otherwise, so on a
-checkout with real data the demo stops at `fetch` and changes nothing. `tests/test_finance_demo.py`
-keeps every other task equal to `finance_daily`'s: change a task in both job files.
+start over, delete `data/`.
+
+The demo and the real data never share a `data/raw/`:
+
+- The synthetic fetch writes only into an empty `data/raw/` or one it wrote itself (it leaves the
+  file `data/raw/SYNTHETIC`), and otherwise exits 1 before writing anything. Every demo task that
+  writes waits for `fetch`, so on a checkout with real data the demo writes nothing and ends failed.
+- The real fetch (`landing/landing2raw.py`) refuses a `data/raw/` that holds `SYNTHETIC`, before any
+  Pluggy call. **To go from the demo to real data, delete `data/` first**: the demo's
+  `data/edicao.db` and curated tables are synthetic too.
+
+`tests/test_finance_demo.py` keeps every other task equal to `finance_daily`'s (the one intended
+difference is that the demo's `calendar` waits for `fetch`): change a task in both job files.
 
 ## Where it lives
 

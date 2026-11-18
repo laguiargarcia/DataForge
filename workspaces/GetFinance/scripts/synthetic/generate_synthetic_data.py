@@ -11,7 +11,8 @@
 #
 # The same checkout runs the real finance_daily in prod, where data/raw holds data that cannot be
 # rebuilt. So this script writes only into an empty raw layer or one it wrote itself (the
-# SYNTHETIC_MARKER file says so), and refuses anything else before writing a byte.
+# SYNTHETIC_MARKER file says so), and refuses anything else (exit 1) before writing a byte. The other
+# way round, landing/landing2raw.py refuses a raw layer that holds the marker.
 import argparse
 import random
 import sys

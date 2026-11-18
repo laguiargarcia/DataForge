@@ -1,4 +1,5 @@
 import argparse
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -7,6 +8,16 @@ exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding=
 parser = argparse.ArgumentParser()
 parser.add_argument("--target", required=True)
 args = parser.parse_args()
+
+# A raw layer the demo wrote (finance_demo's synthetic fetch leaves this file in it) is fabricated
+# data: landing real partitions next to it would mix the two for good. Refuse before any Pluggy call
+# or write; delete data/ to go from the demo to real data.
+SYNTHETIC_MARKER = "SYNTHETIC"
+raw_root = _connection_root(args.target)
+if (raw_root / SYNTHETIC_MARKER).exists():
+    print(f"refusing to land real data: {raw_root} holds the demo's synthetic data "
+          f"({SYNTHETIC_MARKER} file). Delete data/ before running finance_daily on this checkout.")
+    sys.exit(1)
 
 now = datetime.now(timezone.utc)
 ingestion_date = now.date()
