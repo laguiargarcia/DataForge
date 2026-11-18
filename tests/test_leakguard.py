@@ -636,15 +636,15 @@ def test_a_getfinance_data_directory_with_only_edicao_is_found(repo, capsys, tmp
 
 @pytest.mark.parametrize("layout", ["synthetic", "other workspace", "no raw or edicao"])
 def test_synthetic_data_or_another_workspace_is_not_a_source(repo, capsys, tmp_path, monkeypatch, layout):
-    """The demo's data (raw/SYNTHETIC, written by its generator) and a synthetic workspace's are made
-    up: reading them as real would flag the generator's own values. Without another source, the run
-    still needs the waiver."""
+    """The demo's data (raw/SYNTHETIC, written by its generator) is made up, and another workspace in
+    the checkout is not the one whose data is real: reading either as real would flag values that
+    are not. Without another source, the run still needs the waiver."""
     monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
     if layout == "synthetic":
         ws = make_workspace(tmp_path / "workspaces" / "GetFinance")
         (ws / "data" / "raw" / "SYNTHETIC").write_text("written by the generator\n", encoding="utf-8")
     elif layout == "other workspace":
-        make_workspace(tmp_path / "workspaces" / "GetFinance-Show")
+        make_workspace(tmp_path / "workspaces" / "MyBank")
     else:
         (tmp_path / "workspaces" / "GetFinance" / "data" / "curated").mkdir(parents=True)
     assert run(capsys, repo("a.py", f"x = '{NUMBER_BARE}'\n"))[2] == [NO_SOURCE]

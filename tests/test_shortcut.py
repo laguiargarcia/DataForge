@@ -13,7 +13,7 @@ HOME = Path("C:/Users/X/My Projects/DataForge")
 
 
 def _info(tmp_path, icon="app.ico", title="Finanças d'Ana"):
-    return AppInfo("GetFinance-Show", "financas", title, tmp_path / "dist", tmp_path,
+    return AppInfo("GetFinance", "financas", title, tmp_path / "dist", tmp_path,
                    tmp_path / icon if icon else None)
 
 
@@ -74,9 +74,9 @@ def test_desktop_vem_do_powershell_e_home_com_espacos(tmp_path, monkeypatch):
     )
     assert all(kw["encoding"] == "utf-8" and "text" not in kw for kw in kws)
     assert "OneDrive" in str(lnk)
-    assert str(lnk).endswith("Finanças d'Ana (GetFinance-Show).lnk")
+    assert str(lnk).endswith("Finanças d'Ana (GetFinance).lnk")
     script = calls[1][3]
-    expected_args = f'-m dataforge app GetFinance-Show financas --home "{HOME}"'
+    expected_args = f'-m dataforge app GetFinance financas --home "{HOME}"'
     assert f"$s.Arguments = '{expected_args}'" in script
     assert f"$s.WorkingDirectory = '{HOME}'" in script
 
