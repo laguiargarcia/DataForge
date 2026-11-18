@@ -89,45 +89,47 @@ Categories (`categorias`) and rules (`mapeamento`) are user data in `data/edicao
 
 ## Leak guard
 
-`tools/leakguard.py` runs in pre-commit and in CI (`ci.yml`, job `leak-scan`, with gitleaks). It
-blocks private files (`data/`, `report/`, `.env`, `.db`/`.parquet`/`.xlsx`), CPF/CNPJ with valid
-check digits and personal e-mails. Outside CI it also blocks every **real value** read from `data/`
+DataForge's `scripts/leakguard.py` guards this workspace too (it took in the guard this workspace
+had, df-bsb2.2.2). It runs in pre-commit and in CI (job `leak-scan`, with gitleaks), and blocks
+private files (here: `data/`, `report/`, `docs/archive/`, `docs/workbook.md`, `config/investments.yaml`,
+`config/merchant_normalization.local.yaml`; anywhere: a `.env` other than `.env.example`, a
+`.db`/`.parquet`/`.xlsx`), CPF/CNPJ with valid check digits, account short codes and personal
+e-mails. On the owner's machine it also blocks every **real value** read from the real `data/`
 (Pluggy ids, account numbers, owner and counterparty names, documents), `data/edicao.db` (category
-rules) and `.env`. Examples in code, docs and tests use fake values only (e.g.
+rules) and the `.env` beside it. It finds them through `GETFINANCE_DATA` (this workspace's real
+`data/`, set on the command) and through the workspaces listed in DataForge's gitignored
+`.leakguard-workspaces`. Examples in code, docs and tests use fake values only (e.g.
 `901/0001/00012345-6`); a real account number in a docstring example reached the public DataForge
-repo this way (df-k37o). A public value it flags (a company name anyone can look up) goes in
-`tools/leakguard-allow.txt`, never a personal one. Audit the whole history with `--history`.
+repo this way (df-k37o). Audit the whole history with `scripts/leakguard.py --history`.
 
 ## Tests
 
-The pipeline tests live here, in `tests/` (DataForge df-rt6w, ADR 0004). Install once, on Python 3.14:
-`uv venv --python 3.14 .venv && uv pip install --python .venv/bin/python -r requirements-test.txt`
-(it pins the DataForge engine to a commit; bump it on purpose).
+The pipeline tests live here, in `tests/`, with their own `pytest.ini`. They run on DataForge's
+venv (`uv sync`; the engine is the checkout's own `dataforge/`, no pin), from the DataForge root:
+`python -m pytest workspaces/GetFinance -m 'not integration'`. They cannot share one pytest run with
+DataForge's `tests/` (both are a package named `tests`): CI runs them in their own job,
+`tests-getfinance`, whose coverage goes to SonarQube Cloud with the engine's.
 
-- **Each checkout tests itself.** `tests/_delta_util.py` gives `ROOT` and `SCRIPTS` (this checkout,
-  a worktree or the main one) and `REAL_DATA`. When the environment variable `GETFINANCE_DATA` is
-  set, `REAL_DATA` is the directory it names: the prod workspace's `data/` (with `raw/`), read-only;
-  it wins over any `data/` in the checkout. The dev clone has no `data/` and needs it (DataForge
-  df-aef7.1). Without it, `REAL_DATA` is the main checkout's `data/`, since a worktree has none. The
-  leak guard reads the same `data/` (and the `.env` beside it); outside CI it fails when it finds no
-  real value at all, and with the variable set a `data/` that yields none is an error. The variable
-  lasts per shell or per command (a tool that runs each command in a fresh shell drops an `export`),
-  so put it on the command: `GETFINANCE_DATA=<workspace>/data git commit ...`,
-  `GETFINANCE_DATA=<workspace>/data .venv/bin/python -m pytest -m integration`. No hardcoded
-  workspace paths.
+- **Each checkout tests itself.** `tests/_delta_util.py` gives `ROOT` and `SCRIPTS` (this folder in
+  this checkout, a worktree or the main one) and `REAL_DATA`. When the environment variable
+  `GETFINANCE_DATA` is set, `REAL_DATA` is the directory it names: the prod workspace's `data/`
+  (with `raw/`), read-only; it wins over any `data/` in the checkout. Without it, `REAL_DATA` is
+  `data/` of this folder in the main checkout, since a worktree has none. The variable lasts per
+  shell or per command (a tool that runs each command in a fresh shell drops an `export`), so put it
+  on the command: `GETFINANCE_DATA=<workspace>/data python -m pytest workspaces/GetFinance -m integration`.
+  No hardcoded workspace paths.
 - **Two tiers.** Deterministic tests build their data in `tmp_path` and run in CI
-  (`pytest -m "not integration"`). Tests that read the real data are marked `integration`, read
+  (`-m "not integration"`). Tests that read the real data are marked `integration`, read
   `REAL_DATA` and never write it; they skip where there is none (CI, a fresh clone). Run everything
-  locally with `GETFINANCE_DATA` set and `pytest`.
+  locally with `GETFINANCE_DATA` set.
 - **Fake values only.** A test never pins a real account, agency, document, name or id: the leak guard
   blocks the commit. Build examples from fakes (`901/0001/00012345-6`, CPF/CNPJ with invalid check digits).
-- Engine changes in DataForge (`parser`, `models`, `dag`, `engine`, `tasks`) should be checked against
-  these tests locally, since DataForge's CI cannot see them.
+- `tests/test_job_wiring.py::test_finance_daily_warning_does_not_fail_the_run` is an expected
+  failure (`xfail`, strict) on the current engine until the owner decides df-vlfl.
 
 ## Git
 
-This is the private `GetFinance-Workspace` repo, branch `main`. Same rules as DataForge: change it
-through a branch and a PR from a worktree of the dev clone, never by committing to `main` or by
-switching a checkout's branch mid-work. CI is the gate; on every PR, read what SonarQube reports
-even when its check is green (the `sonar` job lists the issues in its summary). The prod checkout
-only receives merged `main` by `git pull --ff-only`.
+This workspace is a folder of the public DataForge repo (df-bsb2.2): same rules as the rest of it.
+Change it through a branch and a PR from a DataForge worktree, never by committing to `main`. CI is
+the gate; on every PR, read what SonarQube reports even when its check is green. Real data never
+enters git: the leak guard and the `.gitignore` keep `data/`, `.env` and the real config out.

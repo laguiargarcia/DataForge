@@ -22,12 +22,17 @@ def exec_functions(ns, path=FUNCTIONS):
 
 
 def _main_checkout(root: Path) -> Path:
+    """`root`'s own folder in the main checkout: the workspace is a folder of the DataForge repo, and
+    a worktree has no data/ (gitignored) while the main checkout may."""
     try:
-        common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-                                cwd=root, capture_output=True, text=True, check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
+        common, top = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel"],
+            cwd=root, capture_output=True, text=True, check=True).stdout.splitlines()
+    except (OSError, subprocess.CalledProcessError, ValueError):
         return root
-    return Path(common).parent if common and Path(common).is_dir() else root
+    if not Path(common).is_dir():
+        return root
+    return Path(common).parent / root.resolve().relative_to(Path(top).resolve())
 
 
 def real_data_dir(root: Path, environ) -> Path:

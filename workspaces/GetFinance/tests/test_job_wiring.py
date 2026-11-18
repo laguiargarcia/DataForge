@@ -63,6 +63,11 @@ def test_finance_daily_fails_when_any_task_fails(tmp_path, db_url, global_engine
 
 
 # A suspicious finding fails data_warnings but not the run: the data was written.
+# Not so on the current engine: since its PR #49 (df-h864) a failure is absorbed only by a dependent
+# that ran with an edge accepting it, and alert_warnings, the one that has it, is inactive. Owner's
+# decision pending (df-vlfl): accept the failed run, or change the wiring. strict: it must flip.
+@pytest.mark.xfail(strict=True, reason="df-vlfl: with alert_warnings inactive, the current engine fails the run "
+                                       "on a data warning")
 def test_finance_daily_warning_does_not_fail_the_run(tmp_path, db_url, global_engine, outcomes):
     outcomes["data_warnings"] = 1
     status, results = _run("finance_daily", tmp_path, db_url, global_engine)
