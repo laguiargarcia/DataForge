@@ -160,7 +160,9 @@ jobs:
   app-financas:
     # The GetFinance web app (df-bsb2.2.3): unit tests, and the committed dist/ must be the build of
     # the current src/. The Playwright e2e stays local (it needs the finance_demo data and a browser).
+    # Not a required check itself: the required `tests` job needs it, so a red app blocks the merge.
     runs-on: ubuntu-latest
+    permissions: { contents: read }
     defaults: { run: { working-directory: workspaces/GetFinance/apps/financas } }
     steps:
       - uses: actions/checkout@v7
@@ -186,11 +188,11 @@ jobs:
         # Read by the report job, which comments on the PR.
         with: { name: report-app-financas, path: report/, if-no-files-found: ignore }
   tests:
-    # Required check: every engine shard, the GUI job, the GetFinance tests and the extra random
-    # orders passed (an order-dependent failure blocks the merge too, df-n8ac.29). Merges every
-    # part's coverage into the coverage.xml the sonar job reads, and the shards' durations into the
-    # cache the next run splits by.
-    needs: [tests-shard, tests-gui, tests-getfinance, orders]
+    # Required check: every engine shard, the GUI job, the GetFinance tests, its web app and the
+    # extra random orders passed (an order-dependent failure blocks the merge too, df-n8ac.29).
+    # Merges every part's coverage into the coverage.xml the sonar job reads, and the shards'
+    # durations into the cache the next run splits by.
+    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, orders]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -229,10 +231,11 @@ jobs:
           SHARDS: "${{ needs.tests-shard.result }}"
           GUI: "${{ needs.tests-gui.result }}"
           GETFINANCE: "${{ needs.tests-getfinance.result }}"
+          APP: "${{ needs.app-financas.result }}"
           ORDERS: "${{ needs.orders.result }}"
         run: |
-          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, orders: $ORDERS"
-          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$ORDERS" = "success" ]
+          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, orders: $ORDERS"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$ORDERS" = "success" ]
   tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
     # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage

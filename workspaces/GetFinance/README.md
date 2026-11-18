@@ -47,9 +47,11 @@ change it, from the app folder after `npm ci`:
 
 - `npm test`: the unit tests (vitest).
 - `npm run build`: type-check and rebuild `dist/`. Commit `dist/` with every change to `src/`; CI
-  (job `app-financas`) runs the tests and the build and fails when the committed `dist/` differs.
+  (job `app-financas`, needed by the required `tests` check) runs the tests and the build, and the
+  PR cannot merge when they fail or the committed `dist/` differs.
 - `npm run test:e2e`: builds, then runs Playwright (`npx playwright install chromium` once) against
-  a `dataforge serve` of this checkout. It needs the demo's data (run `finance_demo` first) and
+  a `dataforge serve` of this checkout on port 8765, started with the repo root's
+  `.venv/bin/dataforge` (or `DATAFORGE_BIN`). It needs the demo's data (run `finance_demo` first) and
   refuses to start without `data/raw/SYNTHETIC`, so it never shows real data. The values it checks
   and the screenshots in `e2e/referencia/` come from that synthetic data.
 
