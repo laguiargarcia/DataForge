@@ -1,0 +1,3 @@
+[run]
+# Paths relative to the repo root, as Sonar reads them from coverage.xml in another job.
+relative_files = True

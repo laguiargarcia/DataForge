@@ -1,0 +1,11 @@
+name: backup
+# Zip semanal do que não tem reposição: data/raw + data/edicao.db (DataForge df-sgyf). Disparado por
+# triggers/backup.yaml; também roda à mão antes de mexer perto do raw: `dataforge run GetFinance backup`.
+# destino é relativo à raiz do workspace: ../../../_backups/GetFinance = projects/_backups/GetFinance,
+# fora de qualquer repo, no mesmo disco.
+tasks:
+  - name: backup
+    script: backup/backup_dados.py
+    params:
+      destino: ../../../_backups/GetFinance
+      manter: 8

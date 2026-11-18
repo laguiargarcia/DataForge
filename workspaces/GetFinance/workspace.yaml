@@ -1,0 +1,4 @@
+name: GetFinance
+version: "1.0"
+engine: duckdb
+database: sqlite
