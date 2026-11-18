@@ -752,6 +752,10 @@ def test_a_value_of_exactly_the_minimum_length_is_kept(repo, capsys, tmp_path):
 
 def _cli_repo(tmp_path, monkeypatch):
     """A scratch repo with its own copy of the guard: its main checkout is the scratch repo, never this one."""
+    if "from mutmut." in GUARD.read_text(encoding="utf-8"):
+        # The mutation run instruments the guard, and the copy imports mutmut, which cannot start
+        # outside the mutation's own folder. The in-process tests below hold the same rules.
+        pytest.skip("guard instrumented by the mutation run: its copy cannot run as a command")
     _clean_env(monkeypatch)
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
     repo = _init(tmp_path / "repo")
