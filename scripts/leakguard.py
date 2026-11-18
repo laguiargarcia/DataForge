@@ -69,6 +69,7 @@ DATA_VARIABLE = "GETFINANCE_DATA"   # a workspace's data/ directory, set on the 
 NO_DATA_VARIABLE = "LEAKGUARD_NO_REAL_DATA"
 REAL_WORKSPACE = "GetFinance"   # the workspace whose data/ is real, read from the main checkout unnamed
 SYNTHETIC_MARKER = "SYNTHETIC"   # in data/raw/: written by the demo's generate_synthetic_data.py
+EDICAO_DB = "edicao.db"   # in data/: the edits database, real categories and rules
 
 # ---------------------------------------------------------------------------- private files
 
@@ -275,8 +276,8 @@ def real_values(workspace):
     sources = []
     if (workspace / "data" / "raw").is_dir():
         sources.append(_raw_values(workspace / "data" / "raw"))
-    if (workspace / "data" / "edicao.db").is_file():
-        sources.append(_edicao_values(workspace / "data" / "edicao.db"))
+    if (workspace / "data" / EDICAO_DB).is_file():
+        sources.append(_edicao_values(workspace / "data" / EDICAO_DB))
     if (workspace / ".env").is_file():
         sources.append(_env_values(workspace / ".env"))
     found = {}
@@ -344,7 +345,7 @@ def _found_workspaces():
     data = ws / "data"
     if (data / "raw" / SYNTHETIC_MARKER).is_file():
         return []
-    if (data / "raw").is_dir() or (data / "edicao.db").is_file():
+    if (data / "raw").is_dir() or (data / EDICAO_DB).is_file():
         return [(ws, f"{ws} (found in the main checkout)")]
     return []
 
@@ -482,14 +483,17 @@ def _read_bytes(path):
 
 
 def _decode(data):
-    """Bytes as text in UTF-16 (with BOM), UTF-8 or cp1252. Every file is read, a binary one or a text
-    with a stray NUL included: digits written in it are found all the same."""
+    """Bytes as text in UTF-16 (with BOM), UTF-8 or cp1252, with CRLF read as LF (a value split across
+    lines measures the same on a Windows checkout). Every file is read, a binary one or a text with a
+    stray NUL included: digits written in it are found all the same."""
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
-        return data.decode("utf-16", errors="replace")
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data.decode("cp1252", errors="replace")
+        text = data.decode("utf-16", errors="replace")
+    else:
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = data.decode("cp1252", errors="replace")
+    return text.replace("\r\n", "\n")
 
 
 def _binary_in_workspace(rel, data):

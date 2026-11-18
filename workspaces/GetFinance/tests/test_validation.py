@@ -764,13 +764,12 @@ def test_transactions_script_refuses_a_flipped_sign(tmp_path):
 
 def _run_data_warnings(tmp_path):
     script = SCRIPTS / "validation" / "data_warnings.py"
-    source = "\n".join(line for line in script.read_text(encoding="utf-8").splitlines()
-                       if not line.strip().startswith("exec(open("))
+    code = _delta_util.compile_script(script)
     ns = _load_functions(tmp_path)
     ns["__file__"] = str(script)
     old_argv, sys.argv = sys.argv, ["data_warnings"]
     try:
-        exec(source, ns)
+        exec(code, ns)
     except SystemExit as e:
         return e.code
     finally:

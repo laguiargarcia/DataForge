@@ -697,11 +697,10 @@ def _load_norm_funcs(tmp_path, monkeypatch, rules_yaml: str, local_yaml: str | N
     cfg.write_text(rules_yaml)
     if local_yaml is not None:
         (tmp_path / "norm.local.yaml").write_text(local_yaml)
-    script = (scripts / "raw2cleansed" / "raw2cleansed.py").read_text()
+    script = scripts / "raw2cleansed" / "raw2cleansed.py"
     # keep everything before argument parsing (the pure helpers + rule load)
-    head = script.split("parser = argparse.ArgumentParser()")[0]
-    head = "\n".join(l for l in head.splitlines() if not l.strip().startswith("exec(open("))
-    ns: dict = {"__file__": str(scripts / "raw2cleansed" / "raw2cleansed.py")}
+    head = _delta_util.compile_script(script, until="parser = argparse.ArgumentParser()")
+    ns: dict = {"__file__": str(script)}
     _delta_util.exec_functions(ns)
     # monkeypatch (not raw os.environ) so MERCHANT_NORM_CONFIG is restored after the test —
     # otherwise it leaks into later tests that load the live config (order-dependent failures).

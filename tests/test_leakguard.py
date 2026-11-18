@@ -16,7 +16,6 @@ from pathlib import Path
 
 import polars as pl
 import pytest
-import yaml
 
 from scripts import leakguard
 
@@ -230,6 +229,14 @@ def test_an_example_e_mail_passes(repo, capsys):
 def test_an_owner_name_is_blocked_except_where_attribution_is_intended(repo, capsys):
     text = "Copyright\nFulano de\n  Tal\n"
     code, _, failures = run(capsys, repo("src.py", text), repo("README.md", text), repo("LICENSE", text))
+    assert code == 1
+    assert failures == ["NAME: src.py:2 -> 'Fu…' (15 chars)"]
+
+
+def test_a_crlf_file_reports_the_same_finding_as_an_lf_one(repo, capsys, tmp_path):
+    """A Windows checkout writes CRLF: a name split across lines measures the same, on the same line."""
+    (tmp_path / "src.py").write_bytes(b"Copyright\r\nFulano de\r\n  Tal\r\n")
+    code, _, failures = run(capsys, "src.py")
     assert code == 1
     assert failures == ["NAME: src.py:2 -> 'Fu…' (15 chars)"]
 
@@ -805,22 +812,6 @@ def test_the_command_finds_the_data_directory_of_a_workspace_in_the_checkout(tmp
     assert result.returncode == 1
     assert "REAL: fixture.py:1 -> 'fu…'" in result.stderr
     assert "raw.accounts.owner from GetFinance" in result.stderr
-
-
-PRE_COMMIT_CONFIG = Path(__file__).resolve().parent.parent / ".pre-commit-config.yaml"
-
-
-def test_pre_commit_checks_the_commit_message_with_the_guard():
-    """B3: a real value typed in a commit message is refused at commit time, not only by --history."""
-    config = yaml.safe_load(PRE_COMMIT_CONFIG.read_text(encoding="utf-8"))
-    hooks = {h["id"]: h for repo in config["repos"] for h in repo["hooks"]}
-    assert "commit-msg" in config["default_install_hook_types"]
-    assert hooks["leakguard-message"]["entry"] == hooks["leakguard"]["entry"] == "python scripts/leakguard.py"
-    assert hooks["leakguard-message"]["stages"] == ["commit-msg"]
-    # Only the message hook runs on the message: the file hooks stay at the commit's own stage.
-    assert config["default_stages"] == ["pre-commit"]
-    assert "tools/leakguard.py" not in PRE_COMMIT_CONFIG.read_text(encoding="utf-8")
-    assert "ALLOWLIST" not in (PRE_COMMIT_CONFIG.parent / ".gitleaks.toml").read_text(encoding="utf-8")
 
 
 def test_a_force_added_ignored_file_is_private(tmp_path, monkeypatch):

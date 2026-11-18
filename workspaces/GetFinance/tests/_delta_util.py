@@ -21,6 +21,17 @@ def exec_functions(ns, path=FUNCTIONS):
     return ns
 
 
+def compile_script(path, until=None):
+    """A pipeline script's code, without its `exec(open(...functions.py))` line (the test loads the
+    functions itself), compiled under the script's own file name with its line numbers kept: coverage
+    then counts the lines the tests run (DataForge df-bsb2.2.5). `until`: only the text before it."""
+    text = path.read_text(encoding="utf-8")
+    if until is not None:
+        text = text.split(until)[0]
+    lines = ["" if line.strip().startswith("exec(open(") else line for line in text.splitlines()]
+    return compile("\n".join(lines), str(path), "exec")
+
+
 def _main_checkout(root: Path) -> Path:
     """`root`'s own folder in the main checkout: the workspace is a folder of the DataForge repo, and
     a worktree has no data/ (gitignored) while the main checkout may."""
@@ -60,10 +71,7 @@ def read(tmp_path, layer, table):
 
 def run_script(layer_dir, name, argv, tmp_path, overrides=None):
     script_path = SCRIPTS / layer_dir / f"{name}.py"
-    source = "\n".join(
-        line for line in script_path.read_text().splitlines()
-        if not line.strip().startswith("exec(open(")
-    )
+    code = compile_script(script_path)
     ns = {"__file__": str(script_path)}
     exec_functions(ns)
     ns["_connection_root"] = lambda lyr: tmp_path / lyr
@@ -71,7 +79,7 @@ def run_script(layer_dir, name, argv, tmp_path, overrides=None):
         ns.update(overrides)
     old_argv, sys.argv = sys.argv, ["script"] + argv
     try:
-        exec(source, ns)
+        exec(code, ns)
     except SystemExit:
         pass
     finally:

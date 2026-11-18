@@ -11,17 +11,14 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
 def run_script(name: str, argv: list[str], overrides: dict | None = None) -> dict:
     script_path = SCRIPTS / "landing" / f"{name}.py"
-    source = "\n".join(
-        line for line in script_path.read_text().splitlines()
-        if not line.strip().startswith("exec(open(")
-    )
+    code = _delta_util.compile_script(script_path)
     ns: dict = {"__file__": str(script_path)}
     _delta_util.exec_functions(ns)
     if overrides:
         ns.update(overrides)
     old_argv, sys.argv = sys.argv, ["script"] + argv
     try:
-        exec(source, ns)
+        exec(code, ns)
     except SystemExit:
         pass
     finally:
