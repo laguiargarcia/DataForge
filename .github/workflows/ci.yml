@@ -157,6 +157,34 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-tests-getfinance, path: report/, if-no-files-found: ignore }
+  app-financas:
+    # The GetFinance web app (df-bsb2.2.3): unit tests, and the committed dist/ must be the build of
+    # the current src/. The Playwright e2e stays local (it needs the finance_demo data and a browser).
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: workspaces/GetFinance/apps/financas } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workspaces/GetFinance/apps/financas/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Unit tests and build
+        shell: bash   # pipefail: each command's exit code survives the tee
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          { npm test && npm run build; } 2>&1 | tee "$GITHUB_WORKSPACE/report/app-financas.txt"
+      - name: Committed dist is the build
+        shell: bash
+        run: |
+          changed=$(git status --porcelain --untracked-files=all -- dist)
+          if [ -n "$changed" ]; then echo "dist differs from the build of src (run npm run build and commit dist):"; echo "$changed"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-app-financas, path: report/, if-no-files-found: ignore }
   tests:
     # Required check: every engine shard, the GUI job, the GetFinance tests and the extra random
     # orders passed (an order-dependent failure blocks the merge too, df-n8ac.29). Merges every
@@ -441,7 +469,7 @@ jobs:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
-    needs: [leak-scan, quality, tests, tests-getfinance, tests-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:

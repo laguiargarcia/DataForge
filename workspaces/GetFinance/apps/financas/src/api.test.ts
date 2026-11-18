@@ -15,7 +15,7 @@ function mockFetchReject() {
 function setLocation(pathname: string) { vi.stubGlobal('location', { pathname }) }
 const lastUrl = () => urls[urls.length - 1]
 
-beforeEach(() => { urls = []; setLocation('/apps/GetFinance-Show/financas/') })
+beforeEach(() => { urls = []; setLocation('/apps/GetFinance/financas/') })
 afterEach(() => { vi.unstubAllGlobals() })
 
 test('404 vira null', async () => { mockFetch(404); expect(await lerTabela('x')).toBeNull() })
@@ -36,5 +36,5 @@ test('decodifica o workspace e devolve as linhas', async () => {
 })
 test('sem segmento apps (dev) usa /api e o workspace padrão', async () => {
   setLocation('/'); mockFetch(200, { columns: [], rows: [], truncated: false })
-  await lerTabela('t'); expect(lastUrl()).toBe('/api/workspaces/GetFinance-Show/tables/t')
+  await lerTabela('t'); expect(lastUrl()).toBe('/api/workspaces/GetFinance/tables/t')
 })

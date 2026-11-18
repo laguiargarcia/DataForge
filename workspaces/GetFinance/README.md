@@ -39,6 +39,20 @@ The demo and the real data never share a `data/raw/`:
 `tests/test_finance_demo.py` keeps every other task equal to `finance_daily`'s (the one intended
 difference is that the demo's `calendar` waits for `fetch`): change a task in both job files.
 
+## The Finanças app
+
+`apps/financas` is a React app over the `curated.report_*` tables. `dataforge serve` publishes its
+committed `dist/` at `/apps/GetFinance/financas/` (no Node needed to run it). Node is needed only to
+change it, from the app folder after `npm ci`:
+
+- `npm test`: the unit tests (vitest).
+- `npm run build`: type-check and rebuild `dist/`. Commit `dist/` with every change to `src/`; CI
+  (job `app-financas`) runs the tests and the build and fails when the committed `dist/` differs.
+- `npm run test:e2e`: builds, then runs Playwright (`npx playwright install chromium` once) against
+  a `dataforge serve` of this checkout. It needs the demo's data (run `finance_demo` first) and
+  refuses to start without `data/raw/SYNTHETIC`, so it never shows real data. The values it checks
+  and the screenshots in `e2e/referencia/` come from that synthetic data.
+
 ## Where it lives
 
 - **Development** happens in a clone on the Linux disk, inside the DataForge dev clone, at

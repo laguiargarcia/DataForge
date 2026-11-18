@@ -5,7 +5,7 @@ function endereco(tabela: string): string {
   if (m) {
     return `../../../api/workspaces/${encodeURIComponent(decodeURIComponent(m[1]))}/tables/${tabela}`
   }
-  const ws = import.meta.env.VITE_WORKSPACE || 'GetFinance-Show'
+  const ws = import.meta.env.VITE_WORKSPACE || 'GetFinance'
   return `/api/workspaces/${encodeURIComponent(ws)}/tables/${tabela}`
 }
 
