@@ -1,7 +1,7 @@
 <#
 Aceite em Windows limpo (Finanças v0, criterio 1).
 Copia so os arquivos da lista (git ls-files -co --exclude-standard, gerada no WSL)
-para uma pasta temporaria nova, tira o Node do PATH, instala, roda o job, sobe
+para uma pasta temporaria nova, tira o Node do PATH, instala, roda o job de demo (finance_demo), sobe
 `dataforge serve` e confere o app no Edge headless. Aborta no primeiro erro.
 #>
 param(
@@ -14,6 +14,7 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $utf8 = New-Object System.Text.UTF8Encoding($false)
+# Os mesmos valores que o e2e do app confere (apps/financas/e2e), do dado sintetico do finance_demo.
 $Expected = @("6.066,74", "6.500,00", "433,26", "2.713,73", "5.230,55", "63.943,70")
 $server = $null
 $Fora = $null
@@ -81,8 +82,8 @@ try {
     Write-Host "Copiados para $Dest"
     $ws = Get-ChildItem (Join-Path $Dest "workspaces") -Directory | ForEach-Object { $_.Name }
     Write-Host "workspaces copiados: $($ws -join ', ')"
-    if (@($ws).Count -ne 1 -or $ws -ne "GetFinance-Show") { throw "workspaces copiados deve ser exatamente GetFinance-Show, veio: $($ws -join ', ')" }
-    $dist = Join-Path $Dest "workspaces\GetFinance-Show\apps\financas\dist\index.html"
+    if (@($ws).Count -ne 1 -or $ws -ne "GetFinance") { throw "workspaces copiados deve ser exatamente GetFinance, veio: $($ws -join ', ')" }
+    $dist = Join-Path $Dest "workspaces\GetFinance\apps\financas\dist\index.html"
     if (-not (Test-Path $dist)) { throw "dist\index.html ausente na copia" }
     Write-Host "dist\index.html presente: $dist"
     Set-Location $Dest
@@ -105,7 +106,7 @@ try {
 
     # 4-5. job
     $env:DATAFORGE_HOME = (Get-Location).Path
-    Invoke-Native "dataforge run GetFinance-Show finance_daily" { & .venv\Scripts\dataforge run GetFinance-Show finance_daily }
+    Invoke-Native "dataforge run GetFinance finance_demo" { & .venv\Scripts\dataforge run GetFinance finance_demo }
 
     # 6. serve
     $so = Join-Path $Dest "serve.out"; $se = Join-Path $Dest "serve.err"
@@ -143,7 +144,7 @@ try {
     $marcador = "MARCADOR-FORA-DA-COPIA"
     [System.IO.File]::WriteAllText((Join-Path $Fora "app.yaml"), "name: '$($Fora.Replace("'", "''"))'`n", $utf8)
     [System.IO.File]::WriteAllText((Join-Path $Fora "dist\index.html"), "<html>$marcador</html>", $utf8)
-    $base = "http://127.0.0.1:$Port/apps/GetFinance-Show"
+    $base = "http://127.0.0.1:$Port/apps/GetFinance"
     $problemas = @()
     $r = Get-Probe "$base/$([Uri]::EscapeDataString($Fora))/"
     Write-Host "app em caminho absoluto -> $($r.Status)"
@@ -161,7 +162,7 @@ try {
     Get-DomValues $url "run1"
 
     # 9. segunda execucao
-    Invoke-Native "dataforge run GetFinance-Show finance_daily (2a)" { & .venv\Scripts\dataforge run GetFinance-Show finance_daily }
+    Invoke-Native "dataforge run GetFinance finance_demo (2a)" { & .venv\Scripts\dataforge run GetFinance finance_demo }
     Get-DomValues $url "run2"
 
     $ok = $true

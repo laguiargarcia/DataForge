@@ -1,0 +1,18 @@
+connections:
+  raw:
+    type: parquet_dir
+    path: data/raw/
+  cleansed:
+    type: delta_dir
+    path: data/cleansed/
+  curated:
+    type: delta_dir
+    path: data/curated/
+  edicao:
+    type: sqlite_file
+    path: data/edicao.db
+  # Suspicious findings of the data checks, one JSON file per check (ADR 0004, df-ahua.3); read by
+  # scripts/validation/data_warnings.py. Rewritten every run.
+  validation:
+    type: json_dir
+    path: data/validation/

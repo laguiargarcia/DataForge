@@ -1,0 +1,255 @@
+name: finance_demo
+# The demo (DataForge df-bsb2.2.1): finance_daily on synthetic data, with no .env, no Pluggy call and
+# no schedule, so a fresh clone runs the whole pipeline: dataforge run GetFinance finance_demo
+# Only fetch differs, plus the demo's own seed of the editable tables and its synthetic holdings
+# map; every other task is finance_daily's, and tests/test_finance_demo.py keeps the two equal.
+# Change a task in both files. The synthetic fetch refuses a data/raw/ it did not write, and every
+# task that writes waits for it, so on a checkout with real data this job stops at fetch, writes
+# nothing and ends failed.
+retry:
+  attempts: 2
+  delay_seconds: 5
+
+# Per-entity fan-out (U9 / df-3t6). One fetch lands raw accounts + transactions +
+# investments; three medallion branches then build the star schema so every fact
+# accumulates on the daily schedule.
+#
+# WHY SERIALIZED, NOT PARALLEL: cleansed and curated layers use Delta tables
+# (Polars + delta-rs). Each table is an independent Delta directory, so there is
+# no shared file lock. The branches are chained for data-dependency correctness;
+# the data volumes are tiny, so true parallel branches would not add value today.
+tasks:
+  # Seeded synthetic Pluggy payloads (scripts/synthetic/generate_synthetic_data.py). No network,
+  # and its refusal of a raw layer it did not write is deterministic, so one attempt: a retry only
+  # repeats the refusal (the job-level `retry:` above does not reach tasks, DataForge df-a16k).
+  - name: fetch
+    script: synthetic/generate_synthetic_data.py
+    params:
+      target: raw
+    depends_on: []
+    retry:
+      attempts: 1
+      delay_seconds: 0
+
+  # Calendar regenerates the dim_calendar Delta table at data/curated/dim_calendar/ —
+  # its own Delta directory, no shared lock, floats independently of the medallion branches.
+  # In the demo it waits for fetch (finance_daily's has no edge), so a refused fetch writes nothing.
+  - name: calendar
+    script: cleansed2curated/dim_calendar.py
+    depends_on: [fetch]
+
+  # ── Accounts branch ────────────────────────────────────────────────────────
+  - name: transform_accounts
+    script: raw2cleansed/raw2cleansed_accounts.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fetch]
+
+  - name: dim_accounts
+    script: cleansed2curated/cleansed2curated_accounts.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform_accounts]
+
+  - name: fact_balance
+    script: cleansed2curated/fact_balance_snapshot.py
+    params:
+      source: raw
+      target: curated
+    depends_on: [dim_accounts]
+
+  # ── Bills branch ─────────────────────────────────────────────────────────────
+  # Credit-card statements (one row per billing cycle). fetch now also lands raw/bills.
+  # transform_bills serializes after fact_balance (serialization edge only) to keep
+  # the cleansed/curated writers single-threaded.
+  - name: transform_bills
+    script: raw2cleansed/raw2cleansed_bills.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fact_balance]
+
+  # ── Investments branch ──────────────────────────────────────────────────────
+  # depends_on transform_bills is a *serialization* edge, not a data dep: its only
+  # purpose is to single-thread transform_investments so it never shares a level
+  # with another cleansed/curated writer. (Was fact_card_statement before df-hog
+  # moved that task after `transform` — see the Transactions branch.)
+  - name: transform_investments
+    script: raw2cleansed/raw2cleansed_investments.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [transform_bills]
+
+  # The synthetic holdings (config/investments.yaml is the owner's own map, never versioned).
+  - name: dim_investments
+    script: cleansed2curated/cleansed2curated_investments.py
+    params:
+      source: cleansed
+      target: curated
+      investments-config: config/investments.synthetic.yaml
+    depends_on: [transform_investments]
+
+  - name: fact_investments
+    script: cleansed2curated/fact_investment_position.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [dim_investments]
+
+  # ── Transactions branch ─────────────────────────────────────────────────────
+  # depends_on fact_investments is a serialization edge (single-threads the
+  # cleansed writer). curate's real data deps are both made explicit below.
+  - name: transform
+    script: raw2cleansed/raw2cleansed.py
+    params:
+      source: raw
+      target: cleansed
+    depends_on: [fact_investments]
+
+  # fact_card_statement real data deps: cleansed.bills (transform_bills), curated.dim_account
+  # (dim_accounts), AND — since df-hog — cleansed.transactions (transform): charge references
+  # for re-issue dedup + BANK 05100000 settlement legs. Moved into this branch after
+  # `transform` so the transactions data dep is satisfied without a cycle.
+  - name: fact_card_statement
+    script: cleansed2curated/fact_card_statement.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform_bills, dim_accounts, transform]
+
+  - name: curate
+    script: cleansed2curated/cleansed2curated.py
+    params:
+      source: cleansed
+      target: curated
+    # Real data deps: cleansed.transactions (transform) AND curated.dim_account
+    # (dim_accounts) — fact_transaction inner-joins dim_account for account_uuid.
+    # depends_on fact_card_statement is a serialization edge (single-threads the
+    # curated writers after the df-hog reorder).
+    depends_on: [transform, dim_accounts, fact_card_statement]
+
+  # Counterparty dimension (df-pzu): one row per CPF/CNPJ from the frozen cleansed counterparty
+  # columns. Reads cleansed.transactions; serialized after curate to keep the curated writer
+  # single-threaded (its real data dep is transform).
+  - name: dim_counterparty
+    script: cleansed2curated/dim_counterparty.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [transform, curate]
+
+  # Fatura per due-month (fatura-panel spec). Real data deps: curated.fact_card_statement
+  # (fact_card_statement) + curated.fact_transaction (curate). depends_on dim_counterparty
+  # additionally serializes it as the last curated writer in the chain.
+  - name: fact_fatura_mes
+    script: cleansed2curated/fact_fatura_mes.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on: [curate, fact_card_statement, dim_counterparty]
+
+  # Resumo v3 no ETL (df-cns etapa 1). classify aplica o roteamento de categorias com o dicionário
+  # e o mapeamento do banco de edição (data/edicao.db); report grava os números e listas do Resumo.
+  # As duas também formam o job `reclassificar` (sem Pluggy), que reaplica as regras após uma edição.
+  # seed_edicao fills the editable tables (data/edicao.db) from the synthetic config/edicao/*.csv,
+  # only when they are empty, so a fresh clone classifies and later edits are kept. After fetch, so
+  # it does not run where fetch refused.
+  - name: seed_edicao
+    script: report/carga_inicial_edicao.py
+    params:
+      dicionario: config/edicao/dicionario.csv
+      mapeamento: config/edicao/mapeamento.csv
+    depends_on: [fetch]
+
+  - name: classify
+    script: report/classify.py
+    params:
+      source: curated
+      target: curated
+    depends_on: [seed_edicao, curate, fact_fatura_mes]
+
+  - name: report
+    script: report/report_curated.py
+    params:
+      source: curated
+      target: curated
+    depends_on: [classify, fact_balance, fact_investments, fact_fatura_mes]
+
+  # ── Data checks and alerts (ADR 0004, df-ahua.3) ────────────────────────────
+  # The checks themselves run inside the scripts above, before each write (validate() in
+  # functions.py). An IMPOSSIBLE finding makes its task fail, so everything after it is skipped and
+  # curated keeps yesterday's data. A SUSPICIOUS finding is recorded and the data goes on.
+  #
+  # Two engine rules shape what follows (dataforge/engine.py, run_status; DataForge df-h864, core
+  # PR #49, which replaced the old leaf-only rule): the run is `failed` when a task failed and no
+  # dependent whose edge accepts `failed` (`when: failed` or `completed`) ran, or when an `error`
+  # task ran. Skipped tasks are neutral: they neither fail the run nor hide a failure.
+  # And there is no warning state, so warnings travel as a failed check task plus a message task.
+
+  # Prints every suspicious finding of this run and exits 1 if there is any. One attempt: it reads
+  # the findings this run recorded, so a retry only repeats the same answer (df-ahua.3.4). The
+  # job-level `retry:` above does not reach tasks (DataForge df-a16k): without its own, a task gets
+  # the engine default, 3 attempts 30 s apart.
+  - name: data_warnings
+    script: validation/data_warnings.py
+    depends_on: [report]
+    retry:
+      attempts: 1
+      delay_seconds: 0
+
+  # Sends the warnings. INACTIVE until the owner picks a channel and a recipient (df-ahua.3.2):
+  # set params.channels and params.recipients, put the channel's variables in .env (never here),
+  # then set active: true. Its {failed_tasks_summary} quotes data_warnings' last lines.
+  - name: alert_warnings
+    type: message
+    active: false
+    depends_on:
+      - {task: data_warnings, when: failed}
+    params:
+      channels: []
+      recipients: {}
+      subject: "GetFinance {job}: dado suspeito ({run_id})"
+      body: |
+        O job {job} terminou, mas as checagens de dados acharam algo suspeito.
+        Os dados foram gravados. Ids (sem valores):
+        {failed_tasks_summary}
+
+  # Sends the failure alert. INACTIVE for the same reason (df-ahua.3.2). Same edges as job_failed:
+  # report did not succeed (something upstream failed and the rest was skipped) or calendar failed.
+  - name: alert_failure
+    type: message
+    active: false
+    match: any
+    depends_on:
+      - {task: report, when: [failed, skipped]}
+      - {task: calendar, when: failed}
+    params:
+      channels: []
+      recipients: {}
+      subject: "GetFinance {job}: FALHOU ({run_id})"
+      body: |
+        Falharam: {failed_tasks}
+        O curated ficou com os dados da última execução boa.
+        {failed_tasks_summary}
+
+  # Trip-wire: forces the run to `failed` whenever any task failed. Its own edges (not "after
+  # alert_failure"): while alert_failure is inactive the engine drops edges to it, and job_failed
+  # would then run on every run. The data_warnings edge is never the one that fires (data_warnings
+  # is skipped only when report did not succeed). It was added so data_warnings would not be a leaf,
+  # which under the old leaf-only rule kept a suspicious finding from failing the run. Since core
+  # PR #49 it no longer does that: a `when: skipped` edge does not take a failure over, so while
+  # alert_warnings is inactive a suspicious finding leaves the run `failed` (exit 1) with the data
+  # written and job_failed skipped. With alert_warnings active and sent, the run is `success`
+  # again. Whether to keep this wiring is an open owner decision (DataForge df-vlfl).
+  - name: job_failed
+    type: error
+    match: any
+    depends_on:
+      - {task: report, when: [failed, skipped]}
+      - {task: calendar, when: failed}
+      - {task: data_warnings, when: skipped}
+    params:
+      message: "finance_demo: uma tarefa falhou (ver failed_tasks no histórico)"

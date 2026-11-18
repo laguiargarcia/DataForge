@@ -81,14 +81,20 @@ workspaces/*/report/aux/
 workspaces/*/report/aux/backups/
 workspaces/*/deploy/.ledger/
 
-# Per-user holdings config (ship investments.example.yaml; Show's SYNTHETIC map is
-# whitelisted at the bottom so the demo's dim_investment has rows on a fresh clone).
+# Per-user holdings config (ship investments.example.yaml; GetFinance's demo map is
+# config/investments.synthetic.yaml, a different name, so it is tracked as is).
 workspaces/*/config/investments.yaml
 
 # REAL workspaces — present on disk for the owner's daily work, NEVER published.
-# (After the rename, the bare name `GetFinance` is the real PROD workspace.)
-workspaces/GetFinance/
 workspaces/GetFinance-Dev/
+
+# GetFinance's code is public; its prod checkout also holds the owner's real data and settings,
+# which stay out of git. (.env, *.db, *.xlsx, *.parquet and data/ are ignored everywhere above.)
+workspaces/GetFinance/.env.*
+!workspaces/GetFinance/.env.example
+workspaces/GetFinance/report/
+workspaces/GetFinance/config/merchant_normalization.local.yaml
+workspaces/GetFinance/**/*.xlsm
 
 # Frontend tooling artefacts
 node_modules/
@@ -96,8 +102,11 @@ test-results/
 playwright-report/
 
 # ── Narrow whitelists (MUST stay last; negations override the broad ignores above) ──
-# Ship Show's SYNTHETIC holdings map (required for dim_investment on a fresh clone).
-!workspaces/GetFinance-Show/config/investments.yaml
-# Ship the Show apps' built front (dist/).
-!workspaces/GetFinance-Show/apps/*/dist/
-!workspaces/GetFinance-Show/apps/*/dist/**
+# Ship GetFinance's own docs (the bare docs/ above is the repo's private knowledge base), except
+# the ones that hold real values and names.
+!workspaces/GetFinance/docs/
+workspaces/GetFinance/docs/archive/
+workspaces/GetFinance/docs/workbook.md
+# Ship the GetFinance apps' built front (dist/).
+!workspaces/GetFinance/apps/*/dist/
+!workspaces/GetFinance/apps/*/dist/**

@@ -1,0 +1,48 @@
+subcategoria,categoria,Tipo
+Groceries,Alimentação,Essencial
+Telecommunications,Contas,Essencial
+Internet,Contas,Essencial
+Pharmacy,Saúde,Essencial
+University,Educação,Essencial
+Housing,Moradia,Essencial
+Insurance,Contas,Essencial
+Public transportation,Transporte,Essencial
+Bus tickets,Transporte,Essencial
+Gas stations,Transporte,Essencial
+Bank fees,Tarifas,Essencial
+Tax on financial operations,Tarifas,Essencial
+Credit card fees,Tarifas,Essencial
+Interests charged,Tarifas,Essencial
+Loans,Financeiro,Essencial
+Shopping,Compras,Não Essencial
+Eating out,Alimentação,Não Essencial
+Food delivery,Alimentação,Não Essencial
+Food and drinks,Alimentação,Não Essencial
+Taxi and ride-hailing,Transporte,Não Essencial
+Car rental,Transporte,Não Essencial
+Traffic tickets,Transporte,Não Essencial
+Airport and airlines,Viagem,Não Essencial
+Travel,Viagem,Não Essencial
+Digital services,Serviços,Não Essencial
+Services,Serviços,Não Essencial
+Music streaming,Lazer,Não Essencial
+Gaming,Lazer,Não Essencial
+Tickets,Lazer,Não Essencial
+Bookstore,Educação,Não Essencial
+Office supplies,Educação,Não Essencial
+Houseware,Casa,Não Essencial
+Clothing,Compras,Não Essencial
+Electronics,Compras,Não Essencial
+Kids and toys,Compras,Não Essencial
+Donations,Doações,Não Essencial
+Same person transfer,Transferências,Não Essencial
+Same person transfer - CASH,Transferências,Não Essencial
+Transfer - PIX,Transferências,Não Essencial
+Transfers,Transferências,Não Essencial
+(sem categoria),Sem categoria,Não Essencial
+Contas,Contas,Essencial
+Onibus,Transporte,Essencial
+Salário,Salário,Salário
+Pagamento cartão,Pagamento cartão,Pagamento cartão
+Reembolso,Reembolso,Reembolso
+Transportation,Transporte,Essencial

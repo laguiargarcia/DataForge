@@ -1,0 +1,15 @@
+# Holding identity map of the demo job (finance_demo): the SYNTHETIC holding ids emitted by
+# scripts/synthetic/generate_synthetic_data.py. All values are fabricated. The real map,
+# config/investments.yaml, is the owner's own and never versioned (shape: investments.example.yaml).
+
+# holdings: pluggy_holding_id -> stable surrogate + display alias.
+holdings:
+  "inv-cdb-0001":
+    holding_uuid: synthetic-cdb-a
+    alias: "CDB Synthetic Bank A"
+  "inv-cdb-0002":
+    holding_uuid: synthetic-cdb-b
+    alias: "CDB Synthetic Bank B"
+  "inv-tesouro-0001":
+    holding_uuid: synthetic-tesouro-2030
+    alias: "Tesouro Synthetic 2030"

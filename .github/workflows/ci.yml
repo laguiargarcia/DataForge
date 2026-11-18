@@ -29,8 +29,9 @@ jobs:
         # Python comes from .python-version and every version from uv.lock (df-n8ac.12): the same
         # environment dev and prod install. Both uv's package cache and the Python download are cached.
         with: { enable-cache: true, cache-python: true }
-      - name: leakguard (PII + private-path block over all tracked files)
-        run: uv run --no-project python scripts/leakguard.py $(git ls-files)
+      - name: leakguard (private files, personal data; every tracked file, read with -z)
+        # No real data here, so no real-value check: that runs on the owner's machine (scripts/leakguard.py).
+        run: uv run --no-project python scripts/leakguard.py --all
   quality:
     # Lint, dead code and import contracts may not grow past scripts/quality/baseline.json, and the
     # baseline may not rise against the PR's base branch (docs/quality-gate.md).
@@ -126,11 +127,72 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: report-tests-gui, path: report/, if-no-files-found: ignore }
+  tests-getfinance:
+    # The GetFinance workspace's pipeline tests (df-bsb2.2.2), on fake data. Run from the repo root,
+    # so coverage.xml has the repo-relative paths Sonar reads; pytest takes workspaces/GetFinance/pytest.ini
+    # (its own `tests` package cannot share a process with the engine's). The `integration` tests read
+    # the real data, which only the owner's machine has (GETFINANCE_DATA): they stay out.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true, cache-python: true }
+      - name: Install
+        run: uv sync --frozen
+      - name: GetFinance tests
+        shell: bash
+        env: { COVERAGE_CORE: sysmon }
+        run: |
+          mkdir -p report
+          uv run --frozen --no-sync python -m pytest workspaces/GetFinance -m 'not integration' -p no:cacheprovider \
+            -n auto --randomly-seed=${{ github.run_id }} \
+            --cov=workspaces/GetFinance/scripts --cov-branch --cov-report= 2>&1 | tee report/tests-getfinance.txt
+      - name: Name the coverage data after the job
+        if: always()
+        run: if [ -f .coverage ]; then mv .coverage .coverage.getfinance; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: { name: coverage-part-getfinance, path: .coverage.getfinance, include-hidden-files: true, if-no-files-found: ignore }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-tests-getfinance, path: report/, if-no-files-found: ignore }
+  app-financas:
+    # The GetFinance web app (df-bsb2.2.3): unit tests, and the committed dist/ must be the build of
+    # the current src/. The Playwright e2e stays local (it needs the finance_demo data and a browser).
+    # Not a required check itself: the required `tests` job needs it, so a red app blocks the merge.
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    defaults: { run: { working-directory: workspaces/GetFinance/apps/financas } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workspaces/GetFinance/apps/financas/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Unit tests and build
+        shell: bash   # pipefail: each command's exit code survives the tee
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          { npm test && npm run build; } 2>&1 | tee "$GITHUB_WORKSPACE/report/app-financas.txt"
+      - name: Committed dist is the build
+        shell: bash
+        run: |
+          changed=$(git status --porcelain --untracked-files=all -- dist)
+          if [ -n "$changed" ]; then echo "dist differs from the build of src (run npm run build and commit dist):"; echo "$changed"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-app-financas, path: report/, if-no-files-found: ignore }
   tests:
-    # Required check: every engine shard, the GUI job and the extra random orders passed (an
-    # order-dependent failure blocks the merge too, df-n8ac.29). Merges the shards' coverage into
-    # the coverage.xml the sonar job reads, and their durations into the cache the next run splits by.
-    needs: [tests-shard, tests-gui, orders]
+    # Required check: every engine shard, the GUI job, the GetFinance tests, its web app and the
+    # extra random orders passed (an order-dependent failure blocks the merge too, df-n8ac.29).
+    # Merges every part's coverage into the coverage.xml the sonar job reads, and the shards'
+    # durations into the cache the next run splits by.
+    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, orders]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -165,10 +227,15 @@ jobs:
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
       - name: Every part passed
-        env: { SHARDS: "${{ needs.tests-shard.result }}", GUI: "${{ needs.tests-gui.result }}", ORDERS: "${{ needs.orders.result }}" }
+        env:
+          SHARDS: "${{ needs.tests-shard.result }}"
+          GUI: "${{ needs.tests-gui.result }}"
+          GETFINANCE: "${{ needs.tests-getfinance.result }}"
+          APP: "${{ needs.app-financas.result }}"
+          ORDERS: "${{ needs.orders.result }}"
         run: |
-          echo "tests-shard: $SHARDS, tests-gui: $GUI, orders: $ORDERS"
-          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$ORDERS" = "success" ]
+          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, orders: $ORDERS"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$ORDERS" = "success" ]
   tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
     # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage
@@ -331,7 +398,9 @@ jobs:
         run: |
           mkdir -p report
           out="report/mutation-${MODULE//\//_}.txt"
-          .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" || { echo "testloop: mutate $MODULE failed" > "$out"; exit 1; }
+          # Budget inside the job's 45 min: the merged leak guard (df-bsb2.2.2) runs ~500 s here on a
+          # laptop and past the tool's 900 s default on a runner. A partial run still fails the job.
+          .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" --budget-seconds 2100 || { echo "testloop: mutate $MODULE failed" > "$out"; exit 1; }
           .venv/bin/python scripts/testloop/cli.py gate "$MODULE" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" "$out"
       # Artifact names must be unique across the matrix and cannot hold '/': use the job index.
       - uses: actions/upload-artifact@v7
@@ -405,7 +474,7 @@ jobs:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
-    needs: [leak-scan, quality, tests, tests-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:

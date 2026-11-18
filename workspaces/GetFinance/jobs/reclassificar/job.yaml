@@ -1,0 +1,26 @@
+name: reclassificar
+# Reaplica as regras de categoria e refaz os números do Resumo a partir do curated que já existe
+# (df-cns etapa 1). NÃO chama o Pluggy. É o "salvar e reclassificar" que a tela de edição de
+# categorias (etapa 2) vai disparar depois de uma edição. Sem schedule: roda sob demanda.
+tasks:
+  - name: classify
+    script: report/classify.py
+    params:
+      source: curated
+      target: curated
+
+  - name: report
+    script: report/report_curated.py
+    params:
+      source: curated
+      target: curated
+    depends_on: [classify]
+
+  # Trip-wire (ADR 0004, df-ahua.3): if classify fails, report is skipped and the engine would
+  # record the run as `success` (only leaves decide it); this error task makes it `failed`.
+  - name: job_failed
+    type: error
+    depends_on:
+      - {task: report, when: [failed, skipped]}
+    params:
+      message: "reclassificar: uma tarefa falhou"

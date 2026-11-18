@@ -1,0 +1,17 @@
+# merchant_key normalization rules.
+#
+# When Pluggy's `merchant` field is null, merchant_key is derived from the
+# transaction `description`. Each institution formats descriptions differently,
+# so normalization is data-driven: rules are tried in order; the first whose
+# `match` regex hits the description is applied, its `strip` patterns are removed,
+# and whitespace is collapsed. To onboard a new bank, add a rule — no code change.
+#
+# Rules for your own banks go in "merchant_normalization.local.yaml" in this folder
+# (gitignored; copy merchant_normalization.local.example.yaml). Its rules are tried
+# before the ones below. This file keeps only the example rule, with a made-up prefix.
+rules:
+  - name: example-debit-pos-prefix
+    match: '^FICTPOS '
+    strip:
+      - '^FICTPOS '   # debit-POS channel prefix (made up)
+      - '\d{4}$'      # trailing DDMM date code

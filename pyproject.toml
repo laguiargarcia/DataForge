@@ -135,6 +135,9 @@ ignore_names = ["*Event", "test_*", "pytest_*", "pytestmark", "side_effect", "re
 # It reads the published code outside tests/; the gate adds the script modules that import each
 # other as siblings (--known-first-party). Every exception below says why.
 [tool.deptry]
+# A workspace's own tests are test code, like tests/ (deptry's default exclude): pytest and
+# hypothesis come from the dev group there (df-bsb2.2.2).
+extend_exclude = ["workspaces/[^/]+/tests/"]
 
 # Distribution -> import name, spelled out so the answer is the same where the packages are not
 # installed (CI's quality job, the pre-commit environment) as where they are.
