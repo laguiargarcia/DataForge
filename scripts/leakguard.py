@@ -5,22 +5,30 @@ The one leak guard of this repo (df-bsb2.2.2: it took in the GetFinance workspac
 pre-commit passes it the staged files, CI runs it with --all (every tracked file), and --history
 audits every version of every file, every commit message and every path ever committed.
 
-1. Private files. Surfaces that are never published (PATH-BLOCK: docs/, .beads/, ...). Inside a
-   workspace (workspaces/<name>/): data/, report/, docs/archive/, docs/workbook.md and the config
-   files that hold real values. Anywhere: a .env other than .env.example, a data artifact (.db,
-   .parquet, .xlsx...), and any file that .gitignore excludes (tracked anyway, it was force-added).
+1. Private files, whatever the case of their path. Surfaces that are never published (PATH-BLOCK:
+   docs/, .beads/, ...). Inside a workspace (workspaces/<name>/): data/, report/, docs/archive/,
+   docs/workbook.md, the config files that hold real values, an archive (.zip, .7z, .gz...) and any
+   binary file other than a web font or an image. Anywhere: a .env other than .env.example, a data
+   artifact (.db, .parquet, .xlsx...), and any file that .gitignore excludes (tracked anyway, it was
+   force-added).
 2. Patterns: a CPF or CNPJ whose check digits are valid (an invalid one is a made-up test value),
-   with or without punctuation or spaces; a bank agency/account short code (NNNN-N; not a date part,
-   not one repeated digit); a personal e-mail address; the owner's name. The name patterns are never
-   written here: they come from LEAKGUARD_NAME_PATTERNS and the gitignored .leakguard-local.
+   with or without punctuation, spaces or tabs, also next to a letter (not in uv.lock's hashes); a
+   bank agency/account short code (NNNN-N; not a date part, not one repeated digit); a personal
+   e-mail address; the owner's name. The name patterns are never written here: they come from
+   LEAKGUARD_NAME_PATTERNS and the gitignored .leakguard-local. Every file is read, one with a NUL
+   byte too.
 3. Real values, on the owner's machine: identifiers, names and documents read from a workspace's
    data/raw (Pluggy raw), data/edicao.db (category rules) and .env. A pattern cannot tell a real
    account number in a docstring example from a fake one (df-k37o); this list can. A number matches
    with any or no separator between its digits, a name with any whitespace between its words. The
-   data comes from GETFINANCE_DATA (a workspace's data/ directory) and from each workspace listed in
-   the gitignored .leakguard-workspaces at the main checkout's root, also from a worktree. Without
-   either (a fresh clone, CI) there is no real-value check; a source that names no data, or yields
-   no value, fails the check instead of letting it pass unchecked.
+   data comes from GETFINANCE_DATA (a workspace's data/ directory), from each workspace listed in
+   the gitignored .leakguard-workspaces at the main checkout's root, and from the main checkout's
+   workspaces/GetFinance/data/ when it holds raw/ or edicao.db and is not the demo's synthetic data
+   (raw/SYNTHETIC); all of these also from a worktree.
+   A source that names no data, or yields no value, fails the check. With no source at all the
+   check fails too, and says what to set, except in CI (no real data there by design) and where
+   LEAKGUARD_NO_REAL_DATA=1 declares that this machine has no real data: an absent variable or
+   listing never passes for "no real data".
 
 Findings never echo a value in full: they show its first two characters and its length (CI logs
 are public).
@@ -57,6 +65,10 @@ MAIN_ROOT, MAIN_ROOT_ERROR = _main_checkout(Path(__file__).resolve().parent.pare
 # The real data's workspaces: one directory per line, gitignored like .leakguard-local.
 LISTED_WORKSPACES_FILE = ".leakguard-workspaces"
 DATA_VARIABLE = "GETFINANCE_DATA"   # a workspace's data/ directory, set on the command
+# Declared, never assumed: whoever has no real data at all (another contributor) sets it to 1.
+NO_DATA_VARIABLE = "LEAKGUARD_NO_REAL_DATA"
+REAL_WORKSPACE = "GetFinance"   # the workspace whose data/ is real, read from the main checkout unnamed
+SYNTHETIC_MARKER = "SYNTHETIC"   # in data/raw/: written by the demo's generate_synthetic_data.py
 
 # ---------------------------------------------------------------------------- private files
 
@@ -75,16 +87,28 @@ WORKSPACE_PRIVATE_DIRS = ("data/", "report/", "docs/archive/")
 WORKSPACE_PRIVATE_FILES = {"docs/workbook.md", "config/investments.yaml",
                            "config/merchant_normalization.local.yaml"}
 PRIVATE_SUFFIXES = {".db", ".sqlite", ".duckdb", ".parquet", ".xlsx", ".xlsm", ".xls"}
+# Inside a workspace, an archive is a copy of its data (backup_dados.py zips data/raw and edicao.db),
+# whatever the name; it is judged by its path, since its content cannot be read.
+WORKSPACE_ARCHIVE_SUFFIXES = (".zip", ".7z", ".gz", ".tgz", ".bz2", ".xz", ".zst", ".tar", ".rar")
+# Inside a workspace, any other binary file is refused too (a dump under any name), except a built
+# app's web fonts and images: public assets that hold no record.
+PUBLIC_BINARY_SUFFIXES = {".woff", ".woff2", ".ttf", ".otf", ".eot", ".png", ".jpg", ".jpeg", ".gif",
+                          ".ico", ".webp"}
 PRIVATE_FILE = "private file (data, report, .env, real config, a data artifact or gitignored)"
+BINARY_IN_WORKSPACE = "binary file inside a workspace (a dump or a backup cannot be read for real values)"
 
 # ---------------------------------------------------------------------------- patterns
 
-# A document's digits may be split by punctuation or spaces; a trailing sentence period is not a digit,
-# and digits inside a word (a hash in uv.lock) are not a document.
-_NOT_BEFORE = r"(?<!\w)(?<!\d[.,])"
-_NOT_AFTER = r"(?!\w)(?![.,]\d)"
-CPF = re.compile(_NOT_BEFORE + r"\d{3}[. ]?\d{3}[. ]?\d{3}[- ]?\d{2}" + _NOT_AFTER)
-CNPJ = re.compile(_NOT_BEFORE + r"\d{2}[. ]?\d{3}[. ]?\d{3}[/ ]?\d{4}[- ]?\d{2}" + _NOT_AFTER)
+# A document's digits may be split by punctuation, spaces or tabs (not by a line break); a trailing
+# sentence period is not a digit, and digits inside a longer number are not a document. A letter or
+# '_' next to it does not hide one ("cpf_" then the digits).
+_NOT_BEFORE = r"(?<!\d)(?<!\d[.,])"
+_NOT_AFTER = r"(?!\d)(?![.,]\d)"
+CPF = re.compile(_NOT_BEFORE + r"\d{3}[.\t ]?\d{3}[.\t ]?\d{3}[-\t ]?\d{2}" + _NOT_AFTER)
+CNPJ = re.compile(_NOT_BEFORE + r"\d{2}[.\t ]?\d{3}[.\t ]?\d{3}[/\t ]?\d{4}[-\t ]?\d{2}" + _NOT_AFTER)
+# Files of hex digests and package names only, where a run of digits inside a hash may pass a
+# check-digit rule: the document patterns do not apply there (every other check does).
+DIGEST_FILES = {"uv.lock"}
 # Agency/account short codes. "2026-4-10" is a date, not an account.
 ACCT = re.compile(r"\b\d{4,5}-\d\b(?!-\d)")
 EMAIL = re.compile(
@@ -311,13 +335,49 @@ def _named_workspace():
     return [(data.parent, f"{DATA_VARIABLE}={named}")], []
 
 
+def _found_workspaces():
+    """[(workspace, how it is named)] for the main checkout's workspaces/GetFinance/ when its data/
+    holds raw/ or edicao.db: the real data where the pipeline writes it, read with nothing named.
+    Not when raw/ holds the demo's SYNTHETIC marker (its generator writes only into a raw/ of its own):
+    made-up values read as real would flag the generator itself. Other workspaces are synthetic."""
+    ws = MAIN_ROOT / "workspaces" / REAL_WORKSPACE
+    data = ws / "data"
+    if (data / "raw" / SYNTHETIC_MARKER).is_file():
+        return []
+    if (data / "raw").is_dir() or (data / "edicao.db").is_file():
+        return [(ws, f"{ws} (found in the main checkout)")]
+    return []
+
+
+def _no_data_waiver():
+    """Why a run with no source of real values may pass, or None: CI has no real data by design, and
+    whoever has none at all declares it with LEAKGUARD_NO_REAL_DATA=1."""
+    if os.environ.get("CI"):
+        return "CI"
+    if os.environ.get(NO_DATA_VARIABLE) == "1":
+        return f"{NO_DATA_VARIABLE}=1"
+    return None
+
+
+NO_SOURCE = (f"REAL-VALUES: no real values to check against: neither {DATA_VARIABLE}, {LISTED_WORKSPACES_FILE} "
+             f"nor a workspaces/{REAL_WORKSPACE}/data/ of the main checkout names any. Outside CI the guard needs "
+             "the real "
+             f"data: set {DATA_VARIABLE}=<workspace>/data on the command ({DATA_VARIABLE}=<workspace>/data git "
+             f"commit ...); with no real data at all, declare it with {NO_DATA_VARIABLE}=1")
+
+
 def load_real_values():
-    """([(workspace name, its real values)], failures) for GETFINANCE_DATA and the listed workspaces."""
+    """([(workspace name, its real values)], failures) for GETFINANCE_DATA, the listed workspaces and
+    the data/ directories of the main checkout's workspaces. With none of them, outside CI and without
+    the waiver, the run fails: an absent variable or listing must not pass as "no real data"."""
     failures = [f"REAL-VALUES: {MAIN_ROOT_ERROR}"] if MAIN_ROOT_ERROR else []
     named, named_failures = _named_workspace()
     failures += named_failures
+    candidates = named + _listed_workspaces() + _found_workspaces()
+    if not candidates and not named_failures and _no_data_waiver() is None:
+        failures.append(NO_SOURCE)
     sources, seen = [], set()
-    for ws, how in named + _listed_workspaces():
+    for ws, how in candidates:
         if ws.resolve() in seen:
             continue
         seen.add(ws.resolve())
@@ -347,10 +407,10 @@ def _mask(value, about=""):
 
 def _pattern_checks(rel):
     """(label, regex, test the match must pass to be a finding or None) for one file."""
-    checks = [("CPF", CPF, lambda s: _cpf_valid(_digits(s))),
-              ("CNPJ", CNPJ, lambda s: _cnpj_valid(_digits(s))),
-              ("ACCT", ACCT, lambda s: len(set(_digits(s))) > 1),   # "0000-0" is a filler
-              ("EMAIL", EMAIL, None)]
+    checks = [] if rel in DIGEST_FILES else [("CPF", CPF, lambda s: _cpf_valid(_digits(s))),
+                                             ("CNPJ", CNPJ, lambda s: _cnpj_valid(_digits(s)))]
+    checks += [("ACCT", ACCT, lambda s: len(set(_digits(s))) > 1),   # "0000-0" is a filler
+               ("EMAIL", EMAIL, None)]
     if rel not in NAME_EXEMPT_PATHS:
         checks += [("NAME", rx, None) for rx in NAME_PATTERNS]
     return checks
@@ -377,16 +437,25 @@ def check_text(rel, text, sources):
     return _pattern_failures(rel, text) + _real_value_failures(rel, text, sources)
 
 
+def _inside_workspace(rel):
+    """The path of `rel` inside its workspace (workspaces/<name>/...), lowercased; None outside one."""
+    parts = rel.lower().split("/")
+    inside = "/".join(parts[2:])
+    return inside if parts[0] == "workspaces" and inside else None
+
+
 def _private_reason(rel, ignored):
-    """Why the file at `rel` may not be versioned at all, or None."""
-    if rel.startswith(BLOCK_PREFIXES):
+    """Why the file at `rel` may not be versioned at all, or None. Case does not matter: on Windows
+    (the prod disk) Data/ is data/."""
+    lower = rel.lower()
+    if lower.startswith(tuple(p.lower() for p in BLOCK_PREFIXES)):
         return f"PATH-BLOCK: {rel} is under a private surface"
-    parts = rel.split("/")
-    inside = "/".join(parts[2:]) if parts[0] == "workspaces" else ""
-    name = parts[-1]
+    inside = _inside_workspace(rel) or ""
+    name = lower.rsplit("/", 1)[-1]
     if (inside.startswith(WORKSPACE_PRIVATE_DIRS) or inside in WORKSPACE_PRIVATE_FILES
+            or (inside and name.endswith(WORKSPACE_ARCHIVE_SUFFIXES))
             or (name.startswith(".env") and name != ".env.example")
-            or Path(name).suffix.lower() in PRIVATE_SUFFIXES or rel in ignored):
+            or Path(name).suffix in PRIVATE_SUFFIXES or rel in ignored):
         return f"PRIVATE: {rel} is a {PRIVATE_FILE}"
     return None
 
@@ -404,20 +473,28 @@ def _gitignored(files):
     return {p for p in out.split("\0") if p}
 
 
-def _read_text(path):
-    """A text file's content in UTF-8, UTF-16 (with BOM) or cp1252; None for a binary or unreadable file."""
+def _read_bytes(path):
+    """The file's bytes; None for a missing or unreadable file."""
     try:
-        data = path.read_bytes()
+        return path.read_bytes() if path.is_file() else None
     except OSError:
         return None
+
+
+def _decode(data):
+    """Bytes as text in UTF-16 (with BOM), UTF-8 or cp1252. Every file is read, a binary one or a text
+    with a stray NUL included: digits written in it are found all the same."""
     if data.startswith((b"\xff\xfe", b"\xfe\xff")):
         return data.decode("utf-16", errors="replace")
-    if b"\0" in data:
-        return None   # binary (fonts, images): gitleaks covers secrets there
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
         return data.decode("cp1252", errors="replace")
+
+
+def _binary_in_workspace(rel, data):
+    inside = _inside_workspace(rel)
+    return inside is not None and b"\0" in data and Path(inside).suffix not in PUBLIC_BINARY_SUFFIXES
 
 
 def check_files(files, sources):
@@ -430,9 +507,13 @@ def check_files(files, sources):
         if reason:
             failures.append(reason)
             continue
-        text = _read_text(Path(rel)) if Path(rel).is_file() else None
-        if text is not None:
-            failures += check_text(rel, text, sources)
+        data = _read_bytes(Path(rel))
+        if data is None:
+            continue
+        if _binary_in_workspace(rel, data):
+            failures.append(f"PRIVATE: {rel} is a {BINARY_IN_WORKSPACE}")
+            continue
+        failures += check_text(rel, _decode(data), sources)
     return failures
 
 
@@ -446,7 +527,7 @@ def check_history(sources):
 
 def _scope(sources):
     if not sources:
-        return f"no real values: neither {DATA_VARIABLE} nor {LISTED_WORKSPACES_FILE} names any"
+        return f"no real values: {_no_data_waiver() or 'none found'}"
     names = ", ".join(ws for ws, _ in sources)
     return f"{sum(len(values) for _, values in sources)} real values from {names}"
 

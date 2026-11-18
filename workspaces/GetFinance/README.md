@@ -90,25 +90,40 @@ Categories (`categorias`) and rules (`mapeamento`) are user data in `data/edicao
 ## Leak guard
 
 DataForge's `scripts/leakguard.py` guards this workspace too (it took in the guard this workspace
-had, df-bsb2.2.2). It runs in pre-commit and in CI (job `leak-scan`, with gitleaks), and blocks
-private files (here: `data/`, `report/`, `docs/archive/`, `docs/workbook.md`, `config/investments.yaml`,
-`config/merchant_normalization.local.yaml`; anywhere: a `.env` other than `.env.example`, a
+had, df-bsb2.2.2). It runs in pre-commit, on the staged files and on the commit message, and in CI
+(job `leak-scan`, with gitleaks). It blocks private files (here, in any case: `data/`, `report/`,
+`docs/archive/`, `docs/workbook.md`, `config/investments.yaml`,
+`config/merchant_normalization.local.yaml`, an archive such as a `.zip` of a backup, and any binary
+file other than the app's fonts and images; anywhere: a `.env` other than `.env.example`, a
 `.db`/`.parquet`/`.xlsx`), CPF/CNPJ with valid check digits, account short codes and personal
 e-mails. On the owner's machine it also blocks every **real value** read from the real `data/`
 (Pluggy ids, account numbers, owner and counterparty names, documents), `data/edicao.db` (category
-rules) and the `.env` beside it. It finds them through `GETFINANCE_DATA` (this workspace's real
-`data/`, set on the command) and through the workspaces listed in DataForge's gitignored
-`.leakguard-workspaces`. Examples in code, docs and tests use fake values only (e.g.
+rules) and the `.env` beside it. Examples in code, docs and tests use fake values only (e.g.
 `901/0001/00012345-6`); a real account number in a docstring example reached the public DataForge
 repo this way (df-k37o). Audit the whole history with `scripts/leakguard.py --history`.
+
+Where the real values come from (any of them; the guard reads them all):
+
+- `GETFINANCE_DATA=<workspace>/data`, set on the command (`GETFINANCE_DATA=<workspace>/data git
+  commit ...`): the `data/` of the workspace with the real data, with `raw/` in it.
+- DataForge's gitignored `.leakguard-workspaces` at the main checkout's root: one workspace
+  directory per line.
+- This folder's `data/` in the main checkout, found with nothing set, when it holds `raw/` or
+  `edicao.db` and is not the demo's synthetic data (`data/raw/SYNTHETIC`).
+
+With none of them, the guard **fails** outside CI and says what to set. Whoever has no real data at
+all (another contributor, a fresh clone) declares it with `LEAKGUARD_NO_REAL_DATA=1` on the command
+or in the shell; an unset variable never counts as "no real data". CI needs neither: it has no real
+data by design.
 
 ## Tests
 
 The pipeline tests live here, in `tests/`, with their own `pytest.ini`. They run on DataForge's
 venv (`uv sync`; the engine is the checkout's own `dataforge/`, no pin), from the DataForge root:
 `python -m pytest workspaces/GetFinance -m 'not integration'`. They cannot share one pytest run with
-DataForge's `tests/` (both are a package named `tests`): CI runs them in their own job,
-`tests-getfinance`, whose coverage goes to SonarQube Cloud with the engine's.
+DataForge's `tests/` (both are a package named `tests`), so the engine's tests are a second command,
+`python -m pytest tests -m 'not integration'`. CI runs these in their own job, `tests-getfinance`,
+whose coverage goes to SonarQube Cloud with the engine's.
 
 - **Each checkout tests itself.** `tests/_delta_util.py` gives `ROOT` and `SCRIPTS` (this folder in
   this checkout, a worktree or the main one) and `REAL_DATA`. When the environment variable

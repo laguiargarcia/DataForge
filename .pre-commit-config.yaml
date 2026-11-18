@@ -1,6 +1,9 @@
-# `pre-commit install` installs both: the commit checks below and, after a merge or pull, the
-# deploy to prod (scripts/prod/deploy.sh does nothing outside the main checkout on main).
-default_install_hook_types: [pre-commit, post-merge]
+# `pre-commit install` installs all three: the commit checks below, the leak guard on the commit
+# message and, after a merge or pull, the deploy to prod (scripts/prod/deploy.sh does nothing outside
+# the main checkout on main).
+default_install_hook_types: [pre-commit, commit-msg, post-merge]
+# A hook with no `stages` runs on the staged files only; the message has its own hook below.
+default_stages: [pre-commit]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.24.3   # same as GITLEAKS_VERSION in .github/workflows/ci.yml; Renovate bumps both together
@@ -9,15 +12,23 @@ repos:
   - repo: local
     hooks:
       - id: leakguard
-        name: leakguard (PII + private-path block)
+        name: leakguard (private files, personal data, real values)
         entry: python scripts/leakguard.py
-        # python + polars, not the system python3: on the owner's machine the guard also runs the private
-        # workspaces' tools/leakguard.py, which reads their raw parquet to list the real values (df-k37o).
+        # python + polars, not the system python3: on the owner's machine the guard reads the real
+        # workspace's raw parquet to list the real values (GETFINANCE_DATA, .leakguard-workspaces or a
+        # workspaces/<name>/data/ of the main checkout). With none of them it fails outside CI; someone
+        # with no real data at all sets LEAKGUARD_NO_REAL_DATA=1 (workspaces/GetFinance/README.md).
         language: python
         additional_dependencies: ["polars==1.41.2"]
         pass_filenames: true
-        require_serial: true   # one process: each run loads every private guard's real values
+        require_serial: true   # one process: each run reads every raw partition to list the real values
         always_run: false
+      - id: leakguard-message
+        name: leakguard (commit message)
+        entry: python scripts/leakguard.py   # pre-commit passes the message file
+        language: python
+        additional_dependencies: ["polars==1.41.2"]
+        stages: [commit-msg]
       - id: quality-gate
         name: quality gate (lint, dead code, import contracts against the baseline)
         # --stage: when findings were fixed, the lowered baseline goes into this same commit.

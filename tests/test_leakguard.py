@@ -16,6 +16,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+import yaml
 
 from scripts import leakguard
 
@@ -58,17 +59,24 @@ def _wrong(doc):
     return doc[:-1] + str((int(doc[-1]) + 1) % 10)
 
 
-def _clean_env(monkeypatch):
-    """No GETFINANCE_DATA, name patterns or GIT_* (a git hook exports them) from the caller's shell."""
+NO_DATA = "no real values: LEAKGUARD_NO_REAL_DATA=1"   # how a waived run describes itself
+
+
+def _clean_env(monkeypatch, waive=True):
+    """No GETFINANCE_DATA, CI, name patterns or GIT_* (a git hook exports them) from the caller's shell.
+    The run without real data is waived, as for a contributor who has none, unless `waive` is False."""
     for name in [n for n in os.environ if n.startswith("GIT_")]:
         monkeypatch.delenv(name)
-    monkeypatch.delenv("GETFINANCE_DATA", raising=False)
-    monkeypatch.delenv("LEAKGUARD_NAME_PATTERNS", raising=False)
+    for name in ("GETFINANCE_DATA", "LEAKGUARD_NAME_PATTERNS", "CI", "LEAKGUARD_NO_REAL_DATA"):
+        monkeypatch.delenv(name, raising=False)
+    if waive:
+        monkeypatch.setenv("LEAKGUARD_NO_REAL_DATA", "1")
 
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    """Run the guard from a scratch root, with one made-up owner name pattern and no real data."""
+    """Run the guard from a scratch root, with one made-up owner name pattern, no real data and the
+    run without it waived (LEAKGUARD_NO_REAL_DATA=1)."""
     _clean_env(monkeypatch)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(leakguard, "NAME_PATTERNS", [re.compile(r"fulano\s+de\s+tal", re.IGNORECASE)])
@@ -96,8 +104,7 @@ def test_clean_files_pass_and_are_counted(repo, capsys):
     files = [repo("a.py", "x = 2024\nport = 8080\n"), repo("b.md", "version 1.2.3\n")]
     code, out, failures = run(capsys, *files)
     assert (code, failures) == (0, [])
-    assert out.strip() == ("leak guard: 2 file(s) clean (no real values: neither GETFINANCE_DATA nor "
-                           ".leakguard-workspaces names any)")
+    assert out.strip() == f"leak guard: 2 file(s) clean ({NO_DATA})"
 
 
 def test_a_private_surface_is_blocked_without_reading_it(repo, capsys):
@@ -115,7 +122,14 @@ def test_a_private_surface_is_blocked_without_reading_it(repo, capsys):
                                  "workspaces/W/config/merchant_normalization.local.yaml",
                                  "workspaces/W/.env", "workspaces/W/config/.env.local", ".env",
                                  "a.parquet", "tests/fixtures/e.db", "w.xlsx", "deep/dir/book.XLSM",
-                                 "x.sqlite", "y.duckdb", "z.xls"])
+                                 "x.sqlite", "y.duckdb", "z.xls",
+                                 # m4: the case of a private path does not matter (Windows, the prod disk)
+                                 "workspaces/W/Data/raw/x.csv", "workspaces/W/REPORT/r.txt",
+                                 "workspaces/W/config/Investments.yaml", "workspaces/W/Docs/Workbook.md",
+                                 "workspaces/W/.ENV", "A.PARQUET",
+                                 # m4: an archive inside a workspace (backup_dados.py writes zips of data/)
+                                 "workspaces/W/backup.zip", "workspaces/W/bk/dados.7z", "workspaces/W/x.tar.gz",
+                                 "workspaces/W/x.TGZ", "workspaces/W/x.rar", "workspaces/W/x.tar"])
 def test_private_files_are_blocked_without_reading_them(repo, capsys, rel):
     code, _, failures = run(capsys, rel)
     assert code == 1
@@ -126,7 +140,8 @@ def test_private_files_are_blocked_without_reading_them(repo, capsys, rel):
 @pytest.mark.parametrize("rel", ["workspaces/GetFinance/.env.example", "workspaces/W/scripts/report/edicao.py",
                                  "workspaces/W/docs/data.md", "workspaces/W/config/investments.synthetic.yaml",
                                  "workspaces/W/tests/data_mutator.py", "workspaces/W/scripts/data/x.py",
-                                 "data/x.csv", "report/quality.txt", "config/investments.yaml"])
+                                 "data/x.csv", "report/quality.txt", "config/investments.yaml",
+                                 "tools/backup.zip.md", "release.zip.txt"])
 def test_ordinary_files_are_read_not_blocked(repo, capsys, rel):
     """Workspace rules hold inside workspaces/<name>/ only; elsewhere the content is checked."""
     assert run(capsys, repo(rel, "x = 1\n"))[:1] == (0,)
@@ -158,9 +173,31 @@ def test_a_cpf_with_its_first_check_digit_wrong_passes(repo, capsys):
 
 
 @pytest.mark.parametrize("text", [f"x = {CPF}9", f"x = 9{CPF}", f"x = 1.{CPF}", f"x = {CPF}.5",
-                                  f"sha256:7f{CPF}ab", f"h = a{CNPJ}", f"x = {CNPJ}0"])
-def test_digits_inside_a_longer_number_or_a_word_are_not_a_document(repo, capsys, text):
+                                  f"x = {CNPJ}0", f"x = 7,{CNPJ}"])
+def test_digits_inside_a_longer_number_are_not_a_document(repo, capsys, text):
     assert run(capsys, repo("x.py", text + "\n"))[2] == []
+
+
+@pytest.mark.parametrize("text", [f"sha256:7f{CPF}ab", f"h = a{CNPJ}", f"cpf_{CPF}", f"{CPF}_old", f"id{CPF}",
+                                  f"CPF\t{CPF[:3]}\t{CPF[3:6]}\t{CPF[6:9]}\t{CPF[9:]}",
+                                  f"{CNPJ[:2]}\t{CNPJ[2:5]}\t{CNPJ[5:8]}\t{CNPJ[8:12]}\t{CNPJ[12:]}"])
+def test_a_document_next_to_a_letter_or_underscore_or_split_by_tabs_is_flagged(repo, capsys, text):
+    """m1: only a digit next to it makes it part of something longer; a letter or '_' does not."""
+    assert len(run(capsys, repo("x.py", text + "\n"))[2]) == 1
+
+
+def test_a_document_split_across_lines_is_not_one(repo, capsys):
+    assert run(capsys, repo("x.txt", f"{CPF[:3]}\n{CPF[3:6]}\n{CPF[6:9]}\n{CPF[9:]}\n"))[2] == []
+
+
+def test_uv_lock_hashes_are_not_documents_but_its_real_values_are_checked(repo, capsys, workspace, monkeypatch):
+    """A hex digest may hold eleven digits that pass the check-digit rule: in uv.lock, which holds
+    hashes and package names only, the document patterns do not apply; every other check does."""
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    code, _, failures = run(capsys, repo("uv.lock", f"hash = 'sha256:7f{CPF}ab'\nx = '{SECRET}'\n{EMAIL}\n"))
+    assert code == 1
+    assert [f.split(" -> ")[0] for f in failures] == ["EMAIL: uv.lock:3", "REAL: uv.lock:2"]
+    assert len(run(capsys, repo("workspaces/W/uv.lock", f"h = 7f{CPF}ab\n"))[2]) == 1
 
 
 @pytest.mark.parametrize("text", [f"CPF {CPF_PUNCT}.", f"CPF: {CPF[:3]} {CPF[3:6]} {CPF[6:9]} {CPF[9:]}",
@@ -209,15 +246,24 @@ def test_every_hit_in_every_file_is_reported(repo, capsys):
 
 
 def test_files_skipped_on_the_way_do_not_end_the_scan(repo, capsys, tmp_path):
-    """A blocked, missing, binary or unreadable file is passed over; the files after it are still scanned."""
+    """A blocked, missing or unreadable file is passed over; the files after it are still scanned."""
     unreadable = repo("locked.txt", "x\n")
     (tmp_path / unreadable).chmod(0)
-    (tmp_path / "font.woff2").write_bytes(b"wOF2\x00" + CPF.encode())
     try:
-        failures = run(capsys, "docs/a.md", "gone.py", "font.woff2", unreadable, repo("last.txt", f"{CPF}\n"))[2]
+        failures = run(capsys, "docs/a.md", "gone.py", unreadable, repo("last.txt", f"{CPF}\n"))[2]
     finally:
         (tmp_path / unreadable).chmod(0o644)
     assert failures == ["PATH-BLOCK: docs/a.md is under a private surface", "CPF: last.txt:1 -> '52…' (11 chars)"]
+
+
+def test_a_file_with_a_nul_byte_is_still_read(repo, capsys, tmp_path):
+    """m5: one NUL does not make a text file skippable, and a binary outside a workspace is read too."""
+    (tmp_path / "notes.txt").write_bytes(b"header\x00\n" + EMAIL.encode() + b"\n")
+    (tmp_path / "font.woff2").write_bytes(b"wOF2\x00" + CPF.encode())
+    (tmp_path / "latin.bin").write_bytes(b"\x00A\xe7\xe3o " + CPF.encode())
+    assert run(capsys, "notes.txt", "font.woff2", "latin.bin")[2] == [
+        "EMAIL: notes.txt:2 -> 'so…' (17 chars)", "CPF: font.woff2:1 -> '52…' (11 chars)",
+        "CPF: latin.bin:1 -> '52…' (11 chars)"]
 
 
 def test_text_that_is_not_utf8_is_still_checked(repo, capsys, tmp_path):
@@ -228,6 +274,27 @@ def test_text_that_is_not_utf8_is_still_checked(repo, capsys, tmp_path):
     assert run(capsys, "latin.txt", "u16.txt", "u16be.txt")[2] == [
         "CPF: latin.txt:1 -> '52…' (11 chars)", "CPF: u16.txt:2 -> '52…' (11 chars)",
         "CPF: u16be.txt:1 -> '52…' (11 chars)"]
+
+
+def test_an_archive_outside_a_workspace_is_read_not_blocked(repo, capsys, tmp_path):
+    """The archive rule is a workspace's (its data/ is what gets zipped); elsewhere the content is checked."""
+    (tmp_path / "fixture.zip").write_bytes(b"PK\x03\x04 " + CPF.encode())
+    assert run(capsys, "fixture.zip")[2] == ["CPF: fixture.zip:1 -> '52…' (11 chars)"]
+
+
+def test_a_binary_file_inside_a_workspace_is_private(repo, capsys, tmp_path):
+    """m4: a dump or backup under any name cannot be read for real values, so it is refused; a web
+    font or an image (a built app's assets) is public and passes."""
+    (tmp_path / "workspaces/W/apps/dist").mkdir(parents=True)
+    (tmp_path / "workspaces/W/dados.bak").write_bytes(b"SQLite format 3\x00rows")
+    (tmp_path / "workspaces/W/apps/dist/font.woff2").write_bytes(b"wOF2\x00glyphs")
+    (tmp_path / "workspaces/W/apps/dist/logo.PNG").write_bytes(b"\x89PNG\x00pixels")
+    (tmp_path / "workspaces/W/notes.txt").write_text("plain\n", encoding="utf-8")
+    code, _, failures = run(capsys, "workspaces/W/dados.bak", "workspaces/W/apps/dist/font.woff2",
+                            "workspaces/W/apps/dist/logo.PNG", "workspaces/W/notes.txt")
+    assert code == 1
+    assert failures == ["PRIVATE: workspaces/W/dados.bak is a binary file inside a workspace (a dump or a "
+                        "backup cannot be read for real values)"]
 
 
 def test_a_file_path_is_judged_in_posix_form(repo, capsys):
@@ -510,6 +577,86 @@ def test_getfinance_data_that_yields_no_real_value_fails(repo, capsys, tmp_path,
 def test_an_empty_getfinance_data_is_unset(repo, capsys, monkeypatch):
     monkeypatch.setenv("GETFINANCE_DATA", "")
     assert run(capsys, repo("a.py", "x = 1\n"))[0] == 0
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    assert run(capsys, repo("a.py", "x = 1\n"))[0] == 1
+
+
+NO_SOURCE = ("REAL-VALUES: no real values to check against: neither GETFINANCE_DATA, .leakguard-workspaces "
+             "nor a workspaces/GetFinance/data/ of the main checkout names any. Outside CI the guard needs the "
+             "real data: set GETFINANCE_DATA=<workspace>/data on the command (GETFINANCE_DATA=<workspace>/data "
+             "git commit ...); with no real data at all, declare it with LEAKGUARD_NO_REAL_DATA=1")
+
+
+@pytest.mark.parametrize("waiver", [None, "", "0", "yes", "true"])
+def test_outside_ci_a_run_with_no_source_of_real_values_fails_and_says_what_to_set(repo, capsys, monkeypatch,
+                                                                                    waiver):
+    """B2: no real data must be declared, never assumed from an absent variable or listing."""
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    if waiver is not None:
+        monkeypatch.setenv("LEAKGUARD_NO_REAL_DATA", waiver)
+    code, out, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert (code, out, failures) == (1, "", [NO_SOURCE])
+
+
+def test_in_ci_a_run_with_no_source_of_real_values_passes_and_says_why(repo, capsys, monkeypatch):
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    monkeypatch.setenv("CI", "true")
+    assert run(capsys, repo("a.py", "x = 1\n")) == (0, "leak guard: 1 file(s) clean (no real values: CI)\n", [])
+
+
+def test_the_waiver_does_not_skip_a_named_source(repo, capsys, workspace, monkeypatch):
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    assert run(capsys, repo("a.py", f"x = '{NUMBER_BARE}'\n"))[0] == 1
+
+
+def test_the_getfinance_data_directory_of_the_main_checkout_is_found_without_being_named(repo, capsys, tmp_path,
+                                                                                        monkeypatch):
+    """B2: the real data where the pipeline writes it (workspaces/GetFinance/data/) is read with no
+    variable and no listing, as both old guards did."""
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    make_workspace(tmp_path / "workspaces" / "GetFinance")
+    code, _, failures = run(capsys, repo("a.py", f"x = '{NUMBER_BARE}'\n"))
+    assert code == 1
+    assert failures == [f"REAL: a.py:1 -> '98…' ({len(NUMBER)} chars, raw.accounts.number from GetFinance)"]
+
+
+def test_a_getfinance_data_directory_with_only_edicao_is_found(repo, capsys, tmp_path, monkeypatch):
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    data = tmp_path / "workspaces" / "GetFinance" / "data"
+    data.mkdir(parents=True)
+    conn = sqlite3.connect(data / "edicao.db")
+    conn.execute("CREATE TABLE mapeamento (padrao TEXT)")
+    conn.execute("INSERT INTO mapeamento VALUES ('MERCADO DO BAIRRO')")
+    conn.commit()
+    conn.close()
+    assert run(capsys, repo("a.py", "y = 'mercado do bairro'\n"))[2] == [
+        "REAL: a.py:1 -> 'me…' (17 chars, edicao.mapeamento from GetFinance)"]
+
+
+@pytest.mark.parametrize("layout", ["synthetic", "other workspace", "no raw or edicao"])
+def test_synthetic_data_or_another_workspace_is_not_a_source(repo, capsys, tmp_path, monkeypatch, layout):
+    """The demo's data (raw/SYNTHETIC, written by its generator) and a synthetic workspace's are made
+    up: reading them as real would flag the generator's own values. Without another source, the run
+    still needs the waiver."""
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    if layout == "synthetic":
+        ws = make_workspace(tmp_path / "workspaces" / "GetFinance")
+        (ws / "data" / "raw" / "SYNTHETIC").write_text("written by the generator\n", encoding="utf-8")
+    elif layout == "other workspace":
+        make_workspace(tmp_path / "workspaces" / "GetFinance-Show")
+    else:
+        (tmp_path / "workspaces" / "GetFinance" / "data" / "curated").mkdir(parents=True)
+    assert run(capsys, repo("a.py", f"x = '{NUMBER_BARE}'\n"))[2] == [NO_SOURCE]
+
+
+def test_a_found_data_directory_that_yields_nothing_fails_closed(repo, capsys, tmp_path):
+    (tmp_path / "workspaces" / "GetFinance" / "data" / "raw").mkdir(parents=True)
+    code, _, failures = run(capsys, repo("a.py", "x = 1\n"))
+    assert code == 1
+    assert failures == [f"REAL-VALUES: {tmp_path / 'workspaces' / 'GetFinance'} (found in the main checkout) "
+                        "yields no real value (no data/raw, data/edicao.db or .env there); nothing was checked "
+                        "against it"]
 
 
 def test_a_listed_workspace_outside_the_checkout_is_checked(repo, capsys, tmp_path):
@@ -633,7 +780,47 @@ def test_a_clean_repo_passes_with_all(tmp_path, monkeypatch):
     _git("add", "-A", cwd=repo)
     result = _cli(repo, repo / "scripts" / "leakguard.py", "--all")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.startswith("leak guard: 2 file(s) clean (no real values")
+    assert result.stdout == f"leak guard: 2 file(s) clean ({NO_DATA})\n"
+
+
+def test_the_command_without_real_data_or_its_waiver_fails_outside_ci(tmp_path, monkeypatch):
+    """B2, as pre-commit and a person run it: no GETFINANCE_DATA, no listing, no data/ in the checkout."""
+    repo = _cli_repo(tmp_path, monkeypatch)
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    (repo / "code.py").write_text("x = 1\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    result = _cli(repo, repo / "scripts" / "leakguard.py", "--all")
+    assert (result.returncode, result.stdout) == (1, "")
+    assert result.stderr.splitlines()[1:] == [f"  {NO_SOURCE}"]
+
+
+def test_the_command_finds_the_data_directory_of_a_workspace_in_the_checkout(tmp_path, monkeypatch):
+    repo = _cli_repo(tmp_path, monkeypatch)
+    monkeypatch.delenv("LEAKGUARD_NO_REAL_DATA")
+    make_workspace(repo / "workspaces" / "GetFinance")
+    (repo / ".gitignore").write_text("workspaces/*/data/\nworkspaces/*/.env\n", encoding="utf-8")
+    (repo / "fixture.py").write_text(f"OWNER = '{OWNER}'\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    result = _cli(repo, repo / "scripts" / "leakguard.py", "--all")
+    assert result.returncode == 1
+    assert "REAL: fixture.py:1 -> 'fu…'" in result.stderr
+    assert "raw.accounts.owner from GetFinance" in result.stderr
+
+
+PRE_COMMIT_CONFIG = Path(__file__).resolve().parent.parent / ".pre-commit-config.yaml"
+
+
+def test_pre_commit_checks_the_commit_message_with_the_guard():
+    """B3: a real value typed in a commit message is refused at commit time, not only by --history."""
+    config = yaml.safe_load(PRE_COMMIT_CONFIG.read_text(encoding="utf-8"))
+    hooks = {h["id"]: h for repo in config["repos"] for h in repo["hooks"]}
+    assert "commit-msg" in config["default_install_hook_types"]
+    assert hooks["leakguard-message"]["entry"] == hooks["leakguard"]["entry"] == "python scripts/leakguard.py"
+    assert hooks["leakguard-message"]["stages"] == ["commit-msg"]
+    # Only the message hook runs on the message: the file hooks stay at the commit's own stage.
+    assert config["default_stages"] == ["pre-commit"]
+    assert "tools/leakguard.py" not in PRE_COMMIT_CONFIG.read_text(encoding="utf-8")
+    assert "ALLOWLIST" not in (PRE_COMMIT_CONFIG.parent / ".gitleaks.toml").read_text(encoding="utf-8")
 
 
 def test_a_force_added_ignored_file_is_private(tmp_path, monkeypatch):
@@ -712,8 +899,7 @@ def test_from_a_worktree_the_listed_workspaces_of_the_main_checkout_are_read(tmp
 
 
 def test_in_process_no_file_is_clean(repo, capsys):
-    assert run(capsys) == (0, "leak guard: 0 file(s) clean (no real values: neither GETFINANCE_DATA nor "
-                              ".leakguard-workspaces names any)\n", [])
+    assert run(capsys) == (0, f"leak guard: 0 file(s) clean ({NO_DATA})\n", [])
 
 
 def test_in_process_all_and_history(repo, capsys, tmp_path, monkeypatch, workspace):
@@ -726,10 +912,8 @@ def test_in_process_all_and_history(repo, capsys, tmp_path, monkeypatch, workspa
     _git("commit", "-qm", f"pay {RECEIVER}", cwd=tmp_path)
     repo("fixture.py", "OWNER = 'fake'\n")
     _git("commit", "-qam", "scrub", cwd=tmp_path)
-    assert run(capsys, "--all")[:2] == (0, "leak guard: 3 file(s) clean (no real values: neither GETFINANCE_DATA "
-                                           "nor .leakguard-workspaces names any)\n")
-    assert run(capsys, "--history")[:2] == (0, "leak guard: history clean (no real values: neither "
-                                               "GETFINANCE_DATA nor .leakguard-workspaces names any)\n")
+    assert run(capsys, "--all")[:2] == (0, f"leak guard: 3 file(s) clean ({NO_DATA})\n")
+    assert run(capsys, "--history")[:2] == (0, f"leak guard: history clean ({NO_DATA})\n")
     repo(".leakguard-workspaces", f"{workspace}\n")
     code, _, failures = run(capsys, "--history")
     assert code == 1
