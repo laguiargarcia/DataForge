@@ -78,7 +78,7 @@ def _valor(texto: str) -> float:
 
 def _dia(texto: str):
     try:
-        return datetime.strptime(texto, "%d/%m/%Y").date()   # noqa: DTZ007 -- a calendar day, no time
+        return datetime.strptime(texto, "%d/%m/%Y").date()   # noqa: DTZ007 -- a calendar day with no time
     except ValueError as erro:
         raise LayoutDesconhecido(f"data impossível {texto}") from erro
 
@@ -88,7 +88,7 @@ def _cabecalho(texto: str) -> tuple[str, str, datetime]:
     if conta is None or emitido is None:
         raise LayoutDesconhecido("cabeçalho sem agência e conta ou sem a data de emissão")
     return (conta.group(1), re.sub(r"\D", "", conta.group(2)),
-            datetime.strptime(emitido.group(1), "%d/%m/%Y %H:%M:%S"))   # noqa: DTZ007 -- the PDF prints local time, no zone
+            datetime.strptime(emitido.group(1), "%d/%m/%Y %H:%M:%S"))   # noqa: DTZ007 -- the PDF prints local time with no zone
 
 
 def _recorte(paginas: list[str]) -> tuple[list[str] | None, bool]:
