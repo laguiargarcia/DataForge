@@ -54,12 +54,66 @@ def test_finance_daily_clean_run_succeeds_and_the_trip_wire_stays_off(tmp_path, 
 
 # The bug the trip-wire fixes: before it, a failed fetch (all else skipped) ended as success.
 @pytest.mark.parametrize("failing", ["fetch", "transform", "curate", "fact_card_statement",
-                                     "classify", "report", "calendar"])
+                                     "classify", "report", "conferencia_saldo", "lancamentos_suspeitos",
+                                     "extrato", "veredito_suspeitos", "calendar"])
 def test_finance_daily_fails_when_any_task_fails(tmp_path, db_url, global_engine, outcomes, failing):
     outcomes[failing] = 1
     status, results = _run("finance_daily", tmp_path, db_url, global_engine)
     assert status == "failed"
     assert results["job_failed"] == 1
+
+
+# A failed balance check does not hide the other tasks' warnings: data_warnings still runs, and the
+# trip-wire still fails the run (df-z4fh.1).
+def test_finance_daily_warnings_run_when_the_balance_check_fails(tmp_path, db_url, global_engine, outcomes):
+    outcomes["conferencia_saldo"] = 1
+    status, results = _run("finance_daily", tmp_path, db_url, global_engine)
+    assert status == "failed"
+    assert results["lancamentos_suspeitos"] == "skipped"
+    assert results["extrato"] == 0   # the statement does not depend on the balance check (df-z4fh.5)
+    assert results["data_warnings"] == 0
+    assert results["job_failed"] == 1
+
+
+# Nor does a failure of the suspect marking (df-z4fh.2).
+def test_finance_daily_warnings_run_when_the_suspect_marking_fails(tmp_path, db_url, global_engine, outcomes):
+    outcomes["lancamentos_suspeitos"] = 1
+    status, results = _run("finance_daily", tmp_path, db_url, global_engine)
+    assert status == "failed"
+    assert results["extrato"] == 0
+    assert results["veredito_suspeitos"] == "skipped"   # its table would be yesterday's (df-z4fh.3)
+    assert results["data_warnings"] == 0
+    assert results["job_failed"] == 1
+
+
+# Nor does a failure of the statement reading (df-z4fh.5): a PDF it cannot read fails the run, after the
+# warnings ran.
+def test_finance_daily_warnings_run_when_the_statement_reading_fails(tmp_path, db_url, global_engine, outcomes):
+    outcomes["extrato"] = 1
+    status, results = _run("finance_daily", tmp_path, db_url, global_engine)
+    assert status == "failed"
+    assert results["veredito_suspeitos"] == 0   # it reads the statement tables extrato left (df-z4fh.3)
+    assert results["data_warnings"] == 0
+    assert results["job_failed"] == 1
+
+
+# Nor does a failure of the statement's verdict (df-z4fh.3).
+def test_finance_daily_warnings_run_when_the_verdict_fails(tmp_path, db_url, global_engine, outcomes):
+    outcomes["veredito_suspeitos"] = 1
+    status, results = _run("finance_daily", tmp_path, db_url, global_engine)
+    assert status == "failed"
+    assert results["data_warnings"] == 0
+    assert results["job_failed"] == 1
+
+
+# extrato reads the statements once: a retry would read the same files (df-z4fh.5).
+def test_extrato_runs_once(monkeypatch, tmp_path):
+    job = load_job(WORKSPACE, "finance_daily")
+    task = next(t for t in job.tasks if t.name == "extrato")
+    calls = []
+    monkeypatch.setattr(engine, "run_task", lambda *a, **k: calls.append(a[0].name) or 1)
+    assert run_task_with_retry(task, job, tmp_path, "sqlite://") == 1
+    assert calls == ["extrato"]
 
 
 # A suspicious finding fails data_warnings but not the run: the data was written.
@@ -92,9 +146,11 @@ def test_finance_daily_alerts_once_activated(tmp_path, db_url, global_engine, ou
     assert results["alert_failure"] == "skipped"
 
 
+@pytest.mark.parametrize("failing", ["transform", "conferencia_saldo", "lancamentos_suspeitos", "extrato",
+                                     "veredito_suspeitos"])
 def test_finance_daily_failure_alerts_and_fails_once_activated(tmp_path, db_url, global_engine,
-                                                               outcomes):
-    outcomes["transform"] = 1
+                                                               outcomes, failing):
+    outcomes[failing] = 1
     status, results = _run("finance_daily", tmp_path, db_url, global_engine,
                            activate=("alert_warnings", "alert_failure"))
     assert status == "failed"

@@ -25,7 +25,10 @@ RULE_LISTS = [
     "CLEANSED_TRANSACTIONS_RULES", "ROWS_KEPT_RULES", "IDS_KEPT_RULES", "ROWS_CARRIED_RULES",
     "TOTALS_CONSERVED_RULES", "DIM_ACCOUNT_RULES", "FACT_TRANSACTION_RULES",
     "FACT_CARD_STATEMENT_RULES", "FACT_FATURA_MES_RULES", "FACT_BALANCE_SNAPSHOT_RULES",
-    "FACT_INVESTMENT_POSITION_RULES", "FACT_TRANSACTION_CLASSIFIED_RULES",
+    "FACT_INVESTMENT_POSITION_RULES", "FACT_TRANSACTION_CLASSIFIED_RULES", "CONFERENCIA_SALDO_RULES",
+    "LANCAMENTOS_SUSPEITOS_RULES", "EXTRATO_RULES", "EXTRATO_SALDOS_RULES",
+    "EXTRATO_ARQUIVOS_RULES", "VEREDITO_SUSPEITOS_RULES", "EXTRATO_SEM_LANCAMENTO_RULES",
+    "ACERTO_POR_MOTIVO_RULES",
 ]
 
 
@@ -270,6 +273,31 @@ POS = dict(id=["x", "y"], holding_uuid=["h1", "h1"], snapshot_date=["2026-01-01"
            invested_amount=[100.0, 100.0], current_value=[101.0, 102.0], currency=["BRL", "BRL"])
 POS["return"] = [1.0, 2.0]
 CLASSIFIED = dict(id=["t1", "t2"])
+CONF = dict(account_uuid=["u1", "u1"], de=[date(2026, 1, 1), date(2026, 1, 2)],
+            ate=[date(2026, 1, 2), date(2026, 1, 3)], coletado_em=[date(2026, 1, 2), date(2026, 1, 3)],
+            saldo_de=[10.0, 12.0], saldo_ate=[12.0, 12.0],
+            variacao_saldo=[2.0, 0.0], soma_lancamentos=[2.0, 0.0], n_lancamentos=[1, 0],
+            diferenca=[0.0, 0.0], diferenca_acumulada=[0.0, 0.0], estado=["fecha", "em_aberto"])
+SUSP = dict(transaction_id=["t1", "t1"], account_uuid=["u1", "u1"], date=[date(2026, 1, 2)] * 2,
+            amount=[-5.0, -5.0], description=["COMPRA", "COMPRA"], status=["PENDING", "PENDING"],
+            motivo=["sumiu_da_coleta", "pendente_que_sumiu"], primeira_coleta=[date(2026, 1, 2)] * 2,
+            ultima_coleta=[date(2026, 1, 3)] * 2, n_coletas=[2, 2], intervalo_de=[date(2026, 1, 1), None],
+            intervalo_ate=[date(2026, 1, 2), None], intervalo_estado=["fecha", None])
+EXTRATO = dict(arquivo=["a.pdf", "a.pdf"], account_uuid=["u1", "u1"], dia=[date(2026, 1, 2)] * 2, ordem=[1, 2],
+               descricao=["COMPRA", "COMPRA"], valor=[-5.0, -5.0], saldo_do_dia=[90.0, 90.0])
+EXTRATO_SALDOS = dict(account_uuid=["u1", "u1"], dia=[date(2026, 1, 1), date(2026, 1, 2)], arquivo=["a.pdf"] * 2,
+                      saldo_do_dia=[100.0, 90.0], saldo_anterior=[None, 100.0], soma_lancamentos=[0.0, -10.0],
+                      n_lancamentos=[0, 2], diferenca=[None, 0.0], fecha=[None, True])
+EXTRATO_ARQUIVOS = dict(arquivo=["a.pdf", "b.pdf"], account_uuid=["u1", "u1"],
+                        emitido_em=[date(2026, 1, 3), date(2026, 1, 4)], n_lancamentos=[2, 0], n_saldos=[2, 1],
+                        linhas_ignoradas=[0, 1])
+VEREDITO = dict(transaction_id=["t1", "t2"], account_uuid=["u1", "u1"], date=[date(2026, 1, 2)] * 2,
+                amount=[-5.0, -6.0], motivo=["sumiu_da_coleta"] * 2, veredito=["no_extrato", "fora_do_extrato"],
+                dia_banco=[date(2026, 1, 2)] * 2, extrato_dia=[date(2026, 1, 3), None], extrato_ordem=[1, None])
+SEM_LANCAMENTO = dict(arquivo=["a.pdf", "a.pdf"], account_uuid=["u1", "u1"], dia=[date(2026, 1, 2)] * 2,
+                      ordem=[1, 2], descricao=["COMPRA", "COMPRA"], valor=[-5.0, -5.0])
+ACERTO = dict(motivo=["sumiu_da_coleta", "aplicacao_automatica"], n=[3, 0], n_no_extrato=[1, 0],
+              n_fora_do_extrato=[2, 0])
 
 
 def _twice(base, **second):
@@ -507,6 +535,62 @@ RULE_CASES = [
      _set(POS, current_value=[101.0, None])),
     ("FACT_INVESTMENT_POSITION_RULES", "current_value is negative", _frame, POS,
      _set(POS, current_value=[101.0, -102.0])),
+    ("CONFERENCIA_SALDO_RULES", "expected columns are present", _frame, CONF, _set(CONF, estado=...)),
+    ("CONFERENCIA_SALDO_RULES", "account_uuid is null", _frame, CONF, _set(CONF, account_uuid=["u1", None])),
+    ("CONFERENCIA_SALDO_RULES", "more than one row per account and interval end", _frame, CONF,
+     _set(CONF, ate=[date(2026, 1, 3), date(2026, 1, 3)])),
+    ("CONFERENCIA_SALDO_RULES", "de is not before ate", _frame, CONF,
+     _set(CONF, de=[date(2026, 1, 2), date(2026, 1, 2)])),
+    ("CONFERENCIA_SALDO_RULES", "estado is not a known state", _frame, CONF,
+     _set(CONF, estado=["fecha", "fechou"])),
+    ("LANCAMENTOS_SUSPEITOS_RULES", "expected columns are present", _frame, SUSP, _set(SUSP, motivo=...)),
+    ("LANCAMENTOS_SUSPEITOS_RULES", "transaction_id is null", _frame, SUSP,
+     _set(SUSP, transaction_id=["t1", None])),
+    ("LANCAMENTOS_SUSPEITOS_RULES", "account_uuid is null", _frame, SUSP, _set(SUSP, account_uuid=["u1", None])),
+    ("LANCAMENTOS_SUSPEITOS_RULES", "more than one row per transaction and reason", _frame, SUSP,
+     _set(SUSP, motivo=["sumiu_da_coleta", "sumiu_da_coleta"])),
+    ("EXTRATO_RULES", "expected columns are present", _frame, EXTRATO, _set(EXTRATO, saldo_do_dia=...)),
+    ("EXTRATO_RULES", "account_uuid is null", _frame, EXTRATO, _set(EXTRATO, account_uuid=["u1", None])),
+    ("EXTRATO_RULES", "dia is null", _frame, EXTRATO, _set(EXTRATO, dia=[date(2026, 1, 2), None])),
+    ("EXTRATO_RULES", "valor is null", _frame, EXTRATO, _set(EXTRATO, valor=[-5.0, None])),
+    ("EXTRATO_RULES", "more than one row per account, day and position", _frame, EXTRATO,
+     _set(EXTRATO, ordem=[1, 1])),
+    ("EXTRATO_SALDOS_RULES", "expected columns are present", _frame, EXTRATO_SALDOS,
+     _set(EXTRATO_SALDOS, fecha=...)),
+    ("EXTRATO_SALDOS_RULES", "account_uuid is null", _frame, EXTRATO_SALDOS,
+     _set(EXTRATO_SALDOS, account_uuid=["u1", None])),
+    ("EXTRATO_SALDOS_RULES", "saldo_do_dia is null", _frame, EXTRATO_SALDOS,
+     _set(EXTRATO_SALDOS, saldo_do_dia=[100.0, None])),
+    ("EXTRATO_SALDOS_RULES", "more than one balance per account and day", _frame, EXTRATO_SALDOS,
+     _set(EXTRATO_SALDOS, dia=[date(2026, 1, 2)] * 2)),
+    ("EXTRATO_ARQUIVOS_RULES", "expected columns are present", _frame, EXTRATO_ARQUIVOS,
+     _set(EXTRATO_ARQUIVOS, linhas_ignoradas=...)),
+    ("EXTRATO_ARQUIVOS_RULES", "account_uuid is null", _frame, EXTRATO_ARQUIVOS,
+     _set(EXTRATO_ARQUIVOS, account_uuid=["u1", None])),
+    ("EXTRATO_ARQUIVOS_RULES", "more than one row per file", _frame, EXTRATO_ARQUIVOS,
+     _set(EXTRATO_ARQUIVOS, arquivo=["a.pdf", "a.pdf"])),
+    ("VEREDITO_SUSPEITOS_RULES", "expected columns are present", _frame, VEREDITO,
+     _set(VEREDITO, extrato_ordem=...)),
+    ("VEREDITO_SUSPEITOS_RULES", "transaction_id is null", _frame, VEREDITO,
+     _set(VEREDITO, transaction_id=["t1", None])),
+    ("VEREDITO_SUSPEITOS_RULES", "account_uuid is null", _frame, VEREDITO, _set(VEREDITO, account_uuid=["u1", None])),
+    ("VEREDITO_SUSPEITOS_RULES", "more than one row per transaction and reason", _frame, VEREDITO,
+     _set(VEREDITO, transaction_id=["t1", "t1"])),
+    ("VEREDITO_SUSPEITOS_RULES", "veredito is not a known verdict", _frame, VEREDITO,
+     _set(VEREDITO, veredito=["no_extrato", "talvez"])),
+    ("VEREDITO_SUSPEITOS_RULES", "the statement line is set exactly when the verdict is no_extrato", _frame,
+     VEREDITO, _set(VEREDITO, extrato_dia=[None, None])),
+    ("EXTRATO_SEM_LANCAMENTO_RULES", "expected columns are present", _frame, SEM_LANCAMENTO,
+     _set(SEM_LANCAMENTO, descricao=...)),
+    ("EXTRATO_SEM_LANCAMENTO_RULES", "account_uuid is null", _frame, SEM_LANCAMENTO,
+     _set(SEM_LANCAMENTO, account_uuid=["u1", None])),
+    ("EXTRATO_SEM_LANCAMENTO_RULES", "more than one row per account, day and position", _frame, SEM_LANCAMENTO,
+     _set(SEM_LANCAMENTO, ordem=[1, 1])),
+    ("ACERTO_POR_MOTIVO_RULES", "expected columns are present", _frame, ACERTO, _set(ACERTO, n=...)),
+    ("ACERTO_POR_MOTIVO_RULES", "motivo is null", _frame, ACERTO, _set(ACERTO, motivo=["sumiu_da_coleta", None])),
+    ("ACERTO_POR_MOTIVO_RULES", "more than one row per reason", _frame, ACERTO,
+     _set(ACERTO, motivo=["sumiu_da_coleta"] * 2)),
+    ("ACERTO_POR_MOTIVO_RULES", "the verdicts add up to more than n", _frame, ACERTO, _set(ACERTO, n=[2, 0])),
 ]
 
 
@@ -537,6 +621,14 @@ def test_every_rule_has_a_case(F):
     ("FACT_BALANCE_SNAPSHOT_RULES", _frame, SNAP),
     ("FACT_INVESTMENT_POSITION_RULES", _frame, POS),
     ("FACT_TRANSACTION_CLASSIFIED_RULES", _frame, CLASSIFIED),
+    ("CONFERENCIA_SALDO_RULES", _frame, CONF),
+    ("LANCAMENTOS_SUSPEITOS_RULES", _frame, SUSP),
+    ("EXTRATO_RULES", _frame, EXTRATO),
+    ("EXTRATO_SALDOS_RULES", _frame, EXTRATO_SALDOS),
+    ("EXTRATO_ARQUIVOS_RULES", _frame, EXTRATO_ARQUIVOS),
+    ("VEREDITO_SUSPEITOS_RULES", _frame, VEREDITO),
+    ("EXTRATO_SEM_LANCAMENTO_RULES", _frame, SEM_LANCAMENTO),
+    ("ACERTO_POR_MOTIVO_RULES", _frame, ACERTO),
 ])
 def test_good_frame_passes_its_whole_list(F, list_name, build, good):
     assert F["validate"](build(**good), f"t.{list_name}", F[list_name]) == []
@@ -666,6 +758,10 @@ VALIDATED_SCRIPTS = {
     "cleansed2curated/fact_investment_position.py": ["FACT_INVESTMENT_POSITION_RULES",
                                                      "ROWS_CARRIED_RULES"],
     "report/classify.py": ["FACT_TRANSACTION_CLASSIFIED_RULES", "ROWS_CARRIED_RULES"],
+    "cleansed2curated/cleansed2curated_conferencia_saldo.py": ["CONFERENCIA_SALDO_RULES"],
+    "cleansed2curated/cleansed2curated_lancamentos_suspeitos.py": ["LANCAMENTOS_SUSPEITOS_RULES"],
+    "cleansed2curated/cleansed2curated_extrato.py": ["EXTRATO_RULES", "EXTRATO_SALDOS_RULES",
+                                                       "EXTRATO_ARQUIVOS_RULES"],
 }
 
 

@@ -702,6 +702,120 @@ FACT_BALANCE_SNAPSHOT_RULES = [
     null_rule("account_type", SUSPICIOUS),
 ]
 
+# The balance check (df-z4fh.1): one row per BANK account and interval between two snapshots, keyed by
+# its end `ate`; `coletado_em` is the day its `ate` snapshot first arrived.
+CONFERENCIA_SALDO_COLUMNS = [
+    "account_uuid", "de", "ate", "coletado_em", "saldo_de", "saldo_ate", "variacao_saldo",
+    "soma_lancamentos", "n_lancamentos", "diferenca", "diferenca_acumulada", "estado",
+]
+CONFERENCIA_SALDO_RULES = [
+    expected_columns_rule(CONFERENCIA_SALDO_COLUMNS),
+    null_rule("account_uuid"),
+    ("more than one row per account and interval end", IMPOSSIBLE, duplicated("account_uuid", "ate")),
+    ("de is not before ate", IMPOSSIBLE, pl.col("de") >= pl.col("ate")),
+    ("estado is not a known state", IMPOSSIBLE,
+     pl.col("estado").is_null() | not_in("estado", ["fecha", "fecha_com_vizinho", "em_aberto", "nao_fecha"])),
+]
+
+
+# Rank of the balance-check interval that warns, newest first: two snapshots later, a transaction posted
+# after a weekend or one sync late has arrived, so an older break is a real one (df-z4fh.1).
+BALANCE_WARN_RANK = 3
+
+
+def new_balance_break_rule(today=None):
+    # The one warning of the balance check (df-z4fh.1): the third-newest interval of an account is
+    # `nao_fecha` and the account's newest snapshot arrived on the run day (`today`, run_day() by
+    # default). Two snapshots later, a transaction the bank posts after a weekend or one sync late has
+    # arrived (`fecha_com_vizinho`), so a healthy account stays quiet. A run without a new snapshot of
+    # the account moves no interval up, so it does not repeat yesterday's warning: the run day is
+    # compared exactly, without RUN_DAY_SLACK, which would repeat it on the next day. A break that
+    # becomes the third-newest on a run that fails, or an older interval that changes later, gives no
+    # warning; the table still shows it (docs/architecture.md).
+    newest_arrival = pl.col("coletado_em").sort_by("ate").last().over("account_uuid")
+    return ("the third-newest interval of an account does not close", SUSPICIOUS,
+            (pl.col("estado") == "nao_fecha")
+            & (pl.col("ate").rank("ordinal", descending=True).over("account_uuid") == BALANCE_WARN_RANK)
+            & (newest_arrival == pl.lit(today or run_day())))
+
+
+# The suspect transactions (df-z4fh.2): one row per (transaction, reason), with the balance-check interval
+# it falls in. They only mark: no rule here is suspicious, so a suspect never warns (data_warnings).
+LANCAMENTOS_SUSPEITOS_COLUMNS = [
+    "transaction_id", "account_uuid", "date", "amount", "description", "status", "motivo",
+    "primeira_coleta", "ultima_coleta", "n_coletas", "intervalo_de", "intervalo_ate", "intervalo_estado",
+]
+LANCAMENTOS_SUSPEITOS_RULES = [
+    expected_columns_rule(LANCAMENTOS_SUSPEITOS_COLUMNS),
+    null_rule("transaction_id"),
+    null_rule("account_uuid"),
+    ("more than one row per transaction and reason", IMPOSSIBLE, duplicated("transaction_id", "motivo")),
+]
+
+# The bank statement PDFs (df-z4fh.5): one row per entry of the statement, and one per daily balance with
+# its check. They only read and record: a day that does not close is printed and kept in `fecha`, never a
+# suspicious finding (an old statement would repeat it every day).
+EXTRATO_COLUMNS = ["arquivo", "account_uuid", "dia", "ordem", "descricao", "valor", "saldo_do_dia"]
+EXTRATO_RULES = [
+    expected_columns_rule(EXTRATO_COLUMNS),
+    null_rule("account_uuid"),
+    null_rule("dia"),
+    null_rule("valor"),
+    ("more than one row per account, day and position", IMPOSSIBLE, duplicated("account_uuid", "dia", "ordem")),
+]
+EXTRATO_SALDOS_COLUMNS = [
+    "account_uuid", "dia", "arquivo", "saldo_do_dia", "saldo_anterior", "soma_lancamentos", "n_lancamentos",
+    "diferenca", "fecha",
+]
+EXTRATO_SALDOS_RULES = [
+    expected_columns_rule(EXTRATO_SALDOS_COLUMNS),
+    null_rule("account_uuid"),
+    null_rule("saldo_do_dia"),
+    ("more than one balance per account and day", IMPOSSIBLE, duplicated("account_uuid", "dia")),
+]
+# One row per PDF read, with what it gave and how many lines of its list were neither an entry nor a balance.
+# Ignored lines are printed and kept here, never a finding: the file stays in the folder, so it would repeat.
+EXTRATO_ARQUIVOS_COLUMNS = ["arquivo", "account_uuid", "emitido_em", "n_lancamentos", "n_saldos",
+                            "linhas_ignoradas"]
+EXTRATO_ARQUIVOS_RULES = [
+    expected_columns_rule(EXTRATO_ARQUIVOS_COLUMNS),
+    null_rule("account_uuid"),
+    ("more than one row per file", IMPOSSIBLE, duplicated("arquivo")),
+]
+
+# The statement's verdict on each suspect (df-z4fh.3): one row per (transaction, reason), the statement lines no
+# transaction matched, and the count of each verdict per reason. They only measure: no rule here is suspicious,
+# since an old statement would repeat the same finding every day.
+VEREDITO_SUSPEITOS_COLUMNS = [
+    "transaction_id", "account_uuid", "date", "amount", "motivo", "veredito", "dia_banco", "extrato_dia",
+    "extrato_ordem",
+]
+VEREDITO_SUSPEITOS_RULES = [
+    expected_columns_rule(VEREDITO_SUSPEITOS_COLUMNS),
+    null_rule("transaction_id"),
+    null_rule("account_uuid"),
+    ("more than one row per transaction and reason", IMPOSSIBLE, duplicated("transaction_id", "motivo")),
+    ("veredito is not a known verdict", IMPOSSIBLE,
+     pl.col("veredito").is_null()
+     | not_in("veredito", ["no_extrato", "fora_do_extrato", "sem_extrato_no_periodo"])),
+    ("the statement line is set exactly when the verdict is no_extrato", IMPOSSIBLE,
+     (pl.col("veredito") == "no_extrato") != pl.col("extrato_dia").is_not_null()),
+]
+EXTRATO_SEM_LANCAMENTO_COLUMNS = ["arquivo", "account_uuid", "dia", "ordem", "descricao", "valor"]
+EXTRATO_SEM_LANCAMENTO_RULES = [
+    expected_columns_rule(EXTRATO_SEM_LANCAMENTO_COLUMNS),
+    null_rule("account_uuid"),
+    ("more than one row per account, day and position", IMPOSSIBLE, duplicated("account_uuid", "dia", "ordem")),
+]
+ACERTO_POR_MOTIVO_COLUMNS = ["motivo", "n", "n_no_extrato", "n_fora_do_extrato"]
+ACERTO_POR_MOTIVO_RULES = [
+    expected_columns_rule(ACERTO_POR_MOTIVO_COLUMNS),
+    null_rule("motivo"),
+    ("more than one row per reason", IMPOSSIBLE, duplicated("motivo")),
+    ("the verdicts add up to more than n", IMPOSSIBLE,
+     pl.col("n_no_extrato") + pl.col("n_fora_do_extrato") > pl.col("n")),
+]
+
 # Append-only: a corrupt row here has no source to rebuild it from (A11).
 FACT_INVESTMENT_POSITION_COLUMNS = [
     "holding_uuid", "snapshot_date", "invested_amount", "current_value", "return", "currency",

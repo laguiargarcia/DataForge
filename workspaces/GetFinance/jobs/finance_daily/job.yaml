@@ -162,6 +162,66 @@ tasks:
       target: curated
     depends_on: [classify, fact_balance, fact_investments, fact_fatura_mes]
 
+  # Conferência pelo saldo (df-z4fh.1): por conta BANK e intervalo entre dois snapshots, a variação do
+  # saldo menos os lançamentos. Real data deps: raw.accounts (fetch), cleansed.transactions (transform)
+  # and curated.dim_account (dim_accounts, via fact_balance). depends_on report is a serialization edge
+  # (the last curated writer). Its only warning is a break that a new snapshot made the account's
+  # third-newest interval (new_balance_break_rule in functions.py).
+  - name: conferencia_saldo
+    script: cleansed2curated/cleansed2curated_conferencia_saldo.py
+    params:
+      source: raw
+      target: curated
+    depends_on: [transform, fact_balance, report]
+
+  # Lançamentos suspeitos (df-z4fh.2): cada lançamento que um motivo marca, com o intervalo da conferência
+  # em que cai. Real data deps: curated.conferencia_saldo (conferencia_saldo), cleansed.transactions and
+  # raw.transactions; it is the last curated writer. It only marks: no suspicious finding of its own.
+  - name: lancamentos_suspeitos
+    script: cleansed2curated/cleansed2curated_lancamentos_suspeitos.py
+    params:
+      source: raw
+      target: curated
+    depends_on: [conferencia_saldo]
+
+  # Extrato do banco (df-z4fh.5): os PDFs de data/extratos/ (conexão extratos) viram curated.extrato,
+  # curated.extrato_saldos (o saldo de cada dia e se ele fecha com os lançamentos) e curated.extrato_arquivos.
+  # Real data deps: cleansed.accounts and curated.dim_account (dim_accounts). The edge to
+  # lancamentos_suspeitos only serializes it after the last curated writer, so it also runs when that task
+  # failed or was skipped (the statement does not depend on the balance check). An empty or missing folder
+  # writes empty tables; PDFs without pypdf installed print a warning and write empty tables. A bad PDF is
+  # left out, the good ones are written, and then the task fails naming each bad file: one attempt, since a
+  # retry reads the same files. It only reads and records: no suspicious finding.
+  - name: extrato
+    script: cleansed2curated/cleansed2curated_extrato.py
+    params:
+      source: extratos
+      target: curated
+    depends_on:
+      - dim_accounts
+      - {task: lancamentos_suspeitos, when: [completed, skipped]}
+    retry:
+      attempts: 1
+      delay_seconds: 0
+
+  # Veredito do extrato (df-z4fh.3): cada lançamento de cleansed é casado com uma linha do extrato, e cada
+  # suspeito ganha um veredito (no_extrato, fora_do_extrato, sem_extrato_no_periodo); grava
+  # curated.veredito_suspeitos, curated.extrato_sem_lancamento e curated.acerto_por_motivo. Real data deps:
+  # curated.lancamentos_suspeitos (lancamentos_suspeitos, which must have succeeded: otherwise its table is
+  # yesterday's), curated.extrato and curated.extrato_saldos (extrato), cleansed.transactions and
+  # raw.transactions. The extrato edge is `when: completed`: when it fails it has written the good files or
+  # nothing (yesterday's tables stay), and both are a statement to read. No statement tables yet: every
+  # suspect is sem_extrato_no_periodo and the task succeeds. It is the last curated writer, and it only reads
+  # and records: no suspicious finding.
+  - name: veredito_suspeitos
+    script: cleansed2curated/cleansed2curated_veredito_suspeitos.py
+    params:
+      source: raw
+      target: curated
+    depends_on:
+      - lancamentos_suspeitos
+      - {task: extrato, when: completed}
+
   # ── Data checks and alerts (ADR 0004, df-ahua.3) ────────────────────────────
   # The checks themselves run inside the scripts above, before each write (validate() in
   # functions.py). An IMPOSSIBLE finding makes its task fail, so everything after it is skipped and
@@ -176,10 +236,18 @@ tasks:
   # Prints every suspicious finding of this run and exits 1 if there is any. One attempt: it reads
   # the findings this run recorded, so a retry only repeats the same answer (df-ahua.3.4). The
   # job-level `retry:` above does not reach tasks (DataForge df-a16k): without its own, a task gets
-  # the engine default, 3 attempts 30 s apart.
+  # the engine default, 3 attempts 30 s apart. It runs whether conferencia_saldo succeeded or failed
+  # (`when: completed`), so a failure of the balance check does not hide the other tasks' warnings; that
+  # failure still fails the run through job_failed. The same for lancamentos_suspeitos, which is also
+  # skipped when the balance check failed, for extrato, and for veredito_suspeitos, skipped when the suspect
+  # marking did not succeed. When report did not succeed, conferencia_saldo is skipped and so is this task.
   - name: data_warnings
     script: validation/data_warnings.py
-    depends_on: [report]
+    depends_on:
+      - {task: conferencia_saldo, when: completed}
+      - {task: lancamentos_suspeitos, when: [completed, skipped]}
+      - {task: extrato, when: [completed, skipped]}
+      - {task: veredito_suspeitos, when: [completed, skipped]}
     retry:
       attempts: 1
       delay_seconds: 0
@@ -202,13 +270,18 @@ tasks:
         {failed_tasks_summary}
 
   # Sends the failure alert. INACTIVE for the same reason (df-ahua.3.2). Same edges as job_failed:
-  # report did not succeed (something upstream failed and the rest was skipped) or calendar failed.
+  # report did not succeed (something upstream failed and the rest was skipped), conferencia_saldo,
+  # lancamentos_suspeitos, extrato or veredito_suspeitos failed, or calendar failed.
   - name: alert_failure
     type: message
     active: false
     match: any
     depends_on:
       - {task: report, when: [failed, skipped]}
+      - {task: conferencia_saldo, when: failed}
+      - {task: lancamentos_suspeitos, when: failed}
+      - {task: extrato, when: failed}
+      - {task: veredito_suspeitos, when: failed}
       - {task: calendar, when: failed}
     params:
       channels: []
@@ -222,17 +295,21 @@ tasks:
   # Trip-wire: forces the run to `failed` whenever any task failed. Its own edges (not "after
   # alert_failure"): while alert_failure is inactive the engine drops edges to it, and job_failed
   # would then run on every run. The data_warnings edge is never the one that fires (data_warnings
-  # is skipped only when report did not succeed). It was added so data_warnings would not be a leaf,
-  # which under the old leaf-only rule kept a suspicious finding from failing the run. Since core
-  # PR #49 it no longer does that: a `when: skipped` edge does not take a failure over, so while
-  # alert_warnings is inactive a suspicious finding leaves the run `failed` (exit 1) with the data
-  # written and job_failed skipped. With alert_warnings active and sent, the run is `success`
-  # again. Whether to keep this wiring is an open owner decision (DataForge df-vlfl).
+  # is skipped only when report did not succeed, which its own edge catches). It was added so
+  # data_warnings would not be a leaf, which under the old leaf-only rule kept a suspicious finding
+  # from failing the run. Since core PR #49 it no longer does that: a `when: skipped` edge does not
+  # take a failure over, so while alert_warnings is inactive a suspicious finding leaves the run
+  # `failed` (exit 1) with the data written and job_failed skipped. With alert_warnings active and
+  # sent, the run is `success` again. Whether to keep this wiring is an open owner decision (DataForge df-vlfl).
   - name: job_failed
     type: error
     match: any
     depends_on:
       - {task: report, when: [failed, skipped]}
+      - {task: conferencia_saldo, when: failed}
+      - {task: lancamentos_suspeitos, when: failed}
+      - {task: extrato, when: failed}
+      - {task: veredito_suspeitos, when: failed}
       - {task: calendar, when: failed}
       - {task: data_warnings, when: skipped}
     params:

@@ -46,6 +46,9 @@ ingestion_date = ANCHOR
 ingested_at = ingestion_date.isoformat()
 
 # --- accounts: 1 BANK + 1 CREDIT, Pluggy /accounts shape ---
+# updatedAt is when the bank last refreshed the balance: the balance check (conferencia_saldo) keys a
+# snapshot on it. One fetch is one snapshot, so the demo's check has no interval yet and writes none.
+SNAPSHOT_AT = ANCHOR.isoformat() + "T09:00:00.000Z"
 # bankData carries transferNumber (a Python-repr blob in the raw layer); its first '/'-segment is
 # the 3-digit COMPE bank code (001 -> "Banco do Brasil" via config/institutions.yaml) and its last
 # segment supplies the account_uuid last4. creditData is a repr blob parsed in curated (U4 reads
@@ -53,7 +56,7 @@ ingested_at = ingestion_date.isoformat()
 accounts = [
     {"id": "acc-bank-0001", "itemId": "item-show-0001", "type": "BANK",
      "name": "Synthetic Checking", "balance": 5230.55, "currencyCode": "BRL",
-     "subtype": "CHECKING_ACCOUNT", "number": "00012345-2",
+     "subtype": "CHECKING_ACCOUNT", "number": "00012345-2", "updatedAt": SNAPSHOT_AT,
      "bankData": {"transferNumber": "001/1620/00012345-2"}},
     {"id": "acc-cred-0001", "itemId": "item-show-0001", "type": "CREDIT",
      # balance = outstanding owed, POSITIVE (Pluggy convention; fact_balance_snapshot maps
@@ -61,7 +64,7 @@ accounts = [
      # and availableCreditLimit = creditLimit - balance with it.
      # number = the card's last digits (Pluggy sends them; account_uuid ends with them).
      "name": "Synthetic Card", "balance": 0.0, "currencyCode": "BRL",
-     "subtype": "CREDIT_CARD", "number": "0000",
+     "subtype": "CREDIT_CARD", "number": "0000", "updatedAt": SNAPSHOT_AT,
      "creditData": {"availableCreditLimit": 8800.0, "creditLimit": 10000.0,
                     "minimumPayment": 120.0, "level": "PLATINUM"}},
 ]

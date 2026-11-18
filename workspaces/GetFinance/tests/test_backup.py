@@ -1,5 +1,6 @@
 # tests/test_backup.py — scripts/backup/backup_dados.py (df-sgyf): zips what cannot be
-# rebuilt (raw + edicao.db) into a dated file outside the repo and keeps the newest N.
+# rebuilt (raw + edicao.db + the bank statement PDFs, df-z4fh.5) into a dated file outside the repo
+# and keeps the newest N.
 # Runs the real script in a throwaway workspace under tmp_path; never touches real data.
 import shutil
 import sqlite3
@@ -26,7 +27,8 @@ def _workspace(tmp_path: Path, with_edicao: bool = True) -> Path:
     (ws / "connections" / "connections.yaml").write_text(
         "connections:\n"
         "  raw: {type: parquet_dir, path: data/raw/}\n"
-        "  edicao: {type: sqlite_file, path: data/edicao.db}\n",
+        "  edicao: {type: sqlite_file, path: data/edicao.db}\n"
+        "  extratos: {type: pdf_dir, path: data/extratos/}\n",
         encoding="utf-8",
     )
     part = ws / "data" / "raw" / "transactions" / "ingestion_date=2026-11-01"
@@ -72,6 +74,30 @@ def test_a_leftover_partition_temp_file_is_not_backed_up(tmp_path):
     (zipped,) = sorted((tmp_path / "backups").glob("getfinance-*.zip"))
     with zipfile.ZipFile(zipped) as z:
         assert sorted(z.namelist()) == ["edicao.db", "raw/transactions/ingestion_date=2026-11-01/data.parquet"]
+
+
+def test_the_statement_pdfs_go_into_the_zip(tmp_path):
+    """df-z4fh.5: a statement PDF has no rebuild either, so data/extratos/ is zipped under extratos/."""
+    ws = _workspace(tmp_path)
+    extratos = ws / "data" / "extratos"
+    (extratos / "2025").mkdir(parents=True)
+    (extratos / "extrato-2026.pdf").write_bytes(b"%PDF-fake-2026")
+    (extratos / "2025" / "extrato-2025.pdf").write_bytes(b"%PDF-fake-2025")
+    result = _run(ws, "../backups", 3)
+    assert result.returncode == 0, result.stderr
+    assert "2 extrato(s)" in result.stdout
+    (zipped,) = sorted((tmp_path / "backups").glob("getfinance-*.zip"))
+    with zipfile.ZipFile(zipped) as z:
+        assert z.read("extratos/extrato-2026.pdf") == b"%PDF-fake-2026"
+        assert z.read("extratos/2025/extrato-2025.pdf") == b"%PDF-fake-2025"
+
+
+def test_a_missing_statement_folder_is_no_error(tmp_path):
+    ws = _workspace(tmp_path)
+    result = _run(ws, "../backups", 3)
+    assert result.returncode == 0, result.stderr
+    assert "0 extrato(s)" in result.stdout
+    assert not (ws / "data" / "extratos").exists()   # the backup only reads it
 
 
 def test_destination_is_relative_to_the_workspace_not_the_cwd(tmp_path):

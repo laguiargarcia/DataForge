@@ -8,8 +8,13 @@ import {
 import { CartaoResumo } from './components/CartaoResumo'
 import { CartaoDetalhe } from './components/CartaoDetalhe'
 import { ListaCategorias } from './components/ListaCategorias'
+import { FalhaCarga } from './components/FalhaCarga'
+import { TelaConferencia } from './components/TelaConferencia'
 
 type Estado = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; dados: Dados }
+type Tela = 'resumo' | 'conferencia'
+
+const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência']]
 
 // Tudo vem pronto do ETL (tasks classify e report do finance_daily).
 async function carregar(): Promise<Dados> {
@@ -30,6 +35,7 @@ const Seta = ({ d }: { d: string }) => (
 const classeSeta = 'w-11 h-11 rounded-[999px] flex items-center justify-center text-secundario'
 
 export function App() {
+  const [tela, setTela] = useState<Tela>('resumo')
   const [estado, setEstado] = useState<Estado>({ fase: 'carregando' })
   const [mes, setMes] = useState<string | null>(null)
   const [selecionada, setSelecionada] = useState<string | null>(null)
@@ -72,17 +78,7 @@ export function App() {
 
   let cartao: ReactNode
   if (estado.fase === 'erro') {
-    cartao = (
-      <div className="flex flex-col gap-5 items-start">
-        <span className="text-[16px] text-secundario">Não foi possível carregar os dados.</span>
-        <button
-          onClick={abrir}
-          className="min-h-11 px-[18px] rounded-[999px] bg-faixa text-acento text-[15px] font-semibold flex items-center"
-        >
-          Tentar de novo
-        </button>
-      </div>
-    )
+    cartao = <FalhaCarga onTentar={abrir} />
   } else if (categoria) {
     cartao = <CartaoDetalhe categoria={categoria} onVoltar={() => setSelecionada(null)} />
   } else {
@@ -102,35 +98,55 @@ export function App() {
     <div className="min-h-[980px] bg-fundo text-texto font-sans pt-8 px-4 pb-16 box-border">
       <div className="max-w-[1120px] mx-auto flex flex-col gap-5">
         <header className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="text-[18px] font-semibold">Finanças</div>
-          <div className="flex items-center gap-1 bg-cartao rounded-[999px] p-1">
-            <button
-              className={classeSeta}
-              aria-label="Mês anterior"
-              disabled={indice <= 0}
-              onClick={() => irPara(lista[indice - 1])}
-            >
-              <Seta d="M15 6l-6 6 6 6" />
-            </button>
-            <div className="text-[15px] font-medium px-2">{rotulo}</div>
-            <button
-              className={classeSeta}
-              aria-label="Próximo mês"
-              disabled={indice < 0 || indice >= lista.length - 1}
-              onClick={() => irPara(lista[indice + 1])}
-            >
-              <Seta d="M9 6l6 6-6 6" />
-            </button>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="text-[18px] font-semibold">Finanças</div>
+            <nav className="flex items-center gap-1 bg-cartao rounded-[999px] p-1">
+              {TELAS.map(([id, nome]) => (
+                <button
+                  key={id}
+                  aria-pressed={tela === id}
+                  onClick={() => setTela(id)}
+                  className={`min-h-11 px-[18px] rounded-[999px] text-[15px] flex items-center ${tela === id ? 'bg-ativa text-acento font-semibold' : 'text-secundario font-medium'}`}
+                >
+                  {nome}
+                </button>
+              ))}
+            </nav>
           </div>
+          {tela === 'resumo' && (
+            <div className="flex items-center gap-1 bg-cartao rounded-[999px] p-1">
+              <button
+                className={classeSeta}
+                aria-label="Mês anterior"
+                disabled={indice <= 0}
+                onClick={() => irPara(lista[indice - 1])}
+              >
+                <Seta d="M15 6l-6 6 6 6" />
+              </button>
+              <div className="text-[15px] font-medium px-2">{rotulo}</div>
+              <button
+                className={classeSeta}
+                aria-label="Próximo mês"
+                disabled={indice < 0 || indice >= lista.length - 1}
+                onClick={() => irPara(lista[indice + 1])}
+              >
+                <Seta d="M9 6l6 6-6 6" />
+              </button>
+            </div>
+          )}
         </header>
 
-        <div className="flex flex-wrap gap-5 items-stretch">
-          <section className="flex-[1_1_440px] min-w-0 bg-cartao rounded-[36px] p-8 box-border flex flex-col gap-7">
-            {cartao}
-          </section>
+        {tela === 'resumo' ? (
+          <div className="flex flex-wrap gap-5 items-stretch">
+            <section className="flex-[1_1_440px] min-w-0 bg-cartao rounded-[36px] p-8 box-border flex flex-col gap-7">
+              {cartao}
+            </section>
 
-          <ListaCategorias categorias={resumo?.categorias ?? []} ativa={categoria?.id ?? null} onEscolher={escolher} />
-        </div>
+            <ListaCategorias categorias={resumo?.categorias ?? []} ativa={categoria?.id ?? null} onEscolher={escolher} />
+          </div>
+        ) : (
+          <TelaConferencia />
+        )}
       </div>
     </div>
   )
