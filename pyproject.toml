@@ -27,6 +27,9 @@ dependencies = [
     # Imported by workspace scripts (scripts/functions/functions.py): the Pluggy HTTP calls and .env.
     "requests>=2.31",
     "python-dotenv>=1.0",
+    # The IANA time zones zoneinfo reads: Windows has none, and polars turns a Datetime with a time
+    # zone into a Python datetime with a ZoneInfo (the tables API answered 500 there, df-i4vo).
+    "tzdata>=2026.6",
 ]
 
 # Everything else the repo's tooling needs: tests, the test loop (scripts/testloop/) and coverage. One
@@ -141,8 +144,9 @@ python-dotenv = "dotenv"
 PySide6 = "PySide6"
 
 [tool.deptry.per_rule_ignores]
-# polars loads deltalake at run time for scan_delta / write_delta; no file imports it by name.
-DEP002 = ["deltalake"]
+# polars loads deltalake at run time for scan_delta / write_delta, and zoneinfo
+# loads tzdata when the system has no time zone database; no file imports either by name.
+DEP002 = ["deltalake", "tzdata"]
 
 [tool.importlinter]
 root_package = "dataforge"

@@ -1,7 +1,7 @@
 import sys
 import polars as pl
 import pytest
-from datetime import date
+from datetime import date, datetime
 
 from dataforge.compat import curated_dir
 
@@ -56,6 +56,17 @@ def test_inf_becomes_null_not_500(workspace_dir, test_client):
         {"id": 3, "f64": 2.5, "f32": 1.5},
         {"id": 4, "f64": None, "f32": None},
     ]
+
+
+def test_a_time_zone_aware_datetime_is_iso_with_its_offset(workspace_dir, test_client):
+    """A Datetime with a time zone becomes a Python datetime with a ZoneInfo, which needs the IANA
+    database: Windows has none, so without the tzdata package the route answered 500 (df-i4vo)."""
+    pl.DataFrame({
+        "quando": pl.Series([datetime(2026, 6, 1, 12, 30)], dtype=pl.Datetime("us", "UTC")),
+    }).write_delta(str(curated_dir(workspace_dir) / "momentos"))
+    r = test_client.get("/api/workspaces/test_ws/tables/momentos")
+    assert r.status_code == 200
+    assert r.json()["rows"] == [{"quando": "2026-06-01T12:30:00+00:00"}]
 
 
 def test_eq_casts_to_column_type(seeded, test_client):
