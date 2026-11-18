@@ -75,6 +75,10 @@ def test_job_loads_and_has_all_branches():
         "fact_fatura_mes",
         "classify",
         "report",
+        "conferencia_saldo",
+        "lancamentos_suspeitos",
+        "extrato",
+        "veredito_suspeitos",
         # The data checks and the failure path (df-ahua.3); when each one runs is tested in
         # test_job_wiring.py.
         "data_warnings",
@@ -186,3 +190,54 @@ def test_classify_and_report_run_after_what_they_read():
     assert lvl["fact_fatura_mes"] < lvl["classify"]
     for upstream in ("classify", "fact_balance", "fact_investments", "fact_fatura_mes"):
         assert lvl[upstream] < lvl["report"], f"report must run after {upstream}"
+
+
+def test_conferencia_saldo_runs_after_what_it_reads_and_before_the_warnings():
+    """conferencia_saldo reads raw.accounts, cleansed.transactions and curated.dim_account (df-z4fh.1),
+    is serialized after the last curated writer (report), and records its finding before data_warnings
+    reads the findings."""
+    lvl = _level_index(_load())
+    for upstream in ("transform", "fact_balance", "report"):
+        assert lvl[upstream] < lvl["conferencia_saldo"], f"conferencia_saldo must run after {upstream}"
+    assert lvl["conferencia_saldo"] < lvl["data_warnings"]
+
+
+def test_lancamentos_suspeitos_runs_after_the_balance_check_and_before_the_warnings():
+    """lancamentos_suspeitos reads curated.conferencia_saldo, cleansed.transactions and raw.transactions
+    (df-z4fh.2), and runs before data_warnings, which keeps its `when: completed` edge on the balance check."""
+    job = _load()
+    lvl = _level_index(job)
+    assert lvl["conferencia_saldo"] < lvl["lancamentos_suspeitos"] < lvl["data_warnings"]
+    edges = {e.task: e.when for e in _by_name(job)["data_warnings"].depends_on}
+    assert edges["conferencia_saldo"] == ["succeeded", "failed"]
+
+
+def test_extrato_runs_after_the_last_curated_writer_and_before_the_warnings():
+    """extrato reads cleansed.accounts and curated.dim_account (df-z4fh.5), is serialized after the last
+    curated writer (lancamentos_suspeitos, whatever its outcome) and runs before data_warnings, whose other
+    edges stay as they were."""
+    job = _load()
+    lvl = _level_index(job)
+    assert lvl["dim_accounts"] < lvl["extrato"]
+    assert lvl["lancamentos_suspeitos"] < lvl["extrato"] < lvl["data_warnings"]
+    task = _by_name(job)["extrato"]
+    assert task.params == {"source": "extratos", "target": "curated"}
+    assert {e.task: e.when for e in task.depends_on} == {
+        "dim_accounts": ["succeeded"], "lancamentos_suspeitos": ["succeeded", "failed", "skipped"]}
+    edges = {e.task: e.when for e in _by_name(job)["data_warnings"].depends_on}
+    assert edges["conferencia_saldo"] == ["succeeded", "failed"]
+    assert edges["lancamentos_suspeitos"] == edges["extrato"]
+
+
+def test_veredito_suspeitos_runs_after_the_suspects_and_the_statement_and_before_the_warnings():
+    """veredito_suspeitos reads curated.lancamentos_suspeitos (which must have succeeded) and the statement tables
+    (df-z4fh.3), whatever extrato's outcome; it is the last curated writer and runs before data_warnings."""
+    job = _load()
+    lvl = _level_index(job)
+    assert lvl["lancamentos_suspeitos"] < lvl["extrato"] < lvl["veredito_suspeitos"] < lvl["data_warnings"]
+    task = _by_name(job)["veredito_suspeitos"]
+    assert task.params == {"source": "raw", "target": "curated"}
+    assert {e.task: e.when for e in task.depends_on} == {
+        "lancamentos_suspeitos": ["succeeded"], "extrato": ["succeeded", "failed"]}
+    edges = {e.task: e.when for e in _by_name(job)["data_warnings"].depends_on}
+    assert edges["veredito_suspeitos"] == edges["extrato"]

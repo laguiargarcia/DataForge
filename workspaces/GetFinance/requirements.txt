@@ -8,3 +8,4 @@
 #
 requests>=2.31      # HTTP client for the Pluggy API (scripts/functions/functions.py)
 python-dotenv>=1.0  # loads .env (imported as `dotenv`)
+pypdf>=7.1          # reads the bank statement PDFs in data/extratos/ (pure Python; df-z4fh.5)

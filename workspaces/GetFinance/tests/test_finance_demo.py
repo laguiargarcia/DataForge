@@ -4,9 +4,14 @@ with no .env and no Pluggy call, so a fresh public clone runs it end to end.
 What is pinned: the demo is finance_daily with only the fetch swapped (so the two never drift
 apart); the demo and the real data never mix: the synthetic fetch refuses (exit 1) a raw layer it did
 not write, no demo task runs before that fetch passed, and the real landing refuses a raw layer the
-demo wrote (the prod checkout holds real raw data that cannot be rebuilt); and the synthetic holdings
-map is found from any working directory.
+demo wrote (the prod checkout holds real raw data that cannot be rebuilt); the synthetic holdings
+map is found from any working directory; and the whole demo job runs to the end on a fresh copy, so a
+new task that cannot read the synthetic data fails here (df-bsb2.2.9: the balance check needed the
+accounts' updatedAt, which the generator did not write).
 """
+import os
+import shutil
+import subprocess
 import sys
 from unittest.mock import patch
 
@@ -76,12 +81,13 @@ def test_demo_seeds_the_editable_tables_after_fetch_and_before_classify():
 
 
 def _runs_only_after_fetch_succeeded(name, tasks):
-    """True when `name` cannot start unless fetch succeeded: every way in goes through a
-    `when: succeeded` edge whose task itself waits for fetch."""
+    """True when `name` cannot start unless fetch succeeded: every way in goes through an edge that
+    needs its task to have run (`succeeded`, `failed` or `completed`, never `skipped`) and that task
+    itself waits for fetch. A task that ran at all, ran after fetch passed."""
     if name == "fetch":
         return True
     task = tasks[name]
-    gated = [e.when == ["succeeded"] and _runs_only_after_fetch_succeeded(e.task, tasks)
+    gated = ["skipped" not in e.when and _runs_only_after_fetch_succeeded(e.task, tasks)
              for e in task.depends_on]
     return bool(gated) and (all(gated) if task.match == "any" else any(gated))
 
@@ -191,3 +197,17 @@ def test_every_synthetic_holding_is_mapped(tmp_path, holding):
     inv = pl.read_parquet(next((tmp_path / "raw" / "investments").glob("*/data.parquet")))
     assert holding in inv["id"].to_list()
     assert holding in (WORKSPACE / SYNTHETIC_HOLDINGS).read_text(encoding="utf-8")
+
+
+def test_the_demo_job_runs_to_the_end_on_a_fresh_copy(tmp_path):
+    # The public face of the workspace: `dataforge run GetFinance finance_demo` on a fresh clone. Run on a
+    # copy under a scratch DATAFORGE_HOME, so nothing is written into this checkout.
+    home = tmp_path / "home"
+    shutil.copytree(WORKSPACE, home / "workspaces" / "GetFinance",
+                    ignore=shutil.ignore_patterns("data", "tests", "apps", ".pytest_cache", "__pycache__"))
+    env = {k: v for k, v in os.environ.items() if k not in ("GETFINANCE_DATA", "MERCHANT_NORM_CONFIG")}
+    env["DATAFORGE_HOME"] = str(home)
+    result = subprocess.run([sys.executable, "-m", "dataforge", "run", "GetFinance", "finance_demo"],
+                            cwd=tmp_path, env=env, capture_output=True, text=True, encoding="utf-8",
+                            timeout=600, check=False)
+    assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-2000:]

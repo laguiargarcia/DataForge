@@ -72,6 +72,7 @@ change it, from the app folder after `npm ci`:
 |---|---|---|
 | `data/raw/` | **No.** Pluggy only returns a short window of history | Backed up weekly by the `backup` job |
 | `data/edicao.db` (categories and rules you edit) | **No** | Same backup |
+| `data/extratos/` (the bank statement PDFs you drop there) | **No.** The bank's app exports them | Same backup |
 | `data/cleansed/` | Yes | `scripts/reprocess.py --source raw --target cleansed --entity all` |
 | `data/curated/` | Yes | Dropped and recreated on every run (`finance_daily` or `reclassificar`) |
 | `data/bridge/`, `report/` | Yes / ignored | Workbook era, not maintained |
@@ -90,11 +91,28 @@ Rules that follow from this table:
 
 ## Backup
 
-`jobs/backup` (trigger `triggers/backup.yaml`, weekly) zips `data/raw/` plus a consistent copy of
-`data/edicao.db` into `../../../_backups/GetFinance/` (relative to the prod workspace, so
+`jobs/backup` (trigger `triggers/backup.yaml`, weekly) zips `data/raw/`, a consistent copy of
+`data/edicao.db` and the statement PDFs of `data/extratos/` into `../../../_backups/GetFinance/` (relative to the prod workspace, so
 `projects/_backups/GetFinance/` on the same disk, outside every repo) and keeps the newest few. The
 destination and how many to keep are params in `jobs/backup/job.yaml`. To restore, unzip `raw/` over
-`data/raw/` and `edicao.db` over `data/edicao.db`, then rebuild cleansed with `reprocess.py`.
+`data/raw/`, `edicao.db` over `data/edicao.db` and `extratos/` over `data/extratos/`, then rebuild cleansed
+with `reprocess.py`.
+
+## Bank statements (df-z4fh.5)
+
+The bank only exports the checking-account statement as a PDF. Save each one, as the bank's app exports
+it, in `data/extratos/` of the prod workspace (create the folder the first time; any file name ending in
+`.pdf`). The next `finance_daily` reads them all into `curated.extrato` (one row per entry) and
+`curated.extrato_saldos` (each daily balance and whether it closes with the entries), and the weekly
+backup keeps them. Overlapping periods are fine: a day is taken from one file only. A PDF the task cannot
+read, or whose agency and account match no BANK account, is left out (the others are still read) and the
+run fails naming it and why: move it out and tell a session. The reading needs `pypdf`, from
+`requirements.txt`; without it the task only warns and the tables stay empty.
+Then every suspect transaction gets the statement's verdict (`curated.veredito_suspeitos`: in the
+statement, not in it, or not covered), the statement lines with no transaction go to
+`curated.extrato_sem_lancamento`, and `curated.acerto_por_motivo` counts how often each suspect reason is
+right (df-z4fh.3).
+Statements hold real names and amounts: never put one in git, a canvas or a public repo.
 
 ## Report logic and the editable tables (since 2026-11-09, df-cns)
 

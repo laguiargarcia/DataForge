@@ -22,7 +22,10 @@ data/cleansed/<table>/   (Delta tables: transactions, accounts, investments,
    │  cleansed2curated/*.py     (build star schema: conformed dims + accumulating facts)
    ▼
 data/curated/<table>/    (Delta tables: dim_account, dim_investment, dim_calendar,
-                          fact_transaction, fact_balance_snapshot, fact_investment_position)
+                          fact_transaction, fact_balance_snapshot, fact_investment_position,
+                          conferencia_saldo, lancamentos_suspeitos, extrato, extrato_saldos,
+                          extrato_arquivos, veredito_suspeitos, extrato_sem_lancamento,
+                          acerto_por_motivo)
    │
    ▼
 scripts/report/export_bridge.py ──► report/bridge/*.csv ──► Power Query ──► develop.xlsx
@@ -92,9 +95,141 @@ Delta tables at `data/curated/<table>/`, one table per script under `scripts/cle
   keeps all prior days (history lives only here — A11).
 - `fact_investment_position` — accumulating: MERGE on `(holding_uuid, snapshot_date)`,
   same contract as `fact_balance_snapshot`.
+- `conferencia_saldo` — the balance check (df-z4fh.1), full overwrite. See below.
+- `lancamentos_suspeitos` — the suspect transactions (df-z4fh.2), full overwrite. See below.
+- `extrato`, `extrato_saldos`, `extrato_arquivos` — the bank statement PDFs (df-z4fh.5), full overwrite.
+  See below.
+- `veredito_suspeitos`, `extrato_sem_lancamento`, `acerto_por_motivo` — the statement's verdict on each suspect
+  (df-z4fh.3), full overwrite. See below.
 
 Per-table column schemas are specified in the data-model redesign spec
 (`docs/superpowers/specs/2026-05-26-finance-data-model-redesign-design.md`).
+
+### curated — `conferencia_saldo` (built by `cleansed2curated_conferencia_saldo.py`)
+The balance of a BANK account in `raw.accounts` is the total (account plus automatic investment), so
+between two consecutive snapshots (distinct `updatedAt`) its change must equal the sum of the account's
+transactions with `de < instant <= ate`. One row per (BANK account, consecutive snapshot pair):
+```
+account_uuid, de, ate (updatedAt, UTC), coletado_em (day the `ate` snapshot first arrived),
+saldo_de, saldo_ate, variacao_saldo, soma_lancamentos, n_lancamentos,
+diferenca (= variacao_saldo - soma_lancamentos), diferenca_acumulada, estado
+```
+- The transactions are `cleansed.transactions` (the set the report sums). Cleansed keeps only the day of
+  each, so the instant comes from `raw.transactions` (the full `date` of the newest fetch of the id); an
+  id without one falls back to the day at midnight UTC. Without the time, a transaction late in the day
+  lands on the wrong side of that day's sync.
+- `estado`: `fecha` when `|diferenca| <= TOLERANCIA` (1.00, `scripts/report/conferencia_saldo.py`);
+  `fecha_com_vizinho` when it does not close alone but does with one adjacent interval that does not
+  close alone either (the bank sometimes moves the balance one sync before the transaction's date; each
+  interval is in one pair at most); `em_aberto` for an account's newest interval when it closes neither
+  alone nor with the previous one (its next neighbour has not come yet); `nao_fecha` otherwise. `diferenca` is always the raw one.
+- It only measures: nothing here changes a transaction (df-z4fh).
+- The one suspicious finding (`new_balance_break_rule` in `functions.py`): the third-newest interval of
+  an account is `nao_fecha` and the account's newest snapshot arrived on the run day. Two snapshots
+  later, a transaction the bank posts after a weekend or one sync late has arrived, so a healthy account
+  stays quiet; a run without a new snapshot of the account repeats nothing. A new break therefore warns
+  two fetches late, once.
+- Two cases where a break gives no warning (the table still shows it, the warning does not): the run in
+  which the break becomes the third-newest interval fails between the fetch and this task (the next run
+  has moved it to fourth); and an older interval that changes later (a transaction arrives or vanishes
+  long after its date). The task prints the count per `estado` and the non-closing intervals among the 3
+  newest of each account, with dates and state only: the amounts are in the table.
+
+### curated — `lancamentos_suspeitos` (built by `cleansed2curated_lancamentos_suspeitos.py`)
+Each transaction of `cleansed.transactions` that a reason marks, with the balance-check interval it falls
+in, so a break in `conferencia_saldo` can be read next to its suspects. One row per (transaction, reason):
+```
+transaction_id, account_uuid, date, amount, description, status, motivo,
+primeira_coleta, ultima_coleta, n_coletas (the fetches, days of raw.transactions, the id came in),
+intervalo_de, intervalo_ate, intervalo_estado (the conferencia_saldo interval with de < instant <= ate)
+```
+- The reasons are named expressions in `MOTIVOS` (`scripts/report/lancamentos_suspeitos.py`); a new
+  reason is one more entry. A transaction may have several. They come from what DataForge df-7twv measured
+  against the balance and the bank statement:
+  - `sumiu_da_coleta`: the id is not in the newest fetch of its account, although its day is inside the
+    window that fetch returns (its first to last transaction day; compared by day, cleansed keeps the day);
+  - `pendente_que_sumiu`: the previous one, with status `PENDING` (usually a duplicate of the posted one);
+  - `aplicacao_automatica`: the description is an automatic investment or redemption line of the account
+    (`PADRAO_APLICACAO_AUTOMATICA`): internal movement that does not change the total balance;
+  - `uma_coleta_so`: the id came in one fetch only, and not in the newest one.
+- The instant that picks the interval is the one `conferencia_saldo` uses (`instantes` in
+  `conferencia_saldo.py`). A transaction outside every interval (a card, before the first snapshot,
+  after the last) has no interval.
+- It only marks: being a suspect changes nothing in the data or the report, and the table has no
+  suspicious rule, so it never warns. The task prints the count per reason, never an id or an amount.
+
+### curated — `extrato`, `extrato_saldos` and `extrato_arquivos` (built by `cleansed2curated_extrato.py`)
+The bank only exports the checking-account statement as a PDF. The owner drops each one in
+`data/extratos/` (connection `extratos`; `data/` is not versioned, and the `backup` job zips the folder with
+raw, since a statement has no rebuild). The task `extrato` reads every `.pdf` there with `pypdf` and writes:
+```
+extrato:        arquivo, account_uuid, dia, ordem (position within the day in the file), descricao,
+                valor (signed: a debit is negative), saldo_do_dia (null when the file has no balance that day)
+extrato_saldos: account_uuid, dia, arquivo, saldo_do_dia, saldo_anterior, soma_lancamentos, n_lancamentos,
+                diferenca (= saldo_anterior + soma_lancamentos - saldo_do_dia), fecha
+extrato_arquivos: arquivo, account_uuid, emitido_em, n_lancamentos, n_saldos, linhas_ignoradas (lines of the
+                list that are neither an entry nor a balance: printed and kept, never a finding)
+```
+- The layout read is described in `scripts/report/extrato.py` (pure functions over the text of the pages):
+  the list after the line `Lançamentos` and before `Posição consolidada`, newest first; an entry is a date
+  and a description with its value at the end of the line or on a later one (also across a page break);
+  a line with only a date and a value is that day's closing balance. Future entries (`Lançamentos futuros`)
+  are left out. A file without the closing line is cut short and is not read.
+- The account is the BANK account of `cleansed.accounts` whose `transfer_number` (agency and account) or
+  `number` matches the agency and account in the PDF header, matched at run time: no account number lives
+  in the code.
+- A bad file (unreadable or encrypted, another layout, an impossible date, an account that matches no BANK
+  account or more than one) is left out; the good ones are written, then the task fails naming every bad
+  file and why. The task runs once (`retry: attempts: 1`): a retry would read the same files.
+- Files may overlap. Each (account, day) takes its entries from one file: the one with more entries that
+  day, then the newest by its "Emitido em", then the name. So a day is never counted twice and two equal
+  entries of one day stay two, and a file that only has that day's balance (its opening balance) does not
+  hide the entries another file has. The day's balance comes from any file that has it; two files with
+  different balances for one day fail the task before any write, naming the day and both files.
+- `extrato_saldos` checks each balance against the previous one: an entry counts toward the first balance
+  on or after its day (the bank prints no balance on weekends and on some days), and `fecha` is
+  `|diferenca| <= 0.005`. The first balance of an account has no previous one (`fecha` null). The task
+  prints the count of days that do not close and their dates, never an amount; it has no suspicious rule,
+  since an old statement would repeat the same finding every day.
+- An empty or missing folder writes empty tables. With PDFs in the folder and `pypdf` not installed, the
+  task prints a warning, writes empty tables and succeeds. It runs after `lancamentos_suspeitos` only to
+  keep one curated writer at a time (`when: [completed, skipped]`), so a failed balance check does not stop
+  it. It only reads and records: nothing here changes a
+  transaction, a fact or a report number (df-z4fh).
+
+### curated — `veredito_suspeitos`, `extrato_sem_lancamento` and `acerto_por_motivo` (built by `cleansed2curated_veredito_suspeitos.py`)
+With the statement read, the task `veredito_suspeitos` matches every transaction of `cleansed.transactions`
+with a statement line, and only then reads the verdict of each suspect of `lancamentos_suspeitos`: matching
+only the suspects would let a suspect take the line of a normal transaction of the same amount.
+```
+veredito_suspeitos:     transaction_id, account_uuid, date, amount, motivo, veredito, dia_banco (the day of the
+                        transaction in the bank's time zone), extrato_dia, extrato_ordem (its statement line)
+extrato_sem_lancamento: arquivo, account_uuid, dia, ordem, descricao, valor (statement lines no transaction matched)
+acerto_por_motivo:      motivo, n, n_no_extrato, n_fora_do_extrato (one row per reason of MOTIVOS, zeros included)
+```
+- The rule is in `scripts/report/veredito_extrato.py`. A pair is the same account and the same amount to the
+  centavo, and days at most `TOLERANCIA_DIAS` (4) apart either way. The transaction's day is its instant from
+  raw (`instantes` in `conferencia_saldo.py`, UTC) in `America/Sao_Paulo`: in UTC, late-evening entries fall on
+  the next day. One to one and greedy: the closest pair first, then by the transaction's day, POSTED before
+  PENDING (the statement lists what was posted; an equal pending one is the duplicate), its id, and the
+  line's day and position. In a run of equal amounts on nearby days (centavo yields) another assignment could
+  pair one more; on the real statement that is 2 of 1129 pairs.
+- The tolerance was measured on the 2026 statement (DataForge df-z4fh.3): with 3 days three real debit purchases
+  the bank posted 4 days later have no pair; with 5 the only extra pair is a centavo yield.
+- The period a statement covers is, per account, the union of each file's span: from the day after its first
+  balance (the opening balance closes a day the file does not list), or its first entry if earlier, to its last
+  day with an entry or a balance. A gap between files is not covered.
+- `veredito`: `no_extrato` when the transaction has a pair; `fora_do_extrato` when it has none and every day
+  its pair could be on (its day plus and minus the tolerance) lies in one covered period; otherwise
+  `sem_extrato_no_periodo` (an account without a statement, such as the card, a day outside the period or near
+  its edge, or no statement read yet). `acerto_por_motivo` counts them per reason: the `sem_extrato_no_periodo`
+  ones are `n - n_no_extrato - n_fora_do_extrato`.
+- Without statement tables (no PDF read yet) every suspect is `sem_extrato_no_periodo` and the task succeeds.
+  It runs after `lancamentos_suspeitos` succeeded (otherwise that table is yesterday's) and after `extrato`
+  whatever its outcome (a failed `extrato` wrote the good files or nothing). It has no suspicious rule, since an
+  old statement would repeat the same finding every day; the task prints counts per verdict and per reason, the
+  lines without a transaction and the transactions of the covered period without a line, never an id or an
+  amount. It only reads and records (df-z4fh).
 
 ### curated — `dim_calendar` (built by `dim_calendar.py`)
 ```

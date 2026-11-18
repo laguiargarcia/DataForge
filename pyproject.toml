@@ -30,6 +30,8 @@ dependencies = [
     # The IANA time zones zoneinfo reads: Windows has none, and polars turns a Datetime with a time
     # zone into a Python datetime with a ZoneInfo (the tables API answered 500 there, df-i4vo).
     "tzdata>=2026.6",
+    # Reads the bank statement PDFs in data/extratos/ (scripts/report/extrato.py; pure Python).
+    "pypdf>=7.1",
 ]
 
 # Everything else the repo's tooling needs: tests, the test loop (scripts/testloop/) and coverage. One
