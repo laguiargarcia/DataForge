@@ -255,7 +255,8 @@ def collect_full(public: list[str], private: list[str]) -> list[Finding]:
     every = public + private
     found = ruff(every) + project_rules(every) + import_contracts() + dependencies(public)
     # Tests count as callers, but their own findings are fixtures and mocks, not dead code.
-    found += [f for f in vulture(public) if not f.file.startswith(TESTS)]
+    # So are a published workspace's own tests (workspaces/<ws>/tests/), as for a private one below.
+    found += [f for f in vulture(public) if not f.file.startswith(TESTS) and not _is_workspace_test(f.file)]
     workspaces = defaultdict(list)
     for rel in private:
         if rel.startswith("workspaces/"):
@@ -267,7 +268,7 @@ def collect_full(public: list[str], private: list[str]) -> list[Finding]:
 
 
 def _is_workspace_test(rel: str) -> bool:
-    """workspaces/<ws>/tests/<...>: a file inside a private workspace's own tests/ directory."""
+    """workspaces/<ws>/tests/<...>: a file inside a workspace's own tests/ directory."""
     root, _, rest = rel.partition("/")
     _, _, inside = rest.partition("/")
     return root == "workspaces" and inside.startswith("tests/")

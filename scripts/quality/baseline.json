@@ -113,10 +113,6 @@
     "PLW2901": 1,
     "TID251": 1
   },
-  "scripts/leakguard.py": {
-    "BLE001": 1,
-    "PLW2901": 1
-  },
   "scripts/testloop/check_cmd.py": {
     "PLW1510": 1
   },
