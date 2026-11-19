@@ -67,3 +67,10 @@ def test_an_install_that_fails_in_the_new_venv_brings_the_old_one_back(prod):
     assert r.returncode == 4, r.stdout + r.stderr
     assert "venv --no-project --seed --python 3.0" in prod["log"].read_text(encoding="utf-8")
     _assert_as_it_was(prod)
+
+
+def test_pyyaml_builds_as_pure_python_before_any_install():
+    """Prod has no C compiler: with no PyYAML wheel for its Python, the build must not ask for MSVC (df-gwjh)."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert '$env:PYYAML_FORCE_LIBYAML = "0"' in text
+    assert text.index('$env:PYYAML_FORCE_LIBYAML = "0"') < text.index("pip install")
