@@ -272,10 +272,35 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: "report-tests-windows-${{ matrix.shard }}", path: report/, if-no-files-found: ignore }
+  tests-getfinance-windows:
+    # The GetFinance pipeline tests on native Windows (df-yivq): its daily job runs on Windows Python
+    # in production, which has had bugs Linux never shows (df-i4vo: no time-zone database). Same
+    # tests as tests-getfinance, without coverage (the sonar job reads the ubuntu run).
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+        with: { enable-cache: true, cache-python: true }
+      - name: Install
+        run: uv sync --frozen
+      - name: GetFinance tests
+        shell: bash   # pipefail: pytest's exit code survives the tee
+        # Only stdout/stderr become UTF-8, so the report file is readable. PYTHONUTF8 stays unset:
+        # open() without encoding= must keep the cp1252 default that production has.
+        env: { PYTHONIOENCODING: utf-8 }
+        run: |
+          mkdir -p report
+          uv run --frozen --no-sync python -m pytest workspaces/GetFinance -m 'not integration' -p no:cacheprovider \
+            -n auto --randomly-seed=${{ github.run_id }} 2>&1 | tee report/tests-getfinance-windows.txt
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-tests-getfinance-windows, path: report/, if-no-files-found: ignore }
   tests-windows:
-    # Required check: every Windows shard and the deploy smoke passed. Merges the shards' durations
-    # for the next run.
-    needs: [tests-windows-shard, windows-smoke]
+    # Required check: every Windows shard, the GetFinance tests on Windows and the deploy smoke
+    # passed. Merges the shards' durations for the next run.
+    needs: [tests-windows-shard, tests-getfinance-windows, windows-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -294,10 +319,13 @@ jobs:
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-windows-${{ github.run_id }}", enableCrossOsArchive: true }
       - name: Every part passed
-        env: { SHARDS: "${{ needs.tests-windows-shard.result }}", SMOKE: "${{ needs.windows-smoke.result }}" }
+        env:
+          SHARDS: "${{ needs.tests-windows-shard.result }}"
+          GETFINANCE: "${{ needs.tests-getfinance-windows.result }}"
+          SMOKE: "${{ needs.windows-smoke.result }}"
         run: |
-          echo "tests-windows-shard: $SHARDS, windows-smoke: $SMOKE"
-          [ "$SHARDS" = "success" ] && [ "$SMOKE" = "success" ]
+          echo "tests-windows-shard: $SHARDS, tests-getfinance-windows: $GETFINANCE, windows-smoke: $SMOKE"
+          [ "$SHARDS" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$SMOKE" = "success" ]
   orders:
     # More shuffles of the engine suite on every PR and push, in parallel (df-n8ac.14): an
     # order-dependent test fails here with its seed in the run summary instead of in a later run.
@@ -474,7 +502,7 @@ jobs:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
-    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
