@@ -187,12 +187,11 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-app-financas, path: report/, if-no-files-found: ignore }
-  tests:
-    # Required check: every engine shard, the GUI job, the GetFinance tests, its web app and the
-    # extra random orders passed (an order-dependent failure blocks the merge too, df-n8ac.29).
+  coverage:
     # Merges every part's coverage into the coverage.xml the sonar job reads, and the shards'
-    # durations into the cache the next run splits by.
-    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, orders]
+    # durations into the cache the next run splits by. Waits only for the jobs that write them, so
+    # sonar starts without waiting for orders or the web app (df-n8ac.37).
+    needs: [tests-shard, tests-gui, tests-getfinance]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -226,6 +225,14 @@ jobs:
       - uses: actions/cache/save@v6
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
+  tests:
+    # Required check: every engine shard, the GUI job, the GetFinance tests, its web app, the
+    # extra random orders (an order-dependent failure blocks the merge too, df-n8ac.29) and the
+    # coverage merge passed.
+    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, orders, coverage]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
       - name: Every part passed
         env:
           SHARDS: "${{ needs.tests-shard.result }}"
@@ -233,9 +240,10 @@ jobs:
           GETFINANCE: "${{ needs.tests-getfinance.result }}"
           APP: "${{ needs.app-financas.result }}"
           ORDERS: "${{ needs.orders.result }}"
+          COVERAGE: "${{ needs.coverage.result }}"
         run: |
-          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, orders: $ORDERS"
-          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$ORDERS" = "success" ]
+          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, orders: $ORDERS, coverage: $COVERAGE"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$ORDERS" = "success" ] && [ "$COVERAGE" = "success" ]
   tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
     # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage
@@ -359,10 +367,11 @@ jobs:
         with: { name: "report-orders-${{ matrix.order }}", path: report/, if-no-files-found: ignore }
   sonar:
     # SonarQube Cloud (df-ahua.1): coverage of new code, cognitive complexity, duplication, history.
+    # Needs only the coverage merge, not the tests gate, so orders does not delay it (df-n8ac.37).
     # A complement to the quality job, not a replacement. Required on main (repo ruleset,
     # df-ahua.1.6): a failed gate fails this check and blocks the merge. Left out of the report
     # job, since the SonarQube Cloud bot comments its own result on the PR.
-    needs: [tests]
+    needs: [coverage]
     if: always() && !cancelled()
     runs-on: ubuntu-latest
     env:

@@ -42,10 +42,14 @@ def test_every_job_is_required_or_needed_by_a_required_job():
 
 
 def test_a_required_job_that_always_runs_checks_each_need_it_gates():
+    """A need may go unchecked only when a failure of it still blocks the merge: it is required
+    itself, or another required job reads its result (sonar needs coverage, which tests gates)."""
+    jobs = _jobs()
+    gated = {n for r in REQUIRED for n in _needs(jobs[r]) if f"needs.{n}.result" in str(jobs[r]["steps"])}
     for name in REQUIRED:
-        job = _jobs()[name]
+        job = jobs[name]
         if "always()" not in str(job.get("if", "")):
             continue
         steps = str(job["steps"])
-        unchecked = [n for n in _needs(job) if n not in REQUIRED and f"needs.{n}.result" not in steps]
+        unchecked = [n for n in _needs(job) if n not in REQUIRED | gated and f"needs.{n}.result" not in steps]
         assert unchecked == [], f"{name} passes even when {unchecked} failed"
