@@ -85,8 +85,8 @@ process_isolation = "forkserver"
 # 3 more on the CI runner:
 #   _edicao_values uri=True dropped / None / False: the runner's SQLite reads a file: URI by default;
 #     one that does not fails to open it, and there the tests kill them.
-# min_score is the laptop's 296/301 less those 3: 293/301.
-min_score = 0.9734
+# The CI runner kills those 3 too (PR #130: 296/301, the laptop's score): min_score is that (df-yy3b).
+min_score = 0.9833
 
 [targets."scripts/leakguard_files.py"]
 # check_text and check_files join the patterns and the real values into findings: every leak guard test
