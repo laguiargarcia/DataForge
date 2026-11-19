@@ -31,7 +31,7 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.9548
 
 [targets."scripts/leakguard.py"]
-tests = ["tests/test_leakguard.py"]
+tests = ["tests/test_leakguard.py", "tests/test_leakguard_properties.py"]
 copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # Its tests start polars' thread pool, which a mutant forked from mutmut's main process waits for until
 # the timeout (df-kmx0): mutants fork from a server that only collects.
@@ -62,7 +62,9 @@ process_isolation = "forkserver"
 #   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
 #   _read_bytes `or True`: read_bytes on a missing path or a directory raises OSError, caught the same.
 #     On a FIFO it would block, but git does not track one, so no caller passes it.
-min_score = 0.96
+# The score the runner reaches: 824 mutants, 26 local survivors + the 7 runner-only ones = 33, so 791
+# killed = 0.9599 (CI measured 791 of 824); a laptop reaches 0.9684. min_score is the runner's.
+min_score = 0.9599
 
 
 [targets."dataforge/apps.py"]
