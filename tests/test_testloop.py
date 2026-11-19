@@ -389,6 +389,29 @@ def test_mutate_strong_suite_kills_mutants(sample_repo_strong):
     assert data["score"] == 1.0
 
 
+TEST_THREAD_POOL = (
+    "from concurrent.futures import ThreadPoolExecutor\n\n"
+    "from sample.mod import classify\n\n"
+    "POOL = ThreadPoolExecutor(max_workers=1)   # its thread starts at the first submit, in a test\n\n\n"
+    "def test_pos():\n    assert POOL.submit(classify, 1).result() == 'pos'\n\n\n"
+    "def test_neg():\n    assert POOL.submit(classify, -1).result() == 'nonpos'\n\n\n"
+    "def test_zero():\n    assert POOL.submit(classify, 0).result() == 'nonpos'\n"
+)
+
+
+def test_a_thread_pool_started_by_a_test_does_not_turn_mutants_into_timeouts(tmp_path):
+    """df-kmx0: forked from a process whose clean run started a pool's thread, a mutant waits for a
+    thread that is not there (polars did this to the leak guard: 249 timeouts hid its survivors).
+    The target's process_isolation = "forkserver" reaches mutmut, whose server only collects."""
+    repo = make_repo(tmp_path, TEST_THREAD_POOL)
+    with (repo / "testloop.toml").open("a") as f:   # the target table is the last one
+        f.write('process_isolation = "forkserver"\n')
+    data = run_ok(repo, "mutate", "sample/mod.py")
+    assert data["timeout"] == []
+    assert data["survived"] == []
+    assert data["killed"] > 0
+
+
 def test_check_args_reach_map_and_mutate(sample_repo_strong):
     """With no filter this suite covers every branch and kills every mutant (see
     test_mutate_strong_suite_kills_mutants), so a gap proves both commands ran with check_args."""

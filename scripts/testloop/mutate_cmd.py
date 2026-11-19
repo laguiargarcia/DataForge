@@ -98,6 +98,14 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
         f"pytest_add_cli_args = {json.dumps(pytest_args(config))}",
         f"pytest_add_cli_args_test_selection = {json.dumps(tests)}",
     ]
+    # mutmut's default ("fork") runs the clean suite in its main process, then forks each mutant from
+    # it: a thread pool a test started there (polars, in the leak guard's tests) is gone in the child,
+    # which waits for it until the timeout (df-kmx0). A target whose tests do that sets
+    # process_isolation = "forkserver" (the server only collects); the others keep "fork", whose
+    # children inherit a warmed-up process and run 1.5-4x faster (df-3lgk).
+    isolation = config.targets.get(module, {}).get("process_isolation")
+    if isolation:
+        lines.append(f"process_isolation = {json.dumps(isolation)}")
     (dest / "pyproject.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

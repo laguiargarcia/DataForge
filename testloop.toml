@@ -33,7 +33,34 @@ min_score = 0.9548
 [targets."scripts/leakguard.py"]
 tests = ["tests/test_leakguard.py"]
 copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-min_score = 0.8841
+# Its tests start polars' thread pool, which a mutant forked from mutmut's main process waits for until
+# the timeout (df-kmx0): mutants fork from a server that only collects.
+process_isolation = "forkserver"
+# 33 survivors on the CI runner (26 on a laptop with git 2.43), all Equivalent (no observable change).
+# The 7 more on the runner depend on its git and SQLite (df-kmx0):
+#   check_history -m dropped or -M (4): git 2.56 shows merge diffs and paths without -m; an older git
+#     does not, and there the tests kill them.
+#   _edicao_values uri=True dropped / None / False (3): the runner's SQLite reads a file: URI by default;
+#     one that does not fails to open it, and there the tests kill them.
+# The other 26:
+#   _check_digits_hold zip strict=True / None / False / dropped: every caller passes digits whose length
+#     it has checked, so the two sides always have the same length.
+#   _git text=None / False / dropped and check=None / dropped: encoding="utf-8" already makes the output
+#     text, and a failed git is never raised on (check=False is the default), so the result is the same.
+#   _cpf_valid range(12, 1, -1): _check_digits_hold keeps only the last `size` weights, so the extra
+#     leading weight is never used.
+#   _decode "UTF-16" / "UTF-8" / "CP1252": codec names are case-insensitive.
+#   _edicao_values lower-case or upper-case SQL: SQLite keywords and names are case-insensitive.
+#   _line count("\n", None, pos): None is the default start.
+#   _main_checkout check=None / False / dropped: a failed `git rev-parse` prints nothing on stdout, so
+#     `common` is empty either way. common = None / "XXXX" in the except (git missing): both fall to the
+#     same branch, since None is falsy and "XXXX" is not a directory.
+#   _parse_nested "XX{[XX": a text starting with X is parsed, fails, and is plain text all the same.
+#   _private_reason rsplit("/") / rsplit("/", 2): only the last part, [-1], is used.
+#   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
+#   _read_bytes `or True`: read_bytes on a missing path or a directory raises OSError, caught the same.
+#     On a FIFO it would block, but git does not track one, so no caller passes it.
+min_score = 0.96
 
 
 [targets."dataforge/apps.py"]
