@@ -31,7 +31,7 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.9548
 
 [targets."scripts/leakguard.py"]
-tests = ["tests/test_leakguard.py"]
+tests = ["tests/test_leakguard.py", "tests/test_leakguard_properties.py"]
 copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # Its tests start polars' thread pool, which a mutant forked from mutmut's main process waits for until
 # the timeout (df-kmx0): mutants fork from a server that only collects.

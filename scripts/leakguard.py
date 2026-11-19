@@ -105,8 +105,13 @@ BINARY_IN_WORKSPACE = "binary file inside a workspace (a dump or a backup cannot
 # '_' next to it does not hide one ("cpf_" then the digits).
 _NOT_BEFORE = r"(?<!\d)(?<!\d[.,])"
 _NOT_AFTER = r"(?!\d)(?![.,]\d)"
-CPF = re.compile(_NOT_BEFORE + r"\d{3}[.\t ]?\d{3}[.\t ]?\d{3}[-\t ]?\d{2}" + _NOT_AFTER)
-CNPJ = re.compile(_NOT_BEFORE + r"\d{2}[.\t ]?\d{3}[.\t ]?\d{3}[/\t ]?\d{4}[-\t ]?\d{2}" + _NOT_AFTER)
+# Between the groups any run (or none) of the characters people put between digits: space, tab, '.',
+# '_', '/', '-', en and em dash, or a single comma ("123.456.789 - 00", "123_456_789_00"). Never a line break: a
+# document wrapped across lines is two things, not one (the real-value check below does join those).
+# A wrong guess costs little: only a match whose check digits are valid is a finding.
+_DOC_SEP = r"(?:[\t .\-_/\u2013\u2014]+|,)?"
+CPF = re.compile(_NOT_BEFORE + _DOC_SEP.join([r"\d{3}", r"\d{3}", r"\d{3}", r"\d{2}"]) + _NOT_AFTER)
+CNPJ = re.compile(_NOT_BEFORE + _DOC_SEP.join([r"\d{2}", r"\d{3}", r"\d{3}", r"\d{4}", r"\d{2}"]) + _NOT_AFTER)
 # Files of hex digests and package names only, where a run of digits inside a hash may pass a
 # check-digit rule: the document patterns do not apply there (every other check does).
 DIGEST_FILES = {"uv.lock"}
@@ -147,7 +152,14 @@ MIN_VALUE_LENGTH = 6   # shorter real values ("CDB", "Pix") are words that code 
 MIN_WORD_LENGTH = 12   # a single plain word ("NETFLIX") is only a value to block when this long
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}(?:[T ][\d:.+Z-]*)?")   # a date or timestamp identifies no one
 NUMBER_LIKE = re.compile(r"[\d\s./-]+")   # digits and separators only: an account, a document, an id
-DIGIT_SEPARATOR = r"[\s./-]?"
+# Between the digits of a real number: any run (or none) of whitespace (a line break too), '.', '_',
+# '/', '-', en and em dash, or a single comma ("12345,6"). Wide on purpose: this list is the owner's
+# real values, so a false alarm is cheaper than a leak. A comma followed by a space is NOT a
+# separator: that is a list of numbers ("3, 1, 4, 1, 5, 9" is not the number 314159; this file's own
+# weights table was one). What still escapes, on purpose: that comma-and-space form, and a letter or
+# other symbol as separator ("12345 x 6", "12345|6", "12345:6").
+SEPARATOR_CHARS = r"\s.\-_/\u2013\u2014"
+DIGIT_SEPARATOR = rf"(?:[{SEPARATOR_CHARS}]+|,)?"
 # Raw columns whose string leaves identify the owner, an account or a counterparty. Amounts, dates
 # and descriptions are left out: they are not identifiers and would match ordinary text.
 RAW_COLUMNS = {
@@ -302,7 +314,7 @@ def real_value_hits(text, values):
     number with any or no separator between its digits. A cheap substring test on normalized text
     runs first, so the regex only runs for the few values that may be there."""
     spaced = re.sub(r"\s+", " ", text.lower())
-    merged = re.sub(r"(?<=\d)[\s./-]+(?=\d)", "", text)
+    merged = re.sub(rf"(?<=\d)(?:[{SEPARATOR_CHARS}]+|,)(?=\d)", "", text)
     hits = []
     for value, source in values.items():
         if _is_number_like(value):
