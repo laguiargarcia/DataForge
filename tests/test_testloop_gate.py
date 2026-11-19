@@ -1,6 +1,6 @@
 """scripts/testloop/gate_cmd.py: the score it prints and the min_score it suggests (df-0kv9); the split
 of a target into shards that mutate runs and gate sums (df-n8ac.32); the cache of mutmut's verdicts
-that mutate --cache-dir keeps (df-n8ac.38); the measured costs that split the shards (df-n8ac.39)."""
+that mutate --cache-dir keeps (df-n8ac.38, df-n8ac.44); the measured costs that split the shards (df-n8ac.39)."""
 
 import json
 import sys
@@ -254,13 +254,16 @@ def _mutants_dir(root, tag):
     return root
 
 
+TESTS_HASHES = {"tests/test_mod.py": "sha256:t"}
+
+
 def test_the_cache_keeps_only_mutmuts_state(tmp_path):
     copy = tmp_path / "copy"
     _mutants_dir(copy / "mutants", "run")
-    mutate_cmd.save_cache(copy, tmp_path / "cache", "pkg/mod.py", {"x_f": "sha256:1"})
+    mutate_cmd.save_cache(copy, tmp_path / "cache", "pkg/mod.py", {"x_f": "sha256:1"}, TESTS_HASHES)
     assert _tree(tmp_path / "cache") == {
         "mutants/mutmut-stats.json": "run mutmut-stats.json", "mutants/pkg/mod.py.meta": "run pkg/mod.py.meta",
-        "mutants/testloop-function-text.json": TEXTS}
+        "mutants/testloop-function-text.json": TEXTS, "mutants/testloop-test-files.json": TESTS}
 
 
 def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
@@ -270,10 +273,10 @@ def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
     _mutants_dir(cache / "mutants.new", "cut short")
     copy = tmp_path / "copy"
     _mutants_dir(copy / "mutants", "new")
-    mutate_cmd.save_cache(copy, cache, "pkg/mod.py", {"x_f": "sha256:1"})
+    mutate_cmd.save_cache(copy, cache, "pkg/mod.py", {"x_f": "sha256:1"}, TESTS_HASHES)
     assert _tree(cache) == {
         "mutants/mutmut-stats.json": "new mutmut-stats.json", "mutants/pkg/mod.py.meta": "new pkg/mod.py.meta",
-        "mutants/testloop-function-text.json": TEXTS}
+        "mutants/testloop-function-text.json": TEXTS, "mutants/testloop-test-files.json": TESTS}
 
 
 def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_path):
@@ -281,21 +284,54 @@ def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_pat
     assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") is None
     assert not (copy / "mutants").exists()
     _mutants_dir(cache / "mutants", "cached")
-    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == {}   # no texts recorded
+    # no texts and no test files recorded: nothing but killed verdicts can be reused
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == mutate_cmd.Cached(texts={}, tests=None)
     assert _tree(copy) == {
         "mutants/mutmut-stats.json": "cached mutmut-stats.json", "mutants/pkg/mod.py.meta": "cached pkg/mod.py.meta"}
 
 
 TEXTS = '{\n  "pkg/mod.py": {\n    "x_f": "sha256:1"\n  }\n}'
+TESTS = '{\n  "pkg/mod.py": {\n    "tests/test_mod.py": "sha256:t"\n  }\n}'
 
 
-def test_a_restored_cache_returns_the_texts_it_was_found_on_and_leaves_the_meta_as_it_was(tmp_path):
+def test_a_restored_cache_returns_the_texts_and_tests_it_was_found_on_and_leaves_the_meta_as_it_was(tmp_path):
     cache, copy = tmp_path / "cache", tmp_path / "copy"
-    mutate_cmd.save_cache(_mutants_dir(tmp_path / "run" / "mutants", "run").parent, cache, "pkg/mod.py", {"x_f": "sha256:1"})
-    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == {"x_f": "sha256:1"}
-    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py") == {}
+    mutate_cmd.save_cache(_mutants_dir(tmp_path / "run" / "mutants", "run").parent, cache, "pkg/mod.py",
+                          {"x_f": "sha256:1"}, TESTS_HASHES)
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == mutate_cmd.Cached({"x_f": "sha256:1"}, TESTS_HASHES)
+    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py") == mutate_cmd.Cached({}, None)
     assert (copy / "mutants" / "pkg" / "mod.py.meta").read_text() == "run pkg/mod.py.meta"
     assert not (copy / "mutants" / "testloop-function-text.json").exists()
+    assert not (copy / "mutants" / "testloop-test-files.json").exists()
+
+
+def test_test_hashes_name_each_test_file_with_the_hash_of_its_bytes(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_a.py").write_text("a")
+    (tmp_path / "tests" / "test_b.py").write_text("b")
+    hashes = mutate_cmd.test_hashes(tmp_path, ["tests/test_a.py", "tests/test_b.py"])
+    assert sorted(hashes) == ["tests/test_a.py", "tests/test_b.py"]
+    assert hashes["tests/test_a.py"] != hashes["tests/test_b.py"]
+    (tmp_path / "tests" / "test_a.py").write_text("a changed")
+    assert mutate_cmd.test_hashes(tmp_path, ["tests/test_a.py", "tests/test_b.py"])["tests/test_a.py"] \
+        != hashes["tests/test_a.py"]
+
+
+@pytest.mark.parametrize("status,same_text,same_tests,reused", [
+    ("killed", True, False, True),       # a killed verdict stays through a changed test (df-n8ac.38)
+    ("killed", False, True, False),      # a function whose text changed is always tested again
+    ("survived", True, False, False),    # a changed test may kill a survivor
+    ("survived", True, True, True),      # same function, same tests: the same verdict (df-n8ac.44)
+    ("timeout", True, True, True),
+    ("no tests", True, True, True),
+    ("timeout", True, False, False),
+    ("no tests", True, False, False),
+    ("survived", False, True, False),
+    ("not checked", True, True, False),  # no verdict to reuse
+    ("suspicious", True, True, False),   # a status we do not know is never reused
+])
+def test_which_cached_verdicts_are_reused(status, same_text, same_tests, reused):
+    assert mutate_cmd.reusable(status, same_text=same_text, same_tests=same_tests) is reused
 
 
 def test_a_functions_text_hash_sees_comments_and_decorators_but_not_other_functions():
