@@ -683,7 +683,7 @@ def test_gate_judges_the_sum_of_the_shards(tmp_path):
     assert run_ok(repo, "gate", "sample/mod.py")["passed"] is True
 
 
-# ---------------------------------------------------------------- mutate --cache-dir (df-n8ac.38)
+# ---------------------------------------------------------------- mutate --cache-dir (df-n8ac.38, df-n8ac.44)
 
 TEST_MARKED = (
     "import os\n\nfrom sample.mod import Box, classify, noop\n\n\n"
@@ -731,55 +731,85 @@ def verdicts(data):
 
 
 def unsettled(data):
-    """The mutants of a result that are not killed: the cache never reuses their verdict."""
+    """The mutants of a result that are not killed: the cache reuses their verdict only while the
+    target's test files are the ones it was found with (df-n8ac.44)."""
     return ids(data) | set(data["timeout"]) | set(data["not_tested"])
 
 
-def test_a_cached_mutate_reruns_the_changed_function_and_what_was_not_killed(tmp_path):
+def test_a_cached_mutate_with_the_same_tests_reruns_only_the_changed_function(tmp_path):
     repo, marker = marked_repo(tmp_path)
     cache = tmp_path / "cache"
     first = mutate_cached(repo, cache)
-    assert (first["cache"], first["cached"]) == ("none", 0)
+    assert (first["cache"], first["cached"], first["cached_survivors"]) == ("none", 0, 0)
     double = "xǁBoxǁdouble"
-    reused = {m for m in mutants_run(marker) if function_of(m) != double} - unsettled(first)
+    doubles = {m for m in mutants_run(marker) if function_of(m) == double}
+    others_unsettled = {m for m in unsettled(first) if function_of(m) != double}
+    assert doubles
+    assert others_unsettled
     assert (cache / "mutants").is_dir()
 
     mod = repo / "sample" / "mod.py"
     mod.write_text(MOD_SHARDED_SRC.replace("return x * 2", "return 2 * x"))
     second = mutate_cached(repo, cache)
     rerun = mutants_run(marker)
-    assert double in {function_of(m) for m in rerun}
-    assert {m for m in rerun if function_of(m) != double} == {m for m in unsettled(first) if function_of(m) != double}
+    assert rerun
+    assert {function_of(m) for m in rerun} == {double}
     assert second["cache"] == "restored"
-    assert second["cached"] == len(reused) > 0
+    assert second["cached"] == first["total"] - len(doubles)
+    assert second["cached_survivors"] == len(others_unsettled)
 
     fresh = run_ok(repo, "mutate", "sample/mod.py")
-    assert (fresh["cache"], fresh["cached"]) == ("none", 0)
+    assert (fresh["cache"], fresh["cached"], fresh["cached_survivors"]) == ("none", 0, 0)
     assert verdicts(second) == verdicts(fresh)
 
 
-def test_a_cached_shard_with_no_change_runs_only_what_was_not_killed(tmp_path):
+def test_a_cached_shard_with_no_change_runs_no_mutant(tmp_path):
     repo, marker = marked_repo(tmp_path)
     (repo / "testloop.toml").write_text((repo / "testloop.toml").read_text() + "shards = 2\n")
     cache = tmp_path / "cache"
     first = mutate_cached(repo, cache, "--shard", "1/2")
-    assert first["total"] > 0
+    assert unsettled(first)
     mutants_run(marker)
     second = mutate_cached(repo, cache, "--shard", "1/2")
-    assert mutants_run(marker) == unsettled(first)
-    assert (second["cache"], second["cached"]) == ("restored", first["killed"])
+    assert mutants_run(marker) == set()
+    assert (second["cache"], second["cached"], second["cached_survivors"]) == \
+        ("restored", first["total"], first["total"] - first["killed"])
+    assert verdicts(second) == verdicts(first)
+    assert second["survived"] == first["survived"]   # diffs included
+
+
+def _change_a_test_file(repo, cache):
+    test = repo / "tests" / "test_mod.py"
+    test.write_text(test.read_text(encoding="utf-8") + "# changed\n", encoding="utf-8")
+
+
+def _drop_the_record_of_test_files(repo, cache):
+    (cache / "mutants" / "testloop-test-files.json").unlink()
+
+
+@pytest.mark.parametrize("change", [_change_a_test_file, _drop_the_record_of_test_files])
+def test_a_changed_test_file_or_no_record_of_them_reruns_what_was_not_killed(tmp_path, change):
+    repo, marker = marked_repo(tmp_path)
+    cache = tmp_path / "cache"
+    first = mutate_cached(repo, cache)
+    assert unsettled(first)
+    mutants_run(marker)
+    change(repo, cache)
+    second = mutate_cached(repo, cache)
+    assert mutants_run(marker) == ids(first) | set(first["timeout"])   # a mutant without tests runs none
+    assert (second["cache"], second["cached"], second["cached_survivors"]) == ("restored", first["killed"], 0)
     assert verdicts(second) == verdicts(first)
 
 
 def test_a_cached_survivor_that_a_new_test_kills_is_reported_killed(sample_repo):
     """The usual way to raise min_score: a PR that only adds tests. The function is the same, so its
-    killed verdicts come from the cache, but its survivors are tested again."""
+    killed verdicts come from the cache, but the test file changed, so its survivors are tested again."""
     cache = sample_repo / "cache"
     first = mutate_cached(sample_repo, cache)
     assert first["survived"]
     (sample_repo / "tests" / "test_mod.py").write_text(TEST_STRONG)   # same file: same test selection
     second = mutate_cached(sample_repo, cache)
-    assert (second["cache"], second["cached"]) == ("restored", first["killed"])
+    assert (second["cache"], second["cached"], second["cached_survivors"]) == ("restored", first["killed"], 0)
     assert second["survived"] == []
     assert second["killed"] == first["killed"] + len(first["survived"])
     assert second["score"] == 1.0
@@ -791,7 +821,8 @@ def test_the_cache_holds_only_mutmut_state_and_no_path_of_the_copy(tmp_path):
     cache = tmp_path / "cache"
     mutate_cached(repo, cache)
     files = sorted(p.relative_to(cache).as_posix() for p in cache.rglob("*") if p.is_file())
-    assert files == ["mutants/mutmut-stats.json", "mutants/sample/mod.py.meta", "mutants/testloop-function-text.json"]
+    assert files == ["mutants/mutmut-stats.json", "mutants/sample/mod.py.meta",
+                     "mutants/testloop-function-text.json", "mutants/testloop-test-files.json"]
     assert all("testloop-mutate-" not in (cache / f).read_text(encoding="utf-8") for f in files)
 
 

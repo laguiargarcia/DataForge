@@ -465,16 +465,18 @@ jobs:
       - uses: actions/download-artifact@v8
         with: { name: mutation-costs }
       # mutmut's verdicts per item, a shard of a target (df-n8ac.38): a PR restores those of main's
-      # last run and reuses only the killed ones. It tests again every survivor, timeout and mutant
-      # without tests (a new test may kill it), and every mutant of a function whose text the PR
-      # changed, comments included (all of them when the pytest arguments or the list of test files
-      # changed). A killed verdict stays through any change outside its function: a changed or
-      # weakened test, module constants or imports, a called function (this module or another), a
-      # base class, `copy` files, conftest.py, `env` in testloop.toml. Push and manual runs start
-      # empty, mutate everything (the audit of what PRs reused, df-n8ac.35) and upload their items'
-      # verdicts, which mutation-ok saves as one cache for the next PRs (df-n8ac.39: a job's items
-      # change from run to run, so the cache holds every item, each in its own <module>-<I>of<N>
-      # directory). The key changes with the environment (uv.lock, .python-version).
+      # last run. It tests again every mutant of a function whose text the PR changed, comments
+      # included (all of them when the pytest arguments or the list of test files changed), and
+      # reuses the other verdicts: killed always; survived, timeout and no tests only while every
+      # test file of the target is byte for byte the one main ran (df-n8ac.44: a changed or new test
+      # may kill them, so then they run again). A reused verdict stays through any other change
+      # outside its function: a weakened test (killed), module constants or imports, a called
+      # function (this module or another), a base class, `copy` files, conftest.py, `env` in
+      # testloop.toml. Push and manual runs start empty, mutate everything (the audit of what PRs
+      # reused, df-n8ac.35) and upload their items' verdicts, which mutation-ok saves as one cache for
+      # the next PRs (df-n8ac.39: a job's items change from run to run, so the cache holds every item,
+      # each in its own <module>-<I>of<N> directory). The key changes with the environment (uv.lock,
+      # .python-version).
       - name: Verdicts of main's last run
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@v6
