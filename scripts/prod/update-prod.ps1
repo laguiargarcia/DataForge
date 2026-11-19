@@ -59,6 +59,7 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 # PyYAML's build then fails asking for MSVC instead of falling back to pure Python (Python 3.15:
 # no PyYAML wheel yet, df-gwjh). This makes it build the pure-Python PyYAML, which
 # dataforge/yamlio.py reads and writes the same (df-xbn9). A PyYAML wheel, when there is one, wins.
+# CI's windows-smoke runs this script with pip refusing every other source build (df-mvls).
 $env:PYYAML_FORCE_LIBYAML = "0"
 
 function Invoke-Native([string]$Label, [scriptblock]$Cmd) {

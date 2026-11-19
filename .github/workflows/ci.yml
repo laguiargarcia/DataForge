@@ -478,6 +478,7 @@ jobs:
   windows-smoke:
     # Deploy path guards on native Windows (df-llmm): NTFS drops a trailing dot or space, reads ':'
     # as a stream and ignores case, which no Linux test reproduces (scripts/smoke_deploy_windows.py).
+    # Then installs a release the way update-prod.ps1 does on prod, with no C compiler (df-mvls).
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -494,6 +495,26 @@ jobs:
         run: |
           mkdir -p report
           uv run --frozen --no-sync python scripts/smoke_deploy_windows.py 2>&1 | tee report/windows-smoke.txt
+      - name: Install like prod, which has no C compiler
+        # This runner has MSVC and prod does not, so a dependency with no wheel for prod's Python
+        # builds here and fails only at the deploy (df-gwjh, df-mvls). Runs update-prod.ps1 as
+        # deploy.sh does, into a fresh venv, with pip refusing every source build but PyYAML's,
+        # which update-prod makes pure Python (PYYAML_FORCE_LIBYAML=0). A pure-Python package with
+        # no wheel joins the no-binary line; one that needs C needs a wheel before it can ship.
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env: { PIP_CONFIG_FILE: "${{ runner.temp }}/pip-no-compiler.ini" }
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          "[install]`nonly-binary = :all:`nno-binary = pyyaml" | Set-Content -LiteralPath $env:PIP_CONFIG_FILE
+          $work = Join-Path $env:RUNNER_TEMP "prod-install"
+          $python = (Get-Content .python-version).Trim()
+          uv build --quiet --wheel --out-dir $work .
+          uv export --quiet --frozen --no-default-groups --no-emit-project --no-hashes --output-file "$work/constraints.txt"
+          uv venv --no-project --seed --python $python "$work/venv"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/prod/update-prod.ps1 `
+            -VenvPath "$work/venv" -DataForgeHome $work -Wheel (Get-Item "$work/dataforge-*.whl").FullName `
+            -Constraints "$work/constraints.txt" -Requirements workspaces/GetFinance/requirements.txt -Python $python
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
