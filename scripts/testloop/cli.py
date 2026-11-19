@@ -1,5 +1,7 @@
 """Test loop CLI. Usage: cli.py <command> <module> [options], or cli.py diff-cover [--compare-branch REF]
 
+mutate takes --shard I/N to mutate one of N parts of the module; gate sums the target's `shards`.
+
 Run from the repo root. Exit codes: 0 measured (and, for check and gate, passed);
 1 check: tests failed, gate: score below min_score, diff-cover: changed lines not covered;
 2 usage or tool error. The module commands print the result JSON path.
@@ -18,13 +20,30 @@ import gate_cmd
 import map_cmd
 import mutate_cmd
 
+
+
+def shard(text: str) -> tuple[int, int]:
+    """`I/N` with 1 <= I <= N: the I-th of N parts of the module (df-n8ac.32)."""
+    i, sep, n = text.partition("/")
+    if not (sep and i.isdigit() and n.isdigit() and 1 <= int(i) <= int(n)):
+        raise argparse.ArgumentTypeError(f"expected I/N with 1 <= I <= N, got {text!r}")
+    return int(i), int(n)
+
+
+def _mutate_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--budget-seconds", type=float, default=mutate_cmd.DEFAULT_BUDGET_SECONDS,
+        help="wall-clock budget for the whole run; exceeded = partial result, exit 2")
+    parser.add_argument(
+        "--shard", type=shard, default=None, metavar="I/N",
+        help="mutate only the I-th of N parts of the module's functions (CI splits a big target)")
+
+
 # command name -> (module with main(config, module, **options) -> Path | (Path, exit_code), option adder)
 COMMANDS = {
     "map": (map_cmd, lambda parser: None),
     "check": (check_cmd, lambda parser: None),
-    "mutate": (mutate_cmd, lambda parser: parser.add_argument(
-        "--budget-seconds", type=float, default=mutate_cmd.DEFAULT_BUDGET_SECONDS,
-        help="wall-clock budget for the whole run; exceeded = partial result, exit 2")),
+    "mutate": (mutate_cmd, _mutate_options),
     "gate": (gate_cmd, lambda parser: None),
 }
 # command name -> (module with main(config, **options) -> exit code, option adder); no module, no result file
@@ -57,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command in REPO_COMMANDS:
             return _repo_command(args)
         handler = COMMANDS[args.command][0]
-        clear_result(Path.cwd(), args.command, args.module)
+        clear_result(Path.cwd(), args.command, args.module, getattr(args, "shard", None))
         config = load_config(Path.cwd())
         options = {k: v for k, v in vars(args).items() if k not in ("command", "module")}
         result = handler.main(config, args.module, **options)

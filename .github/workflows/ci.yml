@@ -396,9 +396,12 @@ jobs:
     # Which testloop.toml targets to mutate (df-gqke). On a PR, only those whose module, tests or
     # first-party imports changed, or every one when a shared file changed
     # (scripts/testloop/affected.py). On push to main and by hand: every target, which also
-    # audits what PRs skipped.
+    # audits what PRs skipped. `matrix` has one item per shard of each target (`shards` in
+    # testloop.toml, df-n8ac.32): a big target runs as several jobs.
     runs-on: ubuntu-latest
-    outputs: { targets: "${{ steps.pick.outputs.targets }}" }
+    outputs:
+      targets: "${{ steps.pick.outputs.targets }}"
+      matrix: "${{ steps.pick.outputs.matrix }}"
     steps:
       - uses: actions/checkout@v7
         with: { fetch-depth: 0 }   # the merge base with the PR's base branch
@@ -411,18 +414,20 @@ jobs:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
         run: |
           targets=$(uv run --no-project python scripts/testloop/affected.py ${BASE_REF:+--base-ref "$BASE_REF"})
+          matrix=$(uv run --no-project python scripts/testloop/affected.py ${BASE_REF:+--base-ref "$BASE_REF"} --matrix)
           echo "targets=$targets" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "mutation targets: $targets" >> "$GITHUB_STEP_SUMMARY"
   mutation:
-    # Mutation score of each picked target must stay at or above its min_score. One job per target,
-    # in parallel; skipped when no target was picked.
+    # One job per shard of each picked target, in parallel: each mutates its part and uploads its
+    # .testloop/; mutation-ok sums the shards and gates the score. Skipped when no target was picked.
     needs: [mutation-targets]
     if: needs.mutation-targets.outputs.targets != '[]'
-    name: mutation (${{ matrix.module }})
+    name: mutation (${{ matrix.module }} ${{ matrix.shard }}/${{ matrix.shards }})
     strategy:
       fail-fast: false
       matrix:
-        module: ${{ fromJSON(needs.mutation-targets.outputs.targets) }}
+        include: ${{ fromJSON(needs.mutation-targets.outputs.matrix) }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -431,33 +436,56 @@ jobs:
         with: { enable-cache: true, cache-python: true }
       - name: Install into .venv (testloop.toml runs .venv/bin/python)
         run: uv sync --frozen
-      - name: Mutate and gate
+      - name: Mutate
         shell: bash
-        env: { MODULE: "${{ matrix.module }}" }
-        run: |
-          mkdir -p report
-          out="report/mutation-${MODULE//\//_}.txt"
-          .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" || { echo "testloop: mutate $MODULE failed" > "$out"; exit 1; }
-          .venv/bin/python scripts/testloop/cli.py gate "$MODULE" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" "$out"
+        env: { MODULE: "${{ matrix.module }}", SHARD: "${{ matrix.shard }}", SHARDS: "${{ matrix.shards }}" }
+        run: .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" --shard "$SHARD/$SHARDS"
       # Artifact names must be unique across the matrix and cannot hold '/': use the job index.
       - uses: actions/upload-artifact@v7
         if: always()
         # .testloop/ is a hidden directory, which upload-artifact skips unless told otherwise.
         with: { name: "testloop-results-${{ strategy.job-index }}", path: .testloop/, include-hidden-files: true, if-no-files-found: warn }
-      - uses: actions/upload-artifact@v7
-        if: always()
-        # Read by the report job, which comments on the PR.
-        with: { name: "report-mutation-${{ strategy.job-index }}", path: report/, if-no-files-found: ignore }
   mutation-ok:
     # One fixed name for the repo ruleset to require (df-ahua.19): the matrix jobs are named per
-    # module and are skipped when no target is picked, so none of them can be a required check.
-    # Passes when every picked target passed or none was picked; fails when the pick itself failed
-    # (which leaves mutation skipped) or any target failed or was cancelled.
+    # shard and are skipped when no target is picked, so none of them can be a required check.
+    # It gates each picked target on its shards' results summed (df-n8ac.32). Passes when every
+    # gate passed or no target was picked; fails when the pick itself failed (which leaves
+    # mutation skipped), any mutation job failed or was cancelled, or any gate did not pass (a
+    # missing or partial shard is a gate error, exit 2).
     needs: [mutation-targets, mutation]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      GATE: ${{ needs.mutation-targets.result == 'success' && needs.mutation-targets.outputs.targets != '[]' }}
     steps:
+      - uses: actions/checkout@v7
+        if: env.GATE == 'true'
+      - uses: astral-sh/setup-uv@v10.3.3
+        if: env.GATE == 'true'
+        with: { enable-cache: true, cache-python: true }
+      - uses: actions/download-artifact@v8
+        if: env.GATE == 'true'
+        continue-on-error: true   # a job that died before writing anything leaves no artifact
+        with: { pattern: testloop-results-*, path: .testloop, merge-multiple: true }
+      - name: Gate each target on its shards
+        if: env.GATE == 'true'
+        shell: bash
+        env: { TARGETS: "${{ needs.mutation-targets.outputs.targets }}" }
+        run: |
+          mkdir -p report
+          failed=0
+          # gate only reads JSON and testloop.toml (stdlib): no project install needed.
+          for module in $(jq -r '.[]' <<< "$TARGETS"); do
+            out="report/mutation-${module//\//_}.txt"
+            uv run --no-project python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" "$out" || failed=1
+          done
+          exit "$failed"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-mutation-gate, path: report/, if-no-files-found: ignore }
       - name: Check the mutation jobs
+        if: always()
         env:
           PICK: ${{ needs.mutation-targets.result }}
           MUTATION: ${{ needs.mutation.result }}
@@ -532,7 +560,8 @@ jobs:
     # One comment on the PR with every job's result and output, edited on each push (scripts/ci_report.py).
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
-    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, testloop-tools, windows-smoke]
+    # mutation-ok: it writes the mutation gate's report (df-n8ac.32).
+    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, mutation-ok, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:

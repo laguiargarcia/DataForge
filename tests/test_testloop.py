@@ -570,3 +570,77 @@ def test_diff_cover_with_failing_tests_exits_2(change_repo):
     proc = run(change_repo, "diff-cover", "--compare-branch", "main")
     assert proc.returncode == 2
     assert "engine tests failed" in proc.stderr
+
+
+# ---------------------------------------------------------------- mutate --shard (df-n8ac.32)
+
+MOD_SHARDED_SRC = MOD_SRC + (
+    "\n\ndef noop():\n    pass\n"
+    "\n\nclass Box:\n    def double(self, x):\n        return x * 2\n"
+)
+TEST_SHARDED = TEST_FULL + (
+    "\n\ndef test_double():\n    from sample.mod import Box, noop\n\n"
+    "    noop()\n    assert Box().double(3) == 6\n"
+)
+
+
+def shard_path(repo, module, i, n):
+    return Path(repo) / ".testloop" / f"mutate-{module.replace('/', '_')}.shard-{i}of{n}.json"
+
+
+def run_shard(repo, i, n):
+    proc = run(repo, "mutate", "sample/mod.py", "--shard", f"{i}/{n}")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert Path(proc.stdout.strip()) == shard_path(repo, "sample/mod.py", i, n)
+    return json.loads(shard_path(repo, "sample/mod.py", i, n).read_text())
+
+
+def ids(data):
+    return {s["id"] for s in data["survived"]}
+
+
+def test_shards_of_a_module_add_up_to_the_whole_run(tmp_path):
+    repo = make_repo(tmp_path, TEST_SHARDED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    whole = run_ok(repo, "mutate", "sample/mod.py")
+    parts = [run_shard(repo, i, 2) for i in (1, 2)]
+    assert [p["shard"] for p in parts] == [[1, 2], [2, 2]]
+    assert all(p["complete"] for p in parts)
+    assert all(p["total"] > 0 for p in parts)
+    assert sum(p["total"] for p in parts) == whole["total"]
+    assert sum(p["killed"] for p in parts) == whole["killed"]
+    assert set().union(*map(ids, parts)) == ids(whole)
+    assert result_path(repo, "mutate", "sample/mod.py").is_file()   # the whole run's file is its own
+
+
+def test_a_shard_without_mutants_is_complete_with_no_score(tmp_path):
+    """With 3 shards noop() (no mutant) gets a shard of its own: mutmut refuses a filter matching
+    nothing, and the shard is still a complete result of 0 mutants."""
+    repo = make_repo(tmp_path, TEST_SHARDED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    parts = [run_shard(repo, i, 3) for i in (1, 2, 3)]
+    empty = [p for p in parts if p["total"] == 0]
+    assert len(empty) == 1
+    assert empty[0]["complete"] is True
+    assert empty[0]["score"] is None
+    assert empty[0]["warnings"] == []
+
+
+@pytest.mark.parametrize("shard", ["0/2", "3/2", "2", "a/b", "1/0"])
+def test_mutate_rejects_a_bad_shard(sample_repo, shard):
+    proc = run(sample_repo, "mutate", "sample/mod.py", "--shard", shard)
+    assert proc.returncode == 2
+    assert "--shard" in proc.stderr
+
+
+def test_gate_judges_the_sum_of_the_shards(tmp_path):
+    repo = make_repo(tmp_path, TEST_SHARDED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    with (repo / "testloop.toml").open("a") as f:
+        f.write("shards = 2\nmin_score = 0.5\n")
+    run_shard(repo, 1, 2)
+    proc = run(repo, "gate", "sample/mod.py")
+    assert proc.returncode == 2
+    assert "shard 2/2" in proc.stderr
+    run_shard(repo, 2, 2)
+    assert run_ok(repo, "gate", "sample/mod.py")["passed"] is True

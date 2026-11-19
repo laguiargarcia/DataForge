@@ -166,3 +166,26 @@ def test_cli_rejects_a_base_ref_that_is_not_a_ref_name(repo, monkeypatch, capsys
     monkeypatch.chdir(repo)
     assert affected.main([f"--base-ref={ref}"]) == 2
     assert "not a git ref name" in capsys.readouterr().err
+
+
+def test_cli_matrix_lists_one_item_per_shard_of_each_target(repo, monkeypatch, capsys):
+    """df-n8ac.32: --matrix feeds CI's mutation matrix; a target without `shards` is one job."""
+    toml = repo / "testloop.toml"
+    toml.write_text(toml.read_text(encoding="utf-8").replace(
+        'tests = ["tests/test_plan*.py"]\n', 'tests = ["tests/test_plan*.py"]\nshards = 3\n'), encoding="utf-8")
+    monkeypatch.chdir(repo)
+    assert affected.main(["--matrix"]) == 0
+    assert json.loads(capsys.readouterr().out) == [
+        {"module": PLAN, "shard": 1, "shards": 3},
+        {"module": PLAN, "shard": 2, "shards": 3},
+        {"module": PLAN, "shard": 3, "shards": 3},
+        {"module": APPLY, "shard": 1, "shards": 1},
+    ]
+
+
+def test_cli_matrix_rejects_an_invalid_shards_value(repo, monkeypatch, capsys):
+    toml = repo / "testloop.toml"
+    toml.write_text(toml.read_text(encoding="utf-8") + "shards = 0\n", encoding="utf-8")
+    monkeypatch.chdir(repo)
+    assert affected.main(["--matrix"]) == 2
+    assert "shards" in capsys.readouterr().err

@@ -1,6 +1,9 @@
 """Which testloop.toml targets a change can affect, as a JSON list on stdout (df-gqke).
 
-Usage (repo root): affected.py [--base-ref REF]
+Usage (repo root): affected.py [--base-ref REF] [--matrix]
+
+With --matrix it prints the CI mutation matrix instead: one {"module", "shard", "shards"} per
+shard of each chosen target (`shards` in testloop.toml, default 1; df-n8ac.32).
 
 Without --base-ref every target is printed: push to main, the weekly run and manual runs mutate
 everything. With it, the changed files are `git diff --name-only REF...HEAD`, and a target is
@@ -28,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import ToolError, load_config, resolve_tests
+from common import ToolError, load_config, resolve_tests, shard_count
 
 # Packages whose imports are followed: everything else is third party.
 FIRST_PARTY = ("dataforge", "tests")
@@ -178,6 +181,16 @@ def select(config, changed: list[str], base_toml: str | None = None) -> tuple[li
     return picked, reasons
 
 
+def matrix(config, picked: list[str]) -> list[dict]:
+    """One CI mutation job per shard of each picked target."""
+    return [
+        {"module": module, "shard": i, "shards": n}
+        for module in picked
+        for n in [shard_count(config, module)]
+        for i in range(1, n + 1)
+    ]
+
+
 def changed_files(repo: Path, base_ref: str) -> list[str]:
     if not REF.fullmatch(base_ref):
         raise ToolError(f"not a git ref name: {base_ref!r}")
@@ -211,6 +224,7 @@ def base_file(repo: Path, base_ref: str, rel: str) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="affected")
     parser.add_argument("--base-ref", help="e.g. origin/main; omitted = every target")
+    parser.add_argument("--matrix", action="store_true", help="print one item per shard of each target")
     args = parser.parse_args(argv)
     try:
         config = load_config(Path.cwd())
@@ -221,12 +235,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             picked = list(config.targets)
             reasons = dict.fromkeys(picked, "no base ref: every target")
+        out = matrix(config, picked) if args.matrix else picked
     except ToolError as exc:
         print(f"affected: {exc}", file=sys.stderr)
         return 2
     for module, reason in reasons.items():
         print(f"affected: {module}: {reason}", file=sys.stderr)
-    print(json.dumps(picked))
+    print(json.dumps(out))
     return 0
 
 
