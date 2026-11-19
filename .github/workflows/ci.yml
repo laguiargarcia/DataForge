@@ -258,7 +258,8 @@ jobs:
       - name: Engine tests
         shell: bash   # pipefail: pytest's exit code survives the tee
         # Only stdout/stderr become UTF-8, so the report file is readable. PYTHONUTF8 stays unset:
-        # open() without encoding= must keep the cp1252 default that production has.
+        # open() without encoding= must keep the default production has: cp1252 up to Python 3.14,
+        # UTF-8 from 3.15 (UTF-8 mode on by default, PEP 686; df-p0wm).
         env: { PYTHONIOENCODING: utf-8, SHARD: "${{ matrix.shard }}" }
         run: |
           mkdir -p report
@@ -287,7 +288,8 @@ jobs:
       - name: GetFinance tests
         shell: bash   # pipefail: pytest's exit code survives the tee
         # Only stdout/stderr become UTF-8, so the report file is readable. PYTHONUTF8 stays unset:
-        # open() without encoding= must keep the cp1252 default that production has.
+        # open() without encoding= must keep the default production has: cp1252 up to Python 3.14,
+        # UTF-8 from 3.15 (UTF-8 mode on by default, PEP 686; df-p0wm).
         env: { PYTHONIOENCODING: utf-8 }
         run: |
           mkdir -p report
