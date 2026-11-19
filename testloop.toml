@@ -21,6 +21,9 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.9893
 # 204 mutants, 244 s of mutate in one CI job: two jobs (df-n8ac.41).
 shards = 2
+# Mutants that drop run_id deadlock a nested job on the run lock and hang until mutmut's timeout,
+# (tests' seconds + 1) x 15 by default; 3 still leaves a slow but killing mutant room (df-n8ac.42).
+timeout_multiplier = 3
 
 [targets."dataforge/dag.py"]
 tests = ["tests/test_dag*.py"]
@@ -185,6 +188,8 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # error (tests check they name the channels). 4 mutants of _run_summary time out instead of failing
 # fast (Hypothesis shrinks the failing example), which counts as caught.
 min_score = 0.9563
+# Those 4 time out after (tests' seconds + 1) x 15 by default; 3 ends them sooner (df-n8ac.42).
+timeout_multiplier = 3
 
 [targets."dataforge/tasks/message/channels/__init__.py"]
 tests = ["tests/test_message_channels*.py"]
