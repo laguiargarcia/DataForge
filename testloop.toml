@@ -221,10 +221,11 @@ copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 # 10 survivors. Equivalent: 7 mutants of the rc given to a succeeded or skipped task (only a failed
 # task's rc is rendered, in {failed_tasks_summary}), and the env file read with encoding "UTF-8" (one
 # codec). Declined: the wording of the success output and of the no-channel
-# error (tests check they name the channels). 4 mutants of _run_summary time out instead of failing
-# fast (Hypothesis shrinks the failing example), which counts as caught.
-min_score = 0.9563
-# Those 4 time out after (tests' seconds + 1) x 15 by default; 3 ends them sooner (df-n8ac.42).
+# error (tests check they name the channels). Mutants that time out (Hypothesis shrinks the failing
+# example) are caught, and the score leaves them out: 213 killed of 223 judged, 10 timeouts.
+min_score = 0.9551
+# Timeouts come after (tests' seconds + 1) x 15 by default; 3 ends them sooner (df-n8ac.42), and
+# turns 6 slow kills into timeouts, so the score went 219/229 -> 213/223 with the same survivors.
 timeout_multiplier = 3
 
 [targets."dataforge/tasks/message/channels/__init__.py"]
