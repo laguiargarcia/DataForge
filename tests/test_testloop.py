@@ -758,7 +758,7 @@ def test_the_cache_holds_only_mutmut_state_and_no_path_of_the_copy(tmp_path):
     cache = tmp_path / "cache"
     mutate_cached(repo, cache)
     files = sorted(p.relative_to(cache).as_posix() for p in cache.rglob("*") if p.is_file())
-    assert files == ["mutants/mutmut-stats.json", "mutants/sample/mod.py.meta"]
+    assert files == ["mutants/mutmut-stats.json", "mutants/sample/mod.py.meta", "mutants/testloop-function-text.json"]
     assert all("testloop-mutate-" not in (cache / f).read_text(encoding="utf-8") for f in files)
 
 
@@ -771,3 +771,45 @@ def test_a_partial_or_failed_mutate_leaves_the_cache_alone(request, fixture, ext
     assert proc.returncode == 2
     assert not (cache / "mutants").exists()
 
+
+
+PRAGMA_SRC = (
+    "def f(x):\n"
+    "    y = x + 1\n"
+    "    return y * 2\n"
+)
+# Kills only some mutants of f, so its survivors and killed ones sit side by side in the numbering.
+TEST_PRAGMA = "from sample.mod import f\n\n\ndef test_f():\n    assert f(0) != 4\n"
+
+
+def test_a_pragma_that_renumbers_a_functions_mutants_does_not_lend_one_mutants_verdict_to_another(tmp_path):
+    """mutmut keeps a verdict by mutant name while the function's AST hash holds, and the hash ignores
+    comments: a `# pragma: no mutate` renumbers the mutants under the same hash, so without a check of
+    the function's text a survivor would take the killed verdict of the mutant that had its number."""
+    repo = make_repo(tmp_path, TEST_PRAGMA)
+    mod = repo / "sample" / "mod.py"
+    mod.write_text(PRAGMA_SRC)
+    cache = tmp_path / "cache"
+    first = mutate_cached(repo, cache)
+    assert first["killed"]
+    assert first["survived"]
+    mod.write_text(PRAGMA_SRC.replace("x + 1\n", "x + 1  # pragma: no mutate\n"))
+    second = mutate_cached(repo, cache)
+    fresh = run_ok(repo, "mutate", "sample/mod.py")
+    assert second["cache"] == "restored"
+    assert verdicts(second) == verdicts(fresh)
+
+
+def test_a_cached_module_left_without_mutants_is_a_tool_error_as_without_cache(sample_repo):
+    """With the cache nothing is left to test and mutmut never runs; without it mutmut stops on its own.
+    Both are a tool error, never a crash of mutate."""
+    cache = sample_repo / "cache"
+    mutate_cached(sample_repo, cache)
+    (sample_repo / "sample" / "mod.py").write_text("def classify(x):\n    pass\n")
+    (sample_repo / "tests" / "test_mod.py").write_text(
+        "from sample.mod import classify\n\n\ndef test_pos():\n    classify(1)\n")
+    for extra in (["--cache-dir", str(cache)], []):
+        proc = run(sample_repo, "mutate", "sample/mod.py", *extra)
+        assert proc.returncode == 2
+        assert proc.stderr.startswith("testloop: ")
+        assert "unexpected" not in proc.stderr

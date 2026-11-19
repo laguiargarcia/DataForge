@@ -8,12 +8,15 @@ and methods, split by line count, so N CI jobs share a big target and `gate` sum
 
 `--cache-dir DIR` (df-n8ac.38) keeps mutmut's verdicts between runs, and a run reuses only the
 killed ones: it tests again every mutant that survived, timed out or had no test (a test added since
-may kill it), and those of functions whose code changed (every one when the pytest arguments or the
-list of test files change). A killed verdict stays even when a test changed: a weakened test is caught
-by the full run of main, which starts from no cache (df-n8ac.35).
+may kill it), and those of functions whose text changed, comments included (every one when the pytest
+arguments or the list of test files change). A killed verdict stays through any change outside its
+function: a changed or weakened test, the module's constants or imports, a function it calls (in this
+module or another), a base class, the files in `copy`, conftest.py, `env` in testloop.toml. The full
+run of main, which starts from no cache, audits those (df-n8ac.35).
 """
 
 import ast
+import hashlib
 import json
 import os
 import shutil
@@ -52,6 +55,11 @@ PROBE = "testloop-cache-probe"
 MUTANTS = "mutants"
 STATS_FILE = "mutmut-stats.json"
 META_SUFFIX = ".meta"
+# Beside them, the hash of each mutated function's text when its verdicts were found. mutmut keeps a
+# verdict by mutant name while the function's AST hash holds, and that hash ignores comments: a
+# `# pragma: no mutate` renumbers a function's mutants under the same hash, and a mutant would take
+# the verdict of the one that had its number. A function whose text differs loses its verdicts first.
+TEXTS_FILE = "testloop-function-text.json"
 
 # mutmut statuses we know how to classify.
 KILLED, SURVIVED = "killed", "survived"
@@ -81,42 +89,77 @@ def _copy_state(src: Path, dest: Path) -> int:
     return len(files)
 
 
-def restore_cache(cache_dir: Path, copy: Path) -> bool:
-    """Put the cached state into the copy's mutants/; False when the cache holds none."""
-    return _copy_state(cache_dir / MUTANTS, copy / MUTANTS) > 0
+def _forget_changed(meta: Path, cached: dict[str, str], texts: dict[str, str]) -> None:
+    """Drop from a restored .meta the verdicts of each function whose text is not the cached one."""
+    data = json.loads(meta.read_text(encoding="utf-8"))
+    for key in data["exit_code_by_key"]:
+        function = function_of(key)
+        if texts.get(function) is None or cached.get(function) != texts[function]:
+            data["exit_code_by_key"][key] = None
+            data.get("durations_by_key", {}).pop(key, None)
+            data.get("type_check_error_by_key", {}).pop(key, None)
+    meta.write_text(json.dumps(data, indent=4), encoding="utf-8")
 
 
-def save_cache(copy: Path, cache_dir: Path) -> None:
-    """Replace the cache with the copy's state: written beside it, then renamed into place, so a run
-    cut short leaves the old cache whole."""
+def restore_cache(cache_dir: Path, copy: Path, module: str, texts: dict[str, str]) -> bool:
+    """Put the cached state into the copy's mutants/, without the verdicts of functions whose text
+    changed (`texts`: function_texts of the module now); False when the cache holds none."""
+    if _copy_state(cache_dir / MUTANTS, copy / MUTANTS) == 0:
+        return False
+    meta = copy / MUTANTS / (module + META_SUFFIX)
+    if meta.is_file():
+        try:
+            cached = json.loads((cache_dir / MUTANTS / TEXTS_FILE).read_text(encoding="utf-8")).get(module, {})
+        except FileNotFoundError:
+            cached = {}
+        _forget_changed(meta, cached, texts)
+    return True
+
+
+def save_cache(copy: Path, cache_dir: Path, module: str, texts: dict[str, str]) -> None:
+    """Replace the cache with the copy's state and the module's function texts: written beside it,
+    then renamed into place, so a run cut short leaves the old cache whole."""
     current, new, old = (cache_dir / name for name in (MUTANTS, MUTANTS + ".new", MUTANTS + ".old"))
     for leftover in (new, old):
         shutil.rmtree(leftover, ignore_errors=True)
     new.mkdir(parents=True)
     _copy_state(copy / MUTANTS, new)
+    (new / TEXTS_FILE).write_text(json.dumps({module: texts}, indent=2, sort_keys=True), encoding="utf-8")
     if current.exists():
         current.rename(old)
     new.rename(current)
     shutil.rmtree(old, ignore_errors=True)
 
 
-def function_weights(source: str) -> dict[str, int]:
+def _functions(source: str):
     """mutmut's key of each function it can mutate (top-level functions and the methods of
-    top-level classes), weighted by its number of lines."""
-    weights: dict[str, int] = {}
-
-    def add(key: str, node: ast.AST) -> None:
-        weights[key] = weights.get(key, 0) + node.end_lineno - node.lineno + 1
-
+    top-level classes) with its node; a name defined twice comes twice."""
     functions = (ast.FunctionDef, ast.AsyncFunctionDef)
     for node in ast.parse(source).body:
         if isinstance(node, functions):
-            add(f"x_{node.name}", node)
+            yield f"x_{node.name}", node
         elif isinstance(node, ast.ClassDef):
             for item in node.body:
                 if isinstance(item, functions):
-                    add(f"x{CLASS_SEPARATOR}{node.name}{CLASS_SEPARATOR}{item.name}", item)
+                    yield f"x{CLASS_SEPARATOR}{node.name}{CLASS_SEPARATOR}{item.name}", item
+
+
+def function_weights(source: str) -> dict[str, int]:
+    """Each function key, weighted by its number of lines."""
+    weights: dict[str, int] = {}
+    for key, node in _functions(source):
+        weights[key] = weights.get(key, 0) + node.end_lineno - node.lineno + 1
     return weights
+
+
+def function_texts(source: str) -> dict[str, str]:
+    """Each function key with a hash of its lines, decorators and comments included."""
+    lines = source.splitlines(keepends=True)
+    texts: dict[str, str] = {}
+    for key, node in _functions(source):
+        start = min([node.lineno, *(d.lineno for d in node.decorator_list)])
+        texts[key] = texts.get(key, "") + "".join(lines[start - 1:node.end_lineno])
+    return {key: "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest() for key, text in texts.items()}
 
 
 def partition(weights: dict[str, int], n: int) -> list[list[str]]:
@@ -374,18 +417,27 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     try:
         _copy_files(config, module, tests, copy)
         _write_tool_config(config, module, tests, copy)
+        texts: dict[str, str] = {}
         if cache_dir is not None:
             cache_dir = Path(cache_dir).resolve()
-            job.restored = restore_cache(cache_dir, copy)
+            texts = _module_texts(config, module)
+            job.restored = restore_cache(cache_dir, copy, module, texts)
         try:
             out_path, code = _mutate(job, deadline)
         except BudgetExceeded:
             return _partial(job, budget_seconds)
         if cache_dir is not None and code == 0:   # only a complete run's verdicts go back
-            save_cache(copy, cache_dir)
+            save_cache(copy, cache_dir, module, texts)
         return out_path, code
     finally:
         shutil.rmtree(copy, ignore_errors=True)
+
+
+def _module_texts(config: Config, module: str) -> dict[str, str]:
+    try:
+        return function_texts((config.repo / module).read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        raise ToolError(f"{module} does not parse, so its cached verdicts cannot be checked: {exc}") from exc
 
 
 def _mutants(job: _Mutation, deadline: float) -> dict[str, str]:
@@ -397,6 +449,7 @@ def _mutants(job: _Mutation, deadline: float) -> dict[str, str]:
     if job.keys is not None and not job.keys:
         return {}
     names = [] if job.keys is None else shard_globs(module, sorted(job.keys))
+    out = ""   # mutmut's output; none when a restored cache leaves nothing to test
     if job.restored:
         names = _pending(job, deadline)
     if names or not job.restored:

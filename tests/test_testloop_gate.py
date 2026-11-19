@@ -257,9 +257,10 @@ def _mutants_dir(root, tag):
 def test_the_cache_keeps_only_mutmuts_state(tmp_path):
     copy = tmp_path / "copy"
     _mutants_dir(copy / "mutants", "run")
-    mutate_cmd.save_cache(copy, tmp_path / "cache")
+    mutate_cmd.save_cache(copy, tmp_path / "cache", "pkg/mod.py", {"x_f": "sha256:1"})
     assert _tree(tmp_path / "cache") == {
-        "mutants/mutmut-stats.json": "run mutmut-stats.json", "mutants/pkg/mod.py.meta": "run pkg/mod.py.meta"}
+        "mutants/mutmut-stats.json": "run mutmut-stats.json", "mutants/pkg/mod.py.meta": "run pkg/mod.py.meta",
+        "mutants/testloop-function-text.json": TEXTS}
 
 
 def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
@@ -269,16 +270,55 @@ def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
     _mutants_dir(cache / "mutants.new", "cut short")
     copy = tmp_path / "copy"
     _mutants_dir(copy / "mutants", "new")
-    mutate_cmd.save_cache(copy, cache)
+    mutate_cmd.save_cache(copy, cache, "pkg/mod.py", {"x_f": "sha256:1"})
     assert _tree(cache) == {
-        "mutants/mutmut-stats.json": "new mutmut-stats.json", "mutants/pkg/mod.py.meta": "new pkg/mod.py.meta"}
+        "mutants/mutmut-stats.json": "new mutmut-stats.json", "mutants/pkg/mod.py.meta": "new pkg/mod.py.meta",
+        "mutants/testloop-function-text.json": TEXTS}
 
 
 def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_path):
     cache, copy = tmp_path / "cache", tmp_path / "copy"
-    assert mutate_cmd.restore_cache(cache, copy) is False
+    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py", {}) is False
     assert not (copy / "mutants").exists()
     _mutants_dir(cache / "mutants", "cached")
-    assert mutate_cmd.restore_cache(cache, copy) is True
+    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py", {}) is True
     assert _tree(copy) == {
         "mutants/mutmut-stats.json": "cached mutmut-stats.json", "mutants/pkg/mod.py.meta": "cached pkg/mod.py.meta"}
+
+
+TEXTS = '{\n  "pkg/mod.py": {\n    "x_f": "sha256:1"\n  }\n}'
+
+
+def _meta(exit_codes):
+    return {"exit_code_by_key": exit_codes, "hash_by_function_name": {}, "type_check_error_by_key": {},
+            "durations_by_key": {k: 0.5 for k in exit_codes}, "estimated_durations_by_key": {}}
+
+
+@pytest.mark.parametrize("cached_texts", [{"x_f": "A", "x_g": "OLD"}, {"x_f": "A"}, None])
+def test_a_restored_cache_forgets_the_verdicts_of_functions_whose_text_changed(tmp_path, cached_texts):
+    """x_g's text is not the cached one (changed, never recorded, or no text file at all): its
+    verdicts go; x_f's stay only when its recorded text is the current one."""
+    cache, copy = tmp_path / "cache", tmp_path / "copy"
+    (cache / "mutants" / "pkg").mkdir(parents=True)
+    (cache / "mutants" / "pkg" / "mod.py.meta").write_text(json.dumps(_meta(
+        {"pkg.mod.x_f__mutmut_1": 1, "pkg.mod.x_g__mutmut_1": 1, "pkg.mod.x_g__mutmut_2": 0})))
+    if cached_texts is not None:
+        (cache / "mutants" / "testloop-function-text.json").write_text(json.dumps({"pkg/mod.py": cached_texts}))
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", {"x_f": "A", "x_g": "NEW"}) is True
+    meta = json.loads((copy / "mutants" / "pkg" / "mod.py.meta").read_text())
+    kept = 1 if cached_texts else None
+    assert meta["exit_code_by_key"] == {"pkg.mod.x_f__mutmut_1": kept, "pkg.mod.x_g__mutmut_1": None,
+                                        "pkg.mod.x_g__mutmut_2": None}
+    assert set(meta["durations_by_key"]) == ({"pkg.mod.x_f__mutmut_1"} if cached_texts else set())
+
+
+def test_a_functions_text_hash_sees_comments_and_decorators_but_not_other_functions():
+    src = "def f(x):\n    return x\n\n\nclass C:\n    @staticmethod\n    def m():\n        pass\n"
+    base = mutate_cmd.function_texts(src)
+    assert set(base) == {"x_f", "xǁCǁm"}
+    commented = mutate_cmd.function_texts(src.replace("return x", "return x  # pragma: no mutate"))
+    assert commented["x_f"] != base["x_f"]
+    assert commented["xǁCǁm"] == base["xǁCǁm"]
+    undecorated = mutate_cmd.function_texts(src.replace("    @staticmethod\n", ""))
+    assert undecorated["xǁCǁm"] != base["xǁCǁm"]
+    assert undecorated["x_f"] == base["x_f"]
