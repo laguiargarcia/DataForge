@@ -7,8 +7,10 @@ everything. With it, the changed files are `git diff --name-only REF...HEAD`, an
 kept when one of them is
 - the target's module, one of its test files, or a first-party module either of them imports,
   directly or through other first-party modules (imports inside functions included);
-- shared by every target: testloop.toml, the test loop tools, the test package setup, the
-  install, this workflow;
+- shared by every target: the test loop tools, the test package setup, the install, this
+  workflow, and testloop.toml outside its [targets] tables;
+- the target's own table in testloop.toml, when only target tables changed there (df-n8ac.34:
+  raising one min_score mutated all 37 targets);
 - something the import graph cannot see: a non-Python file, or a deleted Python file, under the
   first-party packages.
 When unsure it keeps the target: a needless mutation run only costs minutes. The full run on
@@ -21,6 +23,7 @@ import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -30,9 +33,10 @@ from common import ToolError, load_config, resolve_tests
 # Packages whose imports are followed: everything else is third party.
 FIRST_PARTY = ("dataforge", "tests")
 
+# The test loop's config: compared table by table against the base (_config_changes).
+CONFIG = "testloop.toml"
 # A change here can move every target's score.
 SHARED = (
-    "testloop.toml",
     "pyproject.toml",
     "tests/__init__.py",
     "tests/conftest.py",
@@ -127,16 +131,42 @@ def _invisible(repo: Path, rel: str) -> bool:
     return not rel.endswith(".py") or not (repo / rel).is_file()
 
 
-def select(config, changed: list[str]) -> tuple[list[str], dict[str, str]]:
-    """(targets to mutate, reason per target, or why it was skipped)."""
+def _config_changes(head_text: str, base_text: str | None) -> set[str] | None:
+    """Targets whose table in testloop.toml differs from the base version, or None when every
+    target must run: no readable base, or a key outside [targets] changed (it applies to all)."""
+    if base_text is None:
+        return None
+    try:
+        head, base = tomllib.loads(head_text), tomllib.loads(base_text)
+    except tomllib.TOMLDecodeError:
+        return None
+    head_targets, base_targets = head.pop("targets", {}), base.pop("targets", {})
+    if head != base:
+        return None
+    return {module for module, table in head_targets.items() if base_targets.get(module) != table}
+
+
+def select(config, changed: list[str], base_toml: str | None = None) -> tuple[list[str], dict[str, str]]:
+    """(targets to mutate, reason per target, or why it was skipped). `base_toml` is testloop.toml
+    as the base ref has it; without it, a change to testloop.toml runs every target."""
     repo = config.repo
     shared = [f for f in changed if f in SHARED or f.startswith(SHARED_DIRS) or _invisible(repo, f)]
+    retuned: set[str] = set()
+    if CONFIG in changed:
+        retuned = _config_changes((repo / CONFIG).read_text(encoding="utf-8"), base_toml)
+        if retuned is None:
+            shared.insert(0, f"{CONFIG} (outside its target tables, or no base to compare)")
+            retuned = set()
     reasons: dict[str, str] = {}
     picked = []
     for module in config.targets:
         if shared:
             picked.append(module)
             reasons[module] = f"shared or unmapped file changed: {shared[0]}"
+            continue
+        if module in retuned:
+            picked.append(module)
+            reasons[module] = f"its table in {CONFIG} changed"
             continue
         deps = dependencies(repo, [module, *resolve_tests(config, module)])
         hits = sorted(deps.intersection(changed))
@@ -160,6 +190,24 @@ def changed_files(repo: Path, base_ref: str) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line]
 
 
+def base_file(repo: Path, base_ref: str, rel: str) -> str | None:
+    """`rel` as the merge base of `base_ref` and HEAD has it (what `git diff REF...HEAD` compares
+    against), or None when it did not exist there or git cannot say."""
+    if not REF.fullmatch(base_ref):
+        raise ToolError(f"not a git ref name: {base_ref!r}")
+    base = subprocess.run(
+        ["git", "merge-base", "--end-of-options", base_ref, "HEAD"],
+        cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    if base.returncode != 0:
+        return None
+    shown = subprocess.run(
+        ["git", "show", f"{base.stdout.strip()}:{rel}"],
+        cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False,
+    )
+    return shown.stdout if shown.returncode == 0 else None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="affected")
     parser.add_argument("--base-ref", help="e.g. origin/main; omitted = every target")
@@ -167,7 +215,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = load_config(Path.cwd())
         if args.base_ref:
-            picked, reasons = select(config, changed_files(config.repo, args.base_ref))
+            changed = changed_files(config.repo, args.base_ref)
+            base_toml = base_file(config.repo, args.base_ref, CONFIG) if CONFIG in changed else None
+            picked, reasons = select(config, changed, base_toml)
         else:
             picked = list(config.targets)
             reasons = dict.fromkeys(picked, "no base ref: every target")
