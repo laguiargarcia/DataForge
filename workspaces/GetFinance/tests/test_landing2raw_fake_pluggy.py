@@ -836,7 +836,8 @@ def test_no_glob_in_the_scripts_sees_the_temp_file():
     """df-ahua.10.5: every glob in scripts/, read from the source: the readers of raw
     (`<entity>/ingestion_date=*/data.parquet`) match a partition's data.parquet and not its temp
     file; the one glob that matches any file is the backup's rglob("*"), which skips the temp by
-    name (test_backup.py). DataForge's scripts/leakguard.py reads raw too (tests/test_leakguard.py)."""
+    name (test_backup.py). DataForge's leak guard reads raw too (scripts/leakguard_values.py,
+    tests/test_leakguard_values.py)."""
     found = {}
     for script in sorted(_delta_util.SCRIPTS.rglob("*.py")):
         for kind, pattern in _glob_patterns(script):

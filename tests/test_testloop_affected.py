@@ -255,6 +255,65 @@ def test_a_test_loop_tool_that_mutate_does_not_run_picks_no_target(repo, tool):
     assert picked(repo, [tool]) == []
 
 
+# ---------------------------------------------------------------- script targets (df-n8ac.36)
+# A script split into sibling modules: they import each other as `scripts.x` or, from their own folder
+# on sys.path, as bare names; a test may import a script module by its bare name too.
+SCRIPT_FILES = {
+    "testloop.toml": "".join(
+        f'[targets."scripts/{name}.py"]\ntests = ["tests/test_{name.replace("/", "_")}.py"]\n\n'
+        for name in ("guard", "guard_files", "guard_patterns", "other", "tool/helper")),
+    "tests/__init__.py": "",
+    "scripts/guard.py": "from scripts import guard_files\n",
+    "scripts/guard_files.py": "from scripts.guard_patterns import mask\n",
+    "scripts/guard_patterns.py": "import guard_checkout\n",
+    "scripts/guard_checkout.py": "",
+    "scripts/other.py": "import json\n",
+    "scripts/notes.txt": "",
+    "scripts/tool/helper.py": "from sibling import x\n",
+    "scripts/tool/sibling.py": "",
+    "scripts/guard_unused.py": "",
+    "tests/test_guard.py": "from scripts import guard\n",
+    "tests/test_guard_files.py": "from scripts import guard_files\n",
+    "tests/test_guard_patterns.py": "import guard_patterns\n",
+    "tests/test_other.py": "from scripts import other\n",
+    "tests/test_tool_helper.py": "from scripts.tool import helper\n",
+}
+GUARD, GUARD_FILES, GUARD_PATTERNS = "scripts/guard.py", "scripts/guard_files.py", "scripts/guard_patterns.py"
+OTHER, HELPER = "scripts/other.py", "scripts/tool/helper.py"
+
+
+@pytest.fixture
+def script_repo(tmp_path):
+    for rel, text in SCRIPT_FILES.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+def test_dependencies_follow_script_modules_by_package_and_bare_sibling_name(script_repo):
+    assert affected.dependencies(script_repo, [GUARD, "tests/test_guard.py"]) == {
+        GUARD, "tests/test_guard.py", "tests/__init__.py",
+        GUARD_FILES,                    # from scripts import guard_files
+        GUARD_PATTERNS,                 # from scripts.guard_patterns import mask
+        "scripts/guard_checkout.py",    # import guard_checkout, a bare sibling
+    }
+
+
+@pytest.mark.parametrize("changed, expected", [
+    # a sibling module: every target whose module or tests import it, directly or transitively
+    (["scripts/guard_checkout.py"], [GUARD, GUARD_FILES, GUARD_PATTERNS]),
+    ([GUARD_PATTERNS], [GUARD, GUARD_FILES, GUARD_PATTERNS]),
+    ([GUARD_FILES], [GUARD, GUARD_FILES]),
+    ([GUARD], [GUARD]),
+    (["tests/test_guard_patterns.py"], [GUARD_PATTERNS]),   # imports it by its bare name
+    (["scripts/tool/sibling.py"], [HELPER]),                # a bare sibling in its own folder
+    # nothing imports it, and a file that is not Python under scripts/ is no shared file
+    (["scripts/guard_unused.py", "scripts/notes.txt"], []),
+])
+def test_a_change_to_a_script_module_picks_the_targets_that_import_it(script_repo, changed, expected):
+    assert picked(script_repo, changed) == expected
+
+
 # ---------------------------------------------------------------- packing by measured cost (df-n8ac.39)
 
 def item(module, shard=1, shards=1):

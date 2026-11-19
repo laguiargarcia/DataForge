@@ -35,43 +35,81 @@ tests = ["tests/test_deploy_pairing*.py", "tests/test_deploy_plan*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.9548
 
+# The leak guard, split by part (df-n8ac.36): the command and four modules, each its own target. It was
+# one target of 936 mutants in four shards (df-n8ac.32). Each part's tests are its own file, plus the
+# files whose tests reach it (named on its `tests`). Every survivor below is Equivalent (no observable
+# change). A few more on the CI runner than on a laptop (git 2.43) depend on the runner's git and SQLite
+# (df-kmx0); each target's min_score subtracts them from what a laptop measured, and says so.
 [targets."scripts/leakguard.py"]
-tests = ["tests/test_leakguard.py", "tests/test_leakguard_properties.py"]
-copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# Its tests start polars' thread pool, which a mutant forked from mutmut's main process waits for until
-# the timeout (df-kmx0): mutants fork from a server that only collects.
+# The command prints what loading the real values found and failed: tests/test_leakguard_values.py runs it.
+tests = ["tests/test_leakguard.py", "tests/test_leakguard_values.py"]
+copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# Its tests start polars' thread pool (tests/leakguard_fixtures.py writes parquet), which a mutant forked
+# from mutmut's main process waits for until the timeout (df-kmx0): mutants fork from a server that only
+# collects. The same for every part of the guard below.
 process_isolation = "forkserver"
-# 936 mutants took 8.6 min in one CI job: four jobs, each a quarter of its functions (df-n8ac.32).
-shards = 4
-# Every survivor is Equivalent (no observable change). A few more on the CI runner than on a laptop
-# (git 2.43) depend on the runner's git and SQLite (df-kmx0):
-#   check_history -m dropped or -M (4): git 2.56 shows merge diffs and paths without -m; an older git
-#     does not, and there the tests kill them.
-#   _edicao_values uri=True dropped / None / False (3): the runner's SQLite reads a file: URI by default;
-#     one that does not fails to open it, and there the tests kill them.
-# The others, everywhere:
+# 94 mutants, no survivor.
+min_score = 1.0
+
+[targets."scripts/leakguard_checkout.py"]
+tests = ["tests/test_leakguard_checkout.py"]
+copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+process_isolation = "forkserver"
+# 34 mutants, 5 survivors, all in _main_checkout:
+#   check=None / False / dropped: a failed `git rev-parse` prints nothing on stdout, so `common` is empty
+#     either way. common = None / "XXXX" in the except (git missing): both fall to the same branch, since
+#     None is falsy and "XXXX" is not a directory.
+min_score = 0.8529
+
+[targets."scripts/leakguard_patterns.py"]
+# tests/test_leakguard_values.py reads .leakguard-local through _load_owner_name_patterns.
+tests = ["tests/test_leakguard_patterns.py", "tests/test_leakguard_properties.py", "tests/test_leakguard_values.py"]
+copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+process_isolation = "forkserver"
+# 155 mutants, 5 survivors:
 #   _check_digits_hold zip strict=True / None / False / dropped: every caller passes digits whose length
 #     it has checked, so the two sides always have the same length.
+#   _cpf_valid range(12, 1, -1): _check_digits_hold keeps only the last `size` weights, so the extra
+#     leading weight is never used.
+#   _line count("\n", None, pos): None is the default start.
+min_score = 0.9677
+
+[targets."scripts/leakguard_values.py"]
+tests = ["tests/test_leakguard_values.py", "tests/test_leakguard_properties.py"]
+copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+process_isolation = "forkserver"
+# 301 mutants, 5 survivors on a laptop:
+#   _edicao_values lower-case or upper-case SQL: SQLite keywords and names are case-insensitive.
+#   _parse_nested "XX{[XX": a text starting with X is parsed, fails, and is plain text all the same.
+#   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
+# 3 more on the CI runner:
+#   _edicao_values uri=True dropped / None / False: the runner's SQLite reads a file: URI by default;
+#     one that does not fails to open it, and there the tests kill them.
+# min_score is the laptop's 296/301 less those 3: 293/301.
+min_score = 0.9734
+
+[targets."scripts/leakguard_files.py"]
+# check_text and check_files join the patterns and the real values into findings: every leak guard test
+# file reaches them (uv.lock, LICENSE and a masked path's findings are tested beside their part).
+tests = ["tests/test_leakguard*.py"]
+copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+process_isolation = "forkserver"
+# 351 mutants, 67 s of mutate on a laptop, about three times that in a CI job: two jobs.
+shards = 2
+# 11 survivors on a laptop:
 #   _git check=None / dropped: check=False is the default, so the result is the same.
 #   _git "core.quotepath=false" / "CORE.QUOTEPATH=FALSE": git config names and booleans ignore case.
 #   _path_failures check_text(None, ...): `rel` only exempts uv.lock from the document patterns and
 #     LICENSE/README.md from the name ones, and none of those names holds a finding of its own.
-#   _cpf_valid range(12, 1, -1): _check_digits_hold keeps only the last `size` weights, so the extra
-#     leading weight is never used.
 #   _decode "UTF-16" / "UTF-8" / "CP1252": codec names are case-insensitive.
-#   _edicao_values lower-case or upper-case SQL: SQLite keywords and names are case-insensitive.
-#   _line count("\n", None, pos): None is the default start.
-#   _main_checkout check=None / False / dropped: a failed `git rev-parse` prints nothing on stdout, so
-#     `common` is empty either way. common = None / "XXXX" in the except (git missing): both fall to the
-#     same branch, since None is falsy and "XXXX" is not a directory.
-#   _parse_nested "XX{[XX": a text starting with X is parsed, fails, and is plain text all the same.
 #   _private_reason rsplit("/") / rsplit("/", 2): only the last part, [-1], is used.
-#   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
 #   _read_bytes `or True`: read_bytes on a missing path or a directory raises OSError, caught the same.
 #     On a FIFO it would block, but git does not track one, so no caller passes it.
-# min_score is what the CI runner measured on main after df-0dk7 and df-ks84 (0.9679, 935 mutants); a
-# laptop reaches 0.9721.
-min_score = 0.9679
+# 4 more on the CI runner:
+#   check_history -m dropped or -M: git 2.56 shows merge diffs and paths without -m; an older git
+#     does not, and there the tests kill them.
+# min_score is the laptop's 340/351 less those 4: 336/351.
+min_score = 0.9572
 
 
 [targets."dataforge/apps.py"]
