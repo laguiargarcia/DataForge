@@ -55,6 +55,11 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $utf8 = New-Object System.Text.UTF8Encoding($false)
+# Prod has no C compiler. A package with no wheel for the venv's Python is built from source, and
+# PyYAML's build then fails asking for MSVC instead of falling back to pure Python (Python 3.15:
+# no PyYAML wheel yet, df-gwjh). This makes it build the pure-Python PyYAML, which
+# dataforge/yamlio.py reads and writes the same (df-xbn9). A PyYAML wheel, when there is one, wins.
+$env:PYYAML_FORCE_LIBYAML = "0"
 
 function Invoke-Native([string]$Label, [scriptblock]$Cmd) {
     # Native stderr under ErrorActionPreference=Stop aborts the script in 5.1, hence Continue.
