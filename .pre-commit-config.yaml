@@ -19,7 +19,7 @@ repos:
         # workspaces/<name>/data/ of the main checkout). With none of them it fails outside CI; someone
         # with no real data at all sets LEAKGUARD_NO_REAL_DATA=1 (workspaces/GetFinance/README.md).
         language: python
-        additional_dependencies: ["polars==1.41.2"]
+        additional_dependencies: ["polars==1.44.2"]
         pass_filenames: true
         require_serial: true   # one process: each run reads every raw partition to list the real values
         always_run: false
@@ -27,7 +27,7 @@ repos:
         name: leakguard (commit message)
         entry: python scripts/leakguard.py   # pre-commit passes the message file
         language: python
-        additional_dependencies: ["polars==1.41.2"]
+        additional_dependencies: ["polars==1.44.2"]
         stages: [commit-msg]
       - id: quality-gate
         name: quality gate (lint, dead code, import contracts against the baseline)
