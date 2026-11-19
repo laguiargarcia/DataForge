@@ -73,8 +73,10 @@ def test_a_target_runs_when_its_module_tests_or_imports_change(repo, changed, ex
 
 @pytest.mark.parametrize("changed", [
     "testloop.toml",   # no base version given: what changed in it is unknown
-    "pyproject.toml", "tests/conftest.py", ".github/workflows/ci.yml",
-    "scripts/testloop/mutate_cmd.py",
+    "pyproject.toml", "tests/conftest.py",
+    ".github/workflows/ci.yml",   # no base version given either
+    "scripts/testloop/mutate_cmd.py", "scripts/testloop/common.py", "scripts/testloop/cli.py",
+    "scripts/testloop/plugins/testloop_ascii_locale.py",
     "dataforge/deploy/data.json",   # not Python: the import graph cannot see who reads it
     "dataforge/deleted.py",         # gone from HEAD: who imported it is unknown
 ])
@@ -189,3 +191,59 @@ def test_cli_matrix_rejects_an_invalid_shards_value(repo, monkeypatch, capsys):
     monkeypatch.chdir(repo)
     assert affected.main(["--matrix"]) == 2
     assert "shards" in capsys.readouterr().err
+
+
+CI_BASE = """name: ci
+on:
+  pull_request:
+concurrency:
+  group: x
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest
+  mutation-targets:
+    runs-on: ubuntu-latest
+    steps:
+      - run: affected.py
+  mutation:
+    needs: [mutation-targets]
+    steps:
+      - run: cli.py mutate "$MODULE"
+  mutation-ok:
+    needs: [mutation]
+    steps:
+      - run: cli.py gate "$MODULE"
+  report:
+    steps:
+      - run: ci_report.py
+"""
+CI = ".github/workflows/ci.yml"
+
+
+@pytest.mark.parametrize("head, expected", [
+    # a job that does not mutate: no target (df-n8ac.40)
+    (CI_BASE.replace("- run: pytest", "- run: pytest -x"), []),
+    (CI_BASE.replace("- run: ci_report.py", "- run: ci_report.py --all"), []),
+    (CI_BASE.replace("  group: x", "  group: y"), []),
+    (CI_BASE.replace("jobs:\n", "jobs:\n  lint:\n    steps:\n      - run: ruff\n"), []),
+    # what the mutation jobs run, or a top-level key every job sees: every target
+    (CI_BASE.replace('cli.py mutate "$MODULE"', 'cli.py mutate "$MODULE" --fast'), [PLAN, APPLY]),
+    (CI_BASE.replace("- run: affected.py", "- run: affected.py --all"), [PLAN, APPLY]),
+    (CI_BASE.replace('cli.py gate "$MODULE"', 'cli.py gate "$MODULE" || true'), [PLAN, APPLY]),
+    (CI_BASE.replace("jobs:\n", "env:\n  X: 1\njobs:\n"), [PLAN, APPLY]),
+])
+def test_a_ci_yml_change_runs_every_target_only_when_it_touches_the_mutation(repo, head, expected):
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / CI).write_text(head, encoding="utf-8")
+    assert affected.select(load_config(repo), [CI], base_ci=CI_BASE)[0] == expected
+
+
+@pytest.mark.parametrize("tool", [
+    "scripts/testloop/affected.py", "scripts/testloop/gate_cmd.py", "scripts/testloop/diffcover_cmd.py",
+    "scripts/testloop/map_cmd.py", "scripts/testloop/check_cmd.py",
+])
+def test_a_test_loop_tool_that_mutate_does_not_run_picks_no_target(repo, tool):
+    """Their own tests run in the testloop-tools job; a score cannot move with them (df-n8ac.40)."""
+    assert picked(repo, [tool]) == []

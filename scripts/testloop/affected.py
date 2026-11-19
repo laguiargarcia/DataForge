@@ -10,8 +10,10 @@ everything. With it, the changed files are `git diff --name-only REF...HEAD`, an
 kept when one of them is
 - the target's module, one of its test files, or a first-party module either of them imports,
   directly or through other first-party modules (imports inside functions included);
-- shared by every target: the test loop tools, the test package setup, the install, this
-  workflow, and testloop.toml outside its [targets] tables;
+- shared by every target: the test loop code that `mutate` runs, the test package setup, the
+  install, the workflow's mutation jobs or top-level keys, and testloop.toml outside its
+  [targets] tables (df-n8ac.40: the other test loop tools and the other CI jobs cannot move a
+  score; their own tests run in the testloop-tools job);
 - the target's own table in testloop.toml, when only target tables changed there (df-n8ac.34:
   raising one min_score mutated all 37 targets);
 - something the import graph cannot see: a non-Python file, or a deleted Python file, under the
@@ -43,9 +45,20 @@ SHARED = (
     "pyproject.toml",
     "tests/__init__.py",
     "tests/conftest.py",
-    ".github/workflows/ci.yml",
 )
 SHARED_DIRS = ("scripts/testloop/",)
+# Test loop tools `mutate` never runs: a change to them cannot move a score.
+NOT_MUTATE = tuple(f"scripts/testloop/{name}" for name in (
+    "affected.py", "gate_cmd.py", "diffcover_cmd.py", "map_cmd.py", "check_cmd.py",
+))
+# The workflow: compared job by job against the base (_ci_changes).
+CI = ".github/workflows/ci.yml"
+# Its jobs that pick, mutate and gate the targets.
+MUTATION_JOBS = ("mutation-targets", "mutation", "mutation-ok")
+# Its top-level keys that no step sees.
+CI_INERT_KEYS = ("name", "on", "concurrency")
+TOP_KEY = re.compile(r"([A-Za-z_][\w-]*):")
+JOB_KEY = re.compile(r"  ([A-Za-z_][\w-]*):\s*(#.*)?$")
 
 INIT = "__init__.py"
 # A git ref name, never an option: a leading "-" would make git read it as a flag.
@@ -149,11 +162,53 @@ def _config_changes(head_text: str, base_text: str | None) -> set[str] | None:
     return {module for module, table in head_targets.items() if base_targets.get(module) != table}
 
 
-def select(config, changed: list[str], base_toml: str | None = None) -> tuple[list[str], dict[str, str]]:
-    """(targets to mutate, reason per target, or why it was skipped). `base_toml` is testloop.toml
-    as the base ref has it; without it, a change to testloop.toml runs every target."""
+def _blocks(text: str, pattern: re.Pattern) -> dict[str, str]:
+    """Each key the pattern finds at the start of a line, with every line up to the next one."""
+    blocks: dict[str, list[str]] = {}
+    current = None
+    for line in text.splitlines():
+        if match := pattern.match(line):
+            current = match.group(1)
+            blocks[current] = []
+        if current is not None:
+            blocks[current].append(line)
+    return {key: "\n".join(lines) for key, lines in blocks.items()}
+
+
+def _score_parts(text: str) -> dict[str, str]:
+    """The parts of ci.yml that can move a score: top-level keys a step sees, and the mutation jobs."""
+    top = _blocks(text, TOP_KEY)
+    jobs = _blocks(top.pop("jobs", ""), JOB_KEY)
+    parts = {key: block for key, block in top.items() if key not in CI_INERT_KEYS}
+    parts.update((f"jobs.{job}", jobs[job]) for job in MUTATION_JOBS if job in jobs)
+    return parts
+
+
+def _ci_changes(head_text: str | None, base_text: str | None) -> str | None:
+    """The first part of ci.yml that changed and can move a score, or None. No base or no head
+    (added or deleted): every part."""
+    if base_text is None or head_text is None:
+        return "added, deleted, or no base to compare"
+    head, base = _score_parts(head_text), _score_parts(base_text)
+    return next((key for key in sorted(head.keys() | base.keys()) if head.get(key) != base.get(key)), None)
+
+
+def _shared(repo: Path, rel: str) -> bool:
+    if rel in SHARED or _invisible(repo, rel):
+        return True
+    return rel.startswith(SHARED_DIRS) and rel not in NOT_MUTATE
+
+
+def select(config, changed: list[str], base_toml: str | None = None,
+           base_ci: str | None = None) -> tuple[list[str], dict[str, str]]:
+    """(targets to mutate, reason per target, or why it was skipped). `base_toml` and `base_ci` are
+    testloop.toml and ci.yml as the base ref has them; without one, a change to that file runs
+    every target."""
     repo = config.repo
-    shared = [f for f in changed if f in SHARED or f.startswith(SHARED_DIRS) or _invisible(repo, f)]
+    shared = [f for f in changed if _shared(repo, f)]
+    head_ci = (repo / CI).read_text(encoding="utf-8") if (repo / CI).is_file() else None
+    if CI in changed and (part := _ci_changes(head_ci, base_ci)):
+        shared.insert(0, f"{CI} ({part})")
     retuned: set[str] = set()
     if CONFIG in changed:
         retuned = _config_changes((repo / CONFIG).read_text(encoding="utf-8"), base_toml)
@@ -231,7 +286,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.base_ref:
             changed = changed_files(config.repo, args.base_ref)
             base_toml = base_file(config.repo, args.base_ref, CONFIG) if CONFIG in changed else None
-            picked, reasons = select(config, changed, base_toml)
+            base_ci = base_file(config.repo, args.base_ref, CI) if CI in changed else None
+            picked, reasons = select(config, changed, base_toml, base_ci)
         else:
             picked = list(config.targets)
             reasons = dict.fromkeys(picked, "no base ref: every target")
