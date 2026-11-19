@@ -13,21 +13,20 @@ repos:
     hooks:
       - id: leakguard
         name: leakguard (private files, personal data, real values)
-        entry: python scripts/leakguard.py
-        # python + polars, not the system python3: on the owner's machine the guard reads the real
+        entry: uv run --frozen python scripts/leakguard.py
+        # Runs in the project venv (uv.lock), not in a pre-commit env: polars has one version source,
+        # so the guard cannot drift from what CI tests. On the owner's machine the guard reads the real
         # workspace's raw parquet to list the real values (GETFINANCE_DATA, .leakguard-workspaces or a
         # workspaces/<name>/data/ of the main checkout). With none of them it fails outside CI; someone
         # with no real data at all sets LEAKGUARD_NO_REAL_DATA=1 (workspaces/GetFinance/README.md).
-        language: python
-        additional_dependencies: ["polars==2.1.0"]
+        language: unsupported
         pass_filenames: true
         require_serial: true   # one process: each run reads every raw partition to list the real values
         always_run: false
       - id: leakguard-message
         name: leakguard (commit message)
-        entry: python scripts/leakguard.py   # pre-commit passes the message file
-        language: python
-        additional_dependencies: ["polars==2.1.0"]
+        entry: uv run --frozen python scripts/leakguard.py   # pre-commit passes the message file
+        language: unsupported
         stages: [commit-msg]
       - id: quality-gate
         name: quality gate (lint, dead code, import contracts against the baseline)
