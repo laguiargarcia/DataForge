@@ -567,7 +567,7 @@ jobs:
       # the jobs and split the shards by. Only a full run measures every target with no cache.
       - name: Measure the costs
         if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
-        run: uv run --no-project python scripts/testloop/costs.py --out .mutation_costs.json
+        run: uv run --no-project python scripts/testloop/costs.py > .mutation_costs.json
       - name: Save the costs for the next runs
         if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
         uses: actions/cache/save@v6

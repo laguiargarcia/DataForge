@@ -110,7 +110,7 @@ def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
     assert upload["with"]["path"] == COSTS
     assert f"--costs {COSTS}" in next(s for s in mutation if s.get("name") == "Mutate")["run"]
     build = next(s for s in ok if "costs.py" in str(s.get("run", "")))
-    assert f"--out {COSTS}" in build["run"]
+    assert f"costs.py > {COSTS}" in build["run"]
     assert ok.index(build) < ok.index(save)
 
 

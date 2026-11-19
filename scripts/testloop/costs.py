@@ -58,19 +58,17 @@ def build(config) -> dict[str, dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="costs")
-    parser.add_argument("--out", type=Path, required=True, help="the costs file to write")
-    args = parser.parse_args(argv)
+    # The costs file goes to stdout (the CI redirects it): no output path to trust (Sonar S8707).
+    argparse.ArgumentParser(prog="costs", description="print the costs file of the last results").parse_args(argv)
     try:
         config = load_config(Path.cwd())
         costs = build(config)
     except ToolError as exc:
         print(f"costs: {exc}", file=sys.stderr)
         return 2
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(costs, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(json.dumps(costs, indent=2, sort_keys=True))
     timed = sum("elapsed" in entry for entry in costs.values())
-    print(f"costs: {timed} of {len(config.targets)} targets measured, written to {args.out}", file=sys.stderr)
+    print(f"costs: {timed} of {len(config.targets)} targets measured", file=sys.stderr)
     return 0
 
 

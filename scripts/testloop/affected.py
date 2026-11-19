@@ -340,7 +340,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             picked = list(config.targets)
             reasons = dict.fromkeys(picked, "no base ref: every target")
-        out = matrix(config, picked, costs_or_empty(args.costs) if args.costs else None) if args.matrix else picked
+        out = picked
+        if args.matrix:
+            out = matrix(config, picked, costs_or_empty(args.costs) if args.costs else None)
     except ToolError as exc:
         print(f"affected: {exc}", file=sys.stderr)
         return 2

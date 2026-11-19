@@ -395,10 +395,12 @@ def test_a_target_with_a_missing_or_partial_shard_has_no_elapsed_but_keeps_its_c
     assert APPLY not in costs.build(config)
 
 
-def test_costs_cli_writes_a_file_the_matrix_and_mutate_read(repo, monkeypatch, capsys):
+def test_costs_cli_prints_a_file_the_matrix_and_mutate_read(repo, monkeypatch, capsys):
     config = load_config(repo)
     _result(config, APPLY, None, 12.0, {"x_f": 9.0})
     monkeypatch.chdir(repo)
-    assert costs.main(["--out", "out/costs.json"]) == 0
-    assert load_costs(repo / "out" / "costs.json") == {APPLY: {"elapsed": 12.0, "functions": {"x_f": 9.0}}}
-    assert "1 of 2 targets measured" in capsys.readouterr().err
+    assert costs.main([]) == 0
+    captured = capsys.readouterr()
+    (repo / "costs.json").write_text(captured.out, encoding="utf-8")
+    assert load_costs(repo / "costs.json") == {APPLY: {"elapsed": 12.0, "functions": {"x_f": 9.0}}}
+    assert "1 of 2 targets measured" in captured.err
