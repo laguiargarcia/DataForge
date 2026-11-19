@@ -36,17 +36,19 @@ copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests
 # Its tests start polars' thread pool, which a mutant forked from mutmut's main process waits for until
 # the timeout (df-kmx0): mutants fork from a server that only collects.
 process_isolation = "forkserver"
-# 33 survivors on the CI runner (26 on a laptop with git 2.43), all Equivalent (no observable change).
-# The 7 more on the runner depend on its git and SQLite (df-kmx0):
+# Every survivor is Equivalent (no observable change). A few more on the CI runner than on a laptop
+# (git 2.43) depend on the runner's git and SQLite (df-kmx0):
 #   check_history -m dropped or -M (4): git 2.56 shows merge diffs and paths without -m; an older git
 #     does not, and there the tests kill them.
 #   _edicao_values uri=True dropped / None / False (3): the runner's SQLite reads a file: URI by default;
 #     one that does not fails to open it, and there the tests kill them.
-# The other 26:
+# The others, everywhere:
 #   _check_digits_hold zip strict=True / None / False / dropped: every caller passes digits whose length
 #     it has checked, so the two sides always have the same length.
-#   _git text=None / False / dropped and check=None / dropped: encoding="utf-8" already makes the output
-#     text, and a failed git is never raised on (check=False is the default), so the result is the same.
+#   _git check=None / dropped: check=False is the default, so the result is the same.
+#   _git "core.quotepath=false" / "CORE.QUOTEPATH=FALSE": git config names and booleans ignore case.
+#   _path_failures check_text(None, ...): `rel` only exempts uv.lock from the document patterns and
+#     LICENSE/README.md from the name ones, and none of those names holds a finding of its own.
 #   _cpf_valid range(12, 1, -1): _check_digits_hold keeps only the last `size` weights, so the extra
 #     leading weight is never used.
 #   _decode "UTF-16" / "UTF-8" / "CP1252": codec names are case-insensitive.
