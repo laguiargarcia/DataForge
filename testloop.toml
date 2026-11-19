@@ -82,10 +82,8 @@ process_isolation = "forkserver"
 #   _edicao_values lower-case or upper-case SQL: SQLite keywords and names are case-insensitive.
 #   _parse_nested "XX{[XX": a text starting with X is parsed, fails, and is plain text all the same.
 #   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
-# 3 more on the CI runner:
-#   _edicao_values uri=True dropped / None / False: the runner's SQLite reads a file: URI by default;
-#     one that does not fails to open it, and there the tests kill them.
-# The CI runner kills those 3 too (PR #130: 296/301, the laptop's score): min_score is that (df-yy3b).
+# _edicao_values uri=True dropped / None / False survived on the old CI runner (its SQLite read a
+#   file: URI by default); on PR #130 CI killed them too, 296/301 as on a laptop (df-yy3b).
 min_score = 0.9833
 
 [targets."scripts/leakguard_files.py"]
