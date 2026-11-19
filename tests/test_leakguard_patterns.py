@@ -183,11 +183,7 @@ def _documents_by_remainder(size, base_of):
 
 
 CPF_SIZE = 11
-
-
 CPF_BY_REMAINDER = _documents_by_remainder(CPF_SIZE, lambda n: f"{n * 7919:09d}")
-
-
 CNPJ_BY_REMAINDER = _documents_by_remainder(14, lambda n: f"{n * 7919 % 100_000_000:08d}0001")
 
 

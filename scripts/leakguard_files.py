@@ -5,8 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from scripts.leakguard_patterns import _mask, _pattern_failures
-from scripts.leakguard_values import _real_value_failures
+from scripts import leakguard_patterns, leakguard_values
 
 # Surfaces of this repo that are never published.
 BLOCK_PREFIXES = (
@@ -37,14 +36,15 @@ BINARY_IN_WORKSPACE = "binary file inside a workspace (a dump or a backup cannot
 def check_text(rel, text, sources, where=None):
     """Every finding in `text`, located by `where(line)` (by default `rel:line`)."""
     where = where or (lambda n: f"{rel}:{n}")
-    return _pattern_failures(rel, text, where) + _real_value_failures(rel, text, sources, where)
+    return (leakguard_patterns._pattern_failures(rel, text, where)
+            + leakguard_values._real_value_failures(rel, text, sources, where))
 
 
 def _path_failures(rel, sources):
     """(the path as findings may show it, the findings in the path itself). A path with a finding in it
     is shown masked: CI logs are public, and a file named after a document would publish it."""
-    failures = check_text(rel, rel, sources, where=lambda _: f"the path {_mask(rel)}")
-    return (_mask(rel) if failures else rel), failures
+    failures = check_text(rel, rel, sources, where=lambda _: f"the path {leakguard_patterns._mask(rel)}")
+    return (leakguard_patterns._mask(rel) if failures else rel), failures
 
 
 def _inside_workspace(rel):

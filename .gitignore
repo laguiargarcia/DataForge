@@ -29,7 +29,7 @@ logs/
 # Secrets
 .env
 
-# Owner-local leak-guard name patterns (private; loaded by scripts/leakguard.py at runtime)
+# Owner-local leak-guard name patterns (private; loaded by scripts/leakguard_patterns.py at runtime)
 .leakguard-local
 # Owner-local list of private workspaces outside the checkout (dev clone on ext4, workspace on C:)
 .leakguard-workspaces

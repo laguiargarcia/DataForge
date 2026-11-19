@@ -13,7 +13,9 @@ without a measure is UNMEASURED_SECONDS per shard, and an unusable FILE is a war
 Without --base-ref every target is printed: push to main and manual runs mutate everything. With it, the changed files are `git diff --name-only REF...HEAD`, and a target is
 kept when one of them is
 - the target's module, one of its test files, or a first-party module either of them imports,
-  directly or through other first-party modules (imports inside functions included);
+  directly or through other first-party modules (imports inside functions included); a module under
+  scripts/ counts too, imported as `scripts.x` or by its bare name: from a script in its own folder,
+  from a test in scripts/ (df-n8ac.36);
 - shared by every target: the test loop code that `mutate` runs, the test package setup, the
   install, the workflow's mutation jobs or top-level keys, and testloop.toml outside its
   [targets] tables (df-n8ac.40: the other test loop tools and the other CI jobs cannot move a
@@ -42,6 +44,9 @@ from common import ToolError, costs_or_empty, load_config, resolve_tests, shard_
 
 # Packages whose imports are followed: everything else is third party.
 FIRST_PARTY = ("dataforge", "tests")
+# Repo tooling: its modules are followed too (a script split into sibling modules, df-n8ac.36), but a
+# file there that is not Python is no shared file: scripts/ holds many tools no target runs.
+SCRIPTS = "scripts"
 
 # The test loop's config: compared table by table against the base (_config_changes).
 CONFIG = "testloop.toml"
@@ -75,11 +80,12 @@ INIT = "__init__.py"
 REF = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_./-]*")
 
 
-def _module_file(repo: Path, dotted: str) -> str | None:
-    """Repo-relative file for a first-party dotted name, or None."""
-    if dotted.split(".")[0] not in FIRST_PARTY:
+def _module_file(repo: Path, dotted: str, folder: str = "") -> str | None:
+    """Repo-relative file for a first-party dotted name, or None. With `folder`, the name is a bare
+    one Python finds in that folder of the repo (on sys.path)."""
+    if not folder and dotted.split(".")[0] not in (*FIRST_PARTY, SCRIPTS):
         return None
-    base = repo.joinpath(*dotted.split("."))
+    base = repo.joinpath(folder, *dotted.split("."))
     for candidate in (base.with_suffix(".py"), base / INIT):
         if candidate.is_file():
             return candidate.relative_to(repo).as_posix()
@@ -119,6 +125,15 @@ def _imported_names(tree: ast.AST, package: list[str]) -> set[str]:
     return names
 
 
+def _bare_folders(rel: str) -> tuple[str, ...]:
+    """Folders of the repo where a bare import in `rel` may find a module: a script's own folder (it
+    runs with that folder on sys.path), and scripts/ for a test."""
+    top = rel.split("/")[0]
+    if top == SCRIPTS:
+        return (Path(rel).parent.as_posix(),)
+    return (SCRIPTS,) if top == "tests" else ()
+
+
 def _imports(repo: Path, rel: str) -> set[str]:
     """First-party files that `rel` imports directly."""
     try:
@@ -130,8 +145,8 @@ def _imports(repo: Path, rel: str) -> set[str]:
         # `import a.b.c` runs a, a.b and a.b.c.
         parts = name.split(".")
         found.update(
-            path for i in range(1, len(parts) + 1)
-            if (path := _module_file(repo, ".".join(parts[:i]))) is not None
+            path for folder in ("", *_bare_folders(rel)) for i in range(1, len(parts) + 1)
+            if (path := _module_file(repo, ".".join(parts[:i]), folder)) is not None
         )
     return found
 

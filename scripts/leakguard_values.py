@@ -9,8 +9,7 @@ import re
 import sqlite3
 from pathlib import Path
 
-from scripts import leakguard_checkout
-from scripts.leakguard_patterns import _RUN_OR_COMMA, NAME_EXEMPT_PATHS, _digits, _line, _mask
+from scripts import leakguard_checkout, leakguard_patterns
 
 # The real data's workspaces: one directory per line, gitignored like .leakguard-local.
 LISTED_WORKSPACES_FILE = ".leakguard-workspaces"
@@ -34,7 +33,7 @@ NUMBER_LIKE = re.compile(r"[\d\s./-]+")   # digits and separators only: an accou
 # own weights table was one). What still escapes, on purpose: that comma-and-space form, and a letter
 # or other symbol as separator ("12345 x 6", "12345|6", "12345:6").
 SEPARATOR_CHARS = r"\s.\-_/\u2013\u2014"
-GAP = _RUN_OR_COMMA.format(SEPARATOR_CHARS)
+GAP = leakguard_patterns._RUN_OR_COMMA.format(SEPARATOR_CHARS)
 DIGIT_SEPARATOR = GAP + "?"
 # Raw columns whose string leaves identify the owner, an account or a counterparty. Amounts, dates
 # and descriptions are left out: they are not identifiers and would match ordinary text.
@@ -77,7 +76,7 @@ def _string_leaves(value):
 
 
 def _is_number_like(value):
-    return bool(NUMBER_LIKE.fullmatch(value)) and len(_digits(value)) >= MIN_VALUE_LENGTH
+    return bool(NUMBER_LIKE.fullmatch(value)) and len(leakguard_patterns._digits(value)) >= MIN_VALUE_LENGTH
 
 
 def _worth_blocking(leaf):
@@ -85,7 +84,7 @@ def _worth_blocking(leaf):
     if len(leaf) < MIN_VALUE_LENGTH or ISO_DATE.fullmatch(leaf) or len(set(leaf)) == 1:
         return False   # short, a date, or a filler like "00000000" (also a public bank ISPB)
     if _is_number_like(leaf):
-        return len(set(_digits(leaf))) > 1
+        return len(set(leakguard_patterns._digits(leaf))) > 1
     return not leaf.isalpha() or len(leaf) >= MIN_WORD_LENGTH
 
 
@@ -158,7 +157,7 @@ def real_values(workspace):
 
 def _value_pattern(value):
     if _is_number_like(value):
-        return re.compile(r"(?<!\d)" + DIGIT_SEPARATOR.join(_digits(value)) + r"(?!\d)")
+        return re.compile(r"(?<!\d)" + DIGIT_SEPARATOR.join(leakguard_patterns._digits(value)) + r"(?!\d)")
     return re.compile(r"\s+".join(re.escape(word) for word in value.split()), re.IGNORECASE)
 
 
@@ -173,20 +172,20 @@ def real_value_hits(text, values):
     hits = []
     for value, source in values.items():
         if _is_number_like(value):
-            if _digits(value) not in merged:
+            if leakguard_patterns._digits(value) not in merged:
                 continue
         elif re.sub(r"\s+", " ", value) not in spaced:
             continue
-        hits += [(_line(text, m.start()), value, source) for m in _value_pattern(value).finditer(text)]
+        hits += [(leakguard_patterns._line(text, m.start()), value, source) for m in _value_pattern(value).finditer(text)]
     return sorted(hits)
 
 
 def _real_value_failures(rel, text, sources, where):
     """REAL findings; in the attribution files a value read from an owner column is let through."""
     exempt = set()
-    if rel in NAME_EXEMPT_PATHS:
+    if rel in leakguard_patterns.NAME_EXEMPT_PATHS:
         exempt = {v for _, values in sources for v, src in values.items() if src.endswith(ATTRIBUTION_SOURCES)}
-    return [f"REAL: {where(n)} -> {_mask(v, f", {src} from {ws}")}"
+    return [f"REAL: {where(n)} -> {leakguard_patterns._mask(v, f", {src} from {ws}")}"
             for ws, values in sources
             for n, v, src in real_value_hits(text, {k: s for k, s in values.items() if k not in exempt})]
 

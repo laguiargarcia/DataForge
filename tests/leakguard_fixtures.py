@@ -16,29 +16,13 @@ import polars as pl
 
 from scripts import leakguard, leakguard_checkout, leakguard_patterns
 
-
-
 ACCT = "1234" + "-5"
-
-
 EMAIL = "someone" + "@" + "gmail.com"
-
-
 OWNER = "Fulana Exemplo" + " da Silva"
-
-
 NUMBER = "98765" + "-4"
-
-
 NUMBER_BARE = NUMBER.replace("-", "")   # the real number written without its dash: no ACCT shape
-
-
 TRANSFER = "901/0001/" + NUMBER
-
-
 RECEIVER = "Beltrano" + " Recebedor"
-
-
 SECRET = "s3cr3t" + "-value"
 
 
@@ -60,14 +44,8 @@ def _cnpj(base12):
 
 
 CPF = _cpf("529982247")
-
-
 CPF_PUNCT = f"{CPF[:3]}.{CPF[3:6]}.{CPF[6:9]}-{CPF[9:]}"
-
-
 CNPJ = _cnpj("112223330001")
-
-
 CNPJ_PUNCT = f"{CNPJ[:2]}.{CNPJ[2:5]}.{CNPJ[5:8]}/{CNPJ[8:12]}-{CNPJ[12:]}"
 
 

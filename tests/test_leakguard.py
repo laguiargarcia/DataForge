@@ -250,8 +250,6 @@ def test_the_guard_fails_closed_when_git_fails(repo, capsys, monkeypatch, args, 
 VALUES = st.one_of(
     st.text("0123456789", min_size=6, max_size=14).filter(lambda v: len(set(v)) > 1),
     st.lists(st.text("jqxz", min_size=3, max_size=6), min_size=2, max_size=3).map(" ".join))
-
-
 FILLER = st.text("ab -=_\n", max_size=8)
 
 
