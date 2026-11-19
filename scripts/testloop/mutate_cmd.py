@@ -6,10 +6,11 @@ This is the only file that knows the mutation tool. Everything the tool needs
 `--shard I/N` mutates only the I-th of N parts of the module (df-n8ac.32): its top-level functions
 and methods, split by line count, so N CI jobs share a big target and `gate` sums them.
 
-`--cache-dir DIR` (df-n8ac.38) keeps mutmut's verdicts between runs: mutmut tests again only the
-mutants of functions whose code changed (and every one when the pytest arguments or the list of test
-files change), so a PR's run reuses what the last run of main found. A changed or new test does not
-reset a verdict: the full run of main, which starts from no cache, is the audit (df-n8ac.35).
+`--cache-dir DIR` (df-n8ac.38) keeps mutmut's verdicts between runs, and a run reuses only the
+killed ones: it tests again every mutant that survived, timed out or had no test (a test added since
+may kill it), and those of functions whose code changed (every one when the pytest arguments or the
+list of test files change). A killed verdict stays even when a test changed: a weakened test is caught
+by the full run of main, which starts from no cache (df-n8ac.35).
 """
 
 import ast
@@ -342,7 +343,7 @@ class _Mutation:
     shard: tuple[int, int]
     keys: set[str] | None   # the shard's function keys; None = the whole module
     restored: bool = False  # the copy started from a cache's verdicts
-    cached: int = 0         # mutants of the shard whose verdict came from the cache
+    cached: int = 0         # mutants of the shard whose killed verdict came from the cache
 
     def write(self, summary: dict, diffs: dict[str, str], total: int, complete: bool,
               warnings: list[str]) -> Path:
@@ -417,14 +418,15 @@ def _mutants(job: _Mutation, deadline: float) -> dict[str, str]:
 def _pending(job: _Mutation, deadline: float) -> list[str]:
     """With a restored cache: write the mutants and let mutmut merge the cached verdicts (it drops
     those of functions whose hash changed, and all of them when the pytest arguments or the list of
-    test files changed), then return the shard's mutants still without a verdict. Named one by one, because
-    `mutmut run` tests again every mutant a name or glob matches, verdict or not."""
+    test files changed), then return the shard's mutants to test: every one not killed, so a survivor a
+    new test kills is reported killed. Named one by one, because `mutmut run` tests again every mutant
+    a name or glob matches, verdict or not."""
     python, copy, env = job.python, job.copy, job.env
     code, out = _run([python, "-m", "mutmut", "run", PROBE], copy, env, deadline)
     if NOTHING_MATCHES not in out:
         raise ToolError(f"{TOOL} run {PROBE} (writing the mutants) exited {code}:\n{_tail(out)}")
     shard = _in_shard(_collect(python, copy, env, deadline), job.keys)
-    pending = sorted(k for k, status in shard.items() if status == "not checked")
+    pending = sorted(k for k, status in shard.items() if status != KILLED)
     job.cached = len(shard) - len(pending)
     return pending
 

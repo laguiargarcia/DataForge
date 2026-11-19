@@ -436,11 +436,13 @@ jobs:
         with: { enable-cache: true, cache-python: true }
       - name: Install into .venv (testloop.toml runs .venv/bin/python)
         run: uv sync --frozen
-      # mutmut's verdicts per shard (df-n8ac.38): a PR restores those of main's last run, so mutate
-      # tests again only the mutants of functions the PR changed (all of them when the pytest
-      # arguments or the list of test files changed; a changed test alone resets nothing). Push and
-      # manual runs start empty, mutate everything (the audit of what PRs reused) and save the cache
-      # for the next PRs. The key changes with the environment (uv.lock, .python-version).
+      # mutmut's verdicts per shard (df-n8ac.38): a PR restores those of main's last run and reuses
+      # only the killed ones. It tests again every survivor, timeout and mutant without tests (a new
+      # test may kill it), and every mutant of a function the PR changed (all of them when the pytest
+      # arguments or the list of test files changed). A killed verdict stays even when a test changed:
+      # push and manual runs start empty, mutate everything (the audit of what PRs reused, a weakened
+      # test included) and save the cache for the next PRs. The key changes with the environment
+      # (uv.lock, .python-version).
       - name: Cache key of the shard
         id: cache
         shell: bash

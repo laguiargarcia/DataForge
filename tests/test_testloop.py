@@ -697,29 +697,35 @@ def verdicts(data):
     return data["total"], data["killed"], ids(data), data["timeout"], data["not_tested"], data["score"]
 
 
-def test_a_cached_mutate_reruns_only_the_changed_function(tmp_path):
+def unsettled(data):
+    """The mutants of a result that are not killed: the cache never reuses their verdict."""
+    return ids(data) | set(data["timeout"]) | set(data["not_tested"])
+
+
+def test_a_cached_mutate_reruns_the_changed_function_and_what_was_not_killed(tmp_path):
     repo, marker = marked_repo(tmp_path)
     cache = tmp_path / "cache"
     first = mutate_cached(repo, cache)
     assert (first["cache"], first["cached"]) == ("none", 0)
-    unchanged = {m for m in mutants_run(marker) if function_of(m) != "xǁBoxǁdouble"}
+    double = "xǁBoxǁdouble"
+    reused = {m for m in mutants_run(marker) if function_of(m) != double} - unsettled(first)
     assert (cache / "mutants").is_dir()
 
     mod = repo / "sample" / "mod.py"
     mod.write_text(MOD_SHARDED_SRC.replace("return x * 2", "return 2 * x"))
     second = mutate_cached(repo, cache)
     rerun = mutants_run(marker)
-    assert rerun
-    assert {function_of(m) for m in rerun} == {"xǁBoxǁdouble"}
+    assert double in {function_of(m) for m in rerun}
+    assert {m for m in rerun if function_of(m) != double} == {m for m in unsettled(first) if function_of(m) != double}
     assert second["cache"] == "restored"
-    assert second["cached"] == len(unchanged) > 0
+    assert second["cached"] == len(reused) > 0
 
     fresh = run_ok(repo, "mutate", "sample/mod.py")
     assert (fresh["cache"], fresh["cached"]) == ("none", 0)
     assert verdicts(second) == verdicts(fresh)
 
 
-def test_a_cached_shard_with_no_change_runs_no_mutant(tmp_path):
+def test_a_cached_shard_with_no_change_runs_only_what_was_not_killed(tmp_path):
     repo, marker = marked_repo(tmp_path)
     (repo / "testloop.toml").write_text((repo / "testloop.toml").read_text() + "shards = 2\n")
     cache = tmp_path / "cache"
@@ -727,9 +733,23 @@ def test_a_cached_shard_with_no_change_runs_no_mutant(tmp_path):
     assert first["total"] > 0
     mutants_run(marker)
     second = mutate_cached(repo, cache, "--shard", "1/2")
-    assert mutants_run(marker) == set()
-    assert (second["cache"], second["cached"]) == ("restored", second["total"])
+    assert mutants_run(marker) == unsettled(first)
+    assert (second["cache"], second["cached"]) == ("restored", first["killed"])
     assert verdicts(second) == verdicts(first)
+
+
+def test_a_cached_survivor_that_a_new_test_kills_is_reported_killed(sample_repo):
+    """The usual way to raise min_score: a PR that only adds tests. The function is the same, so its
+    killed verdicts come from the cache, but its survivors are tested again."""
+    cache = sample_repo / "cache"
+    first = mutate_cached(sample_repo, cache)
+    assert first["survived"]
+    (sample_repo / "tests" / "test_mod.py").write_text(TEST_STRONG)   # same file: same test selection
+    second = mutate_cached(sample_repo, cache)
+    assert (second["cache"], second["cached"]) == ("restored", first["killed"])
+    assert second["survived"] == []
+    assert second["killed"] == first["killed"] + len(first["survived"])
+    assert second["score"] == 1.0
 
 
 def test_the_cache_holds_only_mutmut_state_and_no_path_of_the_copy(tmp_path):
