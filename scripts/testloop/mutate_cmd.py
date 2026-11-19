@@ -97,6 +97,10 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
         f"only_mutate = {json.dumps([module])}",
         f"pytest_add_cli_args = {json.dumps(pytest_args(config))}",
         f"pytest_add_cli_args_test_selection = {json.dumps(tests)}",
+        # mutmut's default ("fork") runs the clean suite in its main process, then forks each mutant
+        # from it: a thread pool a test started there (polars, the leak guard's parquet reads) is gone
+        # in the child, which waits for it until the timeout (df-kmx0). The fork server only collects.
+        'process_isolation = "forkserver"',
     ]
     (dest / "pyproject.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 

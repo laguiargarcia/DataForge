@@ -398,9 +398,7 @@ jobs:
         run: |
           mkdir -p report
           out="report/mutation-${MODULE//\//_}.txt"
-          # Budget inside the job's 45 min: the merged leak guard (df-bsb2.2.2) runs ~500 s here on a
-          # laptop and past the tool's 900 s default on a runner. A partial run still fails the job.
-          .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" --budget-seconds 2100 || { echo "testloop: mutate $MODULE failed" > "$out"; exit 1; }
+          .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" || { echo "testloop: mutate $MODULE failed" > "$out"; exit 1; }
           .venv/bin/python scripts/testloop/cli.py gate "$MODULE" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" "$out"
       # Artifact names must be unique across the matrix and cannot hold '/': use the job index.
       - uses: actions/upload-artifact@v7
