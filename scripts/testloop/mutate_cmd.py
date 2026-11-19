@@ -5,6 +5,11 @@ This is the only file that knows the mutation tool. Everything the tool needs
 
 `--shard I/N` mutates only the I-th of N parts of the module (df-n8ac.32): its top-level functions
 and methods, split by line count, so N CI jobs share a big target and `gate` sums them.
+
+`--cache-dir DIR` (df-n8ac.38) keeps mutmut's verdicts between runs: mutmut tests again only the
+mutants of functions whose code changed (and every one when the pytest arguments or the list of test
+files change), so a PR's run reuses what the last run of main found. A changed or new test does not
+reset a verdict: the full run of main, which starts from no cache, is the audit (df-n8ac.35).
 """
 
 import ast
@@ -35,6 +40,17 @@ CLASS_SEPARATOR = "ǁ"
 MUTANT_INFIX = "__mutmut_"
 # What `mutmut run <names>` says (an assert) when no mutant matches the names.
 NOTHING_MATCHES = "Filtered for specific mutants, but nothing matches"
+# A name no mutant has: `mutmut run PROBE` writes the mutants and merges the cached verdicts, then
+# stops at NOTHING_MATCHES before testing any (df-n8ac.38).
+PROBE = "testloop-cache-probe"
+
+# What the cache keeps of mutmut's mutants/ (df-n8ac.38): its stats (which tests reach which
+# function, their durations) and a .meta per mutated file (each mutant's verdict, each function's
+# hash). Both name files relative to the copy, so they move to a new copy. The mutant sources are left
+# out: mutmut writes them anew, and one newer than its source would make mutmut skip the hash check.
+MUTANTS = "mutants"
+STATS_FILE = "mutmut-stats.json"
+META_SUFFIX = ".meta"
 
 # mutmut statuses we know how to classify.
 KILLED, SURVIVED = "killed", "survived"
@@ -44,6 +60,43 @@ NOT_TESTED = ("no tests", "not checked")
 
 class BudgetExceeded(Exception):
     pass
+
+
+def state_files(mutants: Path) -> list[Path]:
+    """The files of mutmut's state under `mutants`, relative to it."""
+    if not mutants.is_dir():
+        return []
+    return sorted(
+        p.relative_to(mutants) for p in mutants.rglob("*")
+        if p.is_file() and (p.name == STATS_FILE or p.name.endswith(META_SUFFIX))
+    )
+
+
+def _copy_state(src: Path, dest: Path) -> int:
+    files = state_files(src)
+    for rel in files:
+        (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / rel, dest / rel)
+    return len(files)
+
+
+def restore_cache(cache_dir: Path, copy: Path) -> bool:
+    """Put the cached state into the copy's mutants/; False when the cache holds none."""
+    return _copy_state(cache_dir / MUTANTS, copy / MUTANTS) > 0
+
+
+def save_cache(copy: Path, cache_dir: Path) -> None:
+    """Replace the cache with the copy's state: written beside it, then renamed into place, so a run
+    cut short leaves the old cache whole."""
+    current, new, old = (cache_dir / name for name in (MUTANTS, MUTANTS + ".new", MUTANTS + ".old"))
+    for leftover in (new, old):
+        shutil.rmtree(leftover, ignore_errors=True)
+    new.mkdir(parents=True)
+    _copy_state(copy / MUTANTS, new)
+    if current.exists():
+        current.rename(old)
+    new.rename(current)
+    shutil.rmtree(old, ignore_errors=True)
 
 
 def function_weights(source: str) -> dict[str, int]:
@@ -251,6 +304,8 @@ def _summarise(results: dict[str, str]) -> dict:
 def _result(summary: dict, diffs: dict[str, str], total: int, complete: bool,
             elapsed: float, warnings: list[str], tests: list[str], version: str) -> dict:
     return {
+        "cache": "none",
+        "cached": 0,
         "tests": tests,
         "tool": {"name": TOOL, "version": version},
         "complete": complete,
@@ -286,6 +341,8 @@ class _Mutation:
     started: float
     shard: tuple[int, int]
     keys: set[str] | None   # the shard's function keys; None = the whole module
+    restored: bool = False  # the copy started from a cache's verdicts
+    cached: int = 0         # mutants of the shard whose verdict came from the cache
 
     def write(self, summary: dict, diffs: dict[str, str], total: int, complete: bool,
               warnings: list[str]) -> Path:
@@ -293,13 +350,14 @@ class _Mutation:
         if slow := slow_warning(self.module, elapsed):
             warnings.append(slow)
             print(f"testloop: {slow}", file=sys.stderr)
-        return write_result(self.config.repo, "mutate", self.module, _result(
-            summary, diffs, total, complete, elapsed, warnings, self.tests, _mutmut_version()),
-            shard=self.shard)
+        data = _result(summary, diffs, total, complete, elapsed, warnings, self.tests, _mutmut_version())
+        if self.restored:
+            data.update(cache="restored", cached=self.cached)
+        return write_result(self.config.repo, "mutate", self.module, data, shard=self.shard)
 
 
 def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SECONDS,
-         shard: tuple[int, int] | None = None) -> tuple[Path, int]:
+         shard: tuple[int, int] | None = None, cache_dir: Path | None = None) -> tuple[Path, int]:
     if not (config.repo / module).is_file():
         raise ToolError(f"module not found: {module}")
     shard = shard or WHOLE
@@ -315,10 +373,16 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     try:
         _copy_files(config, module, tests, copy)
         _write_tool_config(config, module, tests, copy)
+        if cache_dir is not None:
+            cache_dir = Path(cache_dir).resolve()
+            job.restored = restore_cache(cache_dir, copy)
         try:
-            return _mutate(job, deadline)
+            out_path, code = _mutate(job, deadline)
         except BudgetExceeded:
             return _partial(job, budget_seconds)
+        if cache_dir is not None and code == 0:   # only a complete run's verdicts go back
+            save_cache(copy, cache_dir)
+        return out_path, code
     finally:
         shutil.rmtree(copy, ignore_errors=True)
 
@@ -331,10 +395,13 @@ def _mutants(job: _Mutation, deadline: float) -> dict[str, str]:
     python, copy, env, module = job.python, job.copy, job.env, job.module
     if job.keys is not None and not job.keys:
         return {}
-    globs = [] if job.keys is None else shard_globs(module, sorted(job.keys))
-    code, out = _run([python, "-m", "mutmut", "run", *globs], copy, env, deadline)
-    if code != 0 and not (globs and NOTHING_MATCHES in out):
-        raise ToolError(f"{TOOL} run exited {code}:\n{_tail(out)}")
+    names = [] if job.keys is None else shard_globs(module, sorted(job.keys))
+    if job.restored:
+        names = _pending(job, deadline)
+    if names or not job.restored:
+        code, out = _run([python, "-m", "mutmut", "run", *names], copy, env, deadline)
+        if code != 0 and not (names and NOTHING_MATCHES in out):
+            raise ToolError(f"{TOOL} run exited {code}:\n{_tail(out)}")
     everything = _collect(python, copy, env, deadline)
     if job.keys is None:
         if not everything:
@@ -345,6 +412,21 @@ def _mutants(job: _Mutation, deadline: float) -> dict[str, str]:
     if strays:
         raise ToolError(f"{TOOL} mutants outside every shard (the split misses their function): {strays[:5]}")
     return _in_shard(everything, job.keys)
+
+
+def _pending(job: _Mutation, deadline: float) -> list[str]:
+    """With a restored cache: write the mutants and let mutmut merge the cached verdicts (it drops
+    those of functions whose hash changed, and all of them when the pytest arguments or the list of
+    test files changed), then return the shard's mutants still without a verdict. Named one by one, because
+    `mutmut run` tests again every mutant a name or glob matches, verdict or not."""
+    python, copy, env = job.python, job.copy, job.env
+    code, out = _run([python, "-m", "mutmut", "run", PROBE], copy, env, deadline)
+    if NOTHING_MATCHES not in out:
+        raise ToolError(f"{TOOL} run {PROBE} (writing the mutants) exited {code}:\n{_tail(out)}")
+    shard = _in_shard(_collect(python, copy, env, deadline), job.keys)
+    pending = sorted(k for k, status in shard.items() if status == "not checked")
+    job.cached = len(shard) - len(pending)
+    return pending
 
 
 def _mutate(job: _Mutation, deadline: float) -> tuple[Path, int]:

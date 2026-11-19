@@ -53,3 +53,19 @@ def test_a_required_job_that_always_runs_checks_each_need_it_gates():
         steps = str(job["steps"])
         unchecked = [n for n in _needs(job) if n not in REQUIRED | gated and f"needs.{n}.result" not in steps]
         assert unchecked == [], f"{name} passes even when {unchecked} failed"
+
+
+def test_a_pr_mutates_from_mains_cache_and_only_push_or_dispatch_saves_it():
+    """df-n8ac.38: a PR restores main's verdicts and never saves its own; the full run of main starts
+    empty (its audit of what PRs reused) and saves under the key the PRs restore from."""
+    steps = _jobs()["mutation"]["steps"]
+    restore = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/restore"))
+    save = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/save"))
+    mutate = next(s for s in steps if s.get("name") == "Mutate")
+    assert restore["if"] == "github.event_name == 'pull_request'"
+    assert save["if"] == "github.event_name != 'pull_request'"
+    assert restore["with"]["key"] == save["with"]["key"]
+    assert restore["with"]["key"].startswith(restore["with"]["restore-keys"])
+    assert restore["with"]["path"] == save["with"]["path"] == mutate["env"]["CACHE"]
+    assert '--cache-dir "$CACHE"' in mutate["run"]
+    assert steps.index(restore) < steps.index(mutate) < steps.index(save)

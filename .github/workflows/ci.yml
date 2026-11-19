@@ -436,10 +436,41 @@ jobs:
         with: { enable-cache: true, cache-python: true }
       - name: Install into .venv (testloop.toml runs .venv/bin/python)
         run: uv sync --frozen
+      # mutmut's verdicts per shard (df-n8ac.38): a PR restores those of main's last run, so mutate
+      # tests again only the mutants of functions the PR changed (all of them when the pytest
+      # arguments or the list of test files changed; a changed test alone resets nothing). Push and
+      # manual runs start empty, mutate everything (the audit of what PRs reused) and save the cache
+      # for the next PRs. The key changes with the environment (uv.lock, .python-version).
+      - name: Cache key of the shard
+        id: cache
+        shell: bash
+        env:
+          MODULE: "${{ matrix.module }}"
+          SHARD: "${{ matrix.shard }}"
+          SHARDS: "${{ matrix.shards }}"
+          ENV_HASH: "${{ hashFiles('uv.lock', '.python-version') }}"
+        run: echo "prefix=mutmut-${MODULE//\//_}-${SHARD}of${SHARDS}-${ENV_HASH}-" >> "$GITHUB_OUTPUT"
+      - name: Verdicts of main's last run
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: "${{ runner.temp }}/mutmut-cache"
+          key: "${{ steps.cache.outputs.prefix }}${{ github.run_id }}"
+          restore-keys: "${{ steps.cache.outputs.prefix }}"
       - name: Mutate
         shell: bash
-        env: { MODULE: "${{ matrix.module }}", SHARD: "${{ matrix.shard }}", SHARDS: "${{ matrix.shards }}" }
-        run: .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" --shard "$SHARD/$SHARDS"
+        env:
+          MODULE: "${{ matrix.module }}"
+          SHARD: "${{ matrix.shard }}"
+          SHARDS: "${{ matrix.shards }}"
+          CACHE: "${{ runner.temp }}/mutmut-cache"
+        run: .venv/bin/python scripts/testloop/cli.py mutate "$MODULE" --shard "$SHARD/$SHARDS" --cache-dir "$CACHE"
+      - name: Save the verdicts for the next PRs
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/save@v6
+        with:
+          path: "${{ runner.temp }}/mutmut-cache"
+          key: "${{ steps.cache.outputs.prefix }}${{ github.run_id }}"
       # Artifact names must be unique across the matrix and cannot hold '/': use the job index.
       - uses: actions/upload-artifact@v7
         if: always()

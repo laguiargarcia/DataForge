@@ -1,5 +1,6 @@
 """scripts/testloop/gate_cmd.py: the score it prints and the min_score it suggests (df-0kv9); the split
-of a target into shards that mutate runs and gate sums (df-n8ac.32)."""
+of a target into shards that mutate runs and gate sums (df-n8ac.32); the cache of mutmut's verdicts
+that mutate --cache-dir keeps (df-n8ac.38)."""
 
 import json
 import sys
@@ -239,3 +240,45 @@ def test_a_shard_count_other_than_the_targets_is_a_tool_error(tmp_path):
 
 def test_the_whole_module_is_always_allowed(tmp_path):
     assert mutate_cmd._shard_keys(_sharded_repo(tmp_path, shards=2), "mod.py", (1, 1)) is None
+
+
+def _tree(root):
+    return {p.relative_to(root).as_posix(): p.read_text() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def _mutants_dir(root, tag):
+    """A mutmut mutants/ with its state (stats, a .meta) and the files it rewrites every run."""
+    for rel in ("mutmut-stats.json", "pkg/mod.py.meta", "pkg/mod.py", "pkg/mod.py.spans", "tests/test_mod.py"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(f"{tag} {rel}")
+    return root
+
+
+def test_the_cache_keeps_only_mutmuts_state(tmp_path):
+    copy = tmp_path / "copy"
+    _mutants_dir(copy / "mutants", "run")
+    mutate_cmd.save_cache(copy, tmp_path / "cache")
+    assert _tree(tmp_path / "cache") == {
+        "mutants/mutmut-stats.json": "run mutmut-stats.json", "mutants/pkg/mod.py.meta": "run pkg/mod.py.meta"}
+
+
+def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
+    cache = tmp_path / "cache"
+    _mutants_dir(cache / "mutants", "old")
+    (cache / "mutants" / "gone.py.meta").write_text("old")
+    _mutants_dir(cache / "mutants.new", "cut short")
+    copy = tmp_path / "copy"
+    _mutants_dir(copy / "mutants", "new")
+    mutate_cmd.save_cache(copy, cache)
+    assert _tree(cache) == {
+        "mutants/mutmut-stats.json": "new mutmut-stats.json", "mutants/pkg/mod.py.meta": "new pkg/mod.py.meta"}
+
+
+def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_path):
+    cache, copy = tmp_path / "cache", tmp_path / "copy"
+    assert mutate_cmd.restore_cache(cache, copy) is False
+    assert not (copy / "mutants").exists()
+    _mutants_dir(cache / "mutants", "cached")
+    assert mutate_cmd.restore_cache(cache, copy) is True
+    assert _tree(copy) == {
+        "mutants/mutmut-stats.json": "cached mutmut-stats.json", "mutants/pkg/mod.py.meta": "cached pkg/mod.py.meta"}

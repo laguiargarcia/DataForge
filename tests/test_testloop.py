@@ -648,3 +648,106 @@ def test_gate_judges_the_sum_of_the_shards(tmp_path):
     assert "shard 2/2" in proc.stderr
     run_shard(repo, 2, 2)
     assert run_ok(repo, "gate", "sample/mod.py")["passed"] is True
+
+
+# ---------------------------------------------------------------- mutate --cache-dir (df-n8ac.38)
+
+TEST_MARKED = (
+    "import os\n\nfrom sample.mod import Box, classify, noop\n\n\n"
+    "def _mark():   # one line per test run: the mutant under test, empty outside a mutant\n"
+    "    with open(os.environ['MARKER'], 'a', encoding='utf-8') as f:\n"
+    "        f.write(os.environ.get('MUTANT_UNDER_TEST', '') + '\\n')\n\n\n"
+    "def test_classify():\n    _mark()\n    assert classify(1) == 'pos'\n    assert classify(-1) == 'nonpos'\n\n\n"
+    "def test_double():\n    _mark()\n    noop()\n    assert Box().double(3) == 6\n"
+)
+
+
+def marked_repo(tmp_path):
+    """The sharded module, with tests that log each mutant they run under to a marker file."""
+    (tmp_path / "repo").mkdir()
+    repo = make_repo(tmp_path / "repo", TEST_MARKED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    marker = tmp_path / "marker.txt"
+    toml = repo / "testloop.toml"
+    toml.write_text(toml.read_text().replace(
+        "check_args = []\n", f"check_args = []\nenv = {{ MARKER = {json.dumps(str(marker))} }}\n"))
+    return repo, marker
+
+
+def mutants_run(marker):
+    """The mutants run since the last call (and clear the log)."""
+    names = {line for line in marker.read_text(encoding="utf-8").splitlines() if "__mutmut_" in line} \
+        if marker.exists() else set()
+    marker.unlink(missing_ok=True)
+    return names
+
+
+def function_of(mutant):
+    """sample.mod.xǁBoxǁdouble__mutmut_2 -> xǁBoxǁdouble"""
+    return mutant.rpartition("__mutmut_")[0].rpartition(".")[2]
+
+
+def mutate_cached(repo, cache, *extra):
+    proc = run(repo, "mutate", "sample/mod.py", "--cache-dir", str(cache), *extra)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return json.loads(Path(proc.stdout.strip()).read_text(encoding="utf-8"))
+
+
+def verdicts(data):
+    return data["total"], data["killed"], ids(data), data["timeout"], data["not_tested"], data["score"]
+
+
+def test_a_cached_mutate_reruns_only_the_changed_function(tmp_path):
+    repo, marker = marked_repo(tmp_path)
+    cache = tmp_path / "cache"
+    first = mutate_cached(repo, cache)
+    assert (first["cache"], first["cached"]) == ("none", 0)
+    unchanged = {m for m in mutants_run(marker) if function_of(m) != "xǁBoxǁdouble"}
+    assert (cache / "mutants").is_dir()
+
+    mod = repo / "sample" / "mod.py"
+    mod.write_text(MOD_SHARDED_SRC.replace("return x * 2", "return 2 * x"))
+    second = mutate_cached(repo, cache)
+    rerun = mutants_run(marker)
+    assert rerun
+    assert {function_of(m) for m in rerun} == {"xǁBoxǁdouble"}
+    assert second["cache"] == "restored"
+    assert second["cached"] == len(unchanged) > 0
+
+    fresh = run_ok(repo, "mutate", "sample/mod.py")
+    assert (fresh["cache"], fresh["cached"]) == ("none", 0)
+    assert verdicts(second) == verdicts(fresh)
+
+
+def test_a_cached_shard_with_no_change_runs_no_mutant(tmp_path):
+    repo, marker = marked_repo(tmp_path)
+    (repo / "testloop.toml").write_text((repo / "testloop.toml").read_text() + "shards = 2\n")
+    cache = tmp_path / "cache"
+    first = mutate_cached(repo, cache, "--shard", "1/2")
+    assert first["total"] > 0
+    mutants_run(marker)
+    second = mutate_cached(repo, cache, "--shard", "1/2")
+    assert mutants_run(marker) == set()
+    assert (second["cache"], second["cached"]) == ("restored", second["total"])
+    assert verdicts(second) == verdicts(first)
+
+
+def test_the_cache_holds_only_mutmut_state_and_no_path_of_the_copy(tmp_path):
+    """The copy is a new temp dir each run: what the cache keeps must not name it."""
+    repo, _ = marked_repo(tmp_path)
+    cache = tmp_path / "cache"
+    mutate_cached(repo, cache)
+    files = sorted(p.relative_to(cache).as_posix() for p in cache.rglob("*") if p.is_file())
+    assert files == ["mutants/mutmut-stats.json", "mutants/sample/mod.py.meta"]
+    assert all("testloop-mutate-" not in (cache / f).read_text(encoding="utf-8") for f in files)
+
+
+@pytest.mark.parametrize("fixture,extra", [("sample_repo_slow", ["--budget-seconds", "8"]),
+                                           ("sample_repo_failing", [])])
+def test_a_partial_or_failed_mutate_leaves_the_cache_alone(request, fixture, extra, tmp_path):
+    repo = request.getfixturevalue(fixture)
+    cache = tmp_path / "cache"
+    proc = run(repo, "mutate", "sample/mod.py", "--cache-dir", str(cache), *extra)
+    assert proc.returncode == 2
+    assert not (cache / "mutants").exists()
+
