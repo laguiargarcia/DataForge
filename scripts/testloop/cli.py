@@ -1,6 +1,8 @@
 """Test loop CLI. Usage: cli.py <command> <module> [options], or cli.py diff-cover [--compare-branch REF]
 
 mutate takes --shard I/N to mutate one of N parts of the module; gate sums the target's `shards`.
+mutate --cache-dir DIR keeps mutmut's verdicts in DIR between runs: the next run tests again only the
+mutants of functions that changed (df-n8ac.38).
 
 Run from the repo root. Exit codes: 0 measured (and, for check and gate, passed);
 1 check: tests failed, gate: score below min_score, diff-cover: changed lines not covered;
@@ -36,6 +38,9 @@ def _mutate_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--shard", type=shard, default=None, metavar="I/N",
         help="mutate only the I-th of N parts of the module's functions (CI splits a big target)")
+    parser.add_argument(
+        "--cache-dir", type=Path, default=None, metavar="DIR",
+        help="reuse the verdicts a previous run left in DIR; a complete run writes them back")
 
 
 # command name -> (module with main(config, module, **options) -> Path | (Path, exit_code), option adder)
