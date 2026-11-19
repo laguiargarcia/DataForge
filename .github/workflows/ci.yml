@@ -483,7 +483,14 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
-        with: { name: report-mutation-gate, path: report/, if-no-files-found: ignore }
+        # Also each target's gate-<module>.json, which the mutation jobs no longer write (df-0klw).
+        with:
+          name: report-mutation-gate
+          path: |
+            report/
+            .testloop/gate-*.json
+          include-hidden-files: true
+          if-no-files-found: ignore
       - name: Check the mutation jobs
         if: always()
         env:
