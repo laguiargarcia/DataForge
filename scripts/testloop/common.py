@@ -91,6 +91,31 @@ def shard_count(config: Config, module: str) -> int:
     return shards
 
 
+def _seconds(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def _cost_entry(entry) -> bool:
+    """{"elapsed": s, "functions": {key: s}}, both optional, every number >= 0."""
+    if not isinstance(entry, dict):
+        return False
+    functions = entry.get("functions", {})
+    return (_seconds(entry.get("elapsed", 0)) and isinstance(functions, dict)
+            and all(isinstance(k, str) and _seconds(v) for k, v in functions.items()))
+
+
+def load_costs(path: Path) -> dict[str, dict]:
+    """The measured mutation costs (df-n8ac.39): {module: {"elapsed": seconds of its shards summed,
+    "functions": {function key: seconds of its mutants}}}, as scripts/testloop/costs.py writes them."""
+    try:
+        costs = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ToolError(f"cannot read the costs file {path}: {exc}") from exc
+    if not isinstance(costs, dict) or not all(_cost_entry(entry) for entry in costs.values()):
+        raise ToolError(f'the costs file {path} is not {{module: {{"elapsed": s, "functions": {{key: s}}}}}}')
+    return costs
+
+
 def mutation_score(killed: int, survived: int, not_tested: int) -> float | None:
     """Killed over the mutants with a verdict that counts (timeouts count as caught, so neither
     side holds them); None when there is none."""

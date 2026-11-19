@@ -1,6 +1,6 @@
 """scripts/testloop/gate_cmd.py: the score it prints and the min_score it suggests (df-0kv9); the split
 of a target into shards that mutate runs and gate sums (df-n8ac.32); the cache of mutmut's verdicts
-that mutate --cache-dir keeps (df-n8ac.38)."""
+that mutate --cache-dir keeps (df-n8ac.38); the measured costs that split the shards (df-n8ac.39)."""
 
 import json
 import sys
@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "testlo
 
 import gate_cmd  # the test loop tools are scripts, not an installed package
 import mutate_cmd
-from common import Config, ToolError, mutation_score, result_path, write_result
+from common import Config, ToolError, load_costs, mutation_score, result_path, write_result
 from gate_cmd import four_places_down
 
 
@@ -308,3 +308,77 @@ def test_a_functions_text_hash_sees_comments_and_decorators_but_not_other_functi
     undecorated = mutate_cmd.function_texts(src.replace("    @staticmethod\n", ""))
     assert undecorated["xǁCǁm"] != base["xǁCǁm"]
     assert undecorated["x_f"] == base["x_f"]
+
+
+# ---------------------------------------------------------------- measured costs (df-n8ac.39)
+
+def test_cost_weights_are_the_measured_seconds_of_each_function():
+    measured = {"elapsed": 30, "functions": {"x_big": 1.0, "xǁBoxǁ__init__": 8.0, "xǁBoxǁfetch": 0, "x_small": 3.0}}
+    assert mutate_cmd.cost_weights(SHARDED_SRC, measured) == {
+        "x_big": 1.0, "xǁBoxǁ__init__": 8.0, "xǁBoxǁfetch": 0, "x_small": 3.0}
+
+
+def test_a_function_without_a_measure_weighs_its_lines_at_the_modules_median_seconds_per_line():
+    """x_big (5 lines) is new since the measure; the measured rates are 4, 1 and 0.5 s/line: median 1."""
+    measured = {"elapsed": 30, "functions": {"xǁBoxǁ__init__": 8.0, "xǁBoxǁfetch": 2.0, "x_small": 1.0}}
+    weights = mutate_cmd.cost_weights(SHARDED_SRC, measured)
+    assert weights["x_big"] == 5 * 1.0
+    assert weights["xǁBoxǁ__init__"] == 8.0
+
+
+@pytest.mark.parametrize("measured", [None, {}, {"elapsed": 12}, {"elapsed": 12, "functions": {"x_gone": 4.0}}])
+def test_a_module_without_a_measured_function_weighs_lines_as_without_costs(measured):
+    assert mutate_cmd.cost_weights(SHARDED_SRC, measured) == mutate_cmd.function_weights(SHARDED_SRC)
+
+
+def test_costs_move_a_function_to_another_shard(tmp_path):
+    """By lines x_big (5) is a shard alone; measured, x_small is the slow one and stands alone."""
+    config = _sharded_repo(tmp_path)
+    (tmp_path / "mod.py").write_text(SHARDED_SRC)
+    assert mutate_cmd._shard_keys(config, "mod.py", (1, 2)) == {"x_big"}
+    costs = {"mod.py": {"elapsed": 40, "functions": {
+        "x_big": 1.0, "xǁBoxǁ__init__": 1.0, "xǁBoxǁfetch": 1.0, "x_small": 9.0}}}
+    assert mutate_cmd._shard_keys(config, "mod.py", (1, 2), costs) == {"x_small"}
+    assert mutate_cmd._shard_keys(config, "mod.py", (2, 2), costs) == {"x_big", "xǁBoxǁ__init__", "xǁBoxǁfetch"}
+    assert mutate_cmd._shard_keys(config, "mod.py", (1, 2), {"other.py": costs["mod.py"]}) == {"x_big"}
+
+
+def _meta(copy, module, exit_codes, durations):
+    path = copy / "mutants" / (module + ".meta")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "exit_code_by_key": exit_codes, "hash_by_function_name": {}, "type_check_error_by_key": {},
+        "durations_by_key": durations, "estimated_durations_by_key": {}}))
+
+
+def test_function_seconds_sum_the_durations_of_each_functions_mutants(tmp_path):
+    """A function without mutants took 0 s; one with a mutant never run (exit code None: a partial run,
+    or another shard's function) has no measure; a mutant with a verdict but no duration (no tests)
+    adds nothing."""
+    _meta(tmp_path, "pkg/mod.py", {
+        "pkg.mod.x_f__mutmut_1": 1, "pkg.mod.x_f__mutmut_2": 0, "pkg.mod.x_f__mutmut_3": 33,
+        "pkg.mod.xǁCǁm__mutmut_1": 1, "pkg.mod.xǁCǁm__mutmut_2": None,
+        "pkg.mod.x_other__mutmut_1": 1,
+    }, {"pkg.mod.x_f__mutmut_1": 0.25, "pkg.mod.x_f__mutmut_2": 1.5, "pkg.mod.xǁCǁm__mutmut_1": 2.0,
+        "pkg.mod.x_other__mutmut_1": 7.0})
+    assert mutate_cmd.function_seconds(tmp_path, "pkg/mod.py", {"x_f", "xǁCǁm", "x_empty"}) == {
+        "x_empty": 0.0, "x_f": 1.75}
+
+
+def test_function_seconds_without_a_meta_measure_nothing(tmp_path):
+    assert mutate_cmd.function_seconds(tmp_path, "pkg/mod.py", {"x_f"}) == {}
+
+
+def test_a_costs_file_loads_and_a_bad_one_is_a_tool_error(tmp_path):
+    good = {"a.py": {"elapsed": 12.5, "functions": {"x_f": 3, "x_g": 0.5}}, "b.py": {"elapsed": 0, "functions": {}}}
+    path = tmp_path / "costs.json"
+    path.write_text(json.dumps(good))
+    assert load_costs(path) == good
+    for bad in ("[1]", '{"a.py": 3}', '{"a.py": {"elapsed": "slow"}}', '{"a.py": {"elapsed": -1}}',
+                '{"a.py": {"functions": {"x_f": "1"}}}', '{"a.py": {"functions": [1]}}',
+                '{"a.py": {"elapsed": true}}', "{not json"):
+        path.write_text(bad)
+        with pytest.raises(ToolError, match="costs"):
+            load_costs(path)
+    with pytest.raises(ToolError, match="costs"):
+        load_costs(tmp_path / "missing.json")

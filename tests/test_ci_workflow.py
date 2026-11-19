@@ -5,9 +5,14 @@ them. A job outside that reach goes red while auto-merge carries the PR in anywa
 orders and windows-smoke failed unnoticed. A required job that runs `if: always()` passes even when
 a job it needs failed, unless its steps read that need's result.
 """
+import sys
 from pathlib import Path
 
 from dataforge import yamlio
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "testloop"))
+
+import affected  # the test loop tools are scripts, not an installed package
 
 CI = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
 
@@ -15,6 +20,8 @@ CI = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
 REQUIRED = {"leak-scan", "quality", "tests", "tests-windows", "testloop-tools", "sonar", "mutation-ok"}
 # Comments on the PR; it reports the other jobs and gates nothing.
 NOT_GATING = {"report"}
+# The measured mutation costs (scripts/testloop/costs.py, df-n8ac.39).
+COSTS = ".mutation_costs.json"
 
 
 def _jobs() -> dict:
@@ -55,17 +62,49 @@ def test_a_required_job_that_always_runs_checks_each_need_it_gates():
         assert unchecked == [], f"{name} passes even when {unchecked} failed"
 
 
+def _slots(steps: list[dict], action: str) -> list[dict]:
+    return [s for s in steps if str(s.get("uses", "")).startswith(action)]
+
+
 def test_a_pr_mutates_from_mains_cache_and_only_push_or_dispatch_saves_it():
     """df-n8ac.38: a PR restores main's verdicts and never saves its own; the full run of main starts
-    empty (its audit of what PRs reused) and saves under the key the PRs restore from."""
+    empty (its audit of what PRs reused) and saves under the key the PRs restore from. df-n8ac.39: a
+    job runs up to JOB_ITEMS items, each with its own cache slot, keyed and placed by the item alone
+    (module and shard), so a verdict is found whichever job and slot the item lands in."""
     steps = _jobs()["mutation"]["steps"]
-    restore = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/restore"))
-    save = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/save"))
+    restores, saves = _slots(steps, "actions/cache/restore"), _slots(steps, "actions/cache/save")
     mutate = next(s for s in steps if s.get("name") == "Mutate")
-    assert restore["if"] == "github.event_name == 'pull_request'"
-    assert save["if"] == "github.event_name != 'pull_request'"
-    assert restore["with"]["key"] == save["with"]["key"]
-    assert restore["with"]["key"].startswith(restore["with"]["restore-keys"])
-    assert restore["with"]["path"] == save["with"]["path"] == mutate["env"]["CACHE"]
-    assert '--cache-dir "$CACHE"' in mutate["run"]
-    assert steps.index(restore) < steps.index(mutate) < steps.index(save)
+    assert len(restores) == len(saves) == affected.JOB_ITEMS
+    for slot, (restore, save) in enumerate(zip(restores, saves, strict=True), 1):
+        output = f"steps.cache.outputs.slug_{slot}"
+        assert restore["if"] == f"github.event_name == 'pull_request' && {output} != ''"
+        assert save["if"] == f"!cancelled() && github.event_name != 'pull_request' && {output} != ''"
+        assert restore["with"]["key"] == save["with"]["key"]
+        assert restore["with"]["key"].startswith(restore["with"]["restore-keys"])
+        assert f"steps.cache.outputs.prefix_{slot}" in restore["with"]["restore-keys"]
+        assert restore["with"]["path"] == save["with"]["path"] == "${{ runner.temp }}/mutmut-cache/${{ %s }}" % output
+        assert steps.index(restore) < steps.index(mutate) < steps.index(save)
+    assert mutate["env"]["CACHE"] == "${{ runner.temp }}/mutmut-cache"
+    assert '--cache-dir "$CACHE/$slug"' in mutate["run"]
+
+
+def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
+    """df-n8ac.39: mutation-targets restores the last full run's costs, packs the jobs from them and
+    hands the same file to the mutation jobs, whose shards split by it; mutation-ok saves new ones."""
+    jobs = _jobs()
+    targets, mutation, ok = (jobs[name]["steps"] for name in ("mutation-targets", "mutation", "mutation-ok"))
+    restore, = _slots(targets, "actions/cache/restore")
+    save, = _slots(ok, "actions/cache/save")
+    assert save["with"]["key"].startswith(restore["with"]["restore-keys"])
+    assert restore["with"]["path"] == save["with"]["path"] == COSTS
+    assert "github.event_name != 'pull_request'" in save["if"]
+    pick = next(s for s in targets if s.get("id") == "pick")
+    assert f"--matrix --costs {COSTS}" in pick["run"]
+    upload, = (s for s in targets if str(s.get("uses", "")).startswith("actions/upload-artifact"))
+    download, = (s for s in mutation if str(s.get("uses", "")).startswith("actions/download-artifact"))
+    assert upload["with"]["name"] == download["with"]["name"]
+    assert upload["with"]["path"] == COSTS
+    assert f"--costs {COSTS}" in next(s for s in mutation if s.get("name") == "Mutate")["run"]
+    build = next(s for s in ok if "costs.py" in str(s.get("run", "")))
+    assert f"--out {COSTS}" in build["run"]
+    assert ok.index(build) < ok.index(save)
