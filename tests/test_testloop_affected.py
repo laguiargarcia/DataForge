@@ -277,10 +277,9 @@ def test_an_item_over_the_cap_runs_alone():
     ]
 
 
-def test_a_job_holds_at_most_as_many_items_as_ci_has_cache_slots():
-    estimated = [(item(f"m{i:02}.py"), 1) for i in range(affected.JOB_ITEMS + 1)]
-    jobs = affected.pack(estimated)
-    assert [len(job["items"]) for job in jobs] == [affected.JOB_ITEMS, 1]
+def test_the_estimate_is_the_only_cap_on_a_job():
+    estimated = [(item(f"m{i:02}.py"), 7.5) for i in range(20)]
+    assert affected.pack(estimated) == [{"job": 1, "items": [i for i, _ in estimated]}]
 
 
 ESTIMATED = st.lists(
@@ -298,7 +297,7 @@ def test_packing_puts_every_item_in_one_job_within_the_cap_whatever_the_order(es
     assert [job["job"] for job in jobs] == list(range(1, len(jobs) + 1))
     seconds = {json.dumps(i): s for i, s in estimated}
     for job in jobs:
-        assert 1 <= len(job["items"]) <= affected.JOB_ITEMS
+        assert job["items"]
         load = sum(seconds[json.dumps(i)] for i in job["items"])
         assert len(job["items"]) == 1 or load <= affected.JOB_SECONDS
     shuffled = list(estimated)

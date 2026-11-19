@@ -5,14 +5,10 @@ them. A job outside that reach goes red while auto-merge carries the PR in anywa
 orders and windows-smoke failed unnoticed. A required job that runs `if: always()` passes even when
 a job it needs failed, unless its steps read that need's result.
 """
-import sys
 from pathlib import Path
 
 from dataforge import yamlio
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "testloop"))
-
-import affected  # the test loop tools are scripts, not an installed package
 
 CI = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
 
@@ -62,30 +58,36 @@ def test_a_required_job_that_always_runs_checks_each_need_it_gates():
         assert unchecked == [], f"{name} passes even when {unchecked} failed"
 
 
-def _slots(steps: list[dict], action: str) -> list[dict]:
+def _uses(steps: list[dict], action: str) -> list[dict]:
     return [s for s in steps if str(s.get("uses", "")).startswith(action)]
 
 
 def test_a_pr_mutates_from_mains_cache_and_only_push_or_dispatch_saves_it():
     """df-n8ac.38: a PR restores main's verdicts and never saves its own; the full run of main starts
     empty (its audit of what PRs reused) and saves under the key the PRs restore from. df-n8ac.39: a
-    job runs up to JOB_ITEMS items, each with its own cache slot, keyed and placed by the item alone
-    (module and shard), so a verdict is found whichever job and slot the item lands in."""
-    steps = _jobs()["mutation"]["steps"]
-    restores, saves = _slots(steps, "actions/cache/restore"), _slots(steps, "actions/cache/save")
-    mutate = next(s for s in steps if s.get("name") == "Mutate")
-    assert len(restores) == len(saves) == affected.JOB_ITEMS
-    for slot, (restore, save) in enumerate(zip(restores, saves, strict=True), 1):
-        output = f"steps.cache.outputs.slug_{slot}"
-        assert restore["if"] == f"github.event_name == 'pull_request' && {output} != ''"
-        assert save["if"] == f"!cancelled() && github.event_name != 'pull_request' && {output} != ''"
-        assert restore["with"]["key"] == save["with"]["key"]
-        assert restore["with"]["key"].startswith(restore["with"]["restore-keys"])
-        assert f"steps.cache.outputs.prefix_{slot}" in restore["with"]["restore-keys"]
-        assert restore["with"]["path"] == save["with"]["path"] == "${{ runner.temp }}/mutmut-cache/${{ %s }}" % output
-        assert steps.index(restore) < steps.index(mutate) < steps.index(save)
-    assert mutate["env"]["CACHE"] == "${{ runner.temp }}/mutmut-cache"
+    job's items change from run to run, so the cache is one for every item: each PR job restores it
+    whole, and mutation-ok saves what the full run's jobs uploaded, merged into the same directory."""
+    jobs = _jobs()
+    mutation, ok = jobs["mutation"]["steps"], jobs["mutation-ok"]["steps"]
+    restore, = _uses(mutation, "actions/cache/restore")
+    assert _uses(mutation, "actions/cache/save") == []
+    mutate = next(s for s in mutation if s.get("name") == "Mutate")
+    upload = next(s for s in _uses(mutation, "actions/upload-artifact") if "mutmut-cache" in s["with"]["name"])
+    download = next(s for s in _uses(ok, "actions/download-artifact") if "mutmut-cache" in s["with"]["pattern"])
+    save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] != COSTS)
+    cache = "${{ runner.temp }}/mutmut-cache"
+    assert restore["if"] == "github.event_name == 'pull_request'"
+    for step in (upload, download, save):
+        assert "github.event_name != 'pull_request'" in step["if"]
+    assert restore["with"]["key"] == save["with"]["key"]
+    assert restore["with"]["key"].startswith(restore["with"]["restore-keys"])
+    assert restore["with"]["path"] == mutate["env"]["CACHE"] == upload["with"]["path"] == cache
+    assert download["with"]["path"] == save["with"]["path"] == cache
+    assert download["with"]["merge-multiple"] is True
+    assert upload["with"]["name"].startswith(download["with"]["pattern"].removesuffix("*"))
     assert '--cache-dir "$CACHE/$slug"' in mutate["run"]
+    assert mutation.index(restore) < mutation.index(mutate) < mutation.index(upload)
+    assert ok.index(download) < ok.index(save)
 
 
 def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
@@ -93,8 +95,8 @@ def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
     hands the same file to the mutation jobs, whose shards split by it; mutation-ok saves new ones."""
     jobs = _jobs()
     targets, mutation, ok = (jobs[name]["steps"] for name in ("mutation-targets", "mutation", "mutation-ok"))
-    restore, = _slots(targets, "actions/cache/restore")
-    save, = _slots(ok, "actions/cache/save")
+    restore, = _uses(targets, "actions/cache/restore")
+    save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] == COSTS)
     assert save["with"]["key"].startswith(restore["with"]["restore-keys"])
     assert restore["with"]["path"] == save["with"]["path"] == COSTS
     assert "github.event_name != 'pull_request'" in save["if"]

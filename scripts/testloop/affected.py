@@ -5,8 +5,7 @@ Usage (repo root): affected.py [--base-ref REF] [--matrix [--costs FILE]]
 With --matrix it prints the CI mutation matrix instead: a list of jobs {"job": j, "items": [...]},
 each item one {"module", "shard", "shards"} per shard of each chosen target (`shards` in
 testloop.toml, default 1; df-n8ac.32). The items are packed first-fit, heaviest first, into jobs of
-at most JOB_SECONDS estimated mutate seconds and JOB_ITEMS items (df-n8ac.39); an item over the cap
-runs alone. An item's estimate is its module's measured elapsed (FILE, from scripts/testloop/costs.py)
+at most JOB_SECONDS estimated mutate seconds (df-n8ac.39); an item over the cap runs alone. An item's estimate is its module's measured elapsed (FILE, from scripts/testloop/costs.py)
 times its shard's share of the module's function weights, split as `mutate --costs FILE` splits
 it; a module without a measure is UNMEASURED_SECONDS per shard.
 
@@ -70,7 +69,6 @@ JOB_KEY = re.compile(r" {2}([A-Za-z_][\w-]*):\s*(#.*)?$")
 # about a minute of setup (checkout, uv sync) before its first mutate.
 JOB_SECONDS = 150          # estimated mutate seconds that fill a job
 UNMEASURED_SECONDS = 60    # the estimate of a shard of a module the costs file does not measure
-JOB_ITEMS = 8              # items per job at most: the mutation job in ci.yml has this many cache slots
 
 INIT = "__init__.py"
 # A git ref name, never an option: a leading "-" would make git read it as a flag.
@@ -267,10 +265,10 @@ def shard_seconds(config, module: str, n: int, measured: dict | None) -> list[fl
 
 def pack(estimated: list[tuple[dict, float]]) -> list[dict]:
     """First-fit decreasing: heaviest item first (ties by module and shard), each into the first job
-    it fits without passing JOB_SECONDS or JOB_ITEMS, else a new job. Every item lands in one job."""
+    it fits without passing JOB_SECONDS, else a new job. Every item lands in one job."""
     jobs: list[dict] = []
     for item, seconds in sorted(estimated, key=lambda pair: (-pair[1], pair[0]["module"], pair[0]["shard"])):
-        job = next((j for j in jobs if j["load"] + seconds <= JOB_SECONDS and len(j["items"]) < JOB_ITEMS), None)
+        job = next((j for j in jobs if j["load"] + seconds <= JOB_SECONDS), None)
         if job is None:
             job = {"load": 0.0, "items": []}
             jobs.append(job)

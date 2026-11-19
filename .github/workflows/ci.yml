@@ -459,87 +459,24 @@ jobs:
       # changed). A killed verdict stays through any change outside its function: a changed or
       # weakened test, module constants or imports, a called function (this module or another), a
       # base class, `copy` files, conftest.py, `env` in testloop.toml. Push and manual runs start
-      # empty, mutate everything (the audit of what PRs reused, df-n8ac.35) and save the cache for
-      # the next PRs. The key changes with the environment (uv.lock, .python-version).
-      # A job holds up to JOB_ITEMS items (affected.py), one cache slot each (df-n8ac.39): the key and
-      # the path name the item alone, so its verdicts are found whichever job and slot it lands in.
-      - name: Cache keys of the items
-        id: cache
-        shell: bash
-        env:
-          ITEMS: "${{ toJSON(matrix.items) }}"
-          ENV_HASH: "${{ hashFiles('uv.lock', '.python-version') }}"
-        run: |
-          slot=0
-          while read -r -u 3 module shard shards; do
-            slot=$((slot + 1))
-            slug="${module//\//_}-${shard}of${shards}"
-            echo "slug_$slot=$slug" >> "$GITHUB_OUTPUT"
-            echo "prefix_$slot=mutmut-$slug-$ENV_HASH-" >> "$GITHUB_OUTPUT"
-          done 3< <(jq -r '.[] | "\(.module) \(.shard) \(.shards)"' <<< "$ITEMS")
-      - name: Verdicts of main's last run (item 1)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_1 != ''
+      # empty, mutate everything (the audit of what PRs reused, df-n8ac.35) and upload their items'
+      # verdicts, which mutation-ok saves as one cache for the next PRs (df-n8ac.39: a job's items
+      # change from run to run, so the cache holds every item, each in its own <module>-<I>of<N>
+      # directory). The key changes with the environment (uv.lock, .python-version).
+      - name: Verdicts of main's last run
+        if: github.event_name == 'pull_request'
         uses: actions/cache/restore@v6
         with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_1 }}"
-          key: "${{ steps.cache.outputs.prefix_1 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_1 }}"
-      - name: Verdicts of main's last run (item 2)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_2 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_2 }}"
-          key: "${{ steps.cache.outputs.prefix_2 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_2 }}"
-      - name: Verdicts of main's last run (item 3)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_3 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_3 }}"
-          key: "${{ steps.cache.outputs.prefix_3 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_3 }}"
-      - name: Verdicts of main's last run (item 4)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_4 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_4 }}"
-          key: "${{ steps.cache.outputs.prefix_4 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_4 }}"
-      - name: Verdicts of main's last run (item 5)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_5 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_5 }}"
-          key: "${{ steps.cache.outputs.prefix_5 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_5 }}"
-      - name: Verdicts of main's last run (item 6)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_6 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_6 }}"
-          key: "${{ steps.cache.outputs.prefix_6 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_6 }}"
-      - name: Verdicts of main's last run (item 7)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_7 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_7 }}"
-          key: "${{ steps.cache.outputs.prefix_7 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_7 }}"
-      - name: Verdicts of main's last run (item 8)
-        if: github.event_name == 'pull_request' && steps.cache.outputs.slug_8 != ''
-        uses: actions/cache/restore@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_8 }}"
-          key: "${{ steps.cache.outputs.prefix_8 }}${{ github.run_id }}"
-          restore-keys: "${{ steps.cache.outputs.prefix_8 }}"
+          path: "${{ runner.temp }}/mutmut-cache"
+          key: "mutmut-all-${{ hashFiles('uv.lock', '.python-version') }}-${{ github.run_id }}"
+          restore-keys: "mutmut-all-${{ hashFiles('uv.lock', '.python-version') }}-"
       - name: Mutate
         shell: bash
         env:
           ITEMS: "${{ toJSON(matrix.items) }}"
           CACHE: "${{ runner.temp }}/mutmut-cache"
         run: |
-          # Every item, even after one fails: each writes its own result and its own cache.
+          # Every item, even after one fails: each writes its own result and, when complete, its own cache.
           failed=0
           while read -r -u 3 module shard shards; do
             slug="${module//\//_}-${shard}of${shards}"
@@ -549,54 +486,11 @@ jobs:
             echo "::endgroup::"
           done 3< <(jq -r '.[] | "\(.module) \(.shard) \(.shards)"' <<< "$ITEMS")
           exit "$failed"
-      - name: Save the verdicts for the next PRs (item 1)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_1 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_1 }}"
-          key: "${{ steps.cache.outputs.prefix_1 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 2)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_2 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_2 }}"
-          key: "${{ steps.cache.outputs.prefix_2 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 3)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_3 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_3 }}"
-          key: "${{ steps.cache.outputs.prefix_3 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 4)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_4 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_4 }}"
-          key: "${{ steps.cache.outputs.prefix_4 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 5)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_5 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_5 }}"
-          key: "${{ steps.cache.outputs.prefix_5 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 6)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_6 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_6 }}"
-          key: "${{ steps.cache.outputs.prefix_6 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 7)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_7 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_7 }}"
-          key: "${{ steps.cache.outputs.prefix_7 }}${{ github.run_id }}"
-      - name: Save the verdicts for the next PRs (item 8)
-        if: "!cancelled() && github.event_name != 'pull_request' && steps.cache.outputs.slug_8 != ''"
-        uses: actions/cache/save@v6
-        with:
-          path: "${{ runner.temp }}/mutmut-cache/${{ steps.cache.outputs.slug_8 }}"
-          key: "${{ steps.cache.outputs.prefix_8 }}${{ github.run_id }}"
+      # mutate writes an item's cache only when its run is complete: a failed item leaves its directory out.
+      - name: Hand the verdicts to mutation-ok to save
+        if: "!cancelled() && github.event_name != 'pull_request'"
+        uses: actions/upload-artifact@v7
+        with: { name: "mutmut-cache-${{ matrix.job }}", path: "${{ runner.temp }}/mutmut-cache", if-no-files-found: ignore }
       # Artifact names must be unique across the matrix and cannot hold '/': use the job index.
       - uses: actions/upload-artifact@v7
         if: always()
@@ -637,6 +531,17 @@ jobs:
             uv run --no-project python scripts/testloop/cli.py gate "$module" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY" "$out" || failed=1
           done
           exit "$failed"
+      # The verdicts of every item of a full run, as one cache for the next PRs (df-n8ac.38, df-n8ac.39).
+      - uses: actions/download-artifact@v8
+        if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
+        continue-on-error: true   # no complete item left a cache
+        with: { pattern: mutmut-cache-*, path: "${{ runner.temp }}/mutmut-cache", merge-multiple: true }
+      - name: Save the verdicts for the next PRs
+        if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
+        uses: actions/cache/save@v6
+        with:
+          path: "${{ runner.temp }}/mutmut-cache"
+          key: "mutmut-all-${{ hashFiles('uv.lock', '.python-version') }}-${{ github.run_id }}"
       # The seconds each target and function took (df-n8ac.39), for the next runs to pack the jobs
       # and split the shards by. Only a full run measures every target with no cache.
       - name: Measure the costs
