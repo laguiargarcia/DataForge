@@ -12,8 +12,8 @@ What escapes on purpose, each with its reason:
 """
 from hypothesis import example, given, settings, strategies as st
 
-from scripts import leakguard
-from tests.test_leakguard import _cnpj, _cpf
+from scripts import leakguard_files, leakguard_patterns, leakguard_values
+from tests.leakguard_fixtures import _cnpj, _cpf
 
 def _sources_for(value):
     return [("ws", {value: "raw.accounts.number"})]
@@ -46,7 +46,7 @@ def _spaced_number(draw):
 @given(_spaced_number())
 def test_real_number_found_whatever_separates_its_digits(case):
     digits, written = case
-    hits = leakguard.real_value_hits(f"id {written} end", {digits: "raw.accounts.number"})
+    hits = leakguard_values.real_value_hits(f"id {written} end", {digits: "raw.accounts.number"})
     assert [(line, value) for line, value, _ in hits] == [(1, digits)]
 
 
@@ -54,21 +54,21 @@ def test_real_number_found_whatever_separates_its_digits(case):
 @given(_spaced_number())
 def test_real_number_in_a_file_is_a_finding(case):
     digits, written = case
-    failures = leakguard.check_text("notes.txt", f"x {written}\n", _sources_for(digits))
+    failures = leakguard_files.check_text("notes.txt", f"x {written}\n", _sources_for(digits))
     assert any(f.startswith("REAL:") for f in failures)
 
 
 @given(_DIGITS, st.sampled_from("xX|:;*+#"))
 def test_a_letter_or_symbol_between_digits_is_not_a_separator(digits, symbol):
     text = f"id {digits[:3]}{symbol}{digits[3:]} end"
-    assert leakguard.real_value_hits(text, {digits: "raw.accounts.number"}) == []
+    assert leakguard_values.real_value_hits(text, {digits: "raw.accounts.number"}) == []
 
 
 @given(_DIGITS, st.sampled_from("0123456789"))
 def test_digits_inside_a_longer_number_are_not_the_value(digits, extra):
     values = {digits: "raw.accounts.number"}
-    assert leakguard.real_value_hits(f"{extra}{digits}", values) == []
-    assert leakguard.real_value_hits(f"{digits}{extra}", values) == []
+    assert leakguard_values.real_value_hits(f"{extra}{digits}", values) == []
+    assert leakguard_values.real_value_hits(f"{digits}{extra}", values) == []
 
 
 @st.composite
@@ -88,29 +88,29 @@ def _spaced_cnpj(draw):
 
 
 @settings(max_examples=200)
-@given(_spaced_cpf().filter(lambda c: leakguard._cpf_valid(c[0])))
+@given(_spaced_cpf().filter(lambda c: leakguard_patterns._cpf_valid(c[0])))
 def test_valid_cpf_found_whatever_separates_its_groups(case):
     _, written = case
-    failures = leakguard.check_text("notes.txt", f"cpf {written} ok\n", [])
+    failures = leakguard_files.check_text("notes.txt", f"cpf {written} ok\n", [])
     assert any(f.startswith("CPF:") for f in failures)
 
 
 @settings(max_examples=200)
-@given(_spaced_cnpj().filter(lambda c: leakguard._cnpj_valid(c[0])))
+@given(_spaced_cnpj().filter(lambda c: leakguard_patterns._cnpj_valid(c[0])))
 def test_valid_cnpj_found_whatever_separates_its_groups(case):
     _, written = case
-    failures = leakguard.check_text("notes.txt", f"cnpj {written} ok\n", [])
+    failures = leakguard_files.check_text("notes.txt", f"cnpj {written} ok\n", [])
     assert any(f.startswith("CNPJ:") for f in failures)
 
 
-@given(_spaced_cpf().filter(lambda c: leakguard._cpf_valid(c[0])), st.sampled_from(["\n", "\r\n"]))
+@given(_spaced_cpf().filter(lambda c: leakguard_patterns._cpf_valid(c[0])), st.sampled_from(["\n", "\r\n"]))
 def test_cpf_across_a_line_break_is_not_a_document(case, newline):
     doc, _ = case
     text = f"{doc[:6]}{newline}{doc[6:]}"
-    assert not any(f.startswith("CPF:") for f in leakguard.check_text("notes.txt", text, []))
+    assert not any(f.startswith("CPF:") for f in leakguard_files.check_text("notes.txt", text, []))
 
 
 @given(_DIGITS)
 def test_numbers_in_a_comma_list_are_not_one_number(digits):
     text = ", ".join(digits)
-    assert leakguard.real_value_hits(text, {digits: "raw.accounts.number"}) == []
+    assert leakguard_values.real_value_hits(text, {digits: "raw.accounts.number"}) == []
