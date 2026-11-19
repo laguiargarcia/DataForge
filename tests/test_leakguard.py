@@ -5,6 +5,7 @@ one and the guard passes over it like any other committed file. Valid CPFs and C
 the check-digit rule.
 """
 
+import itertools
 import json
 import os
 import re
@@ -921,3 +922,352 @@ def test_in_process_all_and_history(repo, capsys, tmp_path, monkeypatch, workspa
     _git("rm", "-q", "x.db", cwd=tmp_path)
     _git("commit", "-qm", "no db", cwd=tmp_path)
     assert run(capsys, "--history")[2][-1] == "history: x.db: private file was committed"
+
+
+# ---------------------------------------------------------------------------- the rules, one function at a time
+# Each test below pins one function on its own, with the guard run in process (the mutation run skips
+# the command-line tests above), so a change to any detail of the function is noticed.
+
+
+def _total(digits, weights):
+    return sum(int(d) * w for d, w in zip(digits, weights, strict=True))
+
+
+def _documents_by_remainder(size, base_of):
+    """{(which check digit, remainder of its sum mod 11): a valid made-up document}: the rule maps a
+    remainder of 0 or 1 to digit 0 and the rest to 11 - remainder, and each case is its own branch."""
+    found = {}
+    for n in range(1, 4000):
+        base = base_of(n)
+        doc = _cpf(base) if size == CPF_SIZE else _cnpj(base)
+        weights = list(range(11, 1, -1)) if size == CPF_SIZE else [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        first = _total(doc[:size - 2], weights[len(weights) - size + 2:]) % 11
+        second = _total(doc[:size - 1], weights[len(weights) - size + 1:]) % 11
+        if len(set(doc)) > 1:
+            found.setdefault((1, first), doc)
+            found.setdefault((2, second), doc)
+    return {key: doc for key, doc in found.items() if key[1] <= 2}
+
+
+CPF_SIZE = 11
+CPF_BY_REMAINDER = _documents_by_remainder(CPF_SIZE, lambda n: f"{n * 7919:09d}")
+CNPJ_BY_REMAINDER = _documents_by_remainder(14, lambda n: f"{n * 7919 % 100_000_000:08d}0001")
+
+
+def test_every_remainder_branch_of_the_check_digit_rule_is_exercised_by_the_search():
+    assert sorted(CPF_BY_REMAINDER) == sorted(CNPJ_BY_REMAINDER) == [(w, r) for w in (1, 2) for r in (0, 1, 2)]
+
+
+@pytest.mark.parametrize("key", sorted(CPF_BY_REMAINDER))
+def test_a_cpf_is_valid_whatever_the_remainder_of_its_check_sums(key):
+    assert leakguard._cpf_valid(CPF_BY_REMAINDER[key]) is True
+    assert leakguard._cpf_valid(_wrong(CPF_BY_REMAINDER[key])) is False
+
+
+@pytest.mark.parametrize("key", sorted(CNPJ_BY_REMAINDER))
+def test_a_cnpj_is_valid_whatever_the_remainder_of_its_check_sums(key):
+    assert leakguard._cnpj_valid(CNPJ_BY_REMAINDER[key]) is True
+    assert leakguard._cnpj_valid(_wrong(CNPJ_BY_REMAINDER[key])) is False
+
+
+def _two_digit_document(make, size):
+    """A valid made-up document written with exactly two distinct digits."""
+    for pair in itertools.combinations("0123456789", 2):
+        for mask in range(1, 2 ** size):
+            doc = make("".join(pair[mask >> i & 1] for i in range(size)))
+            if len(set(doc)) == 2:
+                return doc
+    raise AssertionError("no such document")
+
+
+def test_documents_made_of_two_distinct_digits_are_still_documents():
+    """Only a run of one digit is a filler."""
+    assert leakguard._cpf_valid(_two_digit_document(_cpf, 9)) is True
+    assert leakguard._cnpj_valid(_two_digit_document(_cnpj, 12)) is True
+    assert leakguard._cpf_valid("1" * 11) is False
+    assert leakguard._cnpj_valid("1" * 14) is False
+
+
+def test_the_check_digit_rule_refuses_digits_that_do_not_line_up_with_its_weights():
+    with pytest.raises(ValueError, match="zip"):
+        leakguard._check_digits_hold("1" * 14, range(11, 1, -1))
+
+
+def test_a_two_digit_account_is_still_an_account(repo, capsys):
+    assert run(capsys, repo("a.txt", "n = 1111" + "-2\n"))[2] == ["ACCT: a.txt:1 -> '11…' (6 chars)"]
+
+
+@pytest.mark.parametrize(("leaf", "worth"), [("121212", True), ("1212.12", True), ("aaaaaa", False),
+                                             ("111111", False)])
+def test_two_distinct_characters_are_enough_to_be_a_value(leaf, worth):
+    assert leakguard._worth_blocking(leaf) is worth
+
+
+def test_a_value_that_only_has_digits_in_it_is_not_number_like():
+    assert leakguard._is_number_like("abc1234567") is False
+    assert leakguard._is_number_like("1234567") is True
+
+
+def test_inside_a_workspace_only_a_path_under_workspaces_has_an_inside():
+    assert leakguard._inside_workspace("src/a/b.txt") is None
+    assert leakguard._inside_workspace("workspaces/W") is None
+    assert leakguard._inside_workspace("Workspaces/W/Data/x") == "data/x"
+
+
+def test_an_archive_in_a_nested_folder_outside_a_workspace_is_read(repo, capsys, tmp_path):
+    (tmp_path / "tests/fixtures").mkdir(parents=True)
+    (tmp_path / "tests/fixtures/data.zip").write_bytes(b"PK\x03\x04 " + CPF.encode())
+    assert run(capsys, "tests/fixtures/data.zip")[2] == ["CPF: tests/fixtures/data.zip:1 -> '52…' (11 chars)"]
+
+
+def test_the_name_of_a_path_is_its_last_part_only():
+    assert leakguard._private_reason("a/b/c/x.db", set()) is not None
+    assert leakguard._private_reason("a/b/c/.env.example", set()) is None
+    assert leakguard._private_reason("a/b.env/c.txt", set()) is None
+
+
+# ---- _decode
+
+
+def test_decode_reads_utf8_cp1252_and_utf16_and_never_raises():
+    assert leakguard._decode("ação\r\nx".encode()) == "ação\nx"
+    assert leakguard._decode(b"a\xe7\xe3o") == "a\xe7\xe3o"   # cp1252
+    assert leakguard._decode(b"\x81") == "�"   # a byte cp1252 does not define
+    assert leakguard._decode(b"\xff\xfe" + "a\r\n".encode("utf-16-le")) == "a\n"
+    assert leakguard._decode(b"\xfe\xff" + "b".encode("utf-16-be")) == "b"
+    assert leakguard._decode(b"\xff\xfe" + b"a\x00" + b"\x00\xd8") == "a�"   # a lone surrogate
+    assert leakguard._decode(b"\xff\xfe" + b"a\x00" + b"b") == "a�"   # an odd byte count
+
+
+# ---- the files .gitignore excludes
+
+
+@pytest.fixture
+def git_repo(repo, tmp_path, monkeypatch):
+    """The scratch root as a git repository (with no repository above it), cwd already there."""
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    _git("init", "-q", cwd=tmp_path)
+    return repo
+
+
+def test_gitignored_names_the_excluded_files_even_when_tracked_and_whatever_their_name(git_repo, tmp_path):
+    git_repo(".gitignore", "secret-notes/\n*.tmp\n")
+    git_repo("secret-notes/a.md", "ok\n")
+    git_repo("relatório.tmp", "ok\n")
+    git_repo("ok.py", "x = 1\n")
+    _git("add", "-f", "secret-notes/a.md", "relatório.tmp", "ok.py", ".gitignore", cwd=tmp_path)
+    assert leakguard._gitignored(["secret-notes/a.md", "ok.py", "relatório.tmp", "new\nline.tmp"]) == {
+        "secret-notes/a.md", "relatório.tmp", "new\nline.tmp"}
+    assert leakguard._gitignored([]) == set()
+
+
+def test_a_force_added_ignored_file_is_private_in_process(git_repo, capsys, tmp_path):
+    git_repo(".gitignore", "secret-notes/\n")
+    git_repo("secret-notes/a.md", "ok\n")
+    _git("add", "-f", "secret-notes/a.md", cwd=tmp_path)
+    assert run(capsys, "secret-notes/a.md", ".gitignore")[2] == [
+        "PRIVATE: secret-notes/a.md is a private file (data, report, .env, real config, a data artifact or "
+        "gitignored)"]
+    assert run(capsys, "--all")[2] == run(capsys, "secret-notes/a.md")[2]
+
+
+def test_git_feeds_its_input_and_decodes_whatever_it_prints(git_repo, tmp_path):
+    assert leakguard._git("hash-object", "--stdin", stdin="hello\n").strip() == "ce013625030ba8dba906f756967f9e9ca394464a"
+    blob = tmp_path / "latin.txt"
+    blob.write_bytes(b"a\xe7b\n")
+    sha = leakguard._git("hash-object", "-w", "latin.txt").strip()
+    assert leakguard._git("cat-file", "blob", sha) == "a�b\n"
+
+
+def test_git_runs_in_utf8_text_mode_and_never_raises_on_failure(monkeypatch):
+    calls = []
+
+    def recorder(command, **kwargs):
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 128, stdout="out")
+
+    monkeypatch.setattr(leakguard.subprocess, "run", recorder)
+    assert leakguard._git("status", stdin="in") == "out"
+    assert calls == [(["git", "status"], {"input": "in", "capture_output": True, "text": True,
+                                          "encoding": "utf-8", "errors": "replace", "check": False})]
+
+
+@pytest.mark.parametrize(("function", "setup"), [
+    ("_listed_workspaces", ".leakguard-workspaces"), ("_load_owner_name_patterns", ".leakguard-local")])
+def test_text_files_of_the_guard_are_read_as_utf8_and_a_stray_byte_does_not_stop_it(function, setup, repo,
+                                                                                     tmp_path, monkeypatch):
+    seen = []
+    original = Path.read_text
+
+    def spy(self, *args, **kwargs):
+        seen.append((self.name, kwargs.get("encoding"), kwargs.get("errors")))
+        return original(self, *args, **kwargs)
+
+    (tmp_path / setup).write_bytes(b"# caf\xe9\nfulano\n")
+    monkeypatch.setattr(Path, "read_text", spy)
+    result = getattr(leakguard, function)()
+    assert seen == [(setup, "utf-8", "ignore")]
+    assert len(result) == 1
+
+
+def test_an_env_file_is_read_as_utf8(tmp_path, monkeypatch):
+    seen = []
+    original = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda self, *a, **k: seen.append(k.get("encoding")) or original(self, *a, **k))
+    (tmp_path / ".env").write_text("A=abcdef\n", encoding="utf-8")
+    assert dict(leakguard._env_values(tmp_path / ".env")) == {"abcdef": ".env.A"}
+    assert seen == ["utf-8"]
+
+
+def test_a_missing_or_unreadable_file_is_skipped_and_a_binary_one_in_a_workspace_does_not_stop_the_scan(
+        repo, capsys, tmp_path):
+    (tmp_path / "workspaces/W").mkdir(parents=True)
+    (tmp_path / "workspaces/W/dump.bak").write_bytes(b"x\x00y")
+    repo("last.txt", f"cpf {CPF}\n")
+    assert run(capsys, "workspaces/W/dump.bak", "gone.txt", "last.txt")[2] == [
+        "PRIVATE: workspaces/W/dump.bak is a binary file inside a workspace (a dump or a backup cannot be read "
+        "for real values)", "CPF: last.txt:1 -> '52…' (11 chars)"]
+
+
+# ---- .env and nested values
+
+
+def test_env_values_keep_an_equals_sign_inside_the_value_and_only_trim_quotes(tmp_path):
+    (tmp_path / ".env").write_text("# OLD_KEY=oldvalue123\nTOKEN=ab12cd34==\nEDGE=\"Xedge-valueX\"\n#   =\n",
+                                   encoding="utf-8")
+    assert dict(leakguard._env_values(tmp_path / ".env")) == {"ab12cd34==": ".env.TOKEN",
+                                                              "Xedge-valueX": ".env.EDGE"}
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("#a ", "#a "), (" #b", " "), ("x#y #z", "x#y ")])
+def test_an_inline_comment_may_start_right_after_the_first_character(raw, expected):
+    assert leakguard._strip_inline_comment(raw) == expected
+
+
+def test_a_transfer_number_is_split_on_its_slashes_only_when_it_is_a_number():
+    assert list(leakguard._expand(TRANSFER)) == [TRANSFER, "901", "0001", NUMBER]
+    assert list(leakguard._expand("901 / 0001 / 98765")) == ["901 / 0001 / 98765", "901", "0001", "98765"]
+    assert list(leakguard._expand("abc/def-ghi")) == ["abc/def-ghi"]
+    assert list(leakguard._expand("98765432")) == ["98765432"]
+
+
+def test_a_real_name_with_a_doubled_space_still_matches_the_text_written_with_one():
+    values = {"beltrano  recebedor": "src"}
+    assert leakguard.real_value_hits("x Beltrano Recebedor", values) == [(1, "beltrano  recebedor", "src")]
+
+
+# ---- the whole run
+
+
+def test_the_header_of_a_failed_run_says_what_it_was_checked_against(repo, capsys, workspace, monkeypatch):
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    assert leakguard.main([repo("a.py", f"x = '{NUMBER_BARE}'\n")]) == 1
+    header = capsys.readouterr().err.splitlines()[0]
+    assert re.fullmatch(r"LEAK GUARD FAILED \(\d+ real values from ws\):", header)
+
+
+def test_the_scope_names_every_workspace_and_says_why_there_is_none(monkeypatch):
+    _clean_env(monkeypatch, waive=False)
+    assert leakguard._scope([]) == "no real values: none found"
+    assert leakguard._scope([("a", {"x": 1}), ("b", {"y": 1, "z": 1})]) == "3 real values from a, b"
+
+
+def test_the_help_describes_the_command_and_each_option(capsys):
+    with pytest.raises(SystemExit):
+        leakguard.main(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    for expected in (leakguard.__doc__.splitlines()[0], "files to check (pre-commit passes the staged ones)",
+                     "check every tracked file", "check every commit, message and path in git history"):
+        assert expected in text
+    assert "XX" not in text
+
+
+def test_a_history_run_keeps_the_failures_of_loading_the_real_values(git_repo, capsys, tmp_path, monkeypatch):
+    git_repo("ok.py", "x = 1\n")
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "init", cwd=tmp_path)
+    _clean_env(monkeypatch, waive=False)
+    code, _, failures = run(capsys, "--history")
+    assert (code, failures) == (1, [leakguard.NO_SOURCE])
+
+
+def test_a_listing_with_a_duplicate_and_one_without_values_does_not_stop_at_them(repo, capsys, tmp_path, workspace):
+    other = make_workspace(tmp_path / "other", owner="Ciclano Morador da Casa")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    repo(".leakguard-workspaces", f"{workspace}\n{workspace}\n{empty}\n{other}\n")
+    sources, failures = leakguard.load_real_values()
+    assert [name for name, _ in sources] == ["ws", "other"]
+    assert len(failures) == 1
+    assert failures[0].startswith(f"REAL-VALUES: {empty} (listed in .leakguard-workspaces) yields no real value")
+
+
+def test_data_that_cannot_be_read_names_the_kind_of_error(repo, tmp_path):
+    broken = tmp_path / "broken"
+    (broken / "data" / "raw" / "accounts" / "ingestion_date=2026-11-01").mkdir(parents=True)
+    (broken / "data" / "raw" / "accounts" / "ingestion_date=2026-11-01" / "data.parquet").write_bytes(b"not parquet")
+    repo(".leakguard-workspaces", f"{broken}\n")
+    _, failures = leakguard.load_real_values()
+    assert re.search(r"\(\w+(Error|Exception): ", failures[0])
+    assert "(NoneType" not in failures[0]
+
+
+# ---- git history
+
+
+@pytest.fixture
+def history_repo(git_repo, tmp_path):
+    """A repository whose history holds, on a branch that was never merged and in a merge that
+    resolved a conflict by writing the value, what only an audit of all of it can see."""
+    def git(*args):
+        return _git(*args, cwd=tmp_path)
+
+    git_repo("f.txt", "base\n")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    git("branch", "-M", "main")
+    git("checkout", "-qb", "side")
+    git_repo("f.txt", "side\n")
+    git("commit", "-qam", "side change")
+    git("checkout", "-q", "main")
+    git_repo("f.txt", "main\n")
+    git("commit", "-qam", "main change")
+    subprocess.run(["git", "merge", "--no-commit", "side"], cwd=tmp_path, capture_output=True, check=False)   # conflicts
+    git_repo("f.txt", f"resolved by {RECEIVER}\n")
+    git_repo("merged.db", "")
+    git("add", "-A")
+    git("commit", "-qm", "merge side")
+    git("checkout", "-qb", "never-merged", "HEAD~1")
+    git_repo("g.txt", f"owner {OWNER}\n")
+    git("add", "-A")
+    git("commit", "-qm", "see dump.db")
+    git("checkout", "-q", "main")
+    return tmp_path
+
+
+def test_history_reads_every_branch_merge_resolutions_and_the_paths_of_both(history_repo, capsys, workspace):
+    (history_repo / ".leakguard-workspaces").write_text(f"{workspace}\n", encoding="utf-8")
+    code, _, failures = run(capsys, "--history")
+    assert code == 1
+    assert sorted({f.rsplit(", ", 1)[1] for f in failures if f.startswith("REAL")}) == [
+        "raw.accounts.owner from ws)", "raw.transactions.paymentData from ws)"]
+    assert all(f.startswith("REAL: history:") for f in failures if f.startswith("REAL"))
+    assert [f for f in failures if f.startswith("history:")] == ["history: merged.db: private file was committed"]
+
+
+def test_history_counts_lines_from_its_own_format_and_never_colours_it(monkeypatch):
+    calls = []
+    monkeypatch.setattr(leakguard, "_git", lambda *args, **kw: calls.append(args) or "")
+    leakguard.check_history([])
+    assert calls[0] == ("log", "--all", "-p", "-m", "--no-color", "--format=commit %H%n%B")
+    assert calls[1] == ("log", "--all", "-m", "--name-only", "--format=")
+
+
+def test_a_commit_message_is_the_first_line_after_its_hash(git_repo, capsys, tmp_path, workspace):
+    (tmp_path / ".leakguard-workspaces").write_text(f"{workspace}\n", encoding="utf-8")
+    git_repo("ok.py", "x = 1\n")
+    _git("add", "ok.py", cwd=tmp_path)
+    _git("commit", "-qm", f"pay {RECEIVER}", cwd=tmp_path)
+    code, _, failures = run(capsys, "--history")
+    assert code == 1
+    assert [f.split(" ->")[0] for f in failures] == ["REAL: history:2"]

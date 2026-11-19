@@ -33,7 +33,19 @@ min_score = 0.9548
 [targets."scripts/leakguard.py"]
 tests = ["tests/test_leakguard.py"]
 copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-min_score = 0.8841
+# 18 survivors, all Equivalent (no observable change):
+#   _cpf_valid range(12, 1, -1): _check_digits_hold keeps only the last `size` weights, so the extra
+#     leading weight is never used.
+#   _decode "UTF-16" / "UTF-8" / "CP1252": codec names are case-insensitive.
+#   _edicao_values lower-case or upper-case SQL: SQLite keywords and names are case-insensitive.
+#   _line count("\n", None, pos): None is the default start.
+#   _main_checkout check=None / False / dropped, common = None / "XXXX": a failed `git rev-parse` prints
+#     nothing on stdout, so `common` is empty or not a directory either way.
+#   _parse_nested "XX{[XX": a text starting with X is parsed, fails, and is plain text all the same.
+#   _private_reason rsplit("/") / rsplit("/", 2): only the last part, [-1], is used.
+#   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
+#   _read_bytes `or True`: read_bytes on a missing path or a directory raises OSError, caught the same.
+min_score = 0.9781
 
 
 [targets."dataforge/apps.py"]
