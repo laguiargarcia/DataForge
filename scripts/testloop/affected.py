@@ -58,7 +58,7 @@ MUTATION_JOBS = ("mutation-targets", "mutation", "mutation-ok")
 # Its top-level keys that no step sees.
 CI_INERT_KEYS = ("name", "on", "concurrency")
 TOP_KEY = re.compile(r"([A-Za-z_][\w-]*):")
-JOB_KEY = re.compile(r"  ([A-Za-z_][\w-]*):\s*(#.*)?$")
+JOB_KEY = re.compile(r" {2}([A-Za-z_][\w-]*):\s*(#.*)?$")
 
 INIT = "__init__.py"
 # A git ref name, never an option: a leading "-" would make git read it as a flag.
