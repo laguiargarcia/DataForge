@@ -367,10 +367,15 @@ def _workspace(tmp_path, extratos=None, transfer_number="901/0001/0001234567-8")
 
 
 def _rodar(ws, env=None):
+    # The task's environment as the engine gives it in production (dataforge/tasks/python_handler.py):
+    # no PYTHONIOENCODING, so the script prints in the locale encoding (cp1252 on Windows) and
+    # text=True reads it back in that same encoding. CI sets PYTHONIOENCODING=utf-8 for its own
+    # report; inherited, the script would print UTF-8 that text=True then misreads.
+    base = {k: v for k, v in os.environ.items() if k != "PYTHONIOENCODING"}
     return subprocess.run(
         [sys.executable, str(ws / "scripts" / "cleansed2curated" / "cleansed2curated_extrato.py"),
          "--source", "extratos", "--target", "curated"],
-        capture_output=True, text=True, cwd=ws, check=False, env={**os.environ, **(env or {})})
+        capture_output=True, text=True, cwd=ws, check=False, env={**base, **(env or {})})
 
 
 def _cifrado(paginas):

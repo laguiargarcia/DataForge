@@ -166,7 +166,8 @@ venv (`uv sync`; the engine is the checkout's own `dataforge/`, no pin), from th
 `python -m pytest workspaces/GetFinance -m 'not integration'`. They cannot share one pytest run with
 DataForge's `tests/` (both are a package named `tests`), so the engine's tests are a second command,
 `python -m pytest tests -m 'not integration'`. CI runs these in their own job, `tests-getfinance`,
-whose coverage goes to SonarQube Cloud with the engine's.
+whose coverage goes to SonarQube Cloud with the engine's, and again on Windows in
+`tests-getfinance-windows` (production runs Windows Python), which the `tests-windows` check gates.
 
 - **Each checkout tests itself.** `tests/_delta_util.py` gives `ROOT` and `SCRIPTS` (this folder in
   this checkout, a worktree or the main one) and `REAL_DATA`. When the environment variable

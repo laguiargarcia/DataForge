@@ -694,9 +694,9 @@ def _load_norm_funcs(tmp_path, monkeypatch, rules_yaml: str, local_yaml: str | N
     when given, is written as the local rules file beside the config (df-bsb2.3)."""
     scripts = _delta_util.SCRIPTS
     cfg = tmp_path / "norm.yaml"
-    cfg.write_text(rules_yaml)
+    cfg.write_text(rules_yaml, encoding="utf-8")
     if local_yaml is not None:
-        (tmp_path / "norm.local.yaml").write_text(local_yaml)
+        (tmp_path / "norm.local.yaml").write_text(local_yaml, encoding="utf-8")
     script = scripts / "raw2cleansed" / "raw2cleansed.py"
     # keep everything before argument parsing (the pure helpers + rule load)
     head = _delta_util.compile_script(script, until="parser = argparse.ArgumentParser()")
