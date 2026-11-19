@@ -24,20 +24,24 @@ _START_TIMEOUT = 10.0
 
 # A one-task job whose script waits for a file named 'release' next to it, so the test decides when
 # the task ends and sees the run in progress first. It exits with the number written in the file,
-# and gives up after 30 s so a broken test cannot leave a run going forever.
+# and gives up after 30 s so a broken test cannot leave a run going forever. It reads the code only
+# once the file holds one, and the test writes it whole (temp file, then replace): on Windows the
+# script once read the file between its creation and its write and exited 0 (df-sjde).
 GATED_JOB, GATED_TASK = "gated", "extract"
 GATED_OUTPUT = "extracting\nWARN two rows skipped\n"
 _GATED_SCRIPT = """\
 import pathlib, sys, time
 release = pathlib.Path(__file__).with_name("release")
 deadline = time.monotonic() + 30
-while not release.exists():
+code = ""
+while not code:
     if time.monotonic() > deadline:
         sys.exit(3)
+    code = release.read_text(encoding="utf-8").strip() if release.exists() else ""
     time.sleep(0.02)
 print("extracting")
 print("WARN two rows skipped")
-sys.exit(int(release.read_text(encoding="utf-8") or 0))
+sys.exit(int(code))
 """
 
 
@@ -51,7 +55,9 @@ def add_gated_job(workspace_dir: Path) -> None:
 
 
 def release_gated_job(workspace_dir: Path, exit_code: int = 0) -> None:
-    (workspace_dir / "scripts" / "release").write_bytes(str(exit_code).encode("utf-8"))
+    pending = workspace_dir / "scripts" / "release.tmp"
+    pending.write_bytes(str(exit_code).encode("utf-8"))
+    pending.replace(pending.with_name("release"))   # the script never sees it half written
 
 
 @contextmanager
