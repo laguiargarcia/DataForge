@@ -109,9 +109,15 @@ _NOT_AFTER = r"(?!\d)(?![.,]\d)"
 # '_', '/', '-', en and em dash, or a single comma ("123.456.789 - 00", "123_456_789_00"). Never a line break: a
 # document wrapped across lines is two things, not one (the real-value check below does join those).
 # A wrong guess costs little: only a match whose check digits are valid is a finding.
-_DOC_SEP = r"(?:[\t .\-_/\u2013\u2014]+|,)?"
-CPF = re.compile(_NOT_BEFORE + _DOC_SEP.join([r"\d{3}", r"\d{3}", r"\d{3}", r"\d{2}"]) + _NOT_AFTER)
-CNPJ = re.compile(_NOT_BEFORE + _DOC_SEP.join([r"\d{2}", r"\d{3}", r"\d{3}", r"\d{4}", r"\d{2}"]) + _NOT_AFTER)
+
+# One gap between digits: a run of the given characters, or a single comma (a comma and a space is
+# a list of numbers, not a gap). Module-level expressions, not helper functions: mutmut cannot test
+# what only runs at import.
+_RUN_OR_COMMA = r"(?:[{}]+|,)"
+_DOC_GAP = _RUN_OR_COMMA.format(r"\t .\-_/\u2013\u2014") + "?"
+_D2, _D3, _D4 = r"\d{2}", r"\d{3}", r"\d{4}"
+CPF = re.compile(_NOT_BEFORE + _DOC_GAP.join([_D3, _D3, _D3, _D2]) + _NOT_AFTER)
+CNPJ = re.compile(_NOT_BEFORE + _DOC_GAP.join([_D2, _D3, _D3, _D4, _D2]) + _NOT_AFTER)
 # Files of hex digests and package names only, where a run of digits inside a hash may pass a
 # check-digit rule: the document patterns do not apply there (every other check does).
 DIGEST_FILES = {"uv.lock"}
@@ -159,7 +165,8 @@ NUMBER_LIKE = re.compile(r"[\d\s./-]+")   # digits and separators only: an accou
 # weights table was one). What still escapes, on purpose: that comma-and-space form, and a letter or
 # other symbol as separator ("12345 x 6", "12345|6", "12345:6").
 SEPARATOR_CHARS = r"\s.\-_/\u2013\u2014"
-DIGIT_SEPARATOR = rf"(?:[{SEPARATOR_CHARS}]+|,)?"
+GAP = _RUN_OR_COMMA.format(SEPARATOR_CHARS)
+DIGIT_SEPARATOR = GAP + "?"
 # Raw columns whose string leaves identify the owner, an account or a counterparty. Amounts, dates
 # and descriptions are left out: they are not identifiers and would match ordinary text.
 RAW_COLUMNS = {
@@ -314,7 +321,7 @@ def real_value_hits(text, values):
     number with any or no separator between its digits. A cheap substring test on normalized text
     runs first, so the regex only runs for the few values that may be there."""
     spaced = re.sub(r"\s+", " ", text.lower())
-    merged = re.sub(rf"(?<=\d)(?:[{SEPARATOR_CHARS}]+|,)(?=\d)", "", text)
+    merged = re.sub(rf"(?<=\d){GAP}(?=\d)", "", text)
     hits = []
     for value, source in values.items():
         if _is_number_like(value):
