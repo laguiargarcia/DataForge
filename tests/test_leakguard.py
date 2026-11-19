@@ -1112,6 +1112,76 @@ def test_a_file_outside_the_repository_is_checked_and_never_ignored(repo, capsys
     assert [f.split(" -> ")[1].rsplit(", ", 1)[1] for f in failures] == ["raw.transactions.paymentData from ws)"]
 
 
+@pytest.mark.parametrize(("path", "outside"), [
+    ("a.py", False), ("sub/../a.py", False), ("../a.py", True), ("{top}/a.py", False), ("{top}-other/a.py", True),
+    ("{top}/../a.py", True)])
+def test_outside_the_repository_is_judged_by_the_spelling_of_the_path(tmp_path, monkeypatch, path, outside):
+    monkeypatch.chdir(tmp_path)   # a relative path is relative to the cwd, here the repository's top
+    assert leakguard._outside(path.format(top=tmp_path), tmp_path) is outside
+
+
+def test_two_spellings_of_the_same_directory_are_the_same_repository(tmp_path):
+    """git prints the long, resolved name; a caller may spell it another way (a link, a Windows short name)."""
+    link = tmp_path.parent / f"{tmp_path.name}-link"
+    try:
+        link.symlink_to(tmp_path, target_is_directory=True)
+    except OSError:
+        pytest.skip("this machine cannot create a symlink")
+    assert leakguard._outside(str(link / "a.py"), tmp_path) is False
+    assert leakguard._outside(str(tmp_path / "a.py"), link) is False
+
+
+def test_a_force_added_ignored_symlink_that_points_outside_is_still_private(repo, capsys, tmp_path):
+    """A data/ linked to another disk: following the link would put it outside and skip check-ignore."""
+    elsewhere = tmp_path.parent / f"{tmp_path.name}-elsewhere"
+    elsewhere.mkdir()
+    repo(".gitignore", "links/\n")
+    (tmp_path / "links").mkdir()
+    try:
+        (tmp_path / "links" / "data").symlink_to(elsewhere, target_is_directory=True)
+    except OSError:
+        pytest.skip("this machine cannot create a symlink")
+    _git("add", "-f", "links/data", cwd=tmp_path)
+    assert run(capsys, "links/data")[2] == [f"PRIVATE: links/data is a {leakguard.PRIVATE_FILE}"]
+
+
+def test_from_a_subdirectory_an_absolute_path_in_the_repository_is_still_asked(repo, capsys, tmp_path, monkeypatch):
+    repo(".gitignore", "*.tmp\n")
+    repo("sub/keep.md", "ok\n")
+    repo("a.tmp", "ok\n")
+    _git("add", "-f", "a.tmp", cwd=tmp_path)
+    monkeypatch.chdir(tmp_path / "sub")
+    assert run(capsys, str(tmp_path / "a.tmp"))[2] == [
+        f"PRIVATE: {(tmp_path / 'a.tmp').as_posix()} is a {leakguard.PRIVATE_FILE}"]
+
+
+def test_a_git_error_that_names_a_value_is_masked(repo, capsys, monkeypatch):
+    said = f"fatal: pathspec 'x_{CPF}' is beyond a symbolic link"
+    monkeypatch.setattr(leakguard.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a[0], 128, stdout="", stderr=said))
+    failures = run(capsys, "--all")[2]
+    assert failures == [f"GIT: {leakguard._mask(f'git ls-files failed with exit code 128: {said}')}; nothing was checked"]
+
+
+def test_history_finds_a_real_value_in_a_non_ascii_file_name(repo, capsys, tmp_path, monkeypatch):
+    """Quoted, git would write the name as octal escapes and the value in it would not be seen."""
+    value = "joão" + "zinho inventado"
+    monkeypatch.setattr(leakguard, "load_real_values", lambda: ([("ws", {value: "raw.accounts.owner"})], []))
+    repo(f"notes/{value}.md", "ok\n")
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "add", cwd=tmp_path)
+    _git("rm", "-q", f"notes/{value}.md", cwd=tmp_path)
+    _git("commit", "-qm", "remove", cwd=tmp_path)
+    failures = run(capsys, "--history")[2]
+    assert failures
+    assert {f.split(":", 1)[0] for f in failures} == {"REAL"}
+
+
+def test_a_private_surface_named_after_a_document_is_masked(repo, capsys):
+    rel = f"docs/{CPF}.md"
+    assert run(capsys, rel)[2][1] == f"PATH-BLOCK: 'do…' ({len(rel)} chars) is under a private surface"
+
+
 def test_gitignored_with_git_failing_is_an_error_not_an_empty_set(repo, monkeypatch):
     monkeypatch.setenv("PATH", "")
     with pytest.raises(leakguard.GitError):

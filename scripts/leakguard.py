@@ -477,9 +477,10 @@ class GitError(Exception):
 
 
 def _git(*args, stdin=None, ok=(0,)):
-    """git's output; GitError when git is missing or exits with a code not in `ok`."""
+    """git's output; GitError when git is missing or exits with a code not in `ok`. Paths come out as
+    they are (core.quotePath=false), not as octal escapes that would hide a value written in them."""
     try:
-        done = subprocess.run(["git", *args], input=stdin, capture_output=True, encoding="utf-8",
+        done = subprocess.run(["git", "-c", "core.quotePath=false", *args], input=stdin, capture_output=True, encoding="utf-8",
                               errors="replace", check=False)
     except OSError as e:
         raise GitError(f"git {args[0]} could not run ({type(e).__name__}: {e})") from e
@@ -489,14 +490,25 @@ def _git(*args, stdin=None, ok=(0,)):
     return done.stdout
 
 
+def _outside(path, top):
+    """Whether `path` is outside the repository at `top`. A path relative to the cwd (inside the
+    repository) without '..' is inside: what pre-commit and --all pass. Otherwise its directory is
+    resolved (a Windows short name, as git prints the long one) but not the file itself: a versioned
+    symlink (a data/ linked to another disk) is inside, and must still be asked about."""
+    if not Path(path).is_absolute() and ".." not in Path(path).parts:
+        return False
+    full = Path(os.path.abspath(path))
+    return not (Path(os.path.realpath(full.parent)) / full.name).is_relative_to(Path(os.path.realpath(top)))
+
+
 def _gitignored(files):
     """The files .gitignore excludes: tracked or staged anyway, they were force-added. check-ignore
     exits 1 when none is excluded. A file outside the repository (the commit message file, which a
     worktree keeps in the main checkout's .git/) is never versioned, so git is not asked about it."""
     if not files:
         return set()
-    top = Path(_git("rev-parse", "--show-toplevel").strip()).resolve()
-    files = [f for f in files if Path(f).resolve().is_relative_to(top)]
+    top = Path(_git("rev-parse", "--show-toplevel").strip())
+    files = [f for f in files if not _outside(f, top)]
     if not files:
         return set()
     out = _git("check-ignore", "--no-index", "-z", "--stdin", stdin="\0".join(files) + "\0", ok=(0, 1))
@@ -555,7 +567,8 @@ def check_files(files, sources):
 def check_history(sources):
     """Every version of every file, every commit message, merges included, and every path ever committed.
     The paths are read NUL-separated: without -z git quotes a non-ASCII one ("relat\\303\\263rio.db") and
-    its suffix would not match. The paths' own findings are in the log already (its diff headers)."""
+    its suffix would not match. The paths' own findings are in the log, in its diff headers (written
+    unquoted, see _git)."""
     log = _git("log", "--all", "-p", "-m", "--no-color", "--format=commit %H%n%B")
     failures = check_text("history", log, sources)
     paths = {p for p in _git("log", "--all", "-m", "--name-only", "-z", "--format=").split("\0") if p}
@@ -586,8 +599,8 @@ def main(argv=None):
             files = [p for p in _git("ls-files", "-z").split("\0") if p] if args.all else args.files
             failures += check_files(files, sources)
             what = f"{len(files)} file(s)"
-    except GitError as e:
-        failures.append(f"GIT: {e}; nothing was checked")
+    except GitError as e:   # git's own words may name a path: shown like one
+        failures.append(f"GIT: {_path_failures(str(e), sources)[0]}; nothing was checked")
     if failures:
         print(f"LEAK GUARD FAILED ({_scope(sources)}):\n  " + "\n  ".join(failures), file=sys.stderr)
         return 1
