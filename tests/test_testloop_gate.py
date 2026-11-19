@@ -397,3 +397,24 @@ def test_a_bad_costs_file_warns_and_measures_nothing(tmp_path, capsys):
     assert "costs file" in capsys.readouterr().err
     path.write_text('{"a.py": {"elapsed": 1}}')
     assert costs_or_empty(path) == {"a.py": {"elapsed": 1}}
+
+
+@pytest.mark.parametrize("value, line", [(3, "timeout_multiplier = 3.0"), (2.5, "timeout_multiplier = 2.5")])
+def test_a_targets_timeout_multiplier_reaches_mutmut(tmp_path, value, line):
+    """df-n8ac.42: a mutant that hangs (engine's run_id -> None deadlocks on the run lock) costs
+    mutmut's whole timeout, (tests' seconds + 1) x 15 by default; a target can lower the factor."""
+    config = Config(repo=tmp_path, targets={"mod.py": {"timeout_multiplier": value}})
+    mutate_cmd._write_tool_config(config, "mod.py", ["tests/t.py"], tmp_path)
+    assert line in (tmp_path / "pyproject.toml").read_text(encoding="utf-8").splitlines()
+
+
+def test_without_a_timeout_multiplier_mutmut_keeps_its_default(tmp_path):
+    mutate_cmd._write_tool_config(Config(repo=tmp_path, targets={"mod.py": {}}), "mod.py", ["tests/t.py"], tmp_path)
+    assert "timeout_multiplier" not in (tmp_path / "pyproject.toml").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("value", [0, -1, "3", True])
+def test_a_bad_timeout_multiplier_is_a_tool_error(tmp_path, value):
+    config = Config(repo=tmp_path, targets={"mod.py": {"timeout_multiplier": value}})
+    with pytest.raises(ToolError, match="timeout_multiplier"):
+        mutate_cmd._write_tool_config(config, "mod.py", ["tests/t.py"], tmp_path)

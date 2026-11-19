@@ -323,6 +323,15 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
     isolation = config.targets.get(module, {}).get("process_isolation")
     if isolation:
         lines.append(f"process_isolation = {json.dumps(isolation)}")
+    # mutmut kills a mutant after (its tests' seconds + 1) x timeout_multiplier (15) of wall time. A
+    # target whose mutants can hang (engine.py: run_id None deadlocks on the run lock, df-n8ac.42)
+    # lowers the factor; a timeout never counts as killed or survived, so a slow kill loses nothing.
+    multiplier = config.targets.get(module, {}).get("timeout_multiplier")
+    if multiplier is not None:
+        if isinstance(multiplier, bool) or not isinstance(multiplier, (int, float)) or multiplier <= 0:
+            raise ToolError(f"{module}: timeout_multiplier in testloop.toml must be a number above 0, "
+                            f"got {multiplier!r}")
+        lines.append(f"timeout_multiplier = {float(multiplier)}")
     (dest / "pyproject.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
