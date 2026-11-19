@@ -72,13 +72,48 @@ def test_a_target_runs_when_its_module_tests_or_imports_change(repo, changed, ex
 
 
 @pytest.mark.parametrize("changed", [
-    "testloop.toml", "pyproject.toml", "tests/conftest.py", ".github/workflows/ci.yml",
+    "testloop.toml",   # no base version given: what changed in it is unknown
+    "pyproject.toml", "tests/conftest.py", ".github/workflows/ci.yml",
     "scripts/testloop/mutate_cmd.py",
     "dataforge/deploy/data.json",   # not Python: the import graph cannot see who reads it
     "dataforge/deleted.py",         # gone from HEAD: who imported it is unknown
 ])
 def test_shared_or_invisible_changes_run_every_target(repo, changed):
     assert picked(repo, [changed]) == [PLAN, APPLY]
+
+
+BASE_TOML = FILES["testloop.toml"]
+
+
+@pytest.mark.parametrize("head_toml, expected", [
+    # one target's table changed (its min_score): only that target (df-n8ac.34)
+    (BASE_TOML.replace('tests = ["tests/test_apply.py"]', 'tests = ["tests/test_apply.py"]\nmin_score = 0.9'),
+     [APPLY]),
+    # a key outside [targets] changes how every target runs: all of them
+    ('pytest_args = ["-x"]\n' + BASE_TOML, [PLAN, APPLY]),
+    # only comments or layout: nothing
+    ("# a comment\n" + BASE_TOML, []),
+])
+def test_a_testloop_toml_change_runs_only_the_targets_it_touches(repo, head_toml, expected):
+    (repo / "testloop.toml").write_text(head_toml, encoding="utf-8")
+    assert affected.select(load_config(repo), ["testloop.toml"], base_toml=BASE_TOML)[0] == expected
+
+
+def test_a_new_target_in_testloop_toml_runs(repo):
+    base = '[targets."dataforge/deploy/plan.py"]\ntests = ["tests/test_plan*.py"]\n'
+    assert affected.select(load_config(repo), ["testloop.toml"], base_toml=base)[0] == [APPLY]
+
+
+@pytest.mark.parametrize("base_toml", [None, "not = [valid toml"])
+def test_testloop_toml_without_a_readable_base_runs_every_target(repo, base_toml):
+    assert affected.select(load_config(repo), ["testloop.toml"], base_toml=base_toml)[0] == [PLAN, APPLY]
+
+
+def test_testloop_toml_and_a_module_change_add_up(repo):
+    head = BASE_TOML.replace('tests = ["tests/test_apply.py"]', 'tests = ["tests/test_apply.py"]\nmin_score = 0.9')
+    (repo / "testloop.toml").write_text(head, encoding="utf-8")
+    changed = ["testloop.toml", "tests/test_plan.py"]
+    assert affected.select(load_config(repo), changed, base_toml=BASE_TOML)[0] == [PLAN, APPLY]
 
 
 def test_cli_without_base_ref_prints_every_target(repo, monkeypatch, capsys):
@@ -100,6 +135,22 @@ def test_cli_with_base_ref_selects_from_the_git_diff(repo, monkeypatch, capsys):
     captured = capsys.readouterr()
     assert json.loads(captured.out) == [PLAN]
     assert f"{APPLY}: skipped" in captured.err
+
+
+def test_cli_reads_testloop_toml_of_the_merge_base(repo, monkeypatch, capsys):
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+    subprocess.run([*git, "add", "-A"], cwd=repo, check=True)
+    subprocess.run([*git, "commit", "-qm", "base"], cwd=repo, check=True)
+    subprocess.run(["git", "switch", "-qc", "pr"], cwd=repo, check=True)
+    head = BASE_TOML.replace('tests = ["tests/test_plan*.py"]', 'tests = ["tests/test_plan*.py"]\nmin_score = 0.5')
+    (repo / "testloop.toml").write_text(head, encoding="utf-8")
+    subprocess.run([*git, "commit", "-qam", "pr"], cwd=repo, check=True)
+    monkeypatch.chdir(repo)
+    assert affected.main(["--base-ref", "main"]) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out) == [PLAN]
+    assert f"{PLAN}: its table in testloop.toml changed" in captured.err
 
 
 def test_cli_bad_base_ref_is_a_tool_error(repo, monkeypatch, capsys):
