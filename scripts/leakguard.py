@@ -31,7 +31,8 @@ audits every version of every file, every commit message and every path ever com
    listing never passes for "no real data".
 
 Findings never echo a value in full: they show its first two characters and its length (CI logs
-are public).
+are public). A path is a text like any other: its name is checked too, and a path with a finding in
+it is shown masked the same way. When git fails (not a repository, no git), the check fails.
 """
 import argparse
 import ast
@@ -417,25 +418,34 @@ def _pattern_checks(rel):
     return checks
 
 
-def _pattern_failures(rel, text):
-    return [f"{label}: {rel}:{_line(text, m.start())} -> {_mask(m.group(0))}"
+def _pattern_failures(rel, text, where):
+    return [f"{label}: {where(_line(text, m.start()))} -> {_mask(m.group(0))}"
             for label, rx, keep in _pattern_checks(rel)
             for m in rx.finditer(text)
             if keep is None or keep(m.group(0))]
 
 
-def _real_value_failures(rel, text, sources):
+def _real_value_failures(rel, text, sources, where):
     """REAL findings; in the attribution files a value read from an owner column is let through."""
     exempt = set()
     if rel in NAME_EXEMPT_PATHS:
         exempt = {v for _, values in sources for v, src in values.items() if src.endswith(ATTRIBUTION_SOURCES)}
-    return [f"REAL: {rel}:{n} -> {_mask(v, f", {src} from {ws}")}"
+    return [f"REAL: {where(n)} -> {_mask(v, f", {src} from {ws}")}"
             for ws, values in sources
             for n, v, src in real_value_hits(text, {k: s for k, s in values.items() if k not in exempt})]
 
 
-def check_text(rel, text, sources):
-    return _pattern_failures(rel, text) + _real_value_failures(rel, text, sources)
+def check_text(rel, text, sources, where=None):
+    """Every finding in `text`, located by `where(line)` (by default `rel:line`)."""
+    where = where or (lambda n: f"{rel}:{n}")
+    return _pattern_failures(rel, text, where) + _real_value_failures(rel, text, sources, where)
+
+
+def _path_failures(rel, sources):
+    """(the path as findings may show it, the findings in the path itself). A path with a finding in it
+    is shown masked: CI logs are public, and a file named after a document would publish it."""
+    failures = check_text(rel, rel, sources, where=lambda _: f"the path {_mask(rel)}")
+    return (_mask(rel) if failures else rel), failures
 
 
 def _inside_workspace(rel):
@@ -445,32 +455,51 @@ def _inside_workspace(rel):
     return inside if parts[0] == "workspaces" and inside else None
 
 
-def _private_reason(rel, ignored):
-    """Why the file at `rel` may not be versioned at all, or None. Case does not matter: on Windows
-    (the prod disk) Data/ is data/."""
+def _private_reason(rel, ignored, shown=None):
+    """Why the file at `rel` may not be versioned at all, or None; the path is written as `shown` (by
+    default `rel`). Case does not matter: on Windows (the prod disk) Data/ is data/."""
+    shown = shown or rel
     lower = rel.lower()
     if lower.startswith(tuple(p.lower() for p in BLOCK_PREFIXES)):
-        return f"PATH-BLOCK: {rel} is under a private surface"
+        return f"PATH-BLOCK: {shown} is under a private surface"
     inside = _inside_workspace(rel) or ""
     name = lower.rsplit("/", 1)[-1]
     if (inside.startswith(WORKSPACE_PRIVATE_DIRS) or inside in WORKSPACE_PRIVATE_FILES
             or (inside and name.endswith(WORKSPACE_ARCHIVE_SUFFIXES))
             or (name.startswith(".env") and name != ".env.example")
             or Path(name).suffix in PRIVATE_SUFFIXES or rel in ignored):
-        return f"PRIVATE: {rel} is a {PRIVATE_FILE}"
+        return f"PRIVATE: {shown} is a {PRIVATE_FILE}"
     return None
 
 
-def _git(*args, stdin=None):
-    return subprocess.run(["git", *args], input=stdin, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace", check=False).stdout
+class GitError(Exception):
+    """git could not run or failed: the guard fails closed, since an empty answer would pass."""
+
+
+def _git(*args, stdin=None, ok=(0,)):
+    """git's output; GitError when git is missing or exits with a code not in `ok`."""
+    try:
+        done = subprocess.run(["git", *args], input=stdin, capture_output=True, encoding="utf-8",
+                              errors="replace", check=False)
+    except OSError as e:
+        raise GitError(f"git {args[0]} could not run ({type(e).__name__}: {e})") from e
+    if done.returncode not in ok:
+        said = done.stderr.strip().partition("\n")[0]   # its first line says what went wrong
+        raise GitError(f"git {args[0]} failed with exit code {done.returncode}" + (f": {said}" if said else ""))
+    return done.stdout
 
 
 def _gitignored(files):
-    """The files .gitignore excludes: tracked or staged anyway, they were force-added."""
+    """The files .gitignore excludes: tracked or staged anyway, they were force-added. check-ignore
+    exits 1 when none is excluded. A file outside the repository (the commit message file, which a
+    worktree keeps in the main checkout's .git/) is never versioned, so git is not asked about it."""
     if not files:
         return set()
-    out = _git("check-ignore", "--no-index", "-z", "--stdin", stdin="\0".join(files) + "\0")
+    top = Path(_git("rev-parse", "--show-toplevel").strip()).resolve()
+    files = [f for f in files if Path(f).resolve().is_relative_to(top)]
+    if not files:
+        return set()
+    out = _git("check-ignore", "--no-index", "-z", "--stdin", stdin="\0".join(files) + "\0", ok=(0, 1))
     return {p for p in out.split("\0") if p}
 
 
@@ -507,7 +536,9 @@ def check_files(files, sources):
     ignored = _gitignored(norms)
     failures = []
     for rel in norms:
-        reason = _private_reason(rel, ignored)
+        shown, failures_in_path = _path_failures(rel, sources)
+        failures += failures_in_path
+        reason = _private_reason(rel, ignored, shown)
         if reason:
             failures.append(reason)
             continue
@@ -515,18 +546,21 @@ def check_files(files, sources):
         if data is None:
             continue
         if _binary_in_workspace(rel, data):
-            failures.append(f"PRIVATE: {rel} is a {BINARY_IN_WORKSPACE}")
+            failures.append(f"PRIVATE: {shown} is a {BINARY_IN_WORKSPACE}")
             continue
-        failures += check_text(rel, _decode(data), sources)
+        failures += check_text(rel, _decode(data), sources, where=lambda n, shown=shown: f"{shown}:{n}")
     return failures
 
 
 def check_history(sources):
-    """Every version of every file, every commit message, merges included, and every path ever committed."""
+    """Every version of every file, every commit message, merges included, and every path ever committed.
+    The paths are read NUL-separated: without -z git quotes a non-ASCII one ("relat\\303\\263rio.db") and
+    its suffix would not match. The paths' own findings are in the log already (its diff headers)."""
     log = _git("log", "--all", "-p", "-m", "--no-color", "--format=commit %H%n%B")
     failures = check_text("history", log, sources)
-    paths = {p for p in _git("log", "--all", "-m", "--name-only", "--format=").splitlines() if p}
-    return failures + [f"history: {p}: private file was committed" for p in sorted(paths) if _private_reason(p, set())]
+    paths = {p for p in _git("log", "--all", "-m", "--name-only", "-z", "--format=").split("\0") if p}
+    return failures + [f"history: {_path_failures(p, sources)[0]}: private file was committed"
+                       for p in sorted(paths) if _private_reason(p, set())]
 
 
 def _scope(sources):
@@ -544,13 +578,16 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     sources, failures = load_real_values()
-    if args.history:
-        failures += check_history(sources)
-        what = "history"
-    else:
-        files = [p for p in _git("ls-files", "-z").split("\0") if p] if args.all else args.files
-        failures += check_files(files, sources)
-        what = f"{len(files)} file(s)"
+    try:
+        if args.history:
+            failures += check_history(sources)
+            what = "history"
+        else:
+            files = [p for p in _git("ls-files", "-z").split("\0") if p] if args.all else args.files
+            failures += check_files(files, sources)
+            what = f"{len(files)} file(s)"
+    except GitError as e:
+        failures.append(f"GIT: {e}; nothing was checked")
     if failures:
         print(f"LEAK GUARD FAILED ({_scope(sources)}):\n  " + "\n  ".join(failures), file=sys.stderr)
         return 1

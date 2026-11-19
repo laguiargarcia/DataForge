@@ -17,6 +17,7 @@ from pathlib import Path
 
 import polars as pl
 import pytest
+from hypothesis import HealthCheck, given, settings, strategies as st
 
 from scripts import leakguard
 
@@ -75,9 +76,11 @@ def _clean_env(monkeypatch, waive=True):
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
-    """Run the guard from a scratch root, with one made-up owner name pattern, no real data and the
-    run without it waived (LEAKGUARD_NO_REAL_DATA=1)."""
+    """Run the guard from a scratch git repository (with no repository above it), with one made-up
+    owner name pattern, no real data and the run without it waived (LEAKGUARD_NO_REAL_DATA=1)."""
     _clean_env(monkeypatch)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    _git("init", "-q", cwd=tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(leakguard, "NAME_PATTERNS", [re.compile(r"fulano\s+de\s+tal", re.IGNORECASE)])
     monkeypatch.setattr(leakguard, "MAIN_ROOT", tmp_path)   # no .leakguard-workspaces unless a test writes one
@@ -898,9 +901,7 @@ def test_in_process_no_file_is_clean(repo, capsys):
     assert run(capsys) == (0, f"leak guard: 0 file(s) clean ({NO_DATA})\n", [])
 
 
-def test_in_process_all_and_history(repo, capsys, tmp_path, monkeypatch, workspace):
-    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
-    _git("init", "-q", cwd=tmp_path)
+def test_in_process_all_and_history(repo, capsys, tmp_path, workspace):
     repo(".gitignore", "ws/\n.leakguard-workspaces\n")
     repo("fixture.py", f"OWNER = '{OWNER}'\n")
     repo("ok.py", "x = 1\n")
@@ -1037,28 +1038,20 @@ def test_decode_reads_utf8_cp1252_and_utf16_and_never_raises():
 # ---- the files .gitignore excludes
 
 
-@pytest.fixture
-def git_repo(repo, tmp_path, monkeypatch):
-    """The scratch root as a git repository (with no repository above it), cwd already there."""
-    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
-    _git("init", "-q", cwd=tmp_path)
-    return repo
-
-
-def test_gitignored_names_the_excluded_files_even_when_tracked_and_whatever_their_name(git_repo, tmp_path):
-    git_repo(".gitignore", "secret-notes/\n*.tmp\n")
-    git_repo("secret-notes/a.md", "ok\n")
-    git_repo("relatório.tmp", "ok\n")
-    git_repo("ok.py", "x = 1\n")
+def test_gitignored_names_the_excluded_files_even_when_tracked_and_whatever_their_name(repo, tmp_path):
+    repo(".gitignore", "secret-notes/\n*.tmp\n")
+    repo("secret-notes/a.md", "ok\n")
+    repo("relatório.tmp", "ok\n")
+    repo("ok.py", "x = 1\n")
     _git("add", "-f", "secret-notes/a.md", "relatório.tmp", "ok.py", ".gitignore", cwd=tmp_path)
     assert leakguard._gitignored(["secret-notes/a.md", "ok.py", "relatório.tmp", "new\nline.tmp"]) == {
         "secret-notes/a.md", "relatório.tmp", "new\nline.tmp"}
     assert leakguard._gitignored([]) == set()
 
 
-def test_a_force_added_ignored_file_is_private_in_process(git_repo, capsys, tmp_path):
-    git_repo(".gitignore", "secret-notes/\n")
-    git_repo("secret-notes/a.md", "ok\n")
+def test_a_force_added_ignored_file_is_private_in_process(repo, capsys, tmp_path):
+    repo(".gitignore", "secret-notes/\n")
+    repo("secret-notes/a.md", "ok\n")
     _git("add", "-f", "secret-notes/a.md", cwd=tmp_path)
     assert run(capsys, "secret-notes/a.md", ".gitignore")[2] == [
         "PRIVATE: secret-notes/a.md is a private file (data, report, .env, real config, a data artifact or "
@@ -1066,7 +1059,7 @@ def test_a_force_added_ignored_file_is_private_in_process(git_repo, capsys, tmp_
     assert run(capsys, "--all")[2] == run(capsys, "secret-notes/a.md")[2]
 
 
-def test_git_feeds_its_input_and_decodes_whatever_it_prints(git_repo, tmp_path):
+def test_git_feeds_its_input_and_decodes_whatever_it_prints(repo, tmp_path):
     assert leakguard._git("hash-object", "--stdin", stdin="hello").strip() == "b6fc4c620b67d95f953a5c1c1230aaab5db5a1b0"
     blob = tmp_path / "latin.txt"
     blob.write_bytes(b"a\xe7b\n")
@@ -1074,12 +1067,148 @@ def test_git_feeds_its_input_and_decodes_whatever_it_prints(git_repo, tmp_path):
     assert leakguard._git("cat-file", "blob", sha) == "a�b\n"
 
 
-def test_git_reads_utf8_and_a_failing_command_gives_empty_output_not_an_error(monkeypatch):
+def test_git_reads_utf8_and_a_failing_command_is_an_error_that_says_why(monkeypatch):
     calls = []
     original = subprocess.run
     monkeypatch.setattr(leakguard.subprocess, "run", lambda *a, **k: calls.append(k) or original(*a, **k))
-    assert leakguard._git("no-such-subcommand") == ""
+    with pytest.raises(leakguard.GitError, match=r"^git no-such-subcommand failed with exit code 1: git: "):
+        leakguard._git("no-such-subcommand")
     assert calls[0]["encoding"] == "utf-8"
+    assert leakguard._git("no-such-subcommand", ok=(1,)) == ""
+    monkeypatch.setattr(leakguard.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a[0], 3, stdout="", stderr=""))
+    with pytest.raises(leakguard.GitError, match=r"^git status failed with exit code 3$"):
+        leakguard._git("status")
+
+
+def test_a_git_error_says_only_the_first_line_git_wrote(repo, monkeypatch):
+    monkeypatch.setenv("LC_ALL", "C")   # git's messages in English, whatever the machine's language
+    monkeypatch.setenv("LANGUAGE", "C")
+    with pytest.raises(leakguard.GitError) as raised:
+        leakguard._git("log", "nosuchref")
+    assert str(raised.value) == ("git log failed with exit code 128: fatal: ambiguous argument 'nosuchref': unknown "
+                                 "revision or path not in the working tree.")
+
+
+def test_git_that_cannot_run_is_an_error(monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    with pytest.raises(leakguard.GitError, match=r"^git status could not run \(FileNotFoundError: "):
+        leakguard._git("status")
+
+
+def test_a_file_outside_the_repository_is_checked_and_never_ignored(repo, capsys, tmp_path, workspace,
+                                                                    monkeypatch):
+    """pre-commit's commit-msg hook passes a worktree's message file, which lives in the main checkout's .git/."""
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    outside = tmp_path.parent / f"{tmp_path.name}-msg" / "COMMIT_EDITMSG"
+    outside.parent.mkdir()
+    outside.write_text(f"Pay {RECEIVER} back\n", encoding="utf-8")
+    repo(".gitignore", "*.tmp\n")
+    repo("a.tmp", "ok\n")
+    assert leakguard._gitignored([str(outside), "a.tmp"]) == {"a.tmp"}
+    assert leakguard._gitignored([str(outside)]) == set()
+    code, _, failures = run(capsys, str(outside))
+    assert code == 1
+    assert [f.split(" -> ")[1].rsplit(", ", 1)[1] for f in failures] == ["raw.transactions.paymentData from ws)"]
+
+
+def test_gitignored_with_git_failing_is_an_error_not_an_empty_set(repo, monkeypatch):
+    monkeypatch.setenv("PATH", "")
+    with pytest.raises(leakguard.GitError):
+        leakguard._gitignored(["a.py"])
+
+
+@pytest.mark.parametrize(("args", "broken"), list(itertools.product([["--all"], ["--history"], ["a.py"]],
+                                                                   ["not a repository", "no git"])))
+def test_the_guard_fails_closed_when_git_fails(repo, capsys, monkeypatch, args, broken):
+    """Outside a repository (or with no git) an empty answer from git would read as "nothing to check"."""
+    repo("a.py", "x = 1\n")
+    if broken == "no git":
+        monkeypatch.setenv("PATH", "")
+    else:
+        shutil.rmtree(".git")   # the cwd, the scratch repository
+    code, out, failures = run(capsys, *args)
+    assert (code, out) == (1, "")
+    assert len(failures) == 1
+    assert failures[0].startswith("GIT: git ")
+    assert failures[0].endswith("; nothing was checked")
+
+
+
+# No line of the guard's output holds a value, nor more than its first 2 characters (df-c0vn): CI logs
+# are public. The values are digits (an account, a document) or words of letters that no fixed text of
+# the guard uses, so any 3 characters of one found in the output came from the value.
+VALUES = st.one_of(
+    st.text("0123456789", min_size=6, max_size=14).filter(lambda v: len(set(v)) > 1),
+    st.lists(st.text("jqxz", min_size=3, max_size=6), min_size=2, max_size=3).map(" ".join))
+FILLER = st.text("ab -=_\n", max_size=8)
+
+
+@settings(max_examples=60, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(case=st.tuples(VALUES, FILLER, FILLER, st.sampled_from(["text", "name", "private name"])))
+def test_no_output_line_holds_more_than_two_characters_of_a_value(repo, capsys, monkeypatch, case):
+    value, before, after, place = case
+    monkeypatch.setattr(leakguard, "load_real_values", lambda: ([("ws", {value: "raw.accounts.number"})], []))
+    name = f"x{before}{value}{after}x".replace("\n", "_")
+    rel = {"text": "notes/a.txt", "name": f"notes/{name}.txt", "private name": f"workspaces/W/data/{name}.csv"}[place]
+    repo(rel, f"{before}{value}{after}\n")
+    code = leakguard.main([rel])
+    err = capsys.readouterr().err.lower()
+    assert code == 1
+    assert not [value[i:i + 3] for i in range(len(value) - 2) if value[i:i + 3] in err]
+
+
+# The name of a file is a text like any other (df-0dk7): a document, a real value or the owner's name in
+# it is a finding, and the path is shown masked in every message about that file.
+@pytest.mark.parametrize("case", [
+    (f"comprovante_{CPF}.txt", "CPF"), (f"nota {CNPJ}.md", "CNPJ"),
+    ("conta-" + NUMBER_BARE + ".txt", "REAL"), ("Fulano de Tal.md", "NAME")])
+def test_a_finding_in_a_file_name_fails_with_the_path_masked(repo, capsys, workspace, monkeypatch, case):
+    """Whether the file is there or not (a deleted file is staged by its name alone)."""
+    name, label = case
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    rel = f"notes/{name}"
+    for _ in ("missing", "written"):
+        code, _, failures = run(capsys, rel)
+        assert code == 1
+        assert [f.split(":", 1)[0] for f in failures] == [label]
+        assert failures[0].startswith(f"{label}: the path 'no…' ({len(rel)} chars) -> ")
+        assert name not in failures[0]
+        repo(rel, "x = 1\n")
+
+
+def test_a_private_file_named_after_a_document_is_reported_with_its_path_masked(repo, capsys):
+    rel = f"workspaces/W/data/{CPF}.csv"
+    code, _, failures = run(capsys, rel)
+    assert code == 1
+    assert failures == [f"CPF: the path 'wo…' ({len(rel)} chars) -> '52…' (11 chars)",
+                        f"PRIVATE: 'wo…' ({len(rel)} chars) is a {leakguard.PRIVATE_FILE}"]
+
+
+def test_a_binary_file_named_after_a_document_is_reported_with_its_path_masked(repo, capsys, tmp_path):
+    rel = f"workspaces/W/scripts/{CPF}.bin"
+    (tmp_path / rel).parent.mkdir(parents=True)
+    (tmp_path / rel).write_bytes(b"\0\1")
+    failures = run(capsys, rel)[2]
+    assert failures[1] == f"PRIVATE: 'wo…' ({len(rel)} chars) is a {leakguard.BINARY_IN_WORKSPACE}"
+
+
+def test_a_path_with_no_finding_is_shown_as_it_is():
+    assert leakguard._path_failures("workspaces/W/data/x.csv", []) == ("workspaces/W/data/x.csv", [])
+
+
+def test_history_reads_a_non_ascii_path_and_masks_a_path_with_a_finding(repo, capsys, tmp_path):
+    """Without -z git quotes "relatório.db" and its .db suffix would not match (df-1ryd)."""
+    repo("relatório.db", "")
+    repo(f"x_{CPF}.db", "")
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "dbs", cwd=tmp_path)
+    _git("rm", "-q", "relatório.db", f"x_{CPF}.db", cwd=tmp_path)
+    _git("commit", "-qm", "no dbs", cwd=tmp_path)
+    failures = run(capsys, "--history")[2]
+    assert "history: relatório.db: private file was committed" in failures
+    assert f"history: 'x_…' ({len(CPF) + 5} chars): private file was committed" in failures
+    assert not [f for f in failures if CPF in f]
 
 
 @pytest.mark.parametrize(("function", "setup"), [
@@ -1172,8 +1301,8 @@ def test_the_help_describes_the_command_and_each_option(capsys):
     assert "XX" not in text
 
 
-def test_a_history_run_keeps_the_failures_of_loading_the_real_values(git_repo, capsys, tmp_path, monkeypatch):
-    git_repo("ok.py", "x = 1\n")
+def test_a_history_run_keeps_the_failures_of_loading_the_real_values(repo, capsys, tmp_path, monkeypatch):
+    repo("ok.py", "x = 1\n")
     _git("add", "-A", cwd=tmp_path)
     _git("commit", "-qm", "init", cwd=tmp_path)
     _clean_env(monkeypatch, waive=False)
@@ -1206,30 +1335,30 @@ def test_data_that_cannot_be_read_names_the_kind_of_error(repo, tmp_path):
 
 
 @pytest.fixture
-def history_repo(git_repo, tmp_path):
+def history_repo(repo, tmp_path):
     """A repository whose history holds, on a branch that was never merged and in a merge that
     resolved a conflict by writing the value, what only an audit of all of it can see."""
     def git(*args):
         return _git(*args, cwd=tmp_path)
 
-    git_repo("f.txt", "base\n")
+    repo("f.txt", "base\n")
     git("add", "-A")
     git("commit", "-qm", "base")
     git("branch", "-M", "main")
     git("checkout", "-qb", "side")
-    git_repo("f.txt", "side\n")
+    repo("f.txt", "side\n")
     git("commit", "-qam", "side change")
     git("checkout", "-q", "main")
-    git_repo("f.txt", "main\n")
+    repo("f.txt", "main\n")
     git("commit", "-qam", "main change")
     subprocess.run(["git", "merge", "--no-commit", "side"], cwd=tmp_path, capture_output=True, check=False)   # conflicts
-    git_repo("f.txt", f"resolved by {RECEIVER}\n")
-    git_repo("merged.db", "")
+    repo("f.txt", f"resolved by {RECEIVER}\n")
+    repo("merged.db", "")
     git("add", "-A")
     git("commit", "-qm", "merge side")
     git("checkout", "-qb", "never-merged", "HEAD~1")
-    git_repo("g.txt", f"owner {OWNER}\n")
-    git_repo("branch.db", "")
+    repo("g.txt", f"owner {OWNER}\n")
+    repo("branch.db", "")
     git("add", "-A")
     git("commit", "-qm", "see dump.db")
     git("checkout", "-q", "main")
@@ -1254,9 +1383,9 @@ def test_history_counts_lines_from_its_own_format_and_never_colours_it(monkeypat
     assert "--no-color" in calls[0]
 
 
-def test_a_commit_message_is_the_first_line_after_its_hash(git_repo, capsys, tmp_path, workspace):
+def test_a_commit_message_is_the_first_line_after_its_hash(repo, capsys, tmp_path, workspace):
     (tmp_path / ".leakguard-workspaces").write_text(f"{workspace}\n", encoding="utf-8")
-    git_repo("ok.py", "x = 1\n")
+    repo("ok.py", "x = 1\n")
     _git("add", "ok.py", cwd=tmp_path)
     _git("commit", "-qm", f"pay {RECEIVER}", cwd=tmp_path)
     code, _, failures = run(capsys, "--history")

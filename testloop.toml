@@ -45,8 +45,9 @@ process_isolation = "forkserver"
 # The other 26:
 #   _check_digits_hold zip strict=True / None / False / dropped: every caller passes digits whose length
 #     it has checked, so the two sides always have the same length.
-#   _git text=None / False / dropped and check=None / dropped: encoding="utf-8" already makes the output
-#     text, and a failed git is never raised on (check=False is the default), so the result is the same.
+#   _git check=None / dropped: check=False is the default, so the result is the same.
+#   _path_failures check_text(None, ...): `rel` only exempts uv.lock from the document patterns and
+#     LICENSE/README.md from the name ones, and none of those names holds a finding of its own.
 #   _cpf_valid range(12, 1, -1): _check_digits_hold keeps only the last `size` weights, so the extra
 #     leading weight is never used.
 #   _decode "UTF-16" / "UTF-8" / "CP1252": codec names are case-insensitive.
