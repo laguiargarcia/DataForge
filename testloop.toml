@@ -51,7 +51,7 @@ copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests
 #   _raw_values columns=None / dropped: reads every column, and only the present ones are looked up.
 #   _read_bytes `or True`: read_bytes on a missing path or a directory raises OSError, caught the same.
 #     On a FIFO it would block, but git does not track one, so no caller passes it.
-min_score = 0.9672
+min_score = 0.9684
 
 
 [targets."dataforge/apps.py"]
