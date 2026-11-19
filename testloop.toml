@@ -33,6 +33,9 @@ min_score = 0.9548
 [targets."scripts/leakguard.py"]
 tests = ["tests/test_leakguard.py"]
 copy = ["scripts/leakguard.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# Its tests start polars' thread pool, which a mutant forked from mutmut's main process waits for until
+# the timeout (df-kmx0): mutants fork from a server that only collects.
+process_isolation = "forkserver"
 # 33 survivors on the CI runner (26 on a laptop with git 2.43), all Equivalent (no observable change).
 # The 7 more on the runner depend on its git and SQLite (df-kmx0):
 #   check_history -m dropped or -M (4): git 2.56 shows merge diffs and paths without -m; an older git
