@@ -83,22 +83,40 @@ def resolve_tests(config: Config, module: str) -> list[str]:
     return sorted(found)
 
 
+def shard_count(config: Config, module: str) -> int:
+    """How many CI jobs mutate the module in (the target's `shards`, default 1; df-n8ac.32)."""
+    shards = (config.targets.get(module) or {}).get("shards", 1)
+    if isinstance(shards, bool) or not isinstance(shards, int) or shards < 1:
+        raise ToolError(f"{module}: `shards` in testloop.toml must be a whole number >= 1, got {shards!r}")
+    return shards
+
+
+def mutation_score(killed: int, survived: int, not_tested: int) -> float | None:
+    """Killed over the mutants with a verdict that counts (timeouts count as caught, so neither
+    side holds them); None when there is none."""
+    denom = killed + survived + not_tested
+    return killed / denom if denom else None
+
+
 def source_sha(path: Path) -> str:
     return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def result_path(repo: Path, command: str, module: str) -> Path:
-    return Path(repo) / RESULT_DIR / f"{command}-{module.replace('/', '_')}.json"
+def result_path(repo: Path, command: str, module: str, shard: tuple[int, int] | None = None) -> Path:
+    """`<command>-<module>.json`; shard i of n > 1 adds `.shard-iofn` before `.json`."""
+    suffix = f".shard-{shard[0]}of{shard[1]}" if shard and shard[1] > 1 else ""
+    return Path(repo) / RESULT_DIR / f"{command}-{module.replace('/', '_')}{suffix}.json"
 
 
-def clear_result(repo: Path, command: str, module: str) -> None:
+def clear_result(repo: Path, command: str, module: str, shard: tuple[int, int] | None = None) -> None:
     """Delete a previous result so a failed run never leaves a stale one behind."""
-    result_path(repo, command, module).unlink(missing_ok=True)
+    result_path(repo, command, module, shard).unlink(missing_ok=True)
 
 
-def write_result(repo: Path, command: str, module: str, data: dict) -> Path:
+def write_result(repo: Path, command: str, module: str, data: dict,
+                 shard: tuple[int, int] | None = None) -> Path:
     """Write the JSON with the common fields (command, module, tests, source_sha,
-    generated_at, tool) merged in; return its path."""
+    generated_at, tool, and `shard` when one is given) merged in; return its path."""
     payload = {
         "command": command,
         "module": module,
@@ -107,8 +125,10 @@ def write_result(repo: Path, command: str, module: str, data: dict) -> Path:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "tool": {"name": TOOL_NAME, "version": TOOL_VERSION},
     }
+    if shard:
+        payload["shard"] = list(shard)
     payload.update(data)
-    out = result_path(repo, command, module)
+    out = result_path(repo, command, module, shard)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return out

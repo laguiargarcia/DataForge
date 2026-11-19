@@ -2,8 +2,13 @@
 
 This is the only file that knows the mutation tool. Everything the tool needs
 (its config, its `mutants/` directory) lives in the temporary copy.
+
+`--shard I/N` mutates only the I-th of N parts of the module (df-n8ac.32): its top-level functions
+and methods, split by line count, so N CI jobs share a big target and `gate` sums them.
 """
 
+import ast
+import json
 import os
 import shutil
 import signal
@@ -11,12 +16,25 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
-from common import Config, ToolError, pytest_args, resolve_tests, test_env, write_result
+from common import (
+    Config, ToolError, mutation_score, pytest_args, resolve_tests, result_path, test_env, write_result,
+)
 
 TOOL = "mutmut"
 DEFAULT_BUDGET_SECONDS = 900
+# A run longer than this keeps the PR waiting: the target should be split into more shards.
+SLOW_SECONDS = 240
+WHOLE = (1, 1)
+
+# mutmut 3's names (mutmut/utils/format_utils.py): a top-level function's mutants are
+# <module>.x_<name>__mutmut_<n>, a method's <module>.xǁ<Class>ǁ<name>__mutmut_<n>.
+CLASS_SEPARATOR = "ǁ"
+MUTANT_INFIX = "__mutmut_"
+# What `mutmut run <names>` says (an assert) when no mutant matches the names.
+NOTHING_MATCHES = "Filtered for specific mutants, but nothing matches"
 
 # mutmut statuses we know how to classify.
 KILLED, SURVIVED = "killed", "survived"
@@ -26,6 +44,74 @@ NOT_TESTED = ("no tests", "not checked")
 
 class BudgetExceeded(Exception):
     pass
+
+
+def function_weights(source: str) -> dict[str, int]:
+    """mutmut's key of each function it can mutate (top-level functions and the methods of
+    top-level classes), weighted by its number of lines."""
+    weights: dict[str, int] = {}
+
+    def add(key: str, node: ast.AST) -> None:
+        weights[key] = weights.get(key, 0) + node.end_lineno - node.lineno + 1
+
+    functions = (ast.FunctionDef, ast.AsyncFunctionDef)
+    for node in ast.parse(source).body:
+        if isinstance(node, functions):
+            add(f"x_{node.name}", node)
+        elif isinstance(node, ast.ClassDef):
+            for item in node.body:
+                if isinstance(item, functions):
+                    add(f"x{CLASS_SEPARATOR}{node.name}{CLASS_SEPARATOR}{item.name}", item)
+    return weights
+
+
+def partition(weights: dict[str, int], n: int) -> list[list[str]]:
+    """Split the keys in n shards of near-equal weight: heaviest first (ties by name), each to
+    the lightest shard so far (ties to the lowest index). Every key lands in exactly one shard."""
+    shards: list[list[str]] = [[] for _ in range(n)]
+    loads = [0] * n
+    for key in sorted(sorted(weights), key=lambda k: -weights[k]):
+        lightest = min(range(n), key=lambda i: (loads[i], i))
+        shards[lightest].append(key)
+        loads[lightest] += weights[key]
+    return [sorted(shard) for shard in shards]
+
+
+def _mutant_module(module: str) -> str:
+    """The dotted name mutmut puts before a key: a package's __init__ drops out."""
+    return module.removesuffix(".py").replace("/", ".").removesuffix(".__init__")
+
+
+def shard_globs(module: str, keys: list[str]) -> list[str]:
+    """`mutmut run` filters: every mutant of these functions."""
+    return [f"{_mutant_module(module)}.{key}{MUTANT_INFIX}*" for key in keys]
+
+
+def function_of(mutant: str) -> str:
+    """The function key a mutant belongs to: m.x_f__mutmut_3 -> x_f."""
+    return mutant.partition(MUTANT_INFIX)[0].rpartition(".")[2]
+
+
+def slow_warning(module: str, elapsed: float) -> str | None:
+    if elapsed <= SLOW_SECONDS:
+        return None
+    return (f"mutate took {elapsed:.0f}s, over {SLOW_SECONDS}s: raise `shards` for {module} in "
+            f"testloop.toml so its CI jobs stay short")
+
+
+def _shard_keys(config: Config, module: str, shard: tuple[int, int]) -> set[str] | None:
+    """The function keys of the shard; None for the whole module."""
+    if shard == WHOLE:
+        return None
+    weights = function_weights((config.repo / module).read_text(encoding="utf-8"))
+    return set(partition(weights, shard[1])[shard[0] - 1])
+
+
+def _in_shard(results: dict[str, str], keys: set[str] | None) -> dict[str, str]:
+    """The results of the shard's functions; mutmut lists every mutant, run or not."""
+    if keys is None:
+        return results
+    return {k: v for k, v in results.items() if function_of(k) in keys}
 
 
 def _tail(text: str, n: int = 1500) -> str:
@@ -87,8 +173,6 @@ def _copy_files(config: Config, module: str, tests: list[str], dest: Path) -> No
 
 
 def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path) -> None:
-    import json
-
     parts = Path(module).parts
     source = parts[0] if len(parts) > 1 else module
     lines = [
@@ -158,7 +242,6 @@ def _summarise(results: dict[str, str]) -> dict:
 
 def _result(summary: dict, diffs: dict[str, str], total: int, complete: bool,
             elapsed: float, warnings: list[str], tests: list[str], version: str) -> dict:
-    denom = summary["killed"] + len(summary["survivors"]) + len(summary["not_tested"])
     return {
         "tests": tests,
         "tool": {"name": TOOL, "version": version},
@@ -168,7 +251,7 @@ def _result(summary: dict, diffs: dict[str, str], total: int, complete: bool,
         "survived": [{"id": k, "diff": diffs.get(k, "")} for k in summary["survivors"]],
         "timeout": summary["timeout"],
         "not_tested": summary["not_tested"],
-        "score": (summary["killed"] / denom) if denom else None,
+        "score": mutation_score(summary["killed"], len(summary["survivors"]), len(summary["not_tested"])),
         "elapsed_s": round(elapsed, 2),
         "warnings": warnings,
     }
@@ -183,30 +266,81 @@ def _mutmut_version() -> str:
         return "unknown"
 
 
-def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SECONDS) -> tuple[Path, int]:
+@dataclass
+class _Mutation:
+    """One mutate run: what to mutate, where the copy is, and which shard of the module."""
+    config: Config
+    module: str
+    tests: list[str]
+    python: str
+    copy: Path
+    env: dict
+    started: float
+    shard: tuple[int, int]
+    keys: set[str] | None   # the shard's function keys; None = the whole module
+
+    def write(self, summary: dict, diffs: dict[str, str], total: int, complete: bool,
+              warnings: list[str]) -> Path:
+        elapsed = time.monotonic() - self.started
+        if slow := slow_warning(self.module, elapsed):
+            warnings.append(slow)
+            print(f"testloop: {slow}", file=sys.stderr)
+        return write_result(self.config.repo, "mutate", self.module, _result(
+            summary, diffs, total, complete, elapsed, warnings, self.tests, _mutmut_version()),
+            shard=self.shard)
+
+
+def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SECONDS,
+         shard: tuple[int, int] | None = None) -> tuple[Path, int]:
     if not (config.repo / module).is_file():
         raise ToolError(f"module not found: {module}")
+    shard = shard or WHOLE
     tests = resolve_tests(config, module)
-    python = _python(config)
     started = time.monotonic()
     deadline = started + budget_seconds
     env = test_env(config, PYTHONDONTWRITEBYTECODE="1")
     env.pop("MUTANT_UNDER_TEST", None)
 
     copy = Path(tempfile.mkdtemp(prefix="testloop-mutate-", dir=_tmp_root()))
+    job = _Mutation(config, module, tests, _python(config), copy, env, started, shard,
+               _shard_keys(config, module, shard))
     try:
         _copy_files(config, module, tests, copy)
         _write_tool_config(config, module, tests, copy)
         try:
-            return _mutate(config, module, tests, python, copy, env, started, deadline)
+            return _mutate(job, deadline)
         except BudgetExceeded:
-            return _partial(config, module, tests, python, copy, env, started, budget_seconds)
+            return _partial(job, budget_seconds)
     finally:
         shutil.rmtree(copy, ignore_errors=True)
 
 
-def _mutate(config, module, tests, python, copy, env, started, deadline):
-    version = _mutmut_version()
+def _mutants(job: _Mutation, deadline: float) -> dict[str, str]:
+    """Run mutmut on the whole module, or only on the mutants of the shard's functions, and
+    return the status of each mutant it counts. A shard can have no function at all (more shards
+    than functions) or only functions without mutants, which mutmut refuses to filter for: both
+    are a complete result of 0 mutants."""
+    python, copy, env, module = job.python, job.copy, job.env, job.module
+    if job.keys is not None and not job.keys:
+        return {}
+    globs = [] if job.keys is None else shard_globs(module, sorted(job.keys))
+    code, out = _run([python, "-m", "mutmut", "run", *globs], copy, env, deadline)
+    if code != 0 and not (globs and NOTHING_MATCHES in out):
+        raise ToolError(f"{TOOL} run exited {code}:\n{_tail(out)}")
+    everything = _collect(python, copy, env, deadline)
+    if job.keys is None:
+        if not everything:
+            raise ToolError(f"{TOOL} generated no mutants for {module}:\n{_tail(out)}")
+        return everything
+    known = function_weights((job.config.repo / module).read_text(encoding="utf-8"))
+    strays = sorted(k for k in everything if function_of(k) not in known)
+    if strays:
+        raise ToolError(f"{TOOL} mutants outside every shard (the split misses their function): {strays[:5]}")
+    return _in_shard(everything, job.keys)
+
+
+def _mutate(job: _Mutation, deadline: float) -> tuple[Path, int]:
+    python, copy, env, module = job.python, job.copy, job.env, job.module
 
     # 1. The code under test must be the copy, not an editable install of the repo.
     dotted = module.removesuffix(".py").replace("/", ".")
@@ -221,20 +355,14 @@ def _mutate(config, module, tests, python, copy, env, started, deadline):
 
     # 2. Baseline: the copy's tests must pass before anything is mutated.
     code, out = _run(
-        [python, "-m", "pytest", *pytest_args(config), *tests],
+        [python, "-m", "pytest", *pytest_args(job.config), *job.tests],
         copy, env, deadline,
     )
     if code != 0:
         raise ToolError(f"baseline tests fail in the copy (pytest exit {code}); not mutating:\n{_tail(out)}")
 
     # 3. Mutate.
-    code, out = _run([python, "-m", "mutmut", "run"], copy, env, deadline)
-    if code != 0:
-        raise ToolError(f"{TOOL} run exited {code}:\n{_tail(out)}")
-
-    results = _collect(python, copy, env, deadline)
-    if not results:
-        raise ToolError(f"{TOOL} generated no mutants for {module}:\n{_tail(out)}")
+    results = _mutants(job, deadline)
     summary = _summarise(results)
     if summary["unknown"]:
         shown = ", ".join(f"{k} ({v})" for k, v in list(summary["unknown"].items())[:5])
@@ -245,21 +373,19 @@ def _mutate(config, module, tests, python, copy, env, started, deadline):
     complete = not any(results[k] == "not checked" for k in results)
     if not complete:
         warnings.append("some mutants were never checked; result is partial")
-    if summary["killed"] == 0:
+    if results and summary["killed"] == 0:
         warnings.append("no mutant was killed: the suite may be genuinely weak, or the run is not measuring it")
-    elapsed = time.monotonic() - started
-    out_path = write_result(config.repo, "mutate", module, _result(
-        summary, diffs, len(results), complete, elapsed, warnings, tests, version))
+    out_path = job.write(summary, diffs, len(results), complete, warnings)
     return out_path, (0 if complete else 2)
 
 
-def _partial(config, module, tests, python, copy, env, started, budget_seconds):
+def _partial(job: _Mutation, budget_seconds: float) -> tuple[Path, int]:
     """Budget exhausted: the process group is already dead. Record what we have."""
-    version = _mutmut_version()
+    python, copy, env = job.python, job.copy, job.env
     warnings = [f"budget of {budget_seconds}s exhausted; result is partial"]
     results: dict[str, str] = {}
     try:
-        results = _collect(python, copy, env, time.monotonic() + 30)
+        results = _in_shard(_collect(python, copy, env, time.monotonic() + 30), job.keys)
     except (ToolError, BudgetExceeded):
         warnings.append("could not read partial results")
     summary = _summarise(results)
@@ -273,12 +399,9 @@ def _partial(config, module, tests, python, copy, env, started, budget_seconds):
             diffs[key] = _diff(python, copy, env, key, time.monotonic() + 30)
         except (ToolError, BudgetExceeded):
             pass
-    write_result(config.repo, "mutate", module, _result(
-        summary, diffs, len(results), False, time.monotonic() - started, warnings, tests, version))
+    job.write(summary, diffs, len(results), False, warnings)
     print(f"testloop: mutate budget of {budget_seconds}s exhausted; partial result written (complete: false)",
           file=sys.stderr)
-    from common import result_path
-
     # Returns (path, 2): the CLI prints the path and exits 2, and the partial result is
     # marked complete: false.
-    return result_path(config.repo, "mutate", module), 2
+    return result_path(job.config.repo, "mutate", job.module, job.shard), 2
