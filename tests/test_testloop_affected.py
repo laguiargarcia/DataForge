@@ -178,15 +178,16 @@ def test_cli_rejects_a_base_ref_that_is_not_a_ref_name(repo, monkeypatch, capsys
 
 def test_cli_matrix_packs_one_item_per_shard_of_each_target_into_jobs(repo, monkeypatch, capsys):
     """df-n8ac.32: --matrix feeds CI's mutation matrix, one item per shard; df-n8ac.39: packed into
-    jobs. Without costs every item is estimated at UNMEASURED_SECONDS (60 s: two per 150 s job)."""
+    jobs. Without costs every item is estimated at UNMEASURED_SECONDS (60 s: three per 200 s job)."""
     toml = repo / "testloop.toml"
     toml.write_text(toml.read_text(encoding="utf-8").replace(
         'tests = ["tests/test_plan*.py"]\n', 'tests = ["tests/test_plan*.py"]\nshards = 3\n'), encoding="utf-8")
     monkeypatch.chdir(repo)
     assert affected.main(["--matrix"]) == 0
     assert json.loads(capsys.readouterr().out) == [
-        {"job": 1, "items": [{"module": APPLY, "shard": 1, "shards": 1}, {"module": PLAN, "shard": 1, "shards": 3}]},
-        {"job": 2, "items": [{"module": PLAN, "shard": 2, "shards": 3}, {"module": PLAN, "shard": 3, "shards": 3}]},
+        {"job": 1, "items": [{"module": APPLY, "shard": 1, "shards": 1}, {"module": PLAN, "shard": 1, "shards": 3},
+                             {"module": PLAN, "shard": 2, "shards": 3}]},
+        {"job": 2, "items": [{"module": PLAN, "shard": 3, "shards": 3}]},
     ]
 
 
@@ -261,15 +262,15 @@ def item(module, shard=1, shards=1):
 
 
 def test_items_fill_a_job_up_to_the_cap_first_fit_heaviest_first():
-    estimated = [(item("a.py"), 100), (item("b.py"), 70), (item("c.py"), 50), (item("d.py"), 40), (item("e.py"), 30)]
+    estimated = [(item("a.py"), 130), (item("b.py"), 90), (item("c.py"), 70), (item("d.py"), 60), (item("e.py"), 50)]
     assert affected.pack(estimated) == [
-        {"job": 1, "items": [item("a.py"), item("c.py")]},           # 100 + 50; d (40) would pass 150
-        {"job": 2, "items": [item("b.py"), item("d.py"), item("e.py")]},   # 70 + 40 + 30
+        {"job": 1, "items": [item("a.py"), item("c.py")]},           # 130 + 70; d (60) would pass 200
+        {"job": 2, "items": [item("b.py"), item("d.py"), item("e.py")]},   # 90 + 60 + 50
     ]
 
 
 def test_an_item_over_the_cap_runs_alone():
-    estimated = [(item("big.py", 1, 2), 400), (item("big.py", 2, 2), 151), (item("small.py"), 10)]
+    estimated = [(item("big.py", 1, 2), 400), (item("big.py", 2, 2), 201), (item("small.py"), 10)]
     assert affected.pack(estimated) == [
         {"job": 1, "items": [item("big.py", 1, 2)]},
         {"job": 2, "items": [item("big.py", 2, 2)]},
@@ -278,7 +279,7 @@ def test_an_item_over_the_cap_runs_alone():
 
 
 def test_the_estimate_is_the_only_cap_on_a_job():
-    estimated = [(item(f"m{i:02}.py"), 7.5) for i in range(20)]
+    estimated = [(item(f"m{i:02}.py"), 10) for i in range(20)]
     assert affected.pack(estimated) == [{"job": 1, "items": [i for i, _ in estimated]}]
 
 
@@ -333,7 +334,7 @@ def test_mutate_and_the_matrix_split_a_module_alike_from_the_same_costs_file(rep
     toml.write_text(toml.read_text(encoding="utf-8").replace(
         'tests = ["tests/test_plan*.py"]\n', 'tests = ["tests/test_plan*.py"]\nshards = 2\n'), encoding="utf-8")
     (repo / PLAN).write_text(SPLIT_SRC, encoding="utf-8")
-    (repo / "costs.json").write_text(json.dumps({PLAN: MEASURED, APPLY: {"elapsed": 31.0, "functions": {}}}))
+    (repo / "costs.json").write_text(json.dumps({PLAN: MEASURED, APPLY: {"elapsed": 81.0, "functions": {}}}))
     config = load_config(repo)
     keys = [mutate_cmd._shard_keys(config, PLAN, (i, 2), load_costs(repo / "costs.json")) for i in (1, 2)]
     assert keys == [{"x_small"}, {"x_big", "x_tiny"}]   # by lines it would be x_big alone
@@ -342,22 +343,26 @@ def test_mutate_and_the_matrix_split_a_module_alike_from_the_same_costs_file(rep
     monkeypatch.chdir(repo)
     assert affected.main(["--matrix", "--costs", "costs.json"]) == 0
     captured = capsys.readouterr()
-    assert json.loads(captured.out) == [   # 72 s + 48 s, then APPLY's 31 s would pass 150 s
-        {"job": 1, "items": [item(PLAN, 1, 2), item(PLAN, 2, 2)]},
-        {"job": 2, "items": [item(APPLY)]},
+    assert json.loads(captured.out) == [   # APPLY 81 s + PLAN 1/2 72 s; PLAN 2/2 (48 s) would pass 200 s
+        {"job": 1, "items": [item(APPLY), item(PLAN, 1, 2)]},
+        {"job": 2, "items": [item(PLAN, 2, 2)]},
     ]
-    assert "job 1 (~120 s)" in captured.err
+    assert "job 1 (~153 s)" in captured.err
 
 
-def test_cli_matrix_with_a_bad_costs_file_is_a_tool_error(repo, monkeypatch, capsys):
+def test_cli_matrix_with_a_bad_costs_file_warns_and_estimates_unmeasured(repo, monkeypatch, capsys):
+    """A broken costs file in the CI cache must not fail every run until someone deletes it."""
     (repo / "costs.json").write_text("[]")
     monkeypatch.chdir(repo)
-    assert affected.main(["--matrix", "--costs", "costs.json"]) == 2
-    assert "costs file" in capsys.readouterr().err
+    assert affected.main(["--matrix", "--costs", "costs.json"]) == 0
+    captured = capsys.readouterr()
+    assert "costs file" in captured.err
+    assert json.loads(captured.out) == [{"job": 1, "items": [item(APPLY), item(PLAN)]}]
 
 
-def _result(config, module, shard, elapsed, functions):
-    write_result(config.repo, "mutate", module, {"elapsed_s": elapsed, "function_seconds": functions}, shard=shard)
+def _result(config, module, shard, elapsed, functions, **extra):
+    data = {"elapsed_s": elapsed, "function_seconds": functions, "complete": True, **extra}
+    write_result(config.repo, "mutate", module, data, shard=shard)
 
 
 def test_the_costs_file_sums_each_targets_shards_and_merges_their_functions(repo):
@@ -373,15 +378,21 @@ def test_the_costs_file_sums_each_targets_shards_and_merges_their_functions(repo
     assert costs.build(config)[APPLY] == {"elapsed": 12.0, "functions": {"x_f": 9.0}}
 
 
-def test_a_target_with_a_missing_shard_has_no_elapsed_but_keeps_its_functions(repo):
-    """A shard that died left no result: the module's elapsed would be short, so it is left out
-    and affected estimates the module as unmeasured; the functions measured still split it."""
+@pytest.mark.parametrize("first", ["missing", "partial"])
+def test_a_target_with_a_missing_or_partial_shard_has_no_elapsed_but_keeps_its_complete_functions(repo, first):
+    """A shard that died left no result, and one the budget cut short measured the budget, not the
+    shard: neither is a measure. The module's elapsed would be wrong, so it is left out and affected
+    estimates the module as unmeasured; the functions of the complete shards still split it."""
     toml = repo / "testloop.toml"
     toml.write_text(toml.read_text(encoding="utf-8").replace(
         'tests = ["tests/test_plan*.py"]\n', 'tests = ["tests/test_plan*.py"]\nshards = 2\n'), encoding="utf-8")
     config = load_config(repo)
+    if first == "partial":
+        _result(config, PLAN, (1, 2), 900.0, {"x_a": 400.0}, complete=False)
     _result(config, PLAN, (2, 2), 30.0, {"x_b": 10.0})
     assert costs.build(config) == {PLAN: {"functions": {"x_b": 10.0}}}
+    _result(config, APPLY, None, 900.0, {"x_f": 9.0}, complete=False)
+    assert APPLY not in costs.build(config)
 
 
 def test_costs_cli_writes_a_file_the_matrix_and_mutate_read(repo, monkeypatch, capsys):

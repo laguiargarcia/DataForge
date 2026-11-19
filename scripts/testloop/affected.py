@@ -5,12 +5,12 @@ Usage (repo root): affected.py [--base-ref REF] [--matrix [--costs FILE]]
 With --matrix it prints the CI mutation matrix instead: a list of jobs {"job": j, "items": [...]},
 each item one {"module", "shard", "shards"} per shard of each chosen target (`shards` in
 testloop.toml, default 1; df-n8ac.32). The items are packed first-fit, heaviest first, into jobs of
-at most JOB_SECONDS estimated mutate seconds (df-n8ac.39); an item over the cap runs alone. An item's estimate is its module's measured elapsed (FILE, from scripts/testloop/costs.py)
-times its shard's share of the module's function weights, split as `mutate --costs FILE` splits
-it; a module without a measure is UNMEASURED_SECONDS per shard.
+at most JOB_SECONDS estimated mutate seconds (df-n8ac.39); an item over the cap runs alone. An
+item's estimate is its module's measured elapsed (FILE, from scripts/testloop/costs.py) times its
+shard's share of the module's function weights, split as `mutate --costs FILE` splits it; a module
+without a measure is UNMEASURED_SECONDS per shard, and an unusable FILE is a warning and no measure.
 
-Without --base-ref every target is printed: push to main, the weekly run and manual runs mutate
-everything. With it, the changed files are `git diff --name-only REF...HEAD`, and a target is
+Without --base-ref every target is printed: push to main and manual runs mutate everything. With it, the changed files are `git diff --name-only REF...HEAD`, and a target is
 kept when one of them is
 - the target's module, one of its test files, or a first-party module either of them imports,
   directly or through other first-party modules (imports inside functions included);
@@ -38,7 +38,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mutate_cmd
-from common import ToolError, load_config, load_costs, resolve_tests, shard_count
+from common import ToolError, costs_or_empty, load_config, resolve_tests, shard_count
 
 # Packages whose imports are followed: everything else is third party.
 FIRST_PARTY = ("dataforge", "tests")
@@ -67,7 +67,7 @@ JOB_KEY = re.compile(r" {2}([A-Za-z_][\w-]*):\s*(#.*)?$")
 
 # Packing the matrix into jobs (df-n8ac.39): GitHub Free runs 20 jobs at a time, and each job pays
 # about a minute of setup (checkout, uv sync) before its first mutate.
-JOB_SECONDS = 150          # estimated mutate seconds that fill a job
+JOB_SECONDS = 200          # estimated mutate seconds that fill a job
 UNMEASURED_SECONDS = 60    # the estimate of a shard of a module the costs file does not measure
 
 INIT = "__init__.py"
@@ -340,7 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             picked = list(config.targets)
             reasons = dict.fromkeys(picked, "no base ref: every target")
-        out = matrix(config, picked, load_costs(args.costs) if args.costs else None) if args.matrix else picked
+        out = matrix(config, picked, costs_or_empty(args.costs) if args.costs else None) if args.matrix else picked
     except ToolError as exc:
         print(f"affected: {exc}", file=sys.stderr)
         return 2

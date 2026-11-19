@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "testlo
 
 import gate_cmd  # the test loop tools are scripts, not an installed package
 import mutate_cmd
-from common import Config, ToolError, load_costs, mutation_score, result_path, write_result
+from common import Config, ToolError, costs_or_empty, load_costs, mutation_score, result_path, write_result
 from gate_cmd import four_places_down
 
 
@@ -326,8 +326,12 @@ def test_a_function_without_a_measure_weighs_its_lines_at_the_modules_median_sec
     assert weights["xǁBoxǁ__init__"] == 8.0
 
 
-@pytest.mark.parametrize("measured", [None, {}, {"elapsed": 12}, {"elapsed": 12, "functions": {"x_gone": 4.0}}])
-def test_a_module_without_a_measured_function_weighs_lines_as_without_costs(measured):
+@pytest.mark.parametrize("measured", [
+    None, {}, {"elapsed": 12}, {"elapsed": 12, "functions": {"x_gone": 4.0}},
+    # measured, but no second: every function would weigh 0 and land in shard 1
+    {"elapsed": 12, "functions": {"x_big": 0, "x_small": 0.0}},
+])
+def test_a_module_without_measured_seconds_weighs_lines_as_without_costs(measured):
     assert mutate_cmd.cost_weights(SHARDED_SRC, measured) == mutate_cmd.function_weights(SHARDED_SRC)
 
 
@@ -382,3 +386,14 @@ def test_a_costs_file_loads_and_a_bad_one_is_a_tool_error(tmp_path):
             load_costs(path)
     with pytest.raises(ToolError, match="costs"):
         load_costs(tmp_path / "missing.json")
+
+
+def test_a_bad_costs_file_warns_and_measures_nothing(tmp_path, capsys):
+    """A broken file in the CI cache must not stop every run until someone deletes it: the split and
+    the packing fall back to lines and 60 s, and the next full run writes a good one."""
+    path = tmp_path / "costs.json"
+    path.write_text("[]")
+    assert costs_or_empty(path) == {}
+    assert "costs file" in capsys.readouterr().err
+    path.write_text('{"a.py": {"elapsed": 1}}')
+    assert costs_or_empty(path) == {"a.py": {"elapsed": 1}}

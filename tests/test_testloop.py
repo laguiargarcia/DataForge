@@ -651,11 +651,16 @@ def test_mutate_with_costs_splits_the_shards_by_the_measured_seconds(tmp_path):
     assert {function_of(s["id"]) for s in data["survived"]} <= {"xǁBoxǁdouble"}
 
 
-def test_mutate_with_a_bad_costs_file_exits_2(sample_repo):
-    (sample_repo / "costs.json").write_text("[]")
-    proc = run(sample_repo, "mutate", "sample/mod.py", "--costs", "costs.json")
-    assert proc.returncode == 2
+def test_mutate_with_a_bad_costs_file_warns_and_splits_by_lines(tmp_path):
+    repo = make_repo(tmp_path, TEST_SHARDED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    with (repo / "testloop.toml").open("a") as f:
+        f.write("shards = 2\n")
+    (repo / "costs.json").write_text("[]")
+    proc = run(repo, "mutate", "sample/mod.py", "--shard", "1/2", "--costs", "costs.json")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "costs file" in proc.stderr
+    assert set(json.loads(shard_path(repo, "sample/mod.py", 1, 2).read_text())["function_seconds"]) == {"x_classify"}
 
 
 @pytest.mark.parametrize("shard", ["0/2", "3/2", "2", "a/b", "1/0"])

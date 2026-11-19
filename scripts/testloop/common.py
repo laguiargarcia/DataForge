@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import sys
 import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -114,6 +115,16 @@ def load_costs(path: Path) -> dict[str, dict]:
     if not isinstance(costs, dict) or not all(_cost_entry(entry) for entry in costs.values()):
         raise ToolError(f'the costs file {path} is not {{module: {{"elapsed": s, "functions": {{key: s}}}}}}')
     return costs
+
+
+def costs_or_empty(path: Path) -> dict[str, dict]:
+    """load_costs, or no measure at all (with a warning) when the file cannot be used: a broken file in
+    CI's cache would otherwise stop every run, the full run that writes a new one included."""
+    try:
+        return load_costs(path)
+    except ToolError as exc:
+        print(f"{TOOL_NAME}: warning: {exc}; splitting by lines and estimating as unmeasured", file=sys.stderr)
+        return {}
 
 
 def mutation_score(killed: int, survived: int, not_tested: int) -> float | None:

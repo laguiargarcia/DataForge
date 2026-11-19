@@ -5,9 +5,10 @@ Usage (repo root): costs.py --out FILE
 
 For each testloop.toml target it reads the results of its current `shards` (as gate does) and writes
 {module: {"elapsed": seconds of its shards summed, "functions": {function key: seconds}}}, the
-functions merged from each result's `function_seconds`. A target with a shard missing keeps its
-functions but no elapsed (it would be short), and one without any result is left out: affected
-estimates both as unmeasured. CI builds it in mutation-ok from a full run (push, manual run).
+functions merged from each result's `function_seconds`. Only complete results measure: one the
+budget cut short timed the budget, not the shard. A target with a shard missing or partial keeps the
+functions of the others but no elapsed (it would be wrong), and one without any complete result is
+left out: affected estimates both as unmeasured. CI builds it in mutation-ok from a full run (push, manual run).
 """
 
 import argparse
@@ -33,10 +34,10 @@ def _seconds(value) -> float | None:
 
 
 def measure(config, module: str) -> dict | None:
-    """The module's entry in the costs file, or None when no shard of it left a result."""
+    """The module's entry in the costs file, or None when no shard of it left a complete result."""
     n = shard_count(config, module)
     results = [_read(result_path(config.repo, "mutate", module, (i, n))) for i in range(1, n + 1)]
-    found = [data for data in results if data is not None]
+    found = [data for data in results if data is not None and data.get("complete") is True]
     if not found:
         return None
     functions: dict[str, float] = {}

@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from common import (
-    Config, ToolError, load_costs, mutation_score, pytest_args, resolve_tests, result_path, shard_count, test_env,
+    Config, ToolError, costs_or_empty, mutation_score, pytest_args, resolve_tests, result_path, shard_count, test_env,
     write_result,
 )
 
@@ -145,12 +145,12 @@ def function_weights(source: str) -> dict[str, int]:
 def cost_weights(source: str, measured: dict | None = None) -> dict[str, float]:
     """Each function key weighted by the seconds its mutants took (`measured`: the module's entry in
     the costs file, df-n8ac.39). A function the measure lacks (new since, or never run to the end)
-    weighs its lines times the module's median seconds per line; a module with no measured function
+    weighs its lines times the module's median seconds per line; a module with no measured second
     weighs lines alone, as without costs. The one weighing of mutate's split and affected's packing."""
     lines = function_weights(source)
     seconds = (measured or {}).get("functions", {})
     known = {key: seconds[key] for key in lines if key in seconds}
-    if not known:
+    if not any(known.values()):
         return dict(lines)
     rate = statistics.median(known[key] / lines[key] for key in known)
     return {key: known.get(key, lines[key] * rate) for key in lines}
@@ -188,11 +188,11 @@ def function_texts(source: str) -> dict[str, str]:
     return {key: "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest() for key, text in texts.items()}
 
 
-def partition(weights: dict[str, int], n: int) -> list[list[str]]:
+def partition(weights: dict[str, float], n: int) -> list[list[str]]:
     """Split the keys in n shards of near-equal weight: heaviest first (ties by name), each to
     the lightest shard so far (ties to the lowest index). Every key lands in exactly one shard."""
     shards: list[list[str]] = [[] for _ in range(n)]
-    loads = [0] * n
+    loads = [0.0] * n
     for key in sorted(weights, key=lambda k: (-weights[k], k)):
         lightest = min(range(n), key=lambda i: (loads[i], i))
         shards[lightest].append(key)
@@ -452,7 +452,7 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     env = test_env(config, PYTHONDONTWRITEBYTECODE="1")
     env.pop("MUTANT_UNDER_TEST", None)
 
-    measured = load_costs(costs) if costs is not None else None
+    measured = costs_or_empty(costs) if costs is not None else None
     keys = _shard_keys(config, module, shard, measured)   # before the copy: a refusal leaves no temp dir
     copy = Path(tempfile.mkdtemp(prefix="testloop-mutate-", dir=_tmp_root()))
     job = _Mutation(config, module, tests, _python(config), copy, env, started, shard, keys)

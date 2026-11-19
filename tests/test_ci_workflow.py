@@ -18,6 +18,8 @@ REQUIRED = {"leak-scan", "quality", "tests", "tests-windows", "testloop-tools", 
 NOT_GATING = {"report"}
 # The measured mutation costs (scripts/testloop/costs.py, df-n8ac.39).
 COSTS = ".mutation_costs.json"
+# The costs a full run split its shards by, saved inside its mutmut cache (df-n8ac.39).
+SPLIT = "split-costs.json"
 
 
 def _jobs() -> dict:
@@ -95,7 +97,7 @@ def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
     hands the same file to the mutation jobs, whose shards split by it; mutation-ok saves new ones."""
     jobs = _jobs()
     targets, mutation, ok = (jobs[name]["steps"] for name in ("mutation-targets", "mutation", "mutation-ok"))
-    restore, = _uses(targets, "actions/cache/restore")
+    restore = next(s for s in _uses(targets, "actions/cache/restore") if s["with"]["path"] == COSTS)
     save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] == COSTS)
     assert save["with"]["key"].startswith(restore["with"]["restore-keys"])
     assert restore["with"]["path"] == save["with"]["path"] == COSTS
@@ -110,3 +112,29 @@ def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
     build = next(s for s in ok if "costs.py" in str(s.get("run", "")))
     assert f"--out {COSTS}" in build["run"]
     assert ok.index(build) < ok.index(save)
+
+
+def test_a_pr_splits_by_the_costs_that_built_the_cache_it_reuses():
+    """df-n8ac.39: a push saves, inside the mutmut cache, the costs file it split the shards by; a PR
+    restores that cache in mutation-targets and packs, splits and hands the jobs that same file. Split by
+    newer costs, a function would change shard and lose its cached verdicts (df-n8ac.38)."""
+    jobs = _jobs()
+    targets, mutation, ok = (jobs[name]["steps"] for name in ("mutation-targets", "mutation", "mutation-ok"))
+    cache = "${{ runner.temp }}/mutmut-cache"
+    verdicts = next(s for s in _uses(targets, "actions/cache/restore") if s["with"]["path"] == cache)
+    job_restore, = _uses(mutation, "actions/cache/restore")
+    save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] == cache)
+    assert verdicts["if"] == "github.event_name == 'pull_request'"
+    assert verdicts["with"] == job_restore["with"]
+    assert verdicts["with"]["key"] == save["with"]["key"]
+    pick = next(s for s in targets if s.get("id") == "pick")
+    assert targets.index(verdicts) < targets.index(pick)
+    assert f'split="$RUNNER_TEMP/mutmut-cache/{SPLIT}"' in pick["run"]
+    assert f'cp -f "$split" {COSTS}' in pick["run"]
+    assert pick["run"].index("cp -f") < pick["run"].index("--matrix")
+    split = next(s for s in _uses(ok, "actions/download-artifact") if s["with"].get("name") == "mutation-costs")
+    keep = next(s for s in ok if f"$RUNNER_TEMP/mutmut-cache/{SPLIT}" in str(s.get("run", "")))
+    assert f'"$RUNNER_TEMP/split/{COSTS}"' in keep["run"]
+    assert split["with"]["path"] == "${{ runner.temp }}/split"
+    assert ok.index(split) < ok.index(keep) < ok.index(save)
+    assert keep["if"] == split["if"] == save["if"]

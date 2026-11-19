@@ -397,9 +397,12 @@ jobs:
     # first-party imports changed, or every one when a shared file changed
     # (scripts/testloop/affected.py). On push to main and by hand: every target, which also
     # audits what PRs skipped. `matrix` is the mutation jobs (df-n8ac.39): every shard of each target
-    # (`shards` in testloop.toml, df-n8ac.32) packed by its measured cost into jobs of about 150 s of
-    # mutate, so a full run fits GitHub Free's 20 jobs at a time. The costs are those mutation-ok
-    # measured in main's last full run; without them every shard is estimated at 60 s and split by lines.
+    # (`shards` in testloop.toml, df-n8ac.32) packed by its measured cost into jobs of about 200 s of
+    # mutate, so a full run fits GitHub Free's 20 jobs at a time. A push or manual run packs and splits
+    # by the costs mutation-ok measured in main's last full run. A PR packs and splits by the costs
+    # that built the cache it reuses (split-costs.json, saved inside it): split by other costs, a
+    # function would change shard and lose its cached verdicts. Without either, every shard is
+    # estimated at 60 s and split by lines.
     runs-on: ubuntu-latest
     outputs:
       targets: "${{ steps.pick.outputs.targets }}"
@@ -415,12 +418,21 @@ jobs:
           path: .mutation_costs.json
           key: "mutation-costs-${{ github.run_id }}"
           restore-keys: "mutation-costs-"
+      - name: Verdicts of main's last run, with the costs it split by
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: "${{ runner.temp }}/mutmut-cache"
+          key: "mutmut-all-${{ hashFiles('uv.lock', '.python-version') }}-${{ github.run_id }}"
+          restore-keys: "mutmut-all-${{ hashFiles('uv.lock', '.python-version') }}-"
       - id: pick
         name: Pick targets
         shell: bash
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
         run: |
+          split="$RUNNER_TEMP/mutmut-cache/split-costs.json"
+          if [ -f "$split" ]; then cp -f "$split" .mutation_costs.json; fi   # a PR: as its cache was built
           [ -f .mutation_costs.json ] || echo '{}' > .mutation_costs.json   # no measure yet: lines
           targets=$(uv run --no-project python scripts/testloop/affected.py ${BASE_REF:+--base-ref "$BASE_REF"})
           matrix=$(uv run --no-project python scripts/testloop/affected.py ${BASE_REF:+--base-ref "$BASE_REF"} --matrix --costs .mutation_costs.json)
@@ -536,14 +548,23 @@ jobs:
         if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
         continue-on-error: true   # no complete item left a cache
         with: { pattern: mutmut-cache-*, path: "${{ runner.temp }}/mutmut-cache", merge-multiple: true }
+      # The costs this run split the shards by, kept with the verdicts: a PR that reuses them splits alike.
+      - uses: actions/download-artifact@v8
+        if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
+        with: { name: mutation-costs, path: "${{ runner.temp }}/split" }
+      - name: Keep the split costs beside the verdicts
+        if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
+        run: |
+          mkdir -p "$RUNNER_TEMP/mutmut-cache"
+          mv -f "$RUNNER_TEMP/split/.mutation_costs.json" "$RUNNER_TEMP/mutmut-cache/split-costs.json"
       - name: Save the verdicts for the next PRs
         if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
         uses: actions/cache/save@v6
         with:
           path: "${{ runner.temp }}/mutmut-cache"
           key: "mutmut-all-${{ hashFiles('uv.lock', '.python-version') }}-${{ github.run_id }}"
-      # The seconds each target and function took (df-n8ac.39), for the next runs to pack the jobs
-      # and split the shards by. Only a full run measures every target with no cache.
+      # The seconds each target and function took (df-n8ac.39), for the next push or manual run to pack
+      # the jobs and split the shards by. Only a full run measures every target with no cache.
       - name: Measure the costs
         if: "!cancelled() && env.GATE == 'true' && github.event_name != 'pull_request'"
         run: uv run --no-project python scripts/testloop/costs.py --out .mutation_costs.json
