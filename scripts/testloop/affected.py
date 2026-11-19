@@ -1,12 +1,16 @@
 """Which testloop.toml targets a change can affect, as a JSON list on stdout (df-gqke).
 
-Usage (repo root): affected.py [--base-ref REF] [--matrix]
+Usage (repo root): affected.py [--base-ref REF] [--matrix [--costs FILE]]
 
-With --matrix it prints the CI mutation matrix instead: one {"module", "shard", "shards"} per
-shard of each chosen target (`shards` in testloop.toml, default 1; df-n8ac.32).
+With --matrix it prints the CI mutation matrix instead: a list of jobs {"job": j, "items": [...]},
+each item one {"module", "shard", "shards"} per shard of each chosen target (`shards` in
+testloop.toml, default 1; df-n8ac.32). The items are packed first-fit, heaviest first, into jobs of
+at most JOB_SECONDS estimated mutate seconds (df-n8ac.39); an item over the cap runs alone. An
+item's estimate is its module's measured elapsed (FILE, from scripts/testloop/costs.py) times its
+shard's share of the module's function weights, split as `mutate --costs FILE` splits it; a module
+without a measure is UNMEASURED_SECONDS per shard, and an unusable FILE is a warning and no measure.
 
-Without --base-ref every target is printed: push to main, the weekly run and manual runs mutate
-everything. With it, the changed files are `git diff --name-only REF...HEAD`, and a target is
+Without --base-ref every target is printed: push to main and manual runs mutate everything. With it, the changed files are `git diff --name-only REF...HEAD`, and a target is
 kept when one of them is
 - the target's module, one of its test files, or a first-party module either of them imports,
   directly or through other first-party modules (imports inside functions included);
@@ -33,7 +37,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from common import ToolError, load_config, resolve_tests, shard_count
+import mutate_cmd
+from common import ToolError, costs_or_empty, load_config, resolve_tests, shard_count
 
 # Packages whose imports are followed: everything else is third party.
 FIRST_PARTY = ("dataforge", "tests")
@@ -49,7 +54,7 @@ SHARED = (
 SHARED_DIRS = ("scripts/testloop/",)
 # Test loop tools `mutate` never runs: a change to them cannot move a score.
 NOT_MUTATE = tuple(f"scripts/testloop/{name}" for name in (
-    "affected.py", "gate_cmd.py", "diffcover_cmd.py", "map_cmd.py", "check_cmd.py",
+    "affected.py", "gate_cmd.py", "diffcover_cmd.py", "map_cmd.py", "check_cmd.py", "costs.py",
 ))
 # The workflow: compared job by job against the base (_ci_changes).
 CI = ".github/workflows/ci.yml"
@@ -59,6 +64,11 @@ MUTATION_JOBS = ("mutation-targets", "mutation", "mutation-ok")
 CI_INERT_KEYS = ("name", "on", "concurrency")
 TOP_KEY = re.compile(r"([A-Za-z_][\w-]*):")
 JOB_KEY = re.compile(r" {2}([A-Za-z_][\w-]*):\s*(#.*)?$")
+
+# Packing the matrix into jobs (df-n8ac.39): GitHub Free runs 20 jobs at a time, and each job pays
+# about a minute of setup (checkout, uv sync) before its first mutate.
+JOB_SECONDS = 200          # estimated mutate seconds that fill a job
+UNMEASURED_SECONDS = 60    # the estimate of a shard of a module the costs file does not measure
 
 INIT = "__init__.py"
 # A git ref name, never an option: a leading "-" would make git read it as a flag.
@@ -236,14 +246,51 @@ def select(config, changed: list[str], base_toml: str | None = None,
     return picked, reasons
 
 
-def matrix(config, picked: list[str]) -> list[dict]:
-    """One CI mutation job per shard of each picked target."""
-    return [
-        {"module": module, "shard": i, "shards": n}
-        for module in picked
-        for n in [shard_count(config, module)]
-        for i in range(1, n + 1)
-    ]
+def shard_seconds(config, module: str, n: int, measured: dict | None) -> list[float]:
+    """The estimated mutate seconds of each of the module's n shards: its measured elapsed times
+    the shard's share of mutate_cmd.cost_weights, partitioned as `mutate --shard I/N --costs` does."""
+    if not measured or "elapsed" not in measured:
+        return [UNMEASURED_SECONDS] * n
+    elapsed = measured["elapsed"]
+    if n == 1:
+        return [elapsed]
+    try:
+        weights = mutate_cmd.cost_weights((config.repo / module).read_text(encoding="utf-8"), measured)
+    except (OSError, SyntaxError):
+        return [elapsed / n] * n
+    total = sum(weights.values())
+    shards = mutate_cmd.partition(weights, n)
+    return [elapsed * sum(weights[key] for key in shard) / total if total else elapsed / n for shard in shards]
+
+
+def pack(estimated: list[tuple[dict, float]]) -> list[dict]:
+    """First-fit decreasing: heaviest item first (ties by module and shard), each into the first job
+    it fits without passing JOB_SECONDS, else a new job. Every item lands in one job."""
+    jobs: list[dict] = []
+    for item, seconds in sorted(estimated, key=lambda pair: (-pair[1], pair[0]["module"], pair[0]["shard"])):
+        job = next((j for j in jobs if j["load"] + seconds <= JOB_SECONDS), None)
+        if job is None:
+            job = {"load": 0.0, "items": []}
+            jobs.append(job)
+        job["load"] += seconds
+        job["items"].append(item)
+    return [{"job": j, "items": job["items"]} for j, job in enumerate(jobs, 1)]
+
+
+def matrix(config, picked: list[str], costs: dict[str, dict] | None = None) -> list[dict]:
+    """The CI mutation jobs: every shard of each picked target, packed by estimated seconds."""
+    estimated = []
+    for module in picked:
+        n = shard_count(config, module)
+        seconds = shard_seconds(config, module, n, (costs or {}).get(module))
+        estimated.extend(({"module": module, "shard": i, "shards": n}, seconds[i - 1]) for i in range(1, n + 1))
+    jobs = pack(estimated)
+    seconds_of = {(item["module"], item["shard"]): seconds for item, seconds in estimated}
+    for job in jobs:
+        total = sum(seconds_of[i["module"], i["shard"]] for i in job["items"])
+        names = ", ".join(f"{i['module']} {i['shard']}/{i['shards']}" for i in job["items"])
+        print(f"affected: job {job['job']} (~{total:.0f} s): {names}", file=sys.stderr)
+    return jobs
 
 
 def changed_files(repo: Path, base_ref: str) -> list[str]:
@@ -279,7 +326,9 @@ def base_file(repo: Path, base_ref: str, rel: str) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="affected")
     parser.add_argument("--base-ref", help="e.g. origin/main; omitted = every target")
-    parser.add_argument("--matrix", action="store_true", help="print one item per shard of each target")
+    parser.add_argument("--matrix", action="store_true", help="print the CI jobs: every shard of each target, packed")
+    parser.add_argument("--costs", type=Path, metavar="FILE",
+                        help="with --matrix: estimate each shard from these measured costs (costs.py)")
     args = parser.parse_args(argv)
     try:
         config = load_config(Path.cwd())
@@ -291,7 +340,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             picked = list(config.targets)
             reasons = dict.fromkeys(picked, "no base ref: every target")
-        out = matrix(config, picked) if args.matrix else picked
+        out = picked
+        if args.matrix:
+            out = matrix(config, picked, costs_or_empty(args.costs) if args.costs else None)
     except ToolError as exc:
         print(f"affected: {exc}", file=sys.stderr)
         return 2

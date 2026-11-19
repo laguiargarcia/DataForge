@@ -9,12 +9,17 @@ from pathlib import Path
 
 from dataforge import yamlio
 
+
 CI = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
 
 # The ruleset "Main: checks do CI obrigatórios" on GitHub; keep the two in step.
 REQUIRED = {"leak-scan", "quality", "tests", "tests-windows", "testloop-tools", "sonar", "mutation-ok"}
 # Comments on the PR; it reports the other jobs and gates nothing.
 NOT_GATING = {"report"}
+# The measured mutation costs (scripts/testloop/costs.py, df-n8ac.39).
+COSTS = ".mutation_costs.json"
+# The costs a full run split its shards by, saved inside its mutmut cache (df-n8ac.39).
+SPLIT = "split-costs.json"
 
 
 def _jobs() -> dict:
@@ -55,17 +60,81 @@ def test_a_required_job_that_always_runs_checks_each_need_it_gates():
         assert unchecked == [], f"{name} passes even when {unchecked} failed"
 
 
+def _uses(steps: list[dict], action: str) -> list[dict]:
+    return [s for s in steps if str(s.get("uses", "")).startswith(action)]
+
+
 def test_a_pr_mutates_from_mains_cache_and_only_push_or_dispatch_saves_it():
     """df-n8ac.38: a PR restores main's verdicts and never saves its own; the full run of main starts
-    empty (its audit of what PRs reused) and saves under the key the PRs restore from."""
-    steps = _jobs()["mutation"]["steps"]
-    restore = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/restore"))
-    save = next(s for s in steps if str(s.get("uses", "")).startswith("actions/cache/save"))
-    mutate = next(s for s in steps if s.get("name") == "Mutate")
+    empty (its audit of what PRs reused) and saves under the key the PRs restore from. df-n8ac.39: a
+    job's items change from run to run, so the cache is one for every item: each PR job restores it
+    whole, and mutation-ok saves what the full run's jobs uploaded, merged into the same directory."""
+    jobs = _jobs()
+    mutation, ok = jobs["mutation"]["steps"], jobs["mutation-ok"]["steps"]
+    restore, = _uses(mutation, "actions/cache/restore")
+    assert _uses(mutation, "actions/cache/save") == []
+    mutate = next(s for s in mutation if s.get("name") == "Mutate")
+    upload = next(s for s in _uses(mutation, "actions/upload-artifact") if "mutmut-cache" in s["with"]["name"])
+    download = next(s for s in _uses(ok, "actions/download-artifact") if "mutmut-cache" in s["with"]["pattern"])
+    save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] != COSTS)
+    cache = "${{ runner.temp }}/mutmut-cache"
     assert restore["if"] == "github.event_name == 'pull_request'"
-    assert save["if"] == "github.event_name != 'pull_request'"
+    for step in (upload, download, save):
+        assert "github.event_name != 'pull_request'" in step["if"]
     assert restore["with"]["key"] == save["with"]["key"]
     assert restore["with"]["key"].startswith(restore["with"]["restore-keys"])
-    assert restore["with"]["path"] == save["with"]["path"] == mutate["env"]["CACHE"]
-    assert '--cache-dir "$CACHE"' in mutate["run"]
-    assert steps.index(restore) < steps.index(mutate) < steps.index(save)
+    assert restore["with"]["path"] == mutate["env"]["CACHE"] == upload["with"]["path"] == cache
+    assert download["with"]["path"] == save["with"]["path"] == cache
+    assert download["with"]["merge-multiple"] is True
+    assert upload["with"]["name"].startswith(download["with"]["pattern"].removesuffix("*"))
+    assert '--cache-dir "$CACHE/$slug"' in mutate["run"]
+    assert mutation.index(restore) < mutation.index(mutate) < mutation.index(upload)
+    assert ok.index(download) < ok.index(save)
+
+
+def test_the_matrix_and_mutate_read_the_same_costs_that_only_a_full_run_saves():
+    """df-n8ac.39: mutation-targets restores the last full run's costs, packs the jobs from them and
+    hands the same file to the mutation jobs, whose shards split by it; mutation-ok saves new ones."""
+    jobs = _jobs()
+    targets, mutation, ok = (jobs[name]["steps"] for name in ("mutation-targets", "mutation", "mutation-ok"))
+    restore = next(s for s in _uses(targets, "actions/cache/restore") if s["with"]["path"] == COSTS)
+    save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] == COSTS)
+    assert save["with"]["key"].startswith(restore["with"]["restore-keys"])
+    assert restore["with"]["path"] == save["with"]["path"] == COSTS
+    assert "github.event_name != 'pull_request'" in save["if"]
+    pick = next(s for s in targets if s.get("id") == "pick")
+    assert f"--matrix --costs {COSTS}" in pick["run"]
+    upload, = (s for s in targets if str(s.get("uses", "")).startswith("actions/upload-artifact"))
+    download, = (s for s in mutation if str(s.get("uses", "")).startswith("actions/download-artifact"))
+    assert upload["with"]["name"] == download["with"]["name"]
+    assert upload["with"]["path"] == COSTS
+    assert f"--costs {COSTS}" in next(s for s in mutation if s.get("name") == "Mutate")["run"]
+    build = next(s for s in ok if "costs.py" in str(s.get("run", "")))
+    assert f"costs.py > {COSTS}" in build["run"]
+    assert ok.index(build) < ok.index(save)
+
+
+def test_a_pr_splits_by_the_costs_that_built_the_cache_it_reuses():
+    """df-n8ac.39: a push saves, inside the mutmut cache, the costs file it split the shards by; a PR
+    restores that cache in mutation-targets and packs, splits and hands the jobs that same file. Split by
+    newer costs, a function would change shard and lose its cached verdicts (df-n8ac.38)."""
+    jobs = _jobs()
+    targets, mutation, ok = (jobs[name]["steps"] for name in ("mutation-targets", "mutation", "mutation-ok"))
+    cache = "${{ runner.temp }}/mutmut-cache"
+    verdicts = next(s for s in _uses(targets, "actions/cache/restore") if s["with"]["path"] == cache)
+    job_restore, = _uses(mutation, "actions/cache/restore")
+    save = next(s for s in _uses(ok, "actions/cache/save") if s["with"]["path"] == cache)
+    assert verdicts["if"] == "github.event_name == 'pull_request'"
+    assert verdicts["with"] == job_restore["with"]
+    assert verdicts["with"]["key"] == save["with"]["key"]
+    pick = next(s for s in targets if s.get("id") == "pick")
+    assert targets.index(verdicts) < targets.index(pick)
+    assert f'split="$RUNNER_TEMP/mutmut-cache/{SPLIT}"' in pick["run"]
+    assert f'cp -f "$split" {COSTS}' in pick["run"]
+    assert pick["run"].index("cp -f") < pick["run"].index("--matrix")
+    split = next(s for s in _uses(ok, "actions/download-artifact") if s["with"].get("name") == "mutation-costs")
+    keep = next(s for s in ok if f"$RUNNER_TEMP/mutmut-cache/{SPLIT}" in str(s.get("run", "")))
+    assert f'"$RUNNER_TEMP/split/{COSTS}"' in keep["run"]
+    assert split["with"]["path"] == "${{ runner.temp }}/split"
+    assert ok.index(split) < ok.index(keep) < ok.index(save)
+    assert keep["if"] == split["if"] == save["if"]

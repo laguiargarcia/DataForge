@@ -615,6 +615,11 @@ def test_shards_of_a_module_add_up_to_the_whole_run(tmp_path):
     assert sum(p["killed"] for p in parts) == whole["killed"]
     assert set().union(*map(ids, parts)) == ids(whole)
     assert result_path(repo, "mutate", "sample/mod.py").is_file()   # the whole run's file is its own
+    # df-n8ac.39: each result measures the seconds of exactly its own functions
+    assert set(whole["function_seconds"]) == {"x_classify", "x_noop", "xǁBoxǁdouble"}
+    assert [set(p["function_seconds"]) for p in parts] == [{"x_classify"}, {"x_noop", "xǁBoxǁdouble"}]
+    assert whole["function_seconds"]["x_noop"] == 0   # no mutant
+    assert all(whole["function_seconds"][k] > 0 for k in ("x_classify", "xǁBoxǁdouble"))
 
 
 def test_a_shard_without_mutants_is_complete_with_no_score(tmp_path):
@@ -628,6 +633,34 @@ def test_a_shard_without_mutants_is_complete_with_no_score(tmp_path):
     assert empty[0]["complete"] is True
     assert empty[0]["score"] is None
     assert empty[0]["warnings"] == []
+
+
+def test_mutate_with_costs_splits_the_shards_by_the_measured_seconds(tmp_path):
+    """df-n8ac.39: by lines classify (4 lines) is shard 1 alone; measured, Box.double is the slow one."""
+    repo = make_repo(tmp_path, TEST_SHARDED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    with (repo / "testloop.toml").open("a") as f:
+        f.write("shards = 2\n")
+    (repo / "costs.json").write_text(json.dumps({"sample/mod.py": {
+        "elapsed": 9.0, "functions": {"x_classify": 1.0, "x_noop": 0.0, "xǁBoxǁdouble": 5.0}}}))
+    proc = run(repo, "mutate", "sample/mod.py", "--shard", "1/2", "--costs", "costs.json")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    data = json.loads(shard_path(repo, "sample/mod.py", 1, 2).read_text())
+    assert set(data["function_seconds"]) == {"xǁBoxǁdouble"}
+    assert data["total"] > 0
+    assert {function_of(s["id"]) for s in data["survived"]} <= {"xǁBoxǁdouble"}
+
+
+def test_mutate_with_a_bad_costs_file_warns_and_splits_by_lines(tmp_path):
+    repo = make_repo(tmp_path, TEST_SHARDED)
+    (repo / "sample" / "mod.py").write_text(MOD_SHARDED_SRC)
+    with (repo / "testloop.toml").open("a") as f:
+        f.write("shards = 2\n")
+    (repo / "costs.json").write_text("[]")
+    proc = run(repo, "mutate", "sample/mod.py", "--shard", "1/2", "--costs", "costs.json")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "costs file" in proc.stderr
+    assert set(json.loads(shard_path(repo, "sample/mod.py", 1, 2).read_text())["function_seconds"]) == {"x_classify"}
 
 
 @pytest.mark.parametrize("shard", ["0/2", "3/2", "2", "a/b", "1/0"])

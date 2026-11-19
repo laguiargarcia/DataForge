@@ -4,7 +4,10 @@ This is the only file that knows the mutation tool. Everything the tool needs
 (its config, its `mutants/` directory) lives in the temporary copy.
 
 `--shard I/N` mutates only the I-th of N parts of the module (df-n8ac.32): its top-level functions
-and methods, split by line count, so N CI jobs share a big target and `gate` sums them.
+and methods, split by line count, so N CI jobs share a big target and `gate` sums them. With
+`--costs FILE` (df-n8ac.39) the split weighs each function by the seconds its mutants took in the last
+full run (scripts/testloop/costs.py builds the file from the results' `function_seconds`), and
+affected.py packs the CI jobs from the same weights (`cost_weights`).
 
 `--cache-dir DIR` (df-n8ac.38) keeps mutmut's verdicts between runs, and a run reuses only the
 killed ones: it tests again every mutant that survived, timed out or had no test (a test added since
@@ -21,6 +24,7 @@ import json
 import os
 import shutil
 import signal
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -29,7 +33,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from common import (
-    Config, ToolError, mutation_score, pytest_args, resolve_tests, result_path, shard_count, test_env, write_result,
+    Config, ToolError, costs_or_empty, mutation_score, pytest_args, resolve_tests, result_path, shard_count, test_env,
+    write_result,
 )
 
 TOOL = "mutmut"
@@ -137,6 +142,42 @@ def function_weights(source: str) -> dict[str, int]:
     return weights
 
 
+def cost_weights(source: str, measured: dict | None = None) -> dict[str, float]:
+    """Each function key weighted by the seconds its mutants took (`measured`: the module's entry in
+    the costs file, df-n8ac.39). A function the measure lacks (new since, or never run to the end)
+    weighs its lines times the module's median seconds per line; a module with no measured second
+    weighs lines alone, as without costs. The one weighing of mutate's split and affected's packing."""
+    lines = function_weights(source)
+    seconds = (measured or {}).get("functions", {})
+    known = {key: seconds[key] for key in lines if key in seconds}
+    if not any(known.values()):
+        return dict(lines)
+    rate = statistics.median(known[key] / lines[key] for key in known)
+    return {key: known.get(key, lines[key] * rate) for key in lines}
+
+
+def function_seconds(copy: Path, module: str, keys: set[str]) -> dict[str, float]:
+    """The seconds mutmut spent on the mutants of each of `keys` (durations_by_key in the module's
+    .meta, mutmut/mutation/data.py). A function without mutants took 0 s; one with a mutant left
+    without a verdict (a partial run) has no measure; a verdict without a run (no tests) adds 0."""
+    try:
+        meta = json.loads((copy / MUTANTS / (module + META_SUFFIX)).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    durations = meta.get("durations_by_key", {})
+    seconds = dict.fromkeys(keys, 0.0)
+    unfinished = set()
+    for mutant, exit_code in meta.get("exit_code_by_key", {}).items():
+        function = function_of(mutant)
+        if function not in seconds:
+            continue
+        if exit_code is None:
+            unfinished.add(function)
+        else:
+            seconds[function] += durations.get(mutant, 0)
+    return {key: round(value, 3) for key, value in sorted(seconds.items()) if key not in unfinished}
+
+
 def function_texts(source: str) -> dict[str, str]:
     """Each function key with a hash of its lines, decorators and comments included."""
     lines = source.splitlines(keepends=True)
@@ -147,11 +188,11 @@ def function_texts(source: str) -> dict[str, str]:
     return {key: "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest() for key, text in texts.items()}
 
 
-def partition(weights: dict[str, int], n: int) -> list[list[str]]:
+def partition(weights: dict[str, float], n: int) -> list[list[str]]:
     """Split the keys in n shards of near-equal weight: heaviest first (ties by name), each to
     the lightest shard so far (ties to the lowest index). Every key lands in exactly one shard."""
     shards: list[list[str]] = [[] for _ in range(n)]
-    loads = [0] * n
+    loads = [0.0] * n
     for key in sorted(weights, key=lambda k: (-weights[k], k)):
         lightest = min(range(n), key=lambda i: (loads[i], i))
         shards[lightest].append(key)
@@ -182,8 +223,10 @@ def slow_warning(module: str, elapsed: float) -> str | None:
             f"testloop.toml so its CI jobs stay short")
 
 
-def _shard_keys(config: Config, module: str, shard: tuple[int, int]) -> set[str] | None:
-    """The function keys of the shard; None for the whole module, which is always allowed."""
+def _shard_keys(config: Config, module: str, shard: tuple[int, int],
+                costs: dict[str, dict] | None = None) -> set[str] | None:
+    """The function keys of the shard, split by the measured `costs` when given (by lines without);
+    None for the whole module, which is always allowed."""
     if shard == WHOLE:
         return None
     shards = shard_count(config, module)
@@ -191,7 +234,7 @@ def _shard_keys(config: Config, module: str, shard: tuple[int, int]) -> set[str]
         raise ToolError(f"{module} has shards = {shards} in testloop.toml; --shard {shard[0]}/{shard[1]} "
                         "would write a result its gate never reads")
     try:
-        weights = function_weights((config.repo / module).read_text(encoding="utf-8"))
+        weights = cost_weights((config.repo / module).read_text(encoding="utf-8"), (costs or {}).get(module))
     except SyntaxError as exc:
         raise ToolError(f"{module} does not parse, so its functions cannot be split: {exc}") from exc
     return set(partition(weights, shard[1])[shard[0] - 1])
@@ -382,13 +425,24 @@ class _Mutation:
             warnings.append(slow)
             print(f"testloop: {slow}", file=sys.stderr)
         data = _result(summary, diffs, total, complete, elapsed, warnings, self.tests, _mutmut_version())
+        data["function_seconds"] = function_seconds(self.copy, self.module, self._functions())
         if self.restored:
             data.update(cache="restored", cached=self.cached)
         return write_result(self.config.repo, "mutate", self.module, data, shard=self.shard)
 
+    def _functions(self) -> set[str]:
+        """The function keys this run mutates: the shard's, or every one of the module."""
+        if self.keys is not None:
+            return self.keys
+        try:
+            return set(function_weights((self.config.repo / self.module).read_text(encoding="utf-8")))
+        except SyntaxError:
+            return set()
 
-def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SECONDS,
-         shard: tuple[int, int] | None = None, cache_dir: Path | None = None) -> tuple[Path, int]:
+
+def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SECONDS,  # noqa: PLR0913 -- one keyword per CLI option (cli.py passes them by name)
+         shard: tuple[int, int] | None = None, cache_dir: Path | None = None,
+         costs: Path | None = None) -> tuple[Path, int]:
     if not (config.repo / module).is_file():
         raise ToolError(f"module not found: {module}")
     shard = shard or WHOLE
@@ -398,7 +452,8 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     env = test_env(config, PYTHONDONTWRITEBYTECODE="1")
     env.pop("MUTANT_UNDER_TEST", None)
 
-    keys = _shard_keys(config, module, shard)   # before the copy: a refusal leaves no temp dir
+    measured = costs_or_empty(costs) if costs is not None else None
+    keys = _shard_keys(config, module, shard, measured)   # before the copy: a refusal leaves no temp dir
     copy = Path(tempfile.mkdtemp(prefix="testloop-mutate-", dir=_tmp_root()))
     job = _Mutation(config, module, tests, _python(config), copy, env, started, shard, keys)
     try:

@@ -2,7 +2,8 @@
 
 mutate takes --shard I/N to mutate one of N parts of the module; gate sums the target's `shards`.
 mutate --cache-dir DIR keeps mutmut's verdicts in DIR between runs: the next run tests again only the
-mutants of functions that changed (df-n8ac.38).
+mutants of functions that changed (df-n8ac.38). mutate --shard I/N --costs FILE splits the module by the
+seconds each function took in the last full run (scripts/testloop/costs.py writes FILE; df-n8ac.39).
 
 Run from the repo root. Exit codes: 0 measured (and, for check and gate, passed);
 1 check: tests failed, gate: score below min_score, diff-cover: changed lines not covered;
@@ -41,6 +42,9 @@ def _mutate_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--cache-dir", type=Path, default=None, metavar="DIR",
         help="reuse the verdicts a previous run left in DIR; a complete run writes them back")
+    parser.add_argument(
+        "--costs", type=Path, default=None, metavar="FILE",
+        help="split the shards by the measured seconds in FILE (scripts/testloop/costs.py) instead of lines")
 
 
 # command name -> (module with main(config, module, **options) -> Path | (Path, exit_code), option adder)
