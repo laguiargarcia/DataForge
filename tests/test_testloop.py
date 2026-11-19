@@ -589,6 +589,10 @@ def shard_path(repo, module, i, n):
 
 
 def run_shard(repo, i, n):
+    """mutate --shard i/n, with the target set to n shards (mutate refuses another count)."""
+    toml = repo / "testloop.toml"
+    if "shards = " not in toml.read_text():
+        toml.write_text(toml.read_text() + f"shards = {n}\n")
     proc = run(repo, "mutate", "sample/mod.py", "--shard", f"{i}/{n}")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert Path(proc.stdout.strip()) == shard_path(repo, "sample/mod.py", i, n)

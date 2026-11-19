@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from common import (
-    Config, ToolError, mutation_score, pytest_args, resolve_tests, result_path, test_env, write_result,
+    Config, ToolError, mutation_score, pytest_args, resolve_tests, result_path, shard_count, test_env, write_result,
 )
 
 TOOL = "mutmut"
@@ -70,7 +70,7 @@ def partition(weights: dict[str, int], n: int) -> list[list[str]]:
     the lightest shard so far (ties to the lowest index). Every key lands in exactly one shard."""
     shards: list[list[str]] = [[] for _ in range(n)]
     loads = [0] * n
-    for key in sorted(sorted(weights), key=lambda k: -weights[k]):
+    for key in sorted(weights, key=lambda k: (-weights[k], k)):
         lightest = min(range(n), key=lambda i: (loads[i], i))
         shards[lightest].append(key)
         loads[lightest] += weights[key]
@@ -88,8 +88,9 @@ def shard_globs(module: str, keys: list[str]) -> list[str]:
 
 
 def function_of(mutant: str) -> str:
-    """The function key a mutant belongs to: m.x_f__mutmut_3 -> x_f."""
-    return mutant.partition(MUTANT_INFIX)[0].rpartition(".")[2]
+    """The function key a mutant belongs to: m.x_f__mutmut_3 -> x_f. The suffix is the last
+    infix: a function named _mutmut_version has key x__mutmut_version."""
+    return mutant.rpartition(MUTANT_INFIX)[0].rpartition(".")[2]
 
 
 def slow_warning(module: str, elapsed: float) -> str | None:
@@ -100,10 +101,17 @@ def slow_warning(module: str, elapsed: float) -> str | None:
 
 
 def _shard_keys(config: Config, module: str, shard: tuple[int, int]) -> set[str] | None:
-    """The function keys of the shard; None for the whole module."""
+    """The function keys of the shard; None for the whole module, which is always allowed."""
     if shard == WHOLE:
         return None
-    weights = function_weights((config.repo / module).read_text(encoding="utf-8"))
+    shards = shard_count(config, module)
+    if shard[1] != shards:
+        raise ToolError(f"{module} has shards = {shards} in testloop.toml; --shard {shard[0]}/{shard[1]} "
+                        "would write a result its gate never reads")
+    try:
+        weights = function_weights((config.repo / module).read_text(encoding="utf-8"))
+    except SyntaxError as exc:
+        raise ToolError(f"{module} does not parse, so its functions cannot be split: {exc}") from exc
     return set(partition(weights, shard[1])[shard[0] - 1])
 
 
@@ -301,9 +309,9 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     env = test_env(config, PYTHONDONTWRITEBYTECODE="1")
     env.pop("MUTANT_UNDER_TEST", None)
 
+    keys = _shard_keys(config, module, shard)   # before the copy: a refusal leaves no temp dir
     copy = Path(tempfile.mkdtemp(prefix="testloop-mutate-", dir=_tmp_root()))
-    job = _Mutation(config, module, tests, _python(config), copy, env, started, shard,
-               _shard_keys(config, module, shard))
+    job = _Mutation(config, module, tests, _python(config), copy, env, started, shard, keys)
     try:
         _copy_files(config, module, tests, copy)
         _write_tool_config(config, module, tests, copy)

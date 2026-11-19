@@ -21,7 +21,6 @@ import map_cmd
 import mutate_cmd
 
 
-
 def shard(text: str) -> tuple[int, int]:
     """`I/N` with 1 <= I <= N: the I-th of N parts of the module (df-n8ac.32)."""
     i, sep, n = text.partition("/")

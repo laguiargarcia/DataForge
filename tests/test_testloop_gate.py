@@ -109,6 +109,8 @@ def test_shard_globs_name_mutmuts_mutants_of_the_shard():
 @pytest.mark.parametrize("key, function", [
     ("dataforge.cron.x_parse__mutmut_3", "x_parse"),
     ("dataforge.cron.xǁCronǁ__init____mutmut_12", "xǁCronǁ__init__"),
+    # a function whose own name holds _mutmut_ (df-0klw): the mutant suffix is the last one
+    ("scripts.testloop.mutate_cmd.x__mutmut_version__mutmut_3", "x__mutmut_version"),
 ])
 def test_function_of_a_mutant_key(key, function):
     assert mutate_cmd.function_of(key) == function
@@ -219,3 +221,21 @@ def test_an_invalid_shards_value_is_a_tool_error(tmp_path, shards):
     config = _sharded_repo(tmp_path, shards=shards)
     with pytest.raises(ToolError, match="shards"):
         gate_cmd.main(config, "mod.py")
+
+
+def test_a_shard_of_a_module_that_does_not_parse_is_a_tool_error(tmp_path):
+    config = _sharded_repo(tmp_path)
+    (tmp_path / "mod.py").write_text("def broken(:\n", encoding="utf-8")
+    with pytest.raises(ToolError, match="mod.py does not parse"):
+        mutate_cmd._shard_keys(config, "mod.py", (1, 2))
+
+
+def test_a_shard_count_other_than_the_targets_is_a_tool_error(tmp_path):
+    """A 1/3 result of a target with shards = 2 would be a file the gate never reads (df-0klw)."""
+    config = _sharded_repo(tmp_path, shards=2)
+    with pytest.raises(ToolError, match="shards = 2"):
+        mutate_cmd._shard_keys(config, "mod.py", (1, 3))
+
+
+def test_the_whole_module_is_always_allowed(tmp_path):
+    assert mutate_cmd._shard_keys(_sharded_repo(tmp_path, shards=2), "mod.py", (1, 1)) is None
