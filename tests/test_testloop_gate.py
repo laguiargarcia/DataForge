@@ -278,10 +278,10 @@ def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
 
 def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_path):
     cache, copy = tmp_path / "cache", tmp_path / "copy"
-    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py", {}) is False
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") is None
     assert not (copy / "mutants").exists()
     _mutants_dir(cache / "mutants", "cached")
-    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py", {}) is True
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == {}   # no texts recorded
     assert _tree(copy) == {
         "mutants/mutmut-stats.json": "cached mutmut-stats.json", "mutants/pkg/mod.py.meta": "cached pkg/mod.py.meta"}
 
@@ -289,27 +289,13 @@ def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_pat
 TEXTS = '{\n  "pkg/mod.py": {\n    "x_f": "sha256:1"\n  }\n}'
 
 
-def _meta(exit_codes):
-    return {"exit_code_by_key": exit_codes, "hash_by_function_name": {}, "type_check_error_by_key": {},
-            "durations_by_key": {k: 0.5 for k in exit_codes}, "estimated_durations_by_key": {}}
-
-
-@pytest.mark.parametrize("cached_texts", [{"x_f": "A", "x_g": "OLD"}, {"x_f": "A"}, None])
-def test_a_restored_cache_forgets_the_verdicts_of_functions_whose_text_changed(tmp_path, cached_texts):
-    """x_g's text is not the cached one (changed, never recorded, or no text file at all): its
-    verdicts go; x_f's stay only when its recorded text is the current one."""
+def test_a_restored_cache_returns_the_texts_it_was_found_on_and_leaves_the_meta_as_it_was(tmp_path):
     cache, copy = tmp_path / "cache", tmp_path / "copy"
-    (cache / "mutants" / "pkg").mkdir(parents=True)
-    (cache / "mutants" / "pkg" / "mod.py.meta").write_text(json.dumps(_meta(
-        {"pkg.mod.x_f__mutmut_1": 1, "pkg.mod.x_g__mutmut_1": 1, "pkg.mod.x_g__mutmut_2": 0})))
-    if cached_texts is not None:
-        (cache / "mutants" / "testloop-function-text.json").write_text(json.dumps({"pkg/mod.py": cached_texts}))
-    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", {"x_f": "A", "x_g": "NEW"}) is True
-    meta = json.loads((copy / "mutants" / "pkg" / "mod.py.meta").read_text())
-    kept = 1 if cached_texts else None
-    assert meta["exit_code_by_key"] == {"pkg.mod.x_f__mutmut_1": kept, "pkg.mod.x_g__mutmut_1": None,
-                                        "pkg.mod.x_g__mutmut_2": None}
-    assert set(meta["durations_by_key"]) == ({"pkg.mod.x_f__mutmut_1"} if cached_texts else set())
+    mutate_cmd.save_cache(_mutants_dir(tmp_path / "run" / "mutants", "run").parent, cache, "pkg/mod.py", {"x_f": "sha256:1"})
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == {"x_f": "sha256:1"}
+    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py") == {}
+    assert (copy / "mutants" / "pkg" / "mod.py.meta").read_text() == "run pkg/mod.py.meta"
+    assert not (copy / "mutants" / "testloop-function-text.json").exists()
 
 
 def test_a_functions_text_hash_sees_comments_and_decorators_but_not_other_functions():

@@ -25,7 +25,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from common import (
@@ -58,7 +58,8 @@ META_SUFFIX = ".meta"
 # Beside them, the hash of each mutated function's text when its verdicts were found. mutmut keeps a
 # verdict by mutant name while the function's AST hash holds, and that hash ignores comments: a
 # `# pragma: no mutate` renumbers a function's mutants under the same hash, and a mutant would take
-# the verdict of the one that had its number. A function whose text differs loses its verdicts first.
+# the verdict of the one that had its number. Every mutant of a function whose text differs is tested
+# again, named one by one (the .meta is never rewritten).
 TEXTS_FILE = "testloop-function-text.json"
 
 # mutmut statuses we know how to classify.
@@ -89,31 +90,15 @@ def _copy_state(src: Path, dest: Path) -> int:
     return len(files)
 
 
-def _forget_changed(meta: Path, cached: dict[str, str], texts: dict[str, str]) -> None:
-    """Drop from a restored .meta the verdicts of each function whose text is not the cached one."""
-    data = json.loads(meta.read_text(encoding="utf-8"))
-    for key in data["exit_code_by_key"]:
-        function = function_of(key)
-        if texts.get(function) is None or cached.get(function) != texts[function]:
-            data["exit_code_by_key"][key] = None
-            data.get("durations_by_key", {}).pop(key, None)
-            data.get("type_check_error_by_key", {}).pop(key, None)
-    meta.write_text(json.dumps(data, indent=4), encoding="utf-8")
-
-
-def restore_cache(cache_dir: Path, copy: Path, module: str, texts: dict[str, str]) -> bool:
-    """Put the cached state into the copy's mutants/, without the verdicts of functions whose text
-    changed (`texts`: function_texts of the module now); False when the cache holds none."""
+def restore_cache(cache_dir: Path, copy: Path, module: str) -> dict[str, str] | None:
+    """Put the cached state into the copy's mutants/ and return the module's function texts it was
+    found on ({} when the cache did not record them); None when the cache holds no state."""
     if _copy_state(cache_dir / MUTANTS, copy / MUTANTS) == 0:
-        return False
-    meta = copy / MUTANTS / (module + META_SUFFIX)
-    if meta.is_file():
-        try:
-            cached = json.loads((cache_dir / MUTANTS / TEXTS_FILE).read_text(encoding="utf-8")).get(module, {})
-        except FileNotFoundError:
-            cached = {}
-        _forget_changed(meta, cached, texts)
-    return True
+        return None
+    try:
+        return json.loads((cache_dir / MUTANTS / TEXTS_FILE).read_text(encoding="utf-8")).get(module, {})
+    except FileNotFoundError:
+        return {}
 
 
 def save_cache(copy: Path, cache_dir: Path, module: str, texts: dict[str, str]) -> None:
@@ -387,6 +372,8 @@ class _Mutation:
     keys: set[str] | None   # the shard's function keys; None = the whole module
     restored: bool = False  # the copy started from a cache's verdicts
     cached: int = 0         # mutants of the shard whose killed verdict came from the cache
+    texts: dict[str, str] = field(default_factory=dict)         # function_texts of the module now
+    cached_texts: dict[str, str] = field(default_factory=dict)  # those the cached verdicts were found on
 
     def write(self, summary: dict, diffs: dict[str, str], total: int, complete: bool,
               warnings: list[str]) -> Path:
@@ -417,17 +404,17 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     try:
         _copy_files(config, module, tests, copy)
         _write_tool_config(config, module, tests, copy)
-        texts: dict[str, str] = {}
         if cache_dir is not None:
             cache_dir = Path(cache_dir).resolve()
-            texts = _module_texts(config, module)
-            job.restored = restore_cache(cache_dir, copy, module, texts)
+            job.texts = _module_texts(config, module)
+            cached_texts = restore_cache(cache_dir, copy, module)
+            job.restored, job.cached_texts = cached_texts is not None, cached_texts or {}
         try:
             out_path, code = _mutate(job, deadline)
         except BudgetExceeded:
             return _partial(job, budget_seconds)
         if cache_dir is not None and code == 0:   # only a complete run's verdicts go back
-            save_cache(copy, cache_dir, module, texts)
+            save_cache(copy, cache_dir, module, job.texts)
         return out_path, code
     finally:
         shutil.rmtree(copy, ignore_errors=True)
@@ -472,14 +459,20 @@ def _pending(job: _Mutation, deadline: float) -> list[str]:
     """With a restored cache: write the mutants and let mutmut merge the cached verdicts (it drops
     those of functions whose hash changed, and all of them when the pytest arguments or the list of
     test files changed), then return the shard's mutants to test: every one not killed, so a survivor a
-    new test kills is reported killed. Named one by one, because `mutmut run` tests again every mutant
-    a name or glob matches, verdict or not."""
+    new test kills is reported killed, and every one of a function whose text is not the cached one,
+    so no mutant keeps the verdict of another that had its number. Named one by one, because
+    `mutmut run` tests again every mutant a name or glob matches, verdict or not."""
     python, copy, env = job.python, job.copy, job.env
     code, out = _run([python, "-m", "mutmut", "run", PROBE], copy, env, deadline)
     if NOTHING_MATCHES not in out:
         raise ToolError(f"{TOOL} run {PROBE} (writing the mutants) exited {code}:\n{_tail(out)}")
     shard = _in_shard(_collect(python, copy, env, deadline), job.keys)
-    pending = sorted(k for k, status in shard.items() if status != KILLED)
+    def reusable(key: str, status: str) -> bool:
+        function = function_of(key)
+        same_text = job.texts.get(function) is not None and job.cached_texts.get(function) == job.texts[function]
+        return status == KILLED and same_text
+
+    pending = sorted(k for k, status in shard.items() if not reusable(k, status))
     job.cached = len(shard) - len(pending)
     return pending
 
