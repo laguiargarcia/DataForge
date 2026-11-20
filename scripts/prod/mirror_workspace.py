@@ -109,7 +109,10 @@ def mirror(src: Path, dst: Path, backup: Path) -> int:
     gone = sorted(read_manifest(dst) - set(files))
     run = Mirror(src, dst, backup)
     try:
-        dst.mkdir(parents=True, exist_ok=True)
+        # Sonar S8707 (path traversal via command-line argument) is a false positive: the three paths
+        # are the operator's, built by deploy.sh from its own work folder and prod.env, and copying
+        # into the prod folder they name is this script's whole job.
+        dst.mkdir(parents=True, exist_ok=True)   # NOSONAR
         written = sum(run.write(rel) for rel in files)
         deleted = sum(run.delete(rel) for rel in gone if not is_local(rel))
         manifest = dst / MANIFEST

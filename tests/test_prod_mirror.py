@@ -1,5 +1,6 @@
 """scripts/prod/mirror_workspace.py (df-bsb2.2.6.2): a release's workspace over prod's, prod's own files kept."""
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -181,9 +182,14 @@ _PATHS = st.builds("{}/{}".format, st.sampled_from(["scripts", "data", "triggers
 
 @settings(max_examples=80, deadline=None)
 @given(old=st.sets(_PATHS, max_size=6), new=st.sets(_PATHS, max_size=6), local=st.sets(_PATHS, max_size=6))
-def test_property_after_a_mirror_prod_is_the_release_plus_its_own_files(tmp_path_factory, old, new, local):
+def test_property_after_a_mirror_prod_is_the_release_plus_its_own_files(old, new, local):
     """Release files land, files only the last manifest named go, prod's own files never change."""
-    root = tmp_path_factory.mktemp("p")
+    # A folder per example: tmp_path would be one folder shared by every example Hypothesis runs.
+    with tempfile.TemporaryDirectory() as tmp:
+        _check_one_mirror(Path(tmp), old, new, local)
+
+
+def _check_one_mirror(root: Path, old: set[str], new: set[str], local: set[str]) -> None:
     src, dst = root / "src", root / "dst"
     src.mkdir()
     dst.mkdir()
