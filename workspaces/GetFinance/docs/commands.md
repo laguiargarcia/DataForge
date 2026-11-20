@@ -27,15 +27,9 @@ ITEM_IDS=<comma-separated pluggy item IDs>
 `config/investments.yaml` (gitignored; copy `config/investments.example.yaml`) maps each Pluggy
 holding to a stable slug and a display alias.
 
-`config/merchant_normalization.yaml` holds the versioned rules that turn a transaction description
-into its merchant key (only a made-up example today). Rules for your own banks go in
-`config/merchant_normalization.local.yaml` (gitignored; copy
-`config/merchant_normalization.local.example.yaml`); `raw2cleansed` tries them first. When the file
-is absent the run goes on with the versioned rules only, with no data warning, and the task's log
-says which file to create. Where your rules must be there (the machine that runs the daily job), set
-`MERCHANT_NORM_LOCAL_REQUIRED=1` in `.env`: a missing local file, or one with no rule, then stops `raw2cleansed` with an
-error, before it writes merchant keys your rules would have changed. `MERCHANT_NORM_CONFIG` points at another rules file; the local file is
-then the `.local.yaml` beside it.
+`config/merchant_normalization.yaml` holds the rules that turn a transaction description into its
+merchant key: the first rule whose `match` hits the description has its `strip` patterns removed.
+`MERCHANT_NORM_CONFIG` points at another rules file.
 
 Layer paths live in `connections/connections.yaml`, resolved relative to the workspace root.
 All generated outputs (raw Parquet, cleansed/curated Delta tables, `edicao.db`, `dataforge.db`) live

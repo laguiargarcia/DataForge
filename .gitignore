@@ -93,7 +93,6 @@ workspaces/GetFinance-Dev/
 workspaces/GetFinance/.env.*
 !workspaces/GetFinance/.env.example
 workspaces/GetFinance/report/
-workspaces/GetFinance/config/merchant_normalization.local.yaml
 workspaces/GetFinance/**/*.xlsm
 
 # Frontend tooling artefacts

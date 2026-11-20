@@ -475,13 +475,13 @@ def _frozen_row(tmp_path, **txn):
 
 
 @pytest.mark.parametrize("description,expected", [
-    ("FICTPOS MERCADO FICT0101", "MERCADO FICT"),
-    ("FICTPOS PADARIA  XYZ 0101", "PADARIA XYZ"),
-    ("FICTPOS SORVETERIA X0202", "SORVETERIA X"),
-    ("FICTPOS FARMACIA EXE0202", "FARMACIA EXE"),
+    ("ELCSS MERCADO FICT0101", "MERCADO FICT"),
+    ("ELCSS PADARIA  XYZ 0101", "PADARIA XYZ"),
+    ("ELCSS SORVETERIA X0202", "SORVETERIA X"),
+    ("ELCSS FARMACIA EXE0202", "FARMACIA EXE"),
 ])
 def test_frozen_etl_merchant_key_debit_pos_rule_strips_prefix_and_ddmm(tmp_path, description, expected):
-    # Uses the shipped config (example-debit-pos-prefix rule, no institution: => match-all). With no
+    # Uses the shipped config (itau-debit-pos rule, no institution: => match-all). With no
     # Pluggy merchant, the key IS the normalized description.
     row = _frozen_row(tmp_path, description=description)
     assert row["etl_merchant_key"] == expected
@@ -490,14 +490,14 @@ def test_frozen_etl_merchant_key_debit_pos_rule_strips_prefix_and_ddmm(tmp_path,
 
 def test_frozen_etl_merchant_key_prefers_plain_pluggy_merchant(tmp_path):
     # A plain-string Pluggy merchant wins; description_normalized is still from the description.
-    row = _frozen_row(tmp_path, description="FICTPOS WHATEVER  0101", merchant="Padaria Real")
+    row = _frozen_row(tmp_path, description="ELCSS WHATEVER  0101", merchant="Padaria Real")
     assert row["etl_merchant_key"] == "Padaria Real"
     assert row["description_normalized"] == "WHATEVER"
 
 
 def test_frozen_etl_merchant_key_prefers_counterparty_name_over_description(tmp_path):
     # No Pluggy merchant: the frozen counterparty_name (from paymentData) becomes the key.
-    row = _frozen_row(tmp_path, description="FICTPOS WHATEVER  0101", merchant=None,
+    row = _frozen_row(tmp_path, description="ELCSS WHATEVER  0101", merchant=None,
                       type="DEBIT", amount="-5.0", paymentData={
                           "paymentMethod": "PIX",
                           "receiver": {"name": "RESTAURANTE EXEMPLO ONLINE LTDA",
@@ -518,7 +518,7 @@ def test_frozen_etl_merchant_key_unpacks_nested_merchant_repr_string(tmp_path):
 
 def test_frozen_etl_merchant_key_empty_merchant_falls_through_to_description(tmp_path):
     # M5: merchant == "" (empty string) must fall through to description_normalized.
-    row = _frozen_row(tmp_path, description="FICTPOS MERCADO FICT0101", merchant="")
+    row = _frozen_row(tmp_path, description="ELCSS MERCADO FICT0101", merchant="")
     assert row["etl_merchant_key"] == "MERCADO FICT"
     assert row["description_normalized"] == "MERCADO FICT"
 
@@ -533,7 +533,7 @@ def test_frozen_etl_merchant_key_prefers_merchant_over_counterparty_name(tmp_pat
     # Precedence (df-s65, ported from test_cleansed2curated): when BOTH a structured Pluggy
     # merchant AND a counterparty_name are present, the merchant wins (not just merchant-vs-
     # description). Pairs with the merchant-vs-description and counterparty-vs-description cases.
-    row = _frozen_row(tmp_path, description="FICTPOS WHATEVER  0101", merchant="Padaria Real",
+    row = _frozen_row(tmp_path, description="ELCSS WHATEVER  0101", merchant="Padaria Real",
                       type="DEBIT", amount="-5.0", paymentData={
                           "paymentMethod": "PIX",
                           "receiver": {"name": "IFOOD",
@@ -560,124 +560,6 @@ def test_frozen_etl_merchant_key_extensible_to_another_bank_via_config(tmp_path,
     assert row["etl_merchant_key"] == "PADARIA CENTRAL"
 
 
-# ── df-bsb2.3: a bank's own rules live in an optional, gitignored local file ───────────────
-# Beside the rules file (default config/merchant_normalization.yaml, or MERCHANT_NORM_CONFIG)
-# the script reads "<name>.local.yaml" when it exists, and tries its rules first.
-
-_VERSIONED_STRIPS_PREFIX = (
-    "rules:\n"
-    "  - name: versioned\n"
-    "    match: '^LOCALPFX '\n"
-    "    strip:\n"
-    "      - '^LOCALPFX '\n"
-    "  - name: versioned-other\n"
-    "    match: '^OTHER '\n"
-    "    strip:\n"
-    "      - '^OTHER '\n"
-)
-_LOCAL_STRIPS_PREFIX_AND_DDMM = (
-    "rules:\n"
-    "  - name: local\n"
-    "    match: '^LOCALPFX '\n"
-    "    strip:\n"
-    "      - '^LOCALPFX '\n"
-    "      - '\\d{4}$'\n"
-)
-
-
-def test_frozen_etl_merchant_key_local_rule_wins_over_versioned(tmp_path, monkeypatch):
-    # Both files match the description; the local rule comes first, so its strips are the ones
-    # applied (the versioned rule alone would keep the trailing DDMM).
-    cfg = tmp_path / "norm.yaml"
-    cfg.write_text(_VERSIONED_STRIPS_PREFIX)
-    (tmp_path / "norm.local.yaml").write_text(_LOCAL_STRIPS_PREFIX_AND_DDMM)
-    monkeypatch.setenv("MERCHANT_NORM_CONFIG", str(cfg))
-    row = _frozen_row(tmp_path, description="LOCALPFX PADARIA CENTRAL0101")
-    assert row["etl_merchant_key"] == "PADARIA CENTRAL"
-    assert row["description_normalized"] == "PADARIA CENTRAL"
-
-
-def test_local_rules_come_first_and_versioned_rules_still_apply(tmp_path, monkeypatch):
-    ns = _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX,
-                          local_yaml=_LOCAL_STRIPS_PREFIX_AND_DDMM)
-    assert [r["name"] for r in ns["_norm_rules"]] == ["local", "versioned", "versioned-other"]
-    nd = ns["_normalize_description"]
-    assert nd("LOCALPFX MERCADO X0101") == "MERCADO X"
-    assert nd("OTHER MERCADO X0101") == "MERCADO X0101", "versioned rule, local file present"
-
-
-def test_missing_local_rules_file_is_not_an_error(tmp_path, monkeypatch):
-    ns = _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX)
-    assert not (tmp_path / "norm.local.yaml").exists()
-    assert [r["name"] for r in ns["_norm_rules"]] == ["versioned", "versioned-other"]
-    assert ns["_normalize_description"]("LOCALPFX MERCADO X0101") == "MERCADO X0101"
-
-
-def _local_rules_log_lines(out):
-    return [line for line in out.splitlines() if "local rules file" in line]
-
-
-def test_missing_local_rules_file_logs_the_file_to_create(tmp_path, monkeypatch, capsys):
-    # Tests, CI and a new user run without the local file: the run goes on with no finding (a
-    # finding would fail data_warnings, and the run, every day), and its log says what to create.
-    cfg = tmp_path / "norm.yaml"
-    cfg.write_text(_VERSIONED_STRIPS_PREFIX)
-    monkeypatch.setenv("MERCHANT_NORM_CONFIG", str(cfg))
-    row = _frozen_row(tmp_path, description="LOCALPFX PADARIA CENTRAL0101")
-    assert row["etl_merchant_key"] == "PADARIA CENTRAL0101", "the run still writes"
-    [line] = _local_rules_log_lines(capsys.readouterr().out)
-    assert "norm.local.yaml" in line
-    assert "merchant_normalization.local.example.yaml" in line
-    assert not (tmp_path / "validation" / "merchant_normalization.json").exists()
-
-
-def test_required_local_rules_file_missing_stops_the_run(tmp_path, monkeypatch):
-    # Prod sets MERCHANT_NORM_LOCAL_REQUIRED=1: a missing local file stops the run before any
-    # write, instead of writing merchant keys without the owner's bank rules.
-    monkeypatch.setenv("MERCHANT_NORM_LOCAL_REQUIRED", "1")
-    with pytest.raises(SystemExit) as exc:
-        _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX)
-    assert "norm.local.yaml" in str(exc.value)
-    assert "merchant_normalization.local.example.yaml" in str(exc.value)
-
-
-@pytest.mark.parametrize("local_yaml", ["", "rules:\n", "rules: []\n"])
-def test_required_local_rules_file_without_rules_stops_the_run(tmp_path, monkeypatch, local_yaml):
-    # An empty file would pass an existence check and the run would write without the rules.
-    monkeypatch.setenv("MERCHANT_NORM_LOCAL_REQUIRED", "1")
-    with pytest.raises(SystemExit) as exc:
-        _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX, local_yaml=local_yaml)
-    assert "norm.local.yaml" in str(exc.value)
-    assert "has no rule" in str(exc.value)
-
-
-def test_required_local_rules_file_present_runs(tmp_path, monkeypatch):
-    monkeypatch.setenv("MERCHANT_NORM_LOCAL_REQUIRED", "1")
-    ns = _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX,
-                          local_yaml=_LOCAL_STRIPS_PREFIX_AND_DDMM)
-    assert ns["_normalize_description"]("LOCALPFX MERCADO X0101") == "MERCADO X"
-
-
-def test_present_local_rules_file_logs_nothing(tmp_path, monkeypatch, capsys):
-    cfg = tmp_path / "norm.yaml"
-    cfg.write_text(_VERSIONED_STRIPS_PREFIX)
-    (tmp_path / "norm.local.yaml").write_text(_LOCAL_STRIPS_PREFIX_AND_DDMM)
-    monkeypatch.setenv("MERCHANT_NORM_CONFIG", str(cfg))
-    _frozen_row(tmp_path, description="LOCALPFX PADARIA CENTRAL0101")
-    assert _local_rules_log_lines(capsys.readouterr().out) == []
-
-
-def test_local_rules_file_with_bare_rules_key_adds_no_rules(tmp_path, monkeypatch):
-    # The template with its rule commented out leaves "rules:" with no value (None in YAML).
-    ns = _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX, local_yaml="rules:\n")
-    assert [r["name"] for r in ns["_norm_rules"]] == ["versioned", "versioned-other"]
-
-
-def test_empty_local_rules_file_adds_no_rules(tmp_path, monkeypatch):
-    ns = _load_norm_funcs(tmp_path, monkeypatch, _VERSIONED_STRIPS_PREFIX, local_yaml="")
-    assert [r["name"] for r in ns["_norm_rules"]] == ["versioned", "versioned-other"]
-
-
 # ── A10 institution-scoped normalization (df-s65) ─────────────────────────────────────────
 # raw2cleansed still carries the full A10 machinery: _rule_applies_to + an institution-aware
 # _normalize_description(description, institution=None). The live freeze derives with
@@ -687,16 +569,13 @@ def test_empty_local_rules_file_adds_no_rules(tmp_path, monkeypatch):
 # _merchant_key has NO institution parameter (3-arg, derives via _normalize_description with
 # institution=None), so scoping is tested on _normalize_description / _rule_applies_to.
 
-def _load_norm_funcs(tmp_path, monkeypatch, rules_yaml: str, local_yaml: str | None = None) -> dict:
+def _load_norm_funcs(tmp_path, monkeypatch, rules_yaml: str) -> dict:
     """Exec only raw2cleansed.py up to the argparse line so we get _normalize_description /
     _rule_applies_to / _merchant_key bound against a chosen rules config, without running the
-    pipeline. The A10 institution machinery lives in raw2cleansed since df-s65. `local_yaml`,
-    when given, is written as the local rules file beside the config (df-bsb2.3)."""
+    pipeline. The A10 institution machinery lives in raw2cleansed since df-s65."""
     scripts = _delta_util.SCRIPTS
     cfg = tmp_path / "norm.yaml"
     cfg.write_text(rules_yaml, encoding="utf-8")
-    if local_yaml is not None:
-        (tmp_path / "norm.local.yaml").write_text(local_yaml, encoding="utf-8")
     script = scripts / "raw2cleansed" / "raw2cleansed.py"
     # keep everything before argument parsing (the pure helpers + rule load)
     head = _delta_util.compile_script(script, until="parser = argparse.ArgumentParser()")
@@ -710,19 +589,19 @@ def _load_norm_funcs(tmp_path, monkeypatch, rules_yaml: str, local_yaml: str | N
 
 
 def test_a10_unscoped_rule_is_institution_invariant(tmp_path, monkeypatch):
-    # The shipped example-debit-pos-prefix rule has NO institution: key. Its output must be identical for
+    # The shipped itau-debit-pos rule has NO institution: key. Its output must be identical for
     # institution=None, "Banco Fictício", and any other institution — proving A10 adds zero
     # output change for the current (un-scoped) config, consistent with the institution=None freeze.
     ns = _load_norm_funcs(tmp_path, monkeypatch,
         "rules:\n"
         "  - name: debit-pos-prefix\n"
-        "    match: '^FICTPOS '\n"
+        "    match: '^ELCSS '\n"
         "    strip:\n"
-        "      - '^FICTPOS '\n"
+        "      - '^ELCSS '\n"
         "      - '\\d{4}$'\n"
     )
     nd = ns["_normalize_description"]
-    desc = "FICTPOS MERCADO FICT0101"
+    desc = "ELCSS MERCADO FICT0101"
     baseline = nd(desc, None)            # (description, institution)
     assert baseline == "MERCADO FICT"
     assert nd(desc, "Banco Fictício") == baseline

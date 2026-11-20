@@ -24,8 +24,7 @@ from pathlib import Path, PurePosixPath
 
 MANIFEST = ".mirrored-files"
 LOCAL_DIRS = ("data", "report", "triggers", "deploy/.ledger", ".venv", ".git")
-LOCAL_FILES = (".env", "dataforge.db", "config/investments.yaml", "config/merchant_normalization.local.yaml",
-               MANIFEST)
+LOCAL_FILES = (".env", "dataforge.db", "config/investments.yaml", MANIFEST)
 CACHE_DIRS = ("__pycache__", ".pytest_cache", "node_modules")
 
 

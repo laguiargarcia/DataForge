@@ -195,7 +195,7 @@ def test_is_transfer_false_for_normal_and_estorno_and_null(tmp_path):
          "categoryId": "16000000", "description": "ESTORNO TARIFA EXEMPLO",
          "accountId": "acc-bank", "account_type": "CREDIT"},
         {"id": "NUL", "date": "2026-01-03", "amount": -5.0, "category": None,
-         "categoryId": None, "description": "FICTPOS PADARIA  XYZ 0101",
+         "categoryId": None, "description": "ELCSS PADARIA  XYZ 0101",
          "accountId": "acc-bank", "account_type": "BANK"},
     ])
     _seed_dim_account(tmp_path)
@@ -368,11 +368,11 @@ def test_cc_columns_carried_into_fact(tmp_path):
 
 def test_delta_fact_matches_expected_rows(tmp_path):
     # Seed the frozen merchant columns (df-s65): Dev carries them; prod derives the SAME values
-    # from the descriptions ("FICTPOS MERCADO FICT0101" -> "MERCADO FICT"; "Loja" -> "Loja"), so
+    # from the descriptions ("ELCSS MERCADO FICT0101" -> "MERCADO FICT"; "Loja" -> "Loja"), so
     # the expected rows are identical under both regimes.
     _seed_cleansed(tmp_path, transactions=[
         {"id": "A", "date": "2026-01-01", "amount": -50.0, "category": "Food and drinks",
-         "description": "FICTPOS MERCADO FICT0101", "accountId": "acc-bank", "account_type": "BANK",
+         "description": "ELCSS MERCADO FICT0101", "accountId": "acc-bank", "account_type": "BANK",
          "etl_merchant_key": "MERCADO FICT", "description_normalized": "MERCADO FICT"},
         {"id": "B", "date": "2026-01-02", "amount": 50.0, "category": "Shopping",
          "description": "Loja", "accountId": "acc-card", "account_type": "CREDIT",

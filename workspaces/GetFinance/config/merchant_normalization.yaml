@@ -5,13 +5,9 @@
 # so normalization is data-driven: rules are tried in order; the first whose
 # `match` regex hits the description is applied, its `strip` patterns are removed,
 # and whitespace is collapsed. To onboard a new bank, add a rule — no code change.
-#
-# Rules for your own banks go in "merchant_normalization.local.yaml" in this folder
-# (gitignored; copy merchant_normalization.local.example.yaml). Its rules are tried
-# before the ones below. This file keeps only the example rule, with a made-up prefix.
 rules:
-  - name: example-debit-pos-prefix
-    match: '^FICTPOS '
+  - name: itau-debit-pos
+    match: '^ELCSS '
     strip:
-      - '^FICTPOS '   # debit-POS channel prefix (made up)
-      - '\d{4}$'      # trailing DDMM date code
+      - '^ELCSS '   # debit-POS channel prefix
+      - '\d{4}$'    # trailing DDMM date code
