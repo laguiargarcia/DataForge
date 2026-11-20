@@ -1,6 +1,6 @@
 """tests/_delta_util.py: where the `integration` tests find the real data (DataForge df-aef7.1).
 
-GETFINANCE_DATA when it is set (the dev clone on the Linux disk reads the Windows workspace's data/,
+GETFINANCE_DATA when it is set (a checkout on the Linux disk reads the Windows workspace's data/,
 read-only); otherwise the checkout's own data/ (its main checkout's, from a worktree).
 """
 import os
@@ -10,7 +10,7 @@ from tests._delta_util import real_data_dir
 
 
 def test_the_variable_wins_over_the_checkouts_own_data(tmp_path):
-    """A data/ left in the dev clone (even empty) must not switch the variable off."""
+    """A data/ left in the checkout (even empty) must not switch the variable off."""
     (tmp_path / "data").mkdir()
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()

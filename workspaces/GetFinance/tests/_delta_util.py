@@ -48,7 +48,7 @@ def _main_checkout(root: Path) -> Path:
 
 def real_data_dir(root: Path, environ) -> Path:
     """GETFINANCE_DATA when it is set: the data/ directory of the workspace that holds the real data
-    (the dev clone on the Linux disk has none, DataForge df-aef7.1). Otherwise the main checkout's
+    (a DataForge checkout on the Linux disk has none, DataForge df-aef7.1). Otherwise the main checkout's
     data/, which may not exist, and then the `integration` tests skip."""
     if environ.get("GETFINANCE_DATA"):
         return Path(environ["GETFINANCE_DATA"])

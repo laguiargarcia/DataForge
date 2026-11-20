@@ -9,9 +9,9 @@ related_issues: []
 
 GetFinance is a DataForge workspace: the `dataforge` CLI comes from a DataForge venv, with
 `DATAFORGE_HOME` set to the DataForge folder whose `workspaces/GetFinance` is this checkout. Where
-development and prod live is in the README ("Where it lives"). How to make the dev clone, its venv, a
-worktree per change, and how to run the tests and commit with `GETFINANCE_DATA`: DataForge's
-`docs/commands.md`, section "GetFinance dev clone".
+development and prod live is in the README ("Where it lives"). A change is made in a DataForge
+worktree like any other; how to run the tests and commit with `GETFINANCE_DATA`: DataForge's
+`docs/commands.md`, section "GetFinance workspace".
 
 ## Configuration
 
