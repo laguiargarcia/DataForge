@@ -19,8 +19,7 @@ BLOCK_PREFIXES = (
 )
 # Inside a workspace (workspaces/<name>/...): where its real data and its real config live.
 WORKSPACE_PRIVATE_DIRS = ("data/", "report/", "docs/archive/")
-WORKSPACE_PRIVATE_FILES = {"docs/workbook.md", "config/investments.yaml",
-                           "config/merchant_normalization.local.yaml"}
+WORKSPACE_PRIVATE_FILES = {"docs/workbook.md", "config/investments.yaml"}
 PRIVATE_SUFFIXES = {".db", ".sqlite", ".duckdb", ".parquet", ".xlsx", ".xlsm", ".xls"}
 # Inside a workspace, an archive is a copy of its data (backup_dados.py zips data/raw and edicao.db),
 # whatever the name; it is judged by its path, since its content cannot be read.

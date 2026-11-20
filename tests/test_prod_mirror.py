@@ -18,7 +18,6 @@ LOCALS = {
     "triggers/daily.yaml": "name: daily\n",
     "deploy/.ledger/1.json": "{}",
     "config/investments.yaml": "real holdings\n",
-    "config/merchant_normalization.local.yaml": "rules: []\n",
     ".venv/pyvenv.cfg": "home = x\n",
     "scripts/__pycache__/functions.cpython-314.pyc": "pyc",
     "apps/financas/node_modules/x/index.js": "x",

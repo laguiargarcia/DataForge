@@ -32,7 +32,6 @@ def test_a_private_surface_is_blocked_without_reading_it(repo, capsys):
 @pytest.mark.parametrize("rel", ["workspaces/GetFinance/data/raw/x.csv", "workspaces/GetFinance/report/r.txt",
                                  "workspaces/W/docs/archive/old.md", "workspaces/W/docs/workbook.md",
                                  "workspaces/W/config/investments.yaml",
-                                 "workspaces/W/config/merchant_normalization.local.yaml",
                                  "workspaces/W/.env", "workspaces/W/config/.env.local", ".env",
                                  "a.parquet", "tests/fixtures/e.db", "w.xlsx", "deep/dir/book.XLSM",
                                  "x.sqlite", "y.duckdb", "z.xls",

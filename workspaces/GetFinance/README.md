@@ -66,7 +66,7 @@ change it, from the app folder after `npm ci`:
   workspace of the same commit over prod's (`scripts/prod/mirror_workspace.py`). The mirror writes the
   repo's files and deletes the ones it wrote before and the repo dropped (`.mirrored-files` lists
   them); prod's own files are never touched: `data/`, `.env`, `dataforge.db`, `report/`, `triggers/`,
-  `deploy/.ledger/`, `config/investments.yaml` and `config/merchant_normalization.local.yaml`.
+  `deploy/.ledger/` and `config/investments.yaml`.
 
 ## What is precious and what is not
 
@@ -137,10 +137,9 @@ Categories (`categorias`) and rules (`mapeamento`) are user data in `data/edicao
 DataForge's `scripts/leakguard.py` guards this workspace too (it took in the guard this workspace
 had, df-bsb2.2.2). It runs in pre-commit, on the staged files and on the commit message, and in CI
 (job `leak-scan`, with gitleaks). It blocks private files (here, in any case: `data/`, `report/`,
-`docs/archive/`, `docs/workbook.md`, `config/investments.yaml`,
-`config/merchant_normalization.local.yaml`, an archive such as a `.zip` of a backup, and any binary
-file other than the app's fonts and images; anywhere: a `.env` other than `.env.example`, a
-`.db`/`.parquet`/`.xlsx`), CPF/CNPJ with valid check digits, account short codes and personal
+`docs/archive/`, `docs/workbook.md`, `config/investments.yaml`, an archive such as a `.zip` of a
+backup, and any binary file other than the app's fonts and images; anywhere: a `.env` other than
+`.env.example`, a `.db`/`.parquet`/`.xlsx`), CPF/CNPJ with valid check digits, account short codes and personal
 e-mails. On the owner's machine it also blocks every **real value** read from the real `data/`
 (Pluggy ids, account numbers, owner and counterparty names, documents), `data/edicao.db` (category
 rules) and the `.env` beside it. Examples in code, docs and tests use fake values only (e.g.

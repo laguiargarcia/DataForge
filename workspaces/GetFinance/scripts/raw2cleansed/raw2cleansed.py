@@ -18,40 +18,8 @@ _norm_config_path = Path(
     os.environ.get("MERCHANT_NORM_CONFIG")
     or str(Path(__file__).parent.parent.parent / "config" / "merchant_normalization.yaml")
 )
-# df-bsb2.3: rules that name the owner's own bank formats live beside it in an optional,
-# gitignored "<name>.local.yaml" (template: config/merchant_normalization.local.example.yaml).
-# Its rules are tried first, so on the same description a local rule wins over a versioned one.
-# Without it the run goes on with the versioned rules only (tests, CI, a new user) and its log says
-# what to create; no finding, since a finding would fail every such run (df-bsb2.3 review).
-# Where the rules are known to exist (prod), MERCHANT_NORM_LOCAL_REQUIRED=1 in .env makes the file
-# mandatory: without it, or with no rule in it, the run stops here, before it writes merchant keys
-# the rules would change.
-_norm_local_required = os.environ.get("MERCHANT_NORM_LOCAL_REQUIRED") == "1"
-_norm_local_path = _norm_config_path.with_name(
-    _norm_config_path.stem + ".local" + _norm_config_path.suffix
-)
-_norm_rules = []
-if _norm_local_path.exists():
-    with open(_norm_local_path, encoding="utf-8") as _f:
-        _norm_rules += (yaml.safe_load(_f) or {}).get("rules") or []
-    if _norm_local_required and not _norm_rules:
-        raise SystemExit(
-            f"merchant normalization: MERCHANT_NORM_LOCAL_REQUIRED=1 but the local rules file "
-            f"{_norm_local_path} has no rule; fill it in "
-            "(template: config/merchant_normalization.local.example.yaml)"
-        )
-elif _norm_local_required:
-    raise SystemExit(
-        f"merchant normalization: MERCHANT_NORM_LOCAL_REQUIRED=1 but the local rules file "
-        f"{_norm_local_path} is missing; create it "
-        "(template: config/merchant_normalization.local.example.yaml)"
-    )
-else:
-    print(f"merchant normalization: no local rules file {_norm_local_path.name} beside "
-          f"{_norm_config_path.name}, only the versioned rules apply; to add your banks' rules, "
-          "copy config/merchant_normalization.local.example.yaml to it")
 with open(_norm_config_path, encoding="utf-8") as _f:
-    _norm_rules += yaml.safe_load(_f).get("rules", [])
+    _norm_rules = yaml.safe_load(_f).get("rules", [])
 
 
 def _rule_applies_to(rule, institution):
