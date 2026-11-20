@@ -57,14 +57,16 @@ change it, from the app folder after `npm ci`:
 
 ## Where it lives
 
-- **Development** happens in a clone on the Linux disk, inside the DataForge dev clone, at
-  `workspaces/GetFinance` (DataForge df-aef7.1). Each change is made in a worktree outside
-  `workspaces/` (DataForge's `.worktrees/getfinance/<issue>`), so DataForge does not discover it as
-  a workspace. The clone has no `data/`: the real data stays in prod, read through `GETFINANCE_DATA`
-  (see Tests). The commands are in DataForge's `docs/commands.md`, section "GetFinance dev clone".
-- **Prod** is the checkout under the Windows DataForge folder (`workspaces/GetFinance`), run daily
-  by the Task Scheduler. It holds the real `data/` and `.env`. Nobody edits code there: it receives
-  merged changes with `git pull --ff-only`, outside the daily trigger's time (`triggers/daily.yaml`).
+- **Development** happens in the DataForge repo, where this workspace is `workspaces/GetFinance`
+  (DataForge df-bsb2.2): a change is made in a DataForge worktree like any other. The repo has no real
+  `data/`: the real data stays in prod, read through `GETFINANCE_DATA` (see Tests).
+- **Prod** is `workspaces/GetFinance` under the Windows DataForge folder, run daily by the Task
+  Scheduler. It holds the real `data/` and `.env`. Nobody edits code there: DataForge's
+  `scripts/prod/deploy.sh`, run after each merge to main, installs the engine and then mirrors this
+  workspace of the same commit over prod's (`scripts/prod/mirror_workspace.py`). The mirror writes the
+  repo's files and deletes the ones it wrote before and the repo dropped (`.mirrored-files` lists
+  them); prod's own files are never touched: `data/`, `.env`, `dataforge.db`, `report/`, `triggers/`,
+  `deploy/.ledger/`, `config/investments.yaml` and `config/merchant_normalization.local.yaml`.
 
 ## What is precious and what is not
 
@@ -106,8 +108,8 @@ it, in `data/extratos/` of the prod workspace (create the folder the first time;
 `curated.extrato_saldos` (each daily balance and whether it closes with the entries), and the weekly
 backup keeps them. Overlapping periods are fine: a day is taken from one file only. A PDF the task cannot
 read, or whose agency and account match no BANK account, is left out (the others are still read) and the
-run fails naming it and why: move it out and tell a session. The reading needs `pypdf`, from
-`requirements.txt`; without it the task only warns and the tables stay empty.
+run fails naming it and why: move it out and tell a session. The reading needs `pypdf`, a DataForge
+dependency (`uv.lock`); without it the task only warns and the tables stay empty.
 Then every suspect transaction gets the statement's verdict (`curated.veredito_suspeitos`: in the
 statement, not in it, or not covered), the statement lines with no transaction go to
 `curated.extrato_sem_lancamento`, and `curated.acerto_por_motivo` counts how often each suspect reason is

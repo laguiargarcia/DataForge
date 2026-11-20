@@ -36,7 +36,7 @@ pasta = _connection_root(args.source)
 arquivos = sorted(f for f in pasta.iterdir() if f.is_file() and f.suffix.lower() == ".pdf") if pasta.is_dir() else []
 if arquivos and PdfReader is None:
     print(f"extrato: AVISO: {len(arquivos)} PDF(s) na pasta, mas a biblioteca pypdf não está instalada neste "
-          "Python: nenhum foi lido e as tabelas ficam vazias (instalar o requirements.txt do workspace)")
+          "Python: nenhum foi lido e as tabelas ficam vazias (é dependência do DataForge: uv sync, ou o deploy na prod)")
     arquivos = []
 contas = read_delta_table("cleansed", "accounts") if arquivos else None
 
