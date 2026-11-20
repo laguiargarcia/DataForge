@@ -2,7 +2,7 @@
 
 Every PII-shaped or "real" value is made up and assembled at run time, so this file never holds
 one and the guard passes over it like any other committed file. Valid CPFs and CNPJs come from
-the check-digit rule. `repo` and `workspace` are plain functions here: each test file makes them its
+the check-digit rule, written apart from the guard's own. `repo` and `workspace` are plain functions here: each test file makes them its
 own fixtures (`repo = pytest.fixture(leakguard_fixtures.repo)`).
 """
 
@@ -26,21 +26,23 @@ RECEIVER = "Beltrano" + " Recebedor"
 SECRET = "s3cr3t" + "-value"
 
 
-def _cpf(base9):
-    digits = base9
-    for size in (9, 10):
-        total = sum(int(d) * w for d, w in zip(digits, range(size + 1, 1, -1), strict=True))
-        digits += str((total * 10) % 11 % 10)
+def _with_check_digits(base, cycle):
+    """`base` and its two check digits: each is (10 x sum) mod 11 mod 10, the sum weighting the digits
+    before it 2, 3, 4... from the right, the weight going back to 2 after `cycle`. Written apart from the
+    guard's own rule (scripts/leakguard_patterns.py), so the tests check that rule against another."""
+    digits = base
+    for _ in range(2):
+        total = sum(int(d) * (2 + i % (cycle - 1)) for i, d in enumerate(reversed(digits)))
+        digits += str(total * 10 % 11 % 10)
     return digits
+
+
+def _cpf(base9):
+    return _with_check_digits(base9, 11)   # weights 2..11: never wrap over the 10 digits of a CPF
 
 
 def _cnpj(base12):
-    digits = base12
-    weights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
-    for size in (12, 13):
-        total = sum(int(d) * w for d, w in zip(digits, weights[13 - size:], strict=True))
-        digits += str(0 if total % 11 < 2 else 11 - total % 11)
-    return digits
+    return _with_check_digits(base12, 9)   # weights 2..9, then 2 again
 
 
 CPF = _cpf("529982247")
