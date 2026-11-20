@@ -27,7 +27,7 @@ LOCALS = {
 def _tree(root: Path, files: dict[str, str]) -> None:
     for rel, text in files.items():
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
-        (root / rel).write_text(text, encoding="utf-8")
+        (root / rel).write_bytes(text.encode())   # bytes: Windows text mode would write \r\n
 
 
 def _snapshot(root: Path) -> dict[str, bytes]:
