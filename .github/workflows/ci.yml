@@ -654,7 +654,7 @@ jobs:
           uv venv --no-project --seed --python $python "$work/venv"
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/prod/update-prod.ps1 `
             -VenvPath "$work/venv" -DataForgeHome $work -Wheel (Get-Item "$work/dataforge-*.whl").FullName `
-            -Constraints "$work/constraints.txt" -Requirements workspaces/GetFinance/requirements.txt -Python $python
+            -Constraints "$work/constraints.txt" -Python $python
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.

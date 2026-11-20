@@ -277,3 +277,11 @@ min_score = 0.9431
 tests = ["tests/test_tasks_registry*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 1.0
+
+[targets."scripts/prod/mirror_workspace.py"]
+# Only its own tests: test_prod_deploy.py runs it as a subprocess, which a mutant cannot (mutmut's trampoline).
+tests = ["tests/test_prod_mirror.py"]
+copy = ["scripts/prod/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 172 mutants, 167 killed. The 5 survivors are Equivalent: the manifest's encoding="utf-8" turned into
+# None, "UTF-8" or dropped, on read and write; the mirror runs in WSL, whose default is UTF-8.
+min_score = 0.9709

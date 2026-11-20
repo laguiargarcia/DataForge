@@ -60,6 +60,31 @@ task, `\DataForge\GetFinance\trigger\<trigger>`, whose action runs the prod venv
 `dataforge.exe scheduled-run GetFinance <trigger>` with `DATAFORGE_HOME` set to the DataForge folder.
 `scheduled-run GetFinance daily` runs the `daily` trigger, that is the `finance_daily` job.
 
+The triggers are prod's own files (`triggers/` is gitignored and the deploy never touches it). They are
+made from the app or the API, or by hand; prod has these two (cron in UTC):
+
+```yaml
+# triggers/daily.yaml: 06:00 in Brasília
+name: daily
+cron: 0 9 * * *
+enabled: true
+jobs:
+- job: finance_daily
+  params: {}
+  workspace: GetFinance
+```
+
+```yaml
+# triggers/backup.yaml: Sunday 10:00 in Brasília
+name: backup
+cron: 0 13 * * 0
+enabled: true
+jobs:
+- job: backup
+  params: {}
+  workspace: GetFinance
+```
+
 ```powershell
 # Inspect / run the task (Windows)
 schtasks /query /tn "\DataForge\GetFinance\trigger\daily" /v /fo LIST

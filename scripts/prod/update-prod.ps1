@@ -7,7 +7,7 @@ Update or roll back a NON-editable DataForge install in a Windows venv (df-qryy)
 
   Add -Constraints <file> to pin the dependencies (scripts/prod/deploy.sh passes uv.lock's
   versions, exported with uv export) and -Requirements <file>[,<file>...] for packages the
-  workspaces need that are not DataForge dependencies (e.g. workspaces\GetFinance\requirements.txt).
+  workspaces need that are not DataForge dependencies (none today: list them in pyproject.toml).
   Add -Python <major.minor> (the release's .python-version) to move the venv to that Python: when
   the venv runs another one, uv updates itself and installs that Python, the venv is renamed to
   <venv>.py<old>-<stamp> and a new one is made (uv venv --seed); the release history moves into
