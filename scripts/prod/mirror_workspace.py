@@ -102,7 +102,7 @@ def mirror(src: Path, dst: Path, backup: Path) -> int:
         print(f"mirror: {dst} is still a git checkout, not mirrored (switch it by hand: df-bsb2.2.6.3)")
         return 0
     files = release_files(src)
-    carried = [rel for rel in files if is_local(rel)]
+    carried = [rel for rel in files if is_local(rel) and not set(PurePosixPath(rel).parts) & set(CACHE_DIRS)]
     for rel in carried:
         print(f"mirror: {rel} is prod's own, the release's copy is ignored", file=sys.stderr)
     files = [rel for rel in files if not is_local(rel)]

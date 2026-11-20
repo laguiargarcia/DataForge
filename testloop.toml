@@ -282,6 +282,6 @@ min_score = 1.0
 # Only its own tests: test_prod_deploy.py runs it as a subprocess, which a mutant cannot (mutmut's trampoline).
 tests = ["tests/test_prod_mirror.py"]
 copy = ["scripts/prod/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 166 mutants, 161 killed. The 5 survivors are Equivalent: the manifest's encoding="utf-8" turned into
+# 172 mutants, 167 killed. The 5 survivors are Equivalent: the manifest's encoding="utf-8" turned into
 # None, "UTF-8" or dropped, on read and write; the mirror runs in WSL, whose default is UTF-8.
-min_score = 0.9698
+min_score = 0.9709

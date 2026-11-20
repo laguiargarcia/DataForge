@@ -90,11 +90,15 @@ def test_a_manifest_never_deletes_a_local_path(ws, capsys):
 
 def test_a_local_path_carried_by_the_release_is_ignored(ws, capsys):
     src, dst, backup = ws
-    _tree(src, {".env": "from the release\n", "data/raw/x": "synthetic\n"})
+    _tree(src, {".env": "from the release\n", "data/raw/x": "synthetic\n", "scripts/__pycache__/a.pyc": "c"})
     assert mw.mirror(src, dst, backup) == 0
     assert (dst / ".env").read_text(encoding="utf-8") == LOCALS[".env"]
     assert not (dst / "data" / "raw" / "x").exists()
-    assert ".env is prod's own" in capsys.readouterr().err
+    assert (dst / "scripts" / "__pycache__" / "functions.cpython-314.pyc").is_file()
+    assert not (dst / "scripts" / "__pycache__" / "a.pyc").exists()
+    warned = capsys.readouterr().err.splitlines()
+    assert sorted(warned) == sorted(f"mirror: {rel} is prod's own, the release's copy is ignored"
+                                    for rel in (".env", "data/raw/x"))   # a cache is skipped quietly
 
 
 def test_a_git_checkout_in_prod_is_not_mirrored(ws, capsys):
