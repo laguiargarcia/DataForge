@@ -1,6 +1,7 @@
 """Properties of scripts/leakguard.py: a real number, a CPF or a CNPJ is found whatever is written
 between its digits (df-ks84). Every value is made up and assembled at run time (valid CPFs and CNPJs
-from the check-digit rule), so this file holds no real one.
+from the fixtures' check-digit rule, never filtered by the guard's: a bug there would only thin the
+sample), so this file holds no real one.
 
 What escapes on purpose, each with its reason:
 - a letter or another symbol as the separator ("98765 x 4", "98765|4"): it is not how a number is
@@ -10,9 +11,9 @@ What escapes on purpose, each with its reason:
 - a CPF or CNPJ across a line break: that is two things, not one document (a real value does match
   across lines).
 """
-from hypothesis import example, given, settings, strategies as st
+from hypothesis import assume, example, given, settings, strategies as st
 
-from scripts import leakguard_files, leakguard_patterns, leakguard_values
+from scripts import leakguard_files, leakguard_values
 from tests.leakguard_fixtures import _cnpj, _cpf
 
 def _sources_for(value):
@@ -74,6 +75,7 @@ def test_digits_inside_a_longer_number_are_not_the_value(digits, extra):
 @st.composite
 def _spaced_cpf(draw):
     doc = _cpf(draw(st.text("0123456789", min_size=9, max_size=9)))
+    assume(len(set(doc)) > 1)   # a run of one digit is a filler, not a CPF
     groups = [doc[:3], doc[3:6], doc[6:9], doc[9:]]
     gaps = draw(st.lists(_DOC_GAP, min_size=3, max_size=3))
     return doc, "".join(g + sep for g, sep in zip(groups, [*gaps, ""], strict=True))
@@ -82,13 +84,14 @@ def _spaced_cpf(draw):
 @st.composite
 def _spaced_cnpj(draw):
     doc = _cnpj(draw(st.text("0123456789", min_size=12, max_size=12)))
+    assume(len(set(doc)) > 1)   # a run of one digit is a filler, not a CNPJ
     groups = [doc[:2], doc[2:5], doc[5:8], doc[8:12], doc[12:]]
     gaps = draw(st.lists(_DOC_GAP, min_size=4, max_size=4))
     return doc, "".join(g + sep for g, sep in zip(groups, [*gaps, ""], strict=True))
 
 
 @settings(max_examples=200)
-@given(_spaced_cpf().filter(lambda c: leakguard_patterns._cpf_valid(c[0])))
+@given(_spaced_cpf())
 def test_valid_cpf_found_whatever_separates_its_groups(case):
     _, written = case
     failures = leakguard_files.check_text("notes.txt", f"cpf {written} ok\n", [])
@@ -96,14 +99,14 @@ def test_valid_cpf_found_whatever_separates_its_groups(case):
 
 
 @settings(max_examples=200)
-@given(_spaced_cnpj().filter(lambda c: leakguard_patterns._cnpj_valid(c[0])))
+@given(_spaced_cnpj())
 def test_valid_cnpj_found_whatever_separates_its_groups(case):
     _, written = case
     failures = leakguard_files.check_text("notes.txt", f"cnpj {written} ok\n", [])
     assert any(f.startswith("CNPJ:") for f in failures)
 
 
-@given(_spaced_cpf().filter(lambda c: leakguard_patterns._cpf_valid(c[0])), st.sampled_from(["\n", "\r\n"]))
+@given(_spaced_cpf(), st.sampled_from(["\n", "\r\n"]))
 def test_cpf_across_a_line_break_is_not_a_document(case, newline):
     doc, _ = case
     text = f"{doc[:6]}{newline}{doc[6:]}"
