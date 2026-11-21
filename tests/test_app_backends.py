@@ -270,10 +270,16 @@ def _backend_pid(port: int, token: str) -> int:
             time.sleep(0.1)
 
 
+def _server_python() -> str:
+    """The interpreter prod's server runs on: pythonw.exe on Windows (no console), else this one."""
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    return str(pythonw) if sys.platform == "win32" and pythonw.exists() else sys.executable
+
+
 def test_backend_morre_com_o_servidor_que_o_subiu(info, workspace_dir, tmp_path):
     """df-xy7c: a server killed before it stops its backends (a native crash, Stop-Process) leaves none behind."""
     server = subprocess.Popen(
-        [sys.executable, "-c", _SERVER, str(workspace_dir), info.name, str(tmp_path / "app.log")],
+        [_server_python(), "-c", _SERVER, str(workspace_dir), info.name, str(tmp_path / "app.log")],
         stdout=subprocess.PIPE, text=True,
     )
     try:
