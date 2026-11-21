@@ -116,6 +116,7 @@ def test_carries_dim_and_fact_fields(tmp_path):
     assert row["subtype"] == "CDB"
     assert row["issuer"] == "BANCO FICTICIO S.A."
     assert "institution" in row
+    assert row["dueDate"] is None, "absent dueDate is projected as NULL, not dropped (df-dsy4)"
     # fact_investment_position numerics (invested vs current; mapping locked at U7)
     assert row["amountOriginal"] == 1906.25
     assert row["balance"] == 1987.40
@@ -156,3 +157,12 @@ def test_missing_optional_column_projected_null(tmp_path):
     assert rows[0]["amountOriginal"] is None
     assert rows[0]["amountProfit"] is None
     assert rows[0]["balance"] == 999.5
+
+
+def test_carries_due_date(tmp_path):
+    # df-dsy4: the report takes a matured holding out of the position once its redemption reaches the account.
+    raw = tmp_path / "raw"
+    _write_partition(raw, [_holding(dueDate="2030-08-07T03:00:00.000Z")], "2026-01-01",
+                     cols=[*INV_RAW_COLS, "dueDate"])
+    _run(tmp_path)
+    assert _read_investments(tmp_path)[0]["dueDate"] == "2030-08-07T03:00:00.000Z"

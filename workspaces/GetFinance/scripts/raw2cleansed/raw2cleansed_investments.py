@@ -20,7 +20,9 @@ inv_glob = str(src_root / "investments" / "ingestion_date=*" / "data.parquet")
 # that appear in a fetch — so any column may be absent from every partition. Project absent
 # columns defensively as typed NULL (mirrors the credit/bankData pattern in
 # raw2cleansed_accounts.py), since diagonal_relaxed cannot invent a column that never appears.
-TEXT_COLS = ["id", "itemId", "name", "type", "subtype", "issuer", "institution"]
+# dueDate (df-dsy4): a matured fixed-income holding leaves the position only once its redemption reaches
+# the account; the report needs the maturity day for that.
+TEXT_COLS = ["id", "itemId", "name", "type", "subtype", "issuer", "institution", "dueDate"]
 # A18: only fields with a known U7 consumer. amountProfit joined the list in df-9uv: some banks
 # populate it (Pluggy's own P&L) while amountOriginal is gross-ever-deposited — never reduced
 # by partial withdrawals — so balance − amountOriginal conflates withdrawals with losses.

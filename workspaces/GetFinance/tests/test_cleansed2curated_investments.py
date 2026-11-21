@@ -1,3 +1,5 @@
+from datetime import date
+
 import polars as pl
 import yaml
 from pathlib import Path
@@ -16,6 +18,7 @@ def _seed_cleansed_investments(tmp_path: Path, rows: list[dict]) -> None:
             "subtype": [r.get("subtype") for r in rows],
             "issuer": [r.get("issuer") for r in rows],
             "institution": [r.get("institution") for r in rows],
+            "dueDate": [r.get("dueDate") for r in rows],
             "currency": [r.get("currency", "BRL") for r in rows],
             "balance": [r.get("balance") for r in rows],
             "amountOriginal": [r.get("amountOriginal") for r in rows],
@@ -24,7 +27,7 @@ def _seed_cleansed_investments(tmp_path: Path, rows: list[dict]) -> None:
         schema={
             "id": pl.Utf8, "itemId": pl.Utf8, "name": pl.Utf8, "type": pl.Utf8,
             "subtype": pl.Utf8, "issuer": pl.Utf8, "institution": pl.Utf8,
-            "currency": pl.Utf8, "balance": pl.Float64, "amountOriginal": pl.Float64,
+            "dueDate": pl.Utf8, "currency": pl.Utf8, "balance": pl.Float64, "amountOriginal": pl.Float64,
             "ingested_at": pl.Utf8,
         },
     )
@@ -221,6 +224,23 @@ def test_subtype_carried_to_dim(tmp_path):
     assert _read_dim(tmp_path)[0]["subtype"] == "CDB", "subtype must survive into dim_investment"
 
 
+def test_due_date_carried_to_dim_as_the_brasilia_day(tmp_path):
+    # df-dsy4: Pluggy writes the maturity as midnight in Brasília in UTC (T03:00Z); the dim keeps the day.
+    _seed_cleansed_investments(tmp_path, [
+        {"id": "inv-cdb", "itemId": "item-ficticio", "type": "FIXED_INCOME", "subtype": "CDB",
+         "dueDate": "2030-08-07T03:00:00.000Z"},
+        {"id": "inv-sem", "itemId": "item-ficticio", "type": "FIXED_INCOME", "subtype": "CDB"},
+    ])
+    _seed_institution_via_accounts(tmp_path, institutions={"item-ficticio": "Banco Fictício"})
+    inv_cfg = _write_investments_config(tmp_path, holdings={
+        "inv-cdb": {"holding_uuid": "ficticio-cdb-2030-08"},
+        "inv-sem": {"holding_uuid": "ficticio-cdb-sem-vencimento"},
+    })
+    _run(tmp_path, inv_cfg)
+    assert {r["holding_uuid"]: r["due_date"] for r in _read_dim(tmp_path)} == {
+        "ficticio-cdb-2030-08": date(2030, 8, 7), "ficticio-cdb-sem-vencimento": None}
+
+
 def test_dim_name_uses_alias_for_display(tmp_path):
     # dim_investment.name is the user-facing label = COALESCE(alias, raw name), mirroring U3's
     # dim_account.name. Several CDBs of one bank can share the identical raw Pluggy name
@@ -266,4 +286,5 @@ def test_empty_input_produces_empty_typed_dim(tmp_path):
     assert df.schema["holding_uuid"] == pl.Utf8
     assert df.schema["pluggy_holding_id"] == pl.Utf8
     assert set(df.columns) == {"holding_uuid", "pluggy_holding_id", "name", "type", "subtype",
-                               "issuer", "institution"}, "dim_investment column contract (spec §5)"
+                               "issuer", "institution", "due_date"}, "dim_investment column contract (spec §5)"
+    assert df.schema["due_date"] == pl.Date

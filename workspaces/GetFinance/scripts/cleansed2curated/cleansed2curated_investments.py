@@ -84,6 +84,8 @@ dim = (
         "subtype",
         "issuer",
         "institution",
+        # Pluggy's dueDate is midnight in Brasília written in UTC (T03:00Z): the day is its first 10 characters.
+        pl.col("dueDate").str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False).alias("due_date"),
     )
 )
 

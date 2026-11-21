@@ -270,3 +270,80 @@ def test_investimentos_follow_user_corrections():
     assert jun["aplicado"] == 47.0
     assert investimentos_per_month(fact, _positions([])).row(0, named=True)["aplicado"] == 107.0
     assert investimentos_per_month(fact, _positions([]), corrections.clear()).row(0, named=True)["aplicado"] == 107.0
+
+
+# df-dsy4: a matured holding the bank keeps sending as ACTIVE, frozen, leaves the position only once
+# its redemption reached the account (an investment credit on or after the maturity day).
+_HOLD_SCHEMA = {"holding_uuid": pl.String, "due_date": pl.Date}
+
+def _holdings(rows):
+    return pl.DataFrame(rows, schema=_HOLD_SCHEMA, orient="row")
+
+def _tesouro_congelado():
+    # Vence em 15/08 (sábado); o banco segue mandando o saldo congelado em set e out.
+    return _positions([
+        ("tesouro", date(2026, 8, 11), 16000.0, 18000.0, 2000.0),
+        ("tesouro", date(2026, 8, 30), 16000.0, 18040.5, 2040.5),
+        ("tesouro", date(2026, 9, 30), 16000.0, 18040.5, 2040.5),
+        ("tesouro", date(2026, 10, 30), 16000.0, 18040.5, 2040.5),
+        ("cdb", date(2026, 8, 30), 1000.0, 1000.0, 0.0),
+        ("cdb", date(2026, 9, 30), 1000.0, 1000.0, 0.0),
+        ("cdb", date(2026, 10, 30), 1000.0, 1000.0, 0.0),
+    ])
+
+def _posicao_por_mes(fact, pos, holdings):
+    out = investimentos_per_month(fact, pos, holdings=holdings)
+    return dict(zip(out["anomes_key"].to_list(), out["posicao"].to_list(), strict=True))
+
+_HOLD = [("tesouro", date(2026, 8, 15)), ("cdb", None)]
+
+
+def test_matured_holding_leaves_position_after_its_redemption_reaches_the_account():
+    fact = _inv_fact([(date(2026, 8, 17), "BANK", 19100.0, "investment", True, "OUTROS")])
+    assert _posicao_por_mes(fact, _tesouro_congelado(), _holdings(_HOLD)) == {
+        202608: 1000.0, 202609: 1000.0, 202610: 1000.0}
+
+
+def test_redemption_in_a_later_month_keeps_the_holding_until_then():
+    fact = _inv_fact([(date(2026, 8, 25), "BANK", 17500.0, "investment", True, "OUTROS")])
+    pos = _positions([("tesouro", date(2026, 8, 15), 16000.0, 17500.0, 1500.0),
+                      ("tesouro", date(2026, 8, 20), 16000.0, 17500.0, 1500.0)])
+    hold = _holdings([("tesouro", date(2026, 8, 15))])
+    # The month's latest snapshot (20/08) is before the credit (25/08): still invested in August.
+    assert _posicao_por_mes(fact, pos, hold) == {202608: 17500.0}
+
+
+def test_matured_holding_without_redemption_credit_keeps_counting():
+    sem_prova = [
+        _inv_fact([]),
+        _inv_fact([(date(2026, 8, 14), "BANK", 19100.0, "investment", True, "OUTROS")]),  # antes do vencimento
+        _inv_fact([(date(2026, 8, 26), "BANK", 19100.0, "investment", True, "OUTROS")]),  # fora da janela
+        _inv_fact([(date(2026, 8, 17), "BANK", 15000.0, "investment", True, "OUTROS")]),   # pequeno demais
+        _inv_fact([(date(2026, 8, 17), "BANK", 19100.0, None, True, "OUTROS")]),           # não é investimento
+        _inv_fact([(date(2026, 8, 17), "BANK", 19100.0, "investment", False, "OUTROS")]),  # pendente
+        _inv_fact([(date(2026, 8, 17), "BANK", -19100.0, "investment", True, "OUTROS")]),  # débito
+    ]
+    for fact in sem_prova:
+        assert _posicao_por_mes(fact, _tesouro_congelado(), _holdings(_HOLD))[202610] == 19040.5
+
+
+def test_one_credit_proves_one_matured_holding():
+    pos = _positions([("a", date(2026, 8, 10), 900.0, 1000.0, 100.0),
+                      ("b", date(2026, 8, 10), 900.0, 1000.0, 100.0),
+                      ("a", date(2026, 9, 30), 900.0, 1000.0, 100.0),
+                      ("b", date(2026, 9, 30), 900.0, 1000.0, 100.0)])
+    hold = _holdings([("a", date(2026, 8, 15)), ("b", date(2026, 8, 15))])
+    um = _inv_fact([(date(2026, 8, 16), "BANK", 1000.0, "investment", True, "OUTROS")])
+    dois = _inv_fact([(date(2026, 8, 16), "BANK", 1000.0, "investment", True, "OUTROS"),
+                      (date(2026, 8, 18), "BANK", 1000.0, "investment", True, "OUTROS")])
+    assert _posicao_por_mes(um, pos, hold)[202609] == 1000.0
+    assert _posicao_por_mes(dois, pos, hold)[202609] == 0.0   # all redeemed: 0, not "no data"
+
+
+def test_without_due_dates_the_position_is_unchanged():
+    fact = _inv_fact([(date(2026, 8, 17), "BANK", 19100.0, "investment", True, "OUTROS")])
+    sem = investimentos_per_month(fact, _tesouro_congelado())
+    assert investimentos_per_month(fact, _tesouro_congelado(),
+                                   holdings=_holdings([("tesouro", None), ("cdb", None)])).equals(sem)
+    antigo = pl.DataFrame({"holding_uuid": ["tesouro"]})            # dim_investment from before df-dsy4
+    assert investimentos_per_month(fact, _tesouro_congelado(), holdings=antigo).equals(sem)
