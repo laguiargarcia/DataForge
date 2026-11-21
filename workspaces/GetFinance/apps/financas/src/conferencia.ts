@@ -60,6 +60,8 @@ const ESTADOS = new Map([
   ['fecha', { rotulo: 'Fecha', fecha: true, ordem: 2 }],
   ['fecha_com_vizinho', { rotulo: 'Fecha com o vizinho', fecha: true, ordem: 1 }],
   ['em_aberto', { rotulo: 'Em aberto', fecha: false, ordem: 0 }],
+  // O primeiro intervalo da conta: a outra metade do par é de antes da primeira coleta de saldo. Explicado.
+  ['historico_incompleto', { rotulo: 'Começo do histórico', fecha: true, ordem: 1 }],
   ['nao_fecha', { rotulo: 'Não fecha', fecha: false, ordem: 0 }],
 ])
 

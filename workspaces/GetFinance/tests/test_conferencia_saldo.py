@@ -15,8 +15,8 @@ from tests import _delta_util
 
 sys.path.insert(0, str(_delta_util.SCRIPTS / "report"))
 
-from conferencia_saldo import (EM_ABERTO, ESTADOS, FECHA, FECHA_COM_VIZINHO, NAO_FECHA, TOLERANCIA,
-                               conferencia_saldo)
+from conferencia_saldo import (EM_ABERTO, ESTADOS, FECHA, FECHA_COM_VIZINHO, HISTORICO_INCOMPLETO, NAO_FECHA,
+                               TOLERANCIA, conferencia_saldo)
 
 BANK, OUTRA, CARTAO = "p-bank-1", "p-bank-2", "p-card-1"
 
@@ -90,11 +90,11 @@ def test_linha_de_aplicacao_automatica_nao_entra_na_soma():
 
 def test_intervalo_com_lancamento_faltando():
     # O saldo caiu 50 e só 30 de lançamentos explicam: falta um lançamento de -20. O intervalo seguinte
-    # fecha, então este não tem par.
+    # fecha, então este não tem par; como é o primeiro da conta, é o começo do histórico.
     out = _conferir(_serie(100.0, 50.0, 50.0), _transactions(_txn("t1", BANK, "2026-06-02", -30.0)))
     r = out.row(0, named=True)
     assert (r["variacao_saldo"], r["soma_lancamentos"], r["diferenca"]) == (-50.0, -30.0, -20.0)
-    assert out["estado"].to_list() == [NAO_FECHA, FECHA]
+    assert out["estado"].to_list() == [HISTORICO_INCOMPLETO, FECHA]
 
 
 def test_intervalo_com_lancamento_sobrando():
@@ -103,7 +103,7 @@ def test_intervalo_com_lancamento_sobrando():
                                                              _txn("t2", BANK, "2026-06-02", -20.0)))
     r = out.row(0, named=True)
     assert (r["soma_lancamentos"], r["n_lancamentos"], r["diferenca"]) == (-50.0, 2, 20.0)
-    assert out["estado"].to_list() == [NAO_FECHA, FECHA]
+    assert out["estado"].to_list() == [HISTORICO_INCOMPLETO, FECHA]
 
 
 def test_lancamento_na_borda_do_updated_at():
@@ -222,22 +222,31 @@ def test_cada_intervalo_entra_em_um_par_so():
 
 
 def test_vizinho_que_fecha_sozinho_nao_forma_par():
-    assert _estados(-1.5, 0.9, 0.0) == [NAO_FECHA, FECHA, FECHA]
+    assert _estados(0.0, -1.5, 0.9, 0.0) == [FECHA, NAO_FECHA, FECHA, FECHA]
 
 
 def test_vizinhos_que_nao_se_anulam_nao_fecham():
-    assert _estados(-20.0, -15.0, 0.0) == [NAO_FECHA, NAO_FECHA, FECHA]
+    assert _estados(0.0, -20.0, -15.0, 0.0) == [FECHA, NAO_FECHA, NAO_FECHA, FECHA]
 
 
 def test_o_mais_novo_que_nao_fecha_sozinho_fica_em_aberto():
     # Ainda não há vizinho seguinte; se o anterior o completa, o par já fecha.
     assert _estados(0.0, -8.70) == [FECHA, EM_ABERTO]
     assert _estados(0.0, -8.70, 8.70) == [FECHA, FECHA_COM_VIZINHO, FECHA_COM_VIZINHO]
-    assert _estados(-20.0, -8.70) == [NAO_FECHA, EM_ABERTO]
+    assert _estados(0.0, -20.0, -8.70) == [FECHA, NAO_FECHA, EM_ABERTO]
 
 
-def test_estados_sao_os_quatro():
-    assert set(ESTADOS) == {FECHA, FECHA_COM_VIZINHO, EM_ABERTO, NAO_FECHA}
+def test_o_mais_velho_que_nao_fecha_sozinho_nem_com_o_seguinte_e_o_comeco_do_historico():
+    # df-y26v: o vizinho anterior é de antes da primeira coleta de saldo (o seguro que o banco tirou antes).
+    assert _estados(9.93, 0.0, 0.0) == [HISTORICO_INCOMPLETO, FECHA, FECHA]
+    assert _estados(-20.0, -8.70) == [HISTORICO_INCOMPLETO, EM_ABERTO]
+    # Se o seguinte o completa, é um par como qualquer outro; e um intervalo só é o mais novo: em_aberto.
+    assert _estados(-9.90, 9.90, 0.0) == [FECHA_COM_VIZINHO, FECHA_COM_VIZINHO, FECHA]
+    assert _estados(9.93) == [EM_ABERTO]
+
+
+def test_estados_sao_os_cinco():
+    assert set(ESTADOS) == {FECHA, FECHA_COM_VIZINHO, EM_ABERTO, HISTORICO_INCOMPLETO, NAO_FECHA}
 
 
 # --- o aviso: o terceiro intervalo mais novo, na rodada que trouxe snapshot novo -------------------
@@ -252,7 +261,10 @@ def _achados(accounts, txns, today, raw=None):
 
 
 JUN = {d: date(2026, 6, d) for d in range(1, 7)}
-QUEBRA_ANTIGA = _serie(100.0, 80.0, 80.0, 80.0)   # o intervalo de 01/06 a 02/06 não fecha (-20)
+# Um snapshot de 31/05 com o mesmo saldo antes de cada série: a quebra não é o primeiro intervalo da conta
+# (o primeiro é historico_incompleto, nunca aviso).
+ANTES = _accounts(_snap(BANK, "2026-05-31T19:00:00.000Z", 100.0))
+QUEBRA_ANTIGA = pl.concat([ANTES, _serie(100.0, 80.0, 80.0, 80.0)])   # o intervalo de 01/06 a 02/06 não fecha (-20)
 
 
 def test_aviso_sai_para_o_terceiro_mais_novo_na_rodada_da_coleta():
@@ -267,6 +279,11 @@ def test_segunda_rodada_sem_snapshot_novo_nao_repete_o_aviso():
     assert _achados(repete, _transactions(), JUN[5]) == (0, [])
 
 
+def test_o_primeiro_intervalo_da_conta_nunca_avisa():
+    # Sem o snapshot de 31/05, a quebra de 01/06 é o começo do histórico, também como 3º mais novo.
+    assert _achados(_serie(100.0, 80.0, 80.0, 80.0), _transactions(), JUN[4]) == (0, [])
+
+
 def test_quebra_fora_do_terceiro_lugar_nao_avisa():
     assert _achados(_serie(100.0, 80.0, 80.0), _transactions(), JUN[3]) == (0, [])          # 2º mais novo
     assert _achados(_serie(100.0, 80.0, 80.0, 80.0, 80.0), _transactions(), JUN[5]) == (0, [])   # 4º
@@ -275,8 +292,8 @@ def test_quebra_fora_do_terceiro_lugar_nao_avisa():
 def test_lancamento_que_chega_uma_coleta_depois_nao_avisa():
     # O banco posta depois do fim de semana: na rodada de 03/06 o lançamento de 02/06 ainda não veio
     # (o intervalo é o 2º mais novo, sem aviso); na de 04/06 ele chegou e o intervalo fecha.
-    serie = _serie(100.0, 70.0, 70.0, 70.0)
-    assert _achados(serie.head(3), _transactions(), JUN[3]) == (0, [])
+    serie = pl.concat([ANTES, _serie(100.0, 70.0, 70.0, 70.0)])
+    assert _achados(serie.head(4), _transactions(), JUN[3]) == (0, [])
     assert _achados(serie, _transactions(_txn("t1", BANK, "2026-06-02", -30.0)), JUN[4]) == (0, [])
     # Se não chega nunca, a rodada de 04/06 avisa.
     assert _achados(serie, _transactions(), JUN[4]) == (1, ["2026-06-02 19:00:00+00:00"])
@@ -286,7 +303,8 @@ def test_aviso_por_conta():
     # As duas contas têm a quebra no 3º intervalo mais novo; só avisa a conta cujo snapshot mais novo
     # chegou na rodada.
     outra = _accounts(*[_snap(OUTRA, f"2026-{d}T19:00:00.000Z", s)
-                        for d, s in [("05-31", 10.0), ("06-01", 5.0), ("06-02", 5.0), ("06-03", 5.0)]])
+                        for d, s in [("05-30", 10.0), ("05-31", 10.0), ("06-01", 5.0), ("06-02", 5.0),
+                                     ("06-03", 5.0)]])
     duas = pl.concat([QUEBRA_ANTIGA, outra])
     assert _achados(duas, _transactions(), JUN[4]) == (1, ["2026-06-02 19:00:00+00:00"])
     assert _achados(duas, _transactions(), JUN[3]) == (1, ["2026-06-01 19:00:00+00:00"])
@@ -305,7 +323,9 @@ TXNS = [_txn("t1", BANK, "2026-06-02", -30.0), _txn("t2", BANK, "2026-06-03", -1
 
 def _seed(tmp_path, *saldos):
     # Uma coleta da conta BANK por dia a partir de 01/06 (100 e 50 nas duas primeiras, depois `saldos`) e
-    # duas do cartão. O intervalo de 01/06 a 02/06 não fecha: falta -20.
+    # duas do cartão. O intervalo de 01/06 a 02/06 não fecha: falta -20. Uma coleta de 31/05 com o mesmo
+    # saldo vem antes: a quebra não é o primeiro intervalo da conta.
+    _seed_partition(tmp_path, "accounts", "2026-05-31", _accounts(_snap(BANK, "2026-05-31T19:00:00.000Z", 100.0)))
     for d, s in enumerate((100.0, 50.0, *saldos), 1):
         rows = [_snap(BANK, f"2026-06-{d:02d}T19:00:00.000Z", s)]
         if d <= 2:
@@ -335,7 +355,7 @@ def test_task_grava_por_account_uuid_e_avisa_a_quebra(tmp_path):
     out = _delta_util.read(tmp_path, "curated", "conferencia_saldo").sort("ate")
     assert "account_id" not in out.columns
     assert out.select("account_uuid", "coletado_em", "diferenca", "diferenca_acumulada", "estado").rows() == [
-        ("banco-conta-0001", JUN[2], -20.0, -20.0, NAO_FECHA), ("banco-conta-0001", JUN[3], 0.0, -20.0, FECHA),
+        ("banco-conta-0001", JUN[1], 0.0, 0.0, FECHA), ("banco-conta-0001", JUN[2], -20.0, -20.0, NAO_FECHA), ("banco-conta-0001", JUN[3], 0.0, -20.0, FECHA),
         ("banco-conta-0001", JUN[4], 0.0, -20.0, FECHA)]
     (finding,) = _findings(tmp_path)
     assert finding["rule"] == "the third-newest interval of an account does not close"
@@ -359,8 +379,8 @@ def test_task_imprime_contagens_e_os_mais_novos_sem_valores(tmp_path, capsys):
     _seed(tmp_path, 40.0, 40.0, 30.0)
     _run(tmp_path, 5)
     printed = capsys.readouterr().out
-    assert ("conferencia_saldo: 4 intervalos (tolerância 1.00): fecha 2, fecha_com_vizinho 0, em_aberto 1, "
-            "nao_fecha 1") in printed
+    assert ("conferencia_saldo: 5 intervalos (tolerância 1.00): fecha 3, fecha_com_vizinho 0, em_aberto 1, "
+            "historico_incompleto 0, nao_fecha 1") in printed
     assert "entre os 3 mais novos, 2026-06-04 19:00 -> 2026-06-05 19:00 não fecha (em_aberto)" in printed
     # O intervalo de 01/06 não está entre os 3 mais novos; nenhum valor sai no log.
     assert "2026-06-01 19:00 ->" not in printed

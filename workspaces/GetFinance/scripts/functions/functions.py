@@ -834,7 +834,8 @@ CONFERENCIA_SALDO_RULES = [
     ("more than one row per account and interval end", IMPOSSIBLE, duplicated("account_uuid", "ate")),
     ("de is not before ate", IMPOSSIBLE, pl.col("de") >= pl.col("ate")),
     ("estado is not a known state", IMPOSSIBLE,
-     pl.col("estado").is_null() | not_in("estado", ["fecha", "fecha_com_vizinho", "em_aberto", "nao_fecha"])),
+     pl.col("estado").is_null()
+     | not_in("estado", ["fecha", "fecha_com_vizinho", "em_aberto", "historico_incompleto", "nao_fecha"])),
 ]
 
 

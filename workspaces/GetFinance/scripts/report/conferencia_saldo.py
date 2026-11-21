@@ -18,6 +18,10 @@ Cada intervalo tem um `estado`:
   data do lançamento; cada intervalo entra em no máximo um par;
 - em_aberto: o intervalo mais novo da conta, quando não fecha sozinho nem com o anterior: o vizinho
   seguinte ainda não existe;
+- historico_incompleto: o intervalo mais velho da conta, quando não fecha sozinho nem com o seguinte: o
+  vizinho anterior é de antes da primeira coleta de saldo (df-y26v; na conta principal, o seguro do cartão
+  que o banco tirou do saldo antes da primeira coleta, a metade de um par fecha_com_vizinho). Numa conta com
+  um intervalo só, ele é o mais novo e fica em_aberto;
 - nao_fecha: o resto.
 A `diferenca` crua fica sempre na linha, e `coletado_em` é o dia em que o snapshot `ate` chegou pela
 primeira vez (a regra do aviso, em functions.py, olha se o snapshot mais novo da conta chegou na rodada).
@@ -34,8 +38,9 @@ from classificacao import eh_aplicacao_automatica
 # o rendimento crescer com o saldo sem esconder uma quebra.
 TOLERANCIA = 1.00
 
-FECHA, FECHA_COM_VIZINHO, EM_ABERTO, NAO_FECHA = "fecha", "fecha_com_vizinho", "em_aberto", "nao_fecha"
-ESTADOS = (FECHA, FECHA_COM_VIZINHO, EM_ABERTO, NAO_FECHA)
+FECHA, FECHA_COM_VIZINHO, EM_ABERTO, HISTORICO_INCOMPLETO, NAO_FECHA = (
+    "fecha", "fecha_com_vizinho", "em_aberto", "historico_incompleto", "nao_fecha")
+ESTADOS = (FECHA, FECHA_COM_VIZINHO, EM_ABERTO, HISTORICO_INCOMPLETO, NAO_FECHA)
 
 COLUNAS = {
     "account_id": pl.String,
@@ -111,7 +116,9 @@ def _estados(diferencas: list[float]) -> list[str]:
             i += 2
         else:
             i += 1
-    if estados and estados[-1] == NAO_FECHA:
+    if estados and estados[0] == NAO_FECHA:
+        estados[0] = HISTORICO_INCOMPLETO
+    if estados and estados[-1] in (NAO_FECHA, HISTORICO_INCOMPLETO):
         estados[-1] = EM_ABERTO
     return estados
 

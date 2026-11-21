@@ -66,6 +66,11 @@ describe('montarConferencia: intervalos', () => {
       fecha: ['Fecha', true],
     })
   })
+  test('o começo do histórico aparece explicado, não marcado como erro', () => {
+    const r = montarConferencia([...linhas, intervalo({ ate: H('2026-08-01'), de: H('2026-07-31'), estado: 'historico_incompleto' })], [])
+    const inicio = r.intervalos.find(i => i.estado === 'historico_incompleto')!
+    expect([inicio.rotuloEstado, inicio.fecha]).toEqual(['Começo do histórico', true])
+  })
   test('estado desconhecido aparece como veio, entre os que não fecham', () => {
     const r = montarConferencia([...linhas, intervalo({ ate: H('2026-08-01'), de: H('2026-07-31'), estado: 'novo' })], [])
     const novo = r.intervalos.find(i => i.estado === 'novo')!

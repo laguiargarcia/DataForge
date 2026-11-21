@@ -163,7 +163,11 @@ diferenca (= variacao_saldo - soma_lancamentos), diferenca_acumulada, estado
   `fecha_com_vizinho` when it does not close alone but does with one adjacent interval that does not
   close alone either (the bank sometimes moves the balance one sync before the transaction's date; each
   interval is in one pair at most); `em_aberto` for an account's newest interval when it closes neither
-  alone nor with the previous one (its next neighbour has not come yet); `nao_fecha` otherwise. `diferenca` is always the raw one.
+  alone nor with the previous one (its next neighbour has not come yet); `historico_incompleto` for an
+  account's oldest interval when it closes neither alone nor with the next one (its earlier neighbour is
+  before the first balance fetch: on the main account, the card insurance the bank took from the balance
+  before it; DataForge df-y26v; the app shows it as explained, not red, and it never warns); `nao_fecha`
+  otherwise. `diferenca` is always the raw one.
 - It only measures: nothing here changes a transaction (df-z4fh).
 - The one suspicious finding (`new_balance_break_rule` in `functions.py`): the third-newest interval of
   an account is `nao_fecha` and the account's newest snapshot arrived on the run day. Two snapshots
