@@ -174,3 +174,94 @@ test('detalhe de Mercado não muda sem querer', async ({ page }) => {
   await page.mouse.move(0, 0)
   await expect(page).toHaveScreenshot('detalhe-mercado-maio.png', { fullPage: true, maxDiffPixelRatio: 0.001, animations: 'disabled' })
 })
+
+// --- Edição (df-cns.8): gravam no data/edicao.db do demo e rodam o reclassificar de verdade. Cada
+// teste desfaz o que criou pela própria API do backend e aplica de novo, para os testes acima (e as
+// capturas) acharem os dados como o finance_demo os deixou.
+test.describe('edição', () => {
+  test.describe.configure({ mode: 'serial' })
+
+  const PADRAO = 'MERCADO CENTRAL'
+  const TX = 'txn-00178' // Mercado Central, 15/06/2026, R$ 98,17 (Groceries -> Mercado)
+
+  async function aplicarPelaApi(page: Page) {
+    const { execution_id } = await (await page.request.post('api/aplicar')).json()
+    await expect.poll(async () => (await (await page.request.get(`api/aplicar/${execution_id}`)).json()).status,
+      { timeout: 60_000 }).toBe('success')
+  }
+
+  test.afterEach(async ({ page }) => {
+    const edicao = await (await page.request.get('api/edicao')).json()
+    if (edicao.regras.some((r: { padrao: string }) => r.padrao === PADRAO)) {
+      await page.request.delete(`api/regras/${encodeURIComponent(PADRAO)}`)
+    }
+    for (const c of edicao.correcoes) await page.request.delete(`api/correcoes/${encodeURIComponent(c.transacao_id)}`)
+    if ((await (await page.request.get('api/edicao')).json()).pendente) await aplicarPelaApi(page)
+  })
+
+  const linhaDaTx = (page: Page) => page.locator('div.row, div.bg-ativa', { hasText: '15/06/2026' }).filter({ hasText: 'Mercado Central' })
+
+  async function aplicarPelaTela(page: Page) {
+    await expect(page.getByText('Há edições ainda não recalculadas.')).toBeVisible()
+    await page.getByRole('button', { name: 'Aplicar' }).click()
+    await expect(page.locator('output')).toHaveCount(0, { timeout: 60_000 })
+  }
+
+  test('regra nova muda a categoria depois do Aplicar, e a correção vence a regra', async ({ page }) => {
+    await abrir(page)
+    await page.getByRole('button', { name: 'Categorias' }).click()
+    const regras = page.locator('section', { hasText: 'Regras' }).first()
+    await regras.getByRole('button', { name: 'Adicionar' }).click()
+    await regras.getByLabel('Padrão na descrição').fill(PADRAO)
+    await regras.getByLabel('Subcategoria').selectOption('Health')
+    await regras.getByRole('button', { name: 'Salvar' }).click()
+    await expect(regras.getByText(/^Casa \d+ transações; vale em \d+\.$/)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Transações' }).click()
+    await page.getByLabel('Buscar na descrição').fill('mercado central')
+    await expect(linhaDaTx(page)).toContainText('Mercado') // ainda não aplicada
+    await aplicarPelaTela(page)
+    await expect(linhaDaTx(page)).toContainText('Saúde')
+
+    await linhaDaTx(page).getByRole('button', { name: 'Corrigir' }).click()
+    await page.getByLabel('Nova subcategoria').selectOption('Shopping')
+    await page.getByRole('button', { name: 'Salvar' }).click()
+    await expect(linhaDaTx(page)).toContainText('Corrigida para «Shopping» (falta Aplicar)')
+    await aplicarPelaTela(page)
+    await expect(linhaDaTx(page)).toContainText('Compras')
+    await expect(linhaDaTx(page)).toContainText('Corrigida à mão')
+    // As outras do mesmo estabelecimento seguem a regra.
+    await expect(page.locator('div.row', { hasText: 'Mercado Central' }).filter({ hasText: 'Saúde' })).not.toHaveCount(0)
+  })
+
+  test('validação aparece na linha e não grava', async ({ page }) => {
+    permitidos.push(/status of 409/) // a recusa do backend é o que o teste espera
+    const antes = (await (await page.request.get('api/edicao')).json()).versao
+    await abrir(page)
+    await page.getByRole('button', { name: 'Categorias' }).click()
+    const dicionario = page.locator('section', { hasText: 'Dicionário de categorias' })
+    await dicionario.getByRole('button', { name: 'Adicionar' }).click()
+    await dicionario.getByLabel('Subcategoria', { exact: true }).fill('Groceries')
+    await dicionario.getByLabel('Categoria', { exact: true }).fill('Repetida')
+    await dicionario.getByLabel('Tipo').selectOption('Essencial')
+    await dicionario.getByRole('button', { name: 'Salvar' }).click()
+    await expect(dicionario.getByRole('alert')).toHaveText("a subcategoria 'Groceries' já existe")
+    expect((await (await page.request.get('api/edicao')).json()).versao).toBe(antes)
+  })
+
+  test('correção de transação que sumiu aparece para apagar', async ({ page }) => {
+    // O backend marca encontrada=false quando o id some do curated (pytest do backend); aqui a resposta
+    // real ganha uma correção assim, para ver a tela.
+    await page.route('**/api/edicao', async rota => {
+      const resposta = await rota.fetch()
+      const corpo = await resposta.json()
+      corpo.correcoes.push({ transacao_id: 'id-que-sumiu', subcategoria: 'Health', encontrada: false })
+      await rota.fulfill({ response: resposta, json: corpo })
+    })
+    await abrir(page)
+    await page.getByRole('button', { name: 'Transações' }).click()
+    const aviso = page.locator('section', { hasText: 'Correções de transações não encontradas' })
+    await expect(aviso).toContainText('Transação não encontrada · id-que-sumiu → Health')
+    await expect(aviso.getByRole('button', { name: 'Apagar' })).toBeVisible()
+  })
+})

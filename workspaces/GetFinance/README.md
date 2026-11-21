@@ -42,7 +42,11 @@ difference is that the demo's `calendar` waits for `fetch`): change a task in bo
 ## The Finanças app
 
 `apps/financas` is a React app over the `curated.report_*` tables. `dataforge serve` publishes its
-committed `dist/` at `/apps/GetFinance/financas/` (no Node needed to run it).
+committed `dist/` at `/apps/GetFinance/financas/` (no Node needed to run it). Its tabs: **Resumo** and
+**Conferência** (read only), **Categorias** (the rules and the category dictionary, edited in place) and
+**Transações** (search and filter `fact_transaction_classified`, correct one transaction's category,
+delete corrections whose transaction is gone). Every save goes straight to `data/edicao.db`; the numbers
+change only after **Aplicar**, in the bar every tab shows while there are edits not yet recalculated.
 
 Its backend, `apps/financas/backend/main.py` (`backend:` in `app.yaml`), is what the edit screens call
 at `/apps/GetFinance/financas/api/...`: `GET /edicao` (categories, rules, corrections with `encontrada`,
@@ -63,7 +67,9 @@ Node is needed only to change the front end, from the app folder after `npm ci`:
   a `dataforge serve` of this checkout on port 8765, started with the repo root's
   `.venv/bin/dataforge` (or `DATAFORGE_BIN`). It needs the demo's data (run `finance_demo` first) and
   refuses to start without `data/raw/SYNTHETIC`, so it never shows real data. The values it checks
-  and the screenshots in `e2e/referencia/` come from that synthetic data.
+  and the screenshots in `e2e/referencia/` come from that synthetic data. The `edição` scenarios write
+  to the demo's `data/edicao.db` and run `reclassificar` for real; each one undoes what it created
+  through the backend and applies again, so the demo data ends as `finance_demo` left it.
 
 ## Where it lives
 
