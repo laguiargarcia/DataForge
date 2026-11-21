@@ -129,7 +129,8 @@ def _spawn(info: AppInfo, port: int, token: str, logfile: Path) -> subprocess.Po
     }
     with open(logfile, "wb") as log:  # the child keeps its own copy of the handle
         # stdin is a pipe whose write end only this process holds (Popen.stdin): the OS closes it
-        # when this process ends, and app_backend_host then stops the backend.
+        # when this process ends, and app_backend_host then stops the backend. Keep the Popen referenced
+        # while the backend should live: on Windows a collected Popen closes that end too.
         return subprocess.Popen(
             [sys.executable, "-m", "dataforge.app_backend_host", info.backend, str(port)],
             cwd=info.app_dir, env=env, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT,

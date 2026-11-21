@@ -252,7 +252,9 @@ from pathlib import Path
 from dataforge.app_backends import _free_port, _spawn
 from dataforge.apps import load_app
 port = _free_port()
-_spawn(load_app(Path(sys.argv[1]), sys.argv[2]), port, "t", Path(sys.argv[3]))
+# Kept referenced, as the supervisor keeps it: on Windows a collected Popen closes its stdin, which
+# stops the backend (on POSIX subprocess._active keeps it alive until the child is reaped).
+backend = _spawn(load_app(Path(sys.argv[1]), sys.argv[2]), port, "t", Path(sys.argv[3]))
 print(port, flush=True)
 time.sleep(600)
 """
@@ -275,7 +277,10 @@ def test_backend_morre_com_o_servidor_que_o_subiu(info, workspace_dir, tmp_path)
         stdout=subprocess.PIPE, text=True,
     )
     try:
-        pid = _backend_pid(int(server.stdout.readline()), "t")
+        port = int(server.stdout.readline())
+        pid = _backend_pid(port, "t")
+        time.sleep(1)  # a backend that stopped by itself would pass the check below for the wrong reason
+        assert get(port, "/pid", "t").json()["pid"] == pid
     finally:
         server.kill()
         server.wait(5)

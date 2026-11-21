@@ -17,12 +17,13 @@ EXIT_GRACE_SECONDS = 5
 
 def wait_for_eof(fd: int = 0) -> bool:
     """Block until ``fd`` reaches end of file. False when it cannot be read at all."""
-    try:
-        while os.read(fd, 4096):
-            pass
-    except OSError:
-        return False
-    return True
+    while True:
+        try:
+            chunk = os.read(fd, 4096)
+        except OSError:
+            return False
+        if not chunk:
+            return True
 
 
 def _stop_with_parent(server: uvicorn.Server) -> None:
