@@ -113,7 +113,13 @@ Delta tables at `data/curated/<table>/`, one table per script under `scripts/cle
 - `dim_account` — one row per stable account identity (`account_uuid`). Full overwrite.
 - `dim_investment` — one row per stable investment identity. Full overwrite.
 - `dim_calendar` — date dimension (see below). Full overwrite.
-- `fact_transaction` — full overwrite each run from the durable raw source. The two legs of a bill
+- `fact_transaction` — full overwrite each run from the durable raw source. An automatic investment or
+  redemption line of a BANK account (`eh_aplicacao_automatica` in `scripts/report/classificacao.py`: the
+  cleansed `description` has `APL APLIC AUT` or `RES APLIC AUT`, not `REND PAGO APLIC AUT`) gets `etl_tag`
+  `aplicacao_automatica` before any other rule (DataForge df-7twv.2): it is internal movement between the
+  account and its automatic investment, which the balance (the total of both) and the bank statement do not
+  show. It stays, out of income, expense and aplicado/resgatado: the classification gives it the neutral
+  subcategory and Tipo `Aplicação automática` (a user correction still wins). The two legs of a bill
   payment get `etl_tag` `card_payment_bank` / `card_payment_card` (rules in `cleansed2curated.py`): by
   category (`05100000` on both legs; `05060000` on the card, the automatic debit since 07/2026), or by
   mirror, when one leg has its tag, the other one is the same |amount| within `MIRROR_WINDOW_DAYS` on the
@@ -147,7 +153,9 @@ account_uuid, de, ate (updatedAt, UTC), coletado_em (day the `ate` snapshot firs
 saldo_de, saldo_ate, variacao_saldo, soma_lancamentos, n_lancamentos,
 diferenca (= variacao_saldo - soma_lancamentos), diferenca_acumulada, estado
 ```
-- The transactions are `cleansed.transactions` (the set the report sums). Cleansed keeps only the day of
+- The transactions are `cleansed.transactions` (the set the report sums), but for the automatic investment
+  and redemption lines (DataForge df-7twv.2), which move money between the account and its automatic
+  investment and so leave the total balance as it was. Cleansed keeps only the day of
   each, so the instant comes from `raw.transactions` (the full `date` of the newest fetch of the id); an
   id without one falls back to the day at midnight UTC. Without the time, a transaction late in the day
   lands on the wrong side of that day's sync.
@@ -183,7 +191,8 @@ intervalo_de, intervalo_ate, intervalo_estado (the conferencia_saldo interval wi
     window that fetch returns (its first to last transaction day; compared by day, cleansed keeps the day);
   - `pendente_que_sumiu`: the previous one, with status `PENDING` (usually a duplicate of the posted one);
   - `aplicacao_automatica`: the description is an automatic investment or redemption line of the account
-    (`PADRAO_APLICACAO_AUTOMATICA`): internal movement that does not change the total balance;
+    (`eh_aplicacao_automatica` in `classificacao.py`, the one place of the pattern): internal movement that
+    does not change the total balance;
   - `uma_coleta_so`: the id came in one fetch only, and not in the newest one.
 - The instant that picks the interval is the one `conferencia_saldo` uses (`instantes` in
   `conferencia_saldo.py`). A transaction outside every interval (a card, before the first snapshot,

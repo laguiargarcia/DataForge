@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "report"))
 
-from classificacao import TIPOS_ENTRADA, TIPOS_SAIDA, classificar, efeito_da_regra
+from classificacao import TIPOS_ENTRADA, TIPOS_SAIDA, classificar, efeito_da_regra, eh_aplicacao_automatica
 
 DIC = pl.DataFrame(
     [("Groceries", "Alimentação", "Essencial"),
@@ -67,6 +67,29 @@ def test_etl_tag_investimento_vence_regra():
     row = _row("1", SAIDA, "APLICACAO MERCADO", etl_tag="investment")
     assert _route(row, _rules(("MERCADO", "Groceries"))) == (
         "Investimentos", "Investimentos", "Investimentos", "neutro")
+
+
+@pytest.mark.parametrize("lado", [SAIDA, ENTRADA])
+def test_aplicacao_automatica_e_neutra_e_vence_regra(lado):
+    # df-7twv.2: movimento conta <-> aplicação automática; nem entrada nem saída, nenhuma regra passa por cima.
+    row = _row("1", lado, "APL APLIC AUT FICT", etl_tag="aplicacao_automatica")
+    assert _route(row, _rules(("APLIC", "Groceries"))) == (
+        "Aplicação automática", "Aplicação automática", "Aplicação automática", "neutro")
+
+
+def test_correcao_vence_a_marca_de_aplicacao_automatica():
+    row = _row("1", SAIDA, "APL APLIC AUT FICT", etl_tag="aplicacao_automatica")
+    assert _route(row, correcoes=_corr(("1", "Groceries"))) == ("Groceries", "Alimentação", "Essencial", "saida")
+
+
+@pytest.mark.parametrize("descricao,casa", [
+    ("APL APLIC AUT FICT", True), ("RES APLIC AUT FICT", True), ("Aplicação APL APLIC AUT FICT", True),
+    ("Resgate RES APLIC AUT FICT", True), ("Entrada RES APLIC AUT FICT", True),
+    ("REND PAGO APLIC AUT FICT", False), ("RESGATE COFRINHO", False), ("XAPL APLIC AUTOMOVEL", False), (None, False),
+])
+def test_padrao_da_aplicacao_automatica(descricao, casa):
+    df = pl.DataFrame({"description": [descricao]}, schema={"description": pl.String})
+    assert df.select(eh_aplicacao_automatica())["description"].to_list() == [casa]
 
 
 @pytest.mark.parametrize("tag", ["card_payment_bank", "card_payment_card"])

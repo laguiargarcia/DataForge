@@ -5,7 +5,8 @@ seguidos (updatedAt distintos), a variação do saldo deve ser a soma dos lança
 de < instante <= ate. A diferença de um intervalo é variacao_saldo - soma_lancamentos: negativa quando falta
 um lançamento de saída (ou sobra um de entrada), positiva no caso contrário.
 
-Os lançamentos são os de cleansed.transactions (o conjunto que o relatório soma). O instante de cada um vem
+Os lançamentos são os de cleansed.transactions (o conjunto que o relatório soma), menos as linhas de
+aplicação/resgate automático (classificacao.eh_aplicacao_automatica, df-7twv.2): movimento interno. O instante de cada um vem
 de raw/transactions (o `date` completo da coleta mais nova do id): cleansed guarda só o dia, e sem a hora
 um lançamento do fim da tarde cai do lado errado do sync do mesmo dia. Um id sem hora em raw entra pelo
 dia de cleansed, lido como a meia-noite UTC.
@@ -24,6 +25,8 @@ primeira vez (a regra do aviso, em functions.py, olha se o snapshot mais novo da
 Só mede: nada aqui altera lançamento nenhum (df-z4fh). Funções puras, sem I/O.
 """
 import polars as pl
+
+from classificacao import eh_aplicacao_automatica
 
 # |diferenca| até aqui fecha. Medido no dado real (notas da df-z4fh.1): de junho a 08/09/2026 um intervalo
 # que fecha erra no máximo 0,11 (rendimento da aplicação automática entre a data e o sync) e um par de
@@ -118,7 +121,7 @@ def conferencia_saldo(accounts_raw: pl.DataFrame, transactions: pl.DataFrame,
     """Uma linha por (conta BANK, par de snapshots seguidos) com a diferença entre saldo e lançamentos.
 
     accounts_raw: raw/accounts de todas as partições (id, type, balance, updatedAt, ingested_at; texto).
-    transactions: cleansed.transactions (id, accountId, date, amount); `date` é o dia.
+    transactions: cleansed.transactions (id, accountId, date, amount, description); `date` é o dia.
     raw_transactions: raw/transactions de todas as partições (id, date, ingested_at; texto), só para a hora.
     """
     snapshots = _snapshots(accounts_raw)
@@ -135,8 +138,10 @@ def conferencia_saldo(accounts_raw: pl.DataFrame, transactions: pl.DataFrame,
     # Cada lançamento vai para o primeiro snapshot com ate >= instante: o anterior a ele tem de < instante.
     # O que cai no primeiro snapshot da conta (antes de toda conferência) ou depois do último fica de fora.
     # Os dois lados vão ordenados por instante (por conta, o join_asof não confere a ordem sozinho).
+    # A linha de aplicação/resgate automático não entra: o saldo é o total (conta + aplicação), e ela só move
+    # dinheiro entre os dois (df-7twv.2).
     somas = (
-        instantes(transactions, raw_transactions)
+        instantes(transactions.filter(~eh_aplicacao_automatica()), raw_transactions)
         .sort("instante")
         .join_asof(snapshots.select("account_id", "ate").sort("ate"), left_on="instante", right_on="ate",
                    by="account_id", strategy="forward", check_sortedness=False)
