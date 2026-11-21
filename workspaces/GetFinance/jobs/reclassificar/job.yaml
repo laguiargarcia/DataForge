@@ -16,11 +16,27 @@ tasks:
       target: curated
     depends_on: [classify]
 
-  # Trip-wire (ADR 0004, df-ahua.3): if classify fails, report is skipped and the engine would
+  # A conferência pelo saldo e os suspeitos (df-y26v): o Aplicar também leva à tela Conferência um intervalo
+  # marcado como explicado no edicao.db. Leem raw e cleansed só para ler; não chamam o Pluggy.
+  - name: conferencia_saldo
+    script: cleansed2curated/cleansed2curated_conferencia_saldo.py
+    params:
+      source: raw
+      target: curated
+    depends_on: [report]
+
+  - name: lancamentos_suspeitos
+    script: cleansed2curated/cleansed2curated_lancamentos_suspeitos.py
+    params:
+      source: raw
+      target: curated
+    depends_on: [conferencia_saldo]
+
+  # Trip-wire (ADR 0004, df-ahua.3): if a task fails, the ones after it are skipped and the engine would
   # record the run as `success` (only leaves decide it); this error task makes it `failed`.
   - name: job_failed
     type: error
     depends_on:
-      - {task: report, when: [failed, skipped]}
+      - {task: lancamentos_suspeitos, when: [failed, skipped]}
     params:
       message: "reclassificar: uma tarefa falhou"

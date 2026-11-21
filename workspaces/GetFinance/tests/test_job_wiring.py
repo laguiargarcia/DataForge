@@ -212,7 +212,8 @@ def test_alert_tasks_ship_inactive_and_without_recipients():
         assert t.params["recipients"] == {}
 
 
-@pytest.mark.parametrize("case", [(None, "success"), ("classify", "failed"), ("report", "failed")])
+@pytest.mark.parametrize("case", [(None, "success"), ("classify", "failed"), ("report", "failed"),
+                                  ("conferencia_saldo", "failed"), ("lancamentos_suspeitos", "failed")])
 def test_reclassificar_fails_when_a_task_fails(tmp_path, db_url, global_engine, outcomes, case):
     failing, expected = case
     if failing:

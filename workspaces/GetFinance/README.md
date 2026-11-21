@@ -52,7 +52,9 @@ Its backend, `apps/financas/backend/main.py` (`backend:` in `app.yaml`), is what
 at `/apps/GetFinance/financas/api/...`: `GET /edicao` (categories, rules, corrections with `encontrada`,
 the allowed Tipos, `versao`, `aplicada`, `pendente`), create/change/delete of `/categorias`, `/regras`
 (the answer carries the rule's `efeito`: how many transactions it matches, wins and the direction gate
-leaves out) and `/correcoes/{id}`, and `POST /aplicar` (asks DataForge for a `reclassificar` run, queued
+leaves out) and `/correcoes/{id}`, `PUT`/`DELETE /explicacoes/{conta}/{ate}` (marks a balance-check
+interval that does not close as an explained divergence, with a reason; the backend takes the interval's
+`diferenca` from `curated.conferencia_saldo`, DataForge df-y26v), and `POST /aplicar` (asks DataForge for a `reclassificar` run, queued
 behind any job of the workspace) with `GET /aplicar/{id}` for its status. Saving writes straight to
 `data/edicao.db`; the validations live in `scripts/report/edicao.py`, the one module that writes there.
 Tests: `tests/test_backend_edicao.py`.
@@ -144,10 +146,12 @@ The report logic lives in `scripts/report/`:
 - task scripts: `classify.py` → `curated.fact_transaction_classified` and `curated.edicao_aplicada`
   (the `versao` of `edicao.db` it used); `report_curated.py` →
   `curated.report_*`. Both run at the end of `finance_daily` and, alone, as the job `reclassificar`
-  (no Pluggy).
+  (no Pluggy), which also rebuilds `curated.conferencia_saldo` and `curated.lancamentos_suspeitos` so an
+  interval marked as explained shows after Aplicar.
 
-Categories (`categorias`), rules (`mapeamento`) and per-transaction corrections (`correcoes`, Pluggy id
-→ subcategory; a correction beats every other step, `etl_tag` included) are user data in
+Categories (`categorias`), rules (`mapeamento`), per-transaction corrections (`correcoes`, Pluggy id
+→ subcategory; a correction beats every other step, `etl_tag` included) and explained divergences of the
+balance check (`explicacoes`: account, interval end, the `diferenca` at marking, reason) are user data in
 `data/edicao.db` (connection `edicao`), with `versao`, a counter every write bumps. Their content has
 real names: never put it in git, a canvas or a public repo. A correction reaches every report that
 reads categories: `report_saude*`, the classified list, the bill items and the investment flows of

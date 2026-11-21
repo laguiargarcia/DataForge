@@ -163,7 +163,7 @@ export function App() {
             <ListaCategorias categorias={resumo?.categorias ?? []} ativa={categoria?.id ?? null} onEscolher={escolher} />
           </div>
         )}
-        {tela === 'conferencia' && <TelaConferencia />}
+        {tela === 'conferencia' && <TelaConferencia aplicada={edicao?.aplicada ?? null} onMudou={lerBanco} />}
         {tela === 'categorias' && edicao && <TelaCategorias edicao={edicao} onMudou={lerBanco} />}
         {tela === 'transacoes' && edicao && (
           <TelaTransacoes transacoes={dados?.transacoes ?? null} edicao={edicao} onMudou={lerBanco} />

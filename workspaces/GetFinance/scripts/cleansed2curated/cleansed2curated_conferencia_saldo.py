@@ -1,7 +1,9 @@
 # cleansed2curated_conferencia_saldo.py — task `conferencia_saldo` (df-z4fh.1): a conferência pelo saldo.
 # Flat, top-to-bottom. Lê raw/accounts e raw/transactions (todas as partições, só leitura) e
-# cleansed.transactions; grava curated.conferencia_saldo (inteira), uma linha por conta BANK e intervalo
-# entre dois snapshots. Só mede: não altera lançamento nenhum. A regra está em report/conferencia_saldo.py.
+# cleansed.transactions, e as divergências explicadas do data/edicao.db (df-y26v); grava
+# curated.conferencia_saldo (inteira), uma linha por conta BANK e intervalo entre dois snapshots. Só mede: não
+# altera lançamento nenhum. A regra está em report/conferencia_saldo.py. Roda no finance_daily e no
+# reclassificar (o Aplicar do app, depois de marcar um intervalo como explicado).
 import argparse
 import glob as _glob
 import sys
@@ -11,7 +13,8 @@ import polars as pl
 
 exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
 sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
-from conferencia_saldo import EM_ABERTO, ESTADOS, NAO_FECHA, TOLERANCIA, conferencia_saldo
+from conferencia_saldo import EM_ABERTO, ESTADOS, NAO_FECHA, TOLERANCIA, aplicar_explicacoes, conferencia_saldo
+from edicao import abrir, ler_explicacoes
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", required=True)   # raw (accounts and transactions, every partition)
@@ -26,13 +29,18 @@ raw_transactions = pl.concat([pl.read_parquet(f, columns=["id", "date", "ingeste
 # The transactions are cleansed's, the set the report sums; dim_account names each account.
 transactions = read_delta_table("cleansed", "transactions")
 dim_account = read_delta_table(args.target, "dim_account")
+conn = abrir(_connection_root("edicao"))
+try:
+    explicacoes = ler_explicacoes(conn)
+finally:
+    conn.close()
 
-conferencia = (
+conferencia = aplicar_explicacoes(
     conferencia_saldo(accounts, transactions, raw_transactions)
     .join(dim_account.select(pl.col("pluggy_account_id").alias("account_id"), "account_uuid"),
-          on="account_id", how="left")
-    .select(CONFERENCIA_SALDO_COLUMNS)
-)
+          on="account_id", how="left"),
+    explicacoes,
+).select(CONFERENCIA_SALDO_COLUMNS)
 
 validate(conferencia, "curated.conferencia_saldo", CONFERENCIA_SALDO_RULES + [new_balance_break_rule()],
          "ate")

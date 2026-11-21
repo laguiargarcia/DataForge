@@ -102,3 +102,25 @@ def test_versao_tem_uma_linha_so(tmp_path):
     conn = abrir(tmp_path / "e.db")
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO versao (id, numero) VALUES (2, 1)")
+
+
+# --- divergências explicadas da conferência pelo saldo (df-y26v) ----------------------------------
+
+def test_explicacao_grava_troca_e_desfaz_subindo_a_versao(tmp_path):
+    from edicao import Recusa, excluir_explicacao, ler_explicacoes, salvar_explicacao
+    conn = abrir(tmp_path / "e.db")
+    assert ler_explicacoes(conn).is_empty()
+    salvar_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00", 9.93, "  seguro antes da coleta ")
+    salvar_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00", 9.93, "seguro do cartão")
+    assert ler_explicacoes(conn).rows() == [("conta-ficticia", "2026-05-28T19:00:00+00:00", 9.93, "seguro do cartão")]
+    assert ler_versao(conn) == 2
+    excluir_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00")
+    assert ler_explicacoes(conn).is_empty()
+    assert ler_versao(conn) == 3
+    with pytest.raises(Recusa) as recusa:
+        excluir_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00")
+    assert recusa.value.motivo == "ausente"
+    with pytest.raises(Recusa) as recusa:
+        salvar_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00", 9.93, "   ")
+    assert recusa.value.motivo == "invalido"
+    assert ler_versao(conn) == 3   # recusa não muda nada

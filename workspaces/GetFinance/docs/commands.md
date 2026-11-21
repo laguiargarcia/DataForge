@@ -40,7 +40,7 @@ under `data/` (gitignored).
 ```bash
 dataforge run GetFinance finance_daily     # the daily job: Pluggy fetch, all layers, report tables
 dataforge run GetFinance finance_demo      # the same pipeline on synthetic data, no .env (see the README, Demo)
-dataforge run GetFinance reclassificar     # reapply the category rules to the existing curated (no Pluggy)
+dataforge run GetFinance reclassificar     # reapply the category rules and the explained divergences to the existing curated (no Pluggy)
 dataforge run GetFinance backup            # zip data/raw + data/edicao.db (see the README, Backup)
 ```
 

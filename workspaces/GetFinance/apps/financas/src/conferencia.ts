@@ -17,6 +17,7 @@ export type LinhaConferencia = {
   diferenca: number | null
   diferenca_acumulada: number | null
   estado: string
+  explicacao: string | null
 }
 // Uma linha por lançamento e motivo; o lançamento fora de todo intervalo (cartão) vem com intervalo_* nulos.
 export type LinhaSuspeito = {
@@ -50,6 +51,12 @@ export type Intervalo = {
   fecha: boolean
   suspeitos: Suspeito[]
   quantos: string
+  /** O fim do intervalo como veio da tabela: com a conta, é a chave para marcar como explicado. */
+  ateIso: string
+  /** O motivo, quando o dono marcou a divergência como explicada (estado explicado). */
+  explicacao: string | null
+  /** Não fecha (nao_fecha ou em_aberto): dá para marcar como explicado. */
+  podeExplicar: boolean
 }
 export type ContaAtual = { conta: string; diferenca: number | null; valor: string; ate: string; rotuloEstado: string }
 export type Conferencia = { avisos: string[]; contas: ContaAtual[]; intervalos: Intervalo[]; semIntervalo: Suspeito[] }
@@ -59,6 +66,8 @@ export type Conferencia = { avisos: string[]; contas: ContaAtual[]; intervalos: 
 const ESTADOS = new Map([
   ['fecha', { rotulo: 'Fecha', fecha: true, ordem: 2 }],
   ['fecha_com_vizinho', { rotulo: 'Fecha com o vizinho', fecha: true, ordem: 1 }],
+  // Uma divergência que o dono marcou como explicada (df-y26v): não é erro, e o motivo vai junto.
+  ['explicado', { rotulo: 'Explicado', fecha: true, ordem: 1 }],
   ['em_aberto', { rotulo: 'Em aberto', fecha: false, ordem: 0 }],
   ['nao_fecha', { rotulo: 'Não fecha', fecha: false, ordem: 0 }],
 ])
@@ -193,6 +202,9 @@ export function montarConferencia(
       fecha: estado.fecha,
       suspeitos: lista,
       quantos: lista.length ? plural(lista.length, 'suspeito', 'suspeitos') : '',
+      ateIso: l.ate,
+      explicacao: l.explicacao ?? null,
+      podeExplicar: l.estado === 'nao_fecha' || l.estado === 'em_aberto',
     }
   })
 

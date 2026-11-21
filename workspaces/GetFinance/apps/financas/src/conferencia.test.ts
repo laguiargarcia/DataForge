@@ -11,7 +11,7 @@ function intervalo(p: Partial<LinhaConferencia> & { ate: string }): LinhaConfere
   return {
     account_uuid: 'conta-a', de: H('2026-09-01'), coletado_em: p.ate.slice(0, 10),
     saldo_de: 100, saldo_ate: 100, variacao_saldo: 0, soma_lancamentos: 0, n_lancamentos: 0,
-    diferenca: 0, diferenca_acumulada: 0, estado: 'fecha', ...p,
+    diferenca: 0, diferenca_acumulada: 0, estado: 'fecha', explicacao: null, ...p,
   }
 }
 
@@ -65,6 +65,24 @@ describe('montarConferencia: intervalos', () => {
       fecha_com_vizinho: ['Fecha com o vizinho', true],
       fecha: ['Fecha', true],
     })
+  })
+  test('divergência explicada: rótulo próprio, sem a marca de erro, com o motivo; só o que não fecha pode ser marcado', () => {
+    const r = montarConferencia([
+      intervalo({ ate: H('2026-05-28'), de: H('2026-05-26'), diferenca: 9.93, estado: 'explicado',
+                  explicacao: 'seguro debitado antes da primeira coleta' }),
+      intervalo({ ate: H('2026-06-01'), de: H('2026-05-28'), diferenca: -5, estado: 'nao_fecha' }),
+      intervalo({ ate: H('2026-06-02'), de: H('2026-06-01'), estado: 'em_aberto', diferenca: 3 }),
+      intervalo({ ate: H('2026-06-03'), de: H('2026-06-02') }),
+    ], [])
+    const por = new Map(r.intervalos.map(i => [i.estado, i]))
+    const explicado = por.get('explicado')!
+    expect([explicado.rotuloEstado, explicado.fecha, explicado.explicacao, explicado.podeExplicar]).toEqual(
+      ['Explicado', true, 'seguro debitado antes da primeira coleta', false])
+    expect(explicado.ateIso).toBe(H('2026-05-28'))
+    expect([por.get('nao_fecha')!.podeExplicar, por.get('em_aberto')!.podeExplicar, por.get('fecha')!.podeExplicar])
+      .toEqual([true, true, false])
+    // Explicado vai junto dos que fecham com o vizinho, depois dos que não fecham.
+    expect(r.intervalos.map(i => i.estado)).toEqual(['em_aberto', 'nao_fecha', 'explicado', 'fecha'])
   })
   test('estado desconhecido aparece como veio, entre os que não fecham', () => {
     const r = montarConferencia([...linhas, intervalo({ ate: H('2026-08-01'), de: H('2026-07-31'), estado: 'novo' })], [])

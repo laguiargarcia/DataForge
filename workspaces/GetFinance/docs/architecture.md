@@ -163,7 +163,12 @@ diferenca (= variacao_saldo - soma_lancamentos), diferenca_acumulada, estado
   `fecha_com_vizinho` when it does not close alone but does with one adjacent interval that does not
   close alone either (the bank sometimes moves the balance one sync before the transaction's date; each
   interval is in one pair at most); `em_aberto` for an account's newest interval when it closes neither
-  alone nor with the previous one (its next neighbour has not come yet); `nao_fecha` otherwise. `diferenca` is always the raw one.
+  alone nor with the previous one (its next neighbour has not come yet); `explicado` for a `nao_fecha` or
+  `em_aberto` interval the owner marked as an explained divergence in the app (table `explicacoes` of
+  `data/edicao.db`, `aplicar_explicacoes`, DataForge df-y26v), while its `diferenca` is still the one marked
+  (to the centavo: money that moves into the interval afterwards breaks it again); its reason is in the
+  column `explicacao`, null on every other row; `nao_fecha` otherwise. `diferenca` and
+  `diferenca_acumulada` are always the raw ones.
 - It only measures: nothing here changes a transaction (df-z4fh).
 - The one suspicious finding (`new_balance_break_rule` in `functions.py`): the third-newest interval of
   an account is `nao_fecha` and the account's newest snapshot arrived on the run day. Two snapshots
@@ -323,7 +328,8 @@ writes `curated.fact_transaction_classified` and `scripts/report/report_curated.
 `curated.report_*`, both at the end of `finance_daily` and alone as the job `reclassificar`. The
 Finanças app (`apps/financas`) reads those tables, and its backend (`apps/financas/backend`) edits the
 categories, rules and per-transaction corrections in `data/edicao.db` and asks DataForge for a
-`reclassificar` run when the user clicks Aplicar (DataForge df-cns.8). The Excel workbooks under `report/` are ignored
+`reclassificar` run when the user clicks Aplicar (DataForge df-cns.8); it also marks a balance-check interval
+as an explained divergence, which `reclassificar` carries to `curated.conferencia_saldo` (DataForge df-y26v). The Excel workbooks under `report/` are ignored
 (history only; `docs/workbook.md` describes the old Power Pivot design).
 
 ## Data checks (ADR 0004, DataForge df-ahua.3 and df-ahua.22)

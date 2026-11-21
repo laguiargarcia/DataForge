@@ -281,7 +281,8 @@ CONF = dict(account_uuid=["u1", "u1"], de=[date(2026, 1, 1), date(2026, 1, 2)],
             ate=[date(2026, 1, 2), date(2026, 1, 3)], coletado_em=[date(2026, 1, 2), date(2026, 1, 3)],
             saldo_de=[10.0, 12.0], saldo_ate=[12.0, 12.0],
             variacao_saldo=[2.0, 0.0], soma_lancamentos=[2.0, 0.0], n_lancamentos=[1, 0],
-            diferenca=[0.0, 0.0], diferenca_acumulada=[0.0, 0.0], estado=["fecha", "em_aberto"])
+            diferenca=[0.0, 0.0], diferenca_acumulada=[0.0, 0.0], estado=["fecha", "explicado"],
+            explicacao=[None, "seguro debitado antes da primeira coleta"])
 CONF_FATURA = dict(account_uuid=["u2", "u2"], statement_id=["s1", "s2"],
                    due_date=[date(2026, 1, 20), date(2026, 2, 20)], total_fatura=[300.0, 310.0],
                    saldo_anterior=[0.0, 0.0], soma_lancamentos=[300.0, 320.0], n_lancamentos=[3, 4],
@@ -558,6 +559,8 @@ RULE_CASES = [
      _set(CONF, de=[date(2026, 1, 2), date(2026, 1, 2)])),
     ("CONFERENCIA_SALDO_RULES", "estado is not a known state", _frame, CONF,
      _set(CONF, estado=["fecha", "fechou"])),
+    ("CONFERENCIA_SALDO_RULES", "an explained interval has no reason", _frame, CONF,
+     _set(CONF, explicacao=[None, None])),
     ("CONFERENCIA_FATURA_RULES", "expected columns are present", _frame, CONF_FATURA,
      _set(CONF_FATURA, estado_pagamento=...)),
     ("CONFERENCIA_FATURA_RULES", "account_uuid is null", _frame, CONF_FATURA,
