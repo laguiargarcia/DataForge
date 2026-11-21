@@ -21,7 +21,7 @@ SCRIPTS = _delta_util.SCRIPTS
 FACT_COLS = [
     "id", "date", "account_uuid", "account_type", "etl_merchant_key",
     "description_normalized", "amount", "amount_signed", "category",
-    "categoryId", "is_transfer", "counterparty_document", "payment_method",
+    "categoryId", "counterparty_document", "payment_method",
     "cc_bill_id", "cc_installment_number", "cc_total_installments", "cc_purchase_date",
 ]
 # v3 columns promoted to prod 2026-11-09 (df-668)
@@ -136,7 +136,6 @@ def test_fact_transaction_writes_spec5_columns_and_types(tmp_path):
     assert schema["date"] == pl.Date
     assert schema["amount"] == pl.Float64
     assert schema["amount_signed"] == pl.Float64
-    assert schema["is_transfer"] == pl.Boolean
     assert schema["account_uuid"] == pl.Utf8
     assert schema["etl_merchant_key"] == pl.Utf8
     assert schema["description_normalized"] == pl.Utf8
@@ -171,40 +170,6 @@ def test_transaction_of_an_account_missing_from_dim_account_is_refused(tmp_path)
         _run(tmp_path)
     assert type(exc.value).__name__ == "DataValidationError"
     assert not (tmp_path / "curated" / "fact_transaction").exists()
-
-
-def test_is_transfer_true_for_credit_card_payment_categoryid(tmp_path):
-    _seed_cleansed(tmp_path, transactions=[
-        {"id": "PAY", "date": "2026-01-01", "amount": -731.55, "category": "Credit card payment",
-         "categoryId": "05100000", "description": "PAGTO FATURA VISA 1111-2222",
-         "accountId": "acc-bank", "account_type": "BANK"},
-    ])
-    _seed_dim_account(tmp_path)
-    _run(tmp_path)
-
-    row = _read_fact(tmp_path)[0]
-    assert row["is_transfer"] is True
-
-
-def test_is_transfer_false_for_normal_and_estorno_and_null(tmp_path):
-    _seed_cleansed(tmp_path, transactions=[
-        {"id": "BUY", "date": "2026-01-01", "amount": 50.0, "category": "Shopping",
-         "categoryId": "08000000", "description": "Loja", "accountId": "acc-bank",
-         "account_type": "CREDIT"},
-        {"id": "EST", "date": "2026-01-02", "amount": -21.7, "category": "Credit card fees",
-         "categoryId": "16000000", "description": "ESTORNO TARIFA EXEMPLO",
-         "accountId": "acc-bank", "account_type": "CREDIT"},
-        {"id": "NUL", "date": "2026-01-03", "amount": -5.0, "category": None,
-         "categoryId": None, "description": "ELCSS PADARIA  XYZ 0101",
-         "accountId": "acc-bank", "account_type": "BANK"},
-    ])
-    _seed_dim_account(tmp_path)
-    _run(tmp_path)
-
-    rows = {r["id"]: r for r in _read_fact(tmp_path)}
-    assert rows["BUY"]["is_transfer"] is False
-    assert rows["EST"]["is_transfer"] is False
-    assert rows["NUL"]["is_transfer"] is False  # NULL categoryId must be FALSE, not NULL
 
 
 def test_amount_signed_credit_negated_bank_passthrough(tmp_path):
@@ -388,14 +353,12 @@ def test_delta_fact_matches_expected_rows(tmp_path):
     schema = dict(df.schema)
     assert schema["date"] == pl.Date
     assert schema["amount_signed"] == pl.Float64
-    assert schema["is_transfer"] == pl.Boolean
     rows = df.select(
-        "id", "account_uuid", "account_type", "etl_merchant_key", "amount_signed",
-        "category", "is_transfer",
+        "id", "account_uuid", "account_type", "etl_merchant_key", "amount_signed", "category",
     ).rows()
     assert rows == [
-        ("A", "acme-checking", "BANK", "MERCADO FICT", -50.0, "Food and drinks", False),
-        ("B", "acme-credit-gold", "CREDIT", "Loja", -50.0, "Shopping", False),
+        ("A", "acme-checking", "BANK", "MERCADO FICT", -50.0, "Food and drinks"),
+        ("B", "acme-credit-gold", "CREDIT", "Loja", -50.0, "Shopping"),
     ]
 
 

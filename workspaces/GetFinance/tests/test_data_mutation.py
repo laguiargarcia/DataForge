@@ -195,7 +195,7 @@ def fact_transaction_inputs():
         account_type=["BANK" if a == "acc0" else "CREDIT" for a in accounts],
         etl_merchant_key=["pão de queijo", "salário", "café", "café"],
         description_normalized=["pão de queijo", "salário", "café", "estorno café"],
-        category=["Alimentação"] * 4, categoryId=["01000000"] * 4, is_transfer=[False] * 4,
+        category=["Alimentação"] * 4, categoryId=["01000000"] * 4,
         status=["POSTED", "POSTED", "PENDING", "POSTED"],
         txn_type=[FACT_ROWS[i][1] for i in ids], cash_flag=[True, True, False, False],
         netting_applied=[False, False, True, True])
@@ -230,7 +230,8 @@ def fact_transaction_checks(F, frames):
             ["accountId"], "amount")
     return [
         ("curated.fact_transaction", lambda: frames["fact"],
-         F["FACT_TRANSACTION_RULES"] + [calendar_rule, F["no_dim_account_rule"](dim)], "id"),
+         F["FACT_TRANSACTION_RULES"] + [calendar_rule, F["no_dim_account_rule"](dim),
+                                         F["bill_payment_leg_without_pair_rule"](frames["fact"])], "id"),
         ("curated.fact_transaction vs cleansed", totals, "TOTALS_CONSERVED_RULES", "accountId"),
     ]
 
@@ -421,7 +422,7 @@ class Boundary:
 RAW_TEXT_SHAPE = dict(partition="ingested_at")
 FACT_COLUMNS = [
     "id", "date", "account_uuid", "account_type", "etl_merchant_key", "description_normalized",
-    "amount", "amount_signed", "category", "categoryId", "is_transfer", "counterparty_document",
+    "amount", "amount_signed", "category", "categoryId", "counterparty_document",
     "payment_method", "cc_bill_id", "cc_installment_number", "cc_total_installments",
     "cc_purchase_date", "status", "txn_type", "operation_type", "cash_flag", "etl_tag",
     "netting_applied", "income_source_key"]

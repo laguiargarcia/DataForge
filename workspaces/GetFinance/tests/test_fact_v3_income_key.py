@@ -49,7 +49,7 @@ def test_no_key_on_card_payment_bank_tagged_inflow(tmp_path):
     # block), so this BANK/CREDIT row is tagged regardless, and income_source_key requires
     # etl_tag.is_null() — the tag alone is enough to suppress the key.
     _seed_cleansed(tmp_path, [
-        {"id": "cc-payment", "amount": 246.17, "txn_type": "CREDIT",
+        {"id": "cc-payment", "amount": 246.17, "txn_type": "CREDIT", "operation_type": "OUTROS",
          "category": "Credit card payment", "categoryId": "05100000",
          "counterparty_name": "BANCO"},
     ])

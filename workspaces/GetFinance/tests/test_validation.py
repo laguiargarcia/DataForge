@@ -249,7 +249,7 @@ DIM_ACC = dict(id=["a1", "a2"], pluggy_account_id=["a1", "a2"],
                account_uuid=["bank-checking-0001", "bank-credit-0002"],
                institution=["Banco Fictício", "Banco Fictício"])
 FACT_TXN = {c: [None, None] for c in [
-    "etl_merchant_key", "description_normalized", "category", "categoryId", "is_transfer",
+    "etl_merchant_key", "description_normalized", "category", "categoryId",
     "counterparty_document", "payment_method", "cc_bill_id", "cc_installment_number",
     "cc_total_installments", "cc_purchase_date", "status", "txn_type", "operation_type",
     "cash_flag", "etl_tag", "netting_applied", "income_source_key"]}

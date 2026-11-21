@@ -7,6 +7,10 @@ exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding=
 # Pluggy taxonomy code for "Credit card payment" — tags both bill-settlement legs
 # (checking-side debit + card-side payment) identically across any institution.
 CC_PAYMENT_CATEGORY_ID = "05100000"
+# On the bank, Pluggy also files a Pix QR Code paid to a merchant as 05100000 (measured on the real
+# data, df-t6h2: one in 09/2026, with no card leg). A Pix 05100000 debit is a payment only when the
+# mirror below finds its card leg.
+PIX_OPERATION_TYPE = "PIX"
 # On the card, the bill payment by automatic debit comes as "Transfer - Internal" (05060000) since
 # 07/2026, measured on the real data (df-sf61); every 05060000 inflow on a card is a bill payment.
 CARD_SIDE_PAYMENT_CATEGORY_IDS = (CC_PAYMENT_CATEGORY_ID, "05060000")
@@ -54,15 +58,13 @@ fact_rows = []
 for row in joined.iter_rows(named=True):
     account_type = row["account_type"]
     amount = row["amount"]
-    categoryId = row["categoryId"]
     amount_signed = -amount if account_type == "CREDIT" else amount
-    is_transfer = categoryId == CC_PAYMENT_CATEGORY_ID
     # df-s65 (A5 freeze): carry the frozen cleansed columns, do NOT re-derive.
     description_normalized = row["description_normalized"]
     etl_merchant_key = row["etl_merchant_key"]
     fact_rows.append((
         row["id"], row["date"], row["account_uuid"], account_type, etl_merchant_key,
-        description_normalized, amount, amount_signed, row["category"], categoryId, is_transfer,
+        description_normalized, amount, amount_signed, row["category"], row["categoryId"],
         row["counterparty_document"], row["payment_method"],
         row["cc_bill_id"], row["cc_installment_number"],
         row["cc_total_installments"], row["cc_purchase_date"],
@@ -86,7 +88,6 @@ df = pl.DataFrame(
         "amount_signed": pl.Float64,
         "category": pl.Utf8,
         "categoryId": pl.Utf8,
-        "is_transfer": pl.Boolean,
         "counterparty_document": pl.Utf8,
         "payment_method": pl.Utf8,
         "cc_bill_id": pl.Utf8,
@@ -109,7 +110,6 @@ df = df.with_columns(
 # df-dnc + E2b: structural etl_tag (E3 precedence step 1 — user rules can never override).
 INVESTMENT_CATEGORY_PREFIX = "03"          # Pluggy 03xxxxxx = Investments family
 RESGATE_OPERATION_TYPE = "RESGATE_APLIC_FINANCEIRA"
-MIRROR_WINDOW_DAYS = 3                     # the two legs of a bill payment are within ±3 days
 
 df = df.with_columns(
     etl_tag=pl.when(
@@ -117,7 +117,11 @@ df = df.with_columns(
         | (pl.col("operation_type") == RESGATE_OPERATION_TYPE)
     )
     .then(pl.lit("investment"))
-    .when((pl.col("account_type") == "BANK") & (pl.col("categoryId") == CC_PAYMENT_CATEGORY_ID))
+    .when(
+        (pl.col("account_type") == "BANK")
+        & (pl.col("categoryId") == CC_PAYMENT_CATEGORY_ID)
+        & pl.col("operation_type").ne_missing(PIX_OPERATION_TYPE)
+    )
     .then(pl.lit("card_payment_bank"))
     .when(
         (pl.col("account_type") == "CREDIT")
@@ -235,6 +239,7 @@ calendar_dates = (read_delta_table(args.target, "dim_calendar")["date"]
 validate(df, "curated.fact_transaction", FACT_TRANSACTION_RULES + [
     ("date has no row in dim_calendar", SUSPICIOUS, not_in("date", calendar_dates)),
     no_dim_account_rule(dim_account),
+    bill_payment_leg_without_pair_rule(df),
 ])
 # Reconciliation (df-ahua.22): per account, every cleansed transaction is in the fact once, with the
 # same amount total. dim_account has every cleansed account (D3), so a transaction the inner join
