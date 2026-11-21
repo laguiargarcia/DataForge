@@ -125,12 +125,18 @@ The report logic lives in `scripts/report/`:
 - pure modules: `classificacao.py` (category routing E3/E3a), `saude.py` (Saúde do mês + breakdown),
   `cartao_listas.py` (active installments, next-bill items), `report_lib.py` (cartão, investimentos,
   liquidez), `edicao.py` (the editable tables);
-- task scripts: `classify.py` → `curated.fact_transaction_classified`; `report_curated.py` →
+- task scripts: `classify.py` → `curated.fact_transaction_classified` and `curated.edicao_aplicada`
+  (the `versao` of `edicao.db` it used); `report_curated.py` →
   `curated.report_*`. Both run at the end of `finance_daily` and, alone, as the job `reclassificar`
   (no Pluggy).
 
-Categories (`categorias`) and rules (`mapeamento`) are user data in `data/edicao.db` (connection
-`edicao`). Their content has real names: never put it in git, a canvas or a public repo.
+Categories (`categorias`), rules (`mapeamento`) and per-transaction corrections (`correcoes`, Pluggy id
+→ subcategory; a correction beats every other step, `etl_tag` included) are user data in
+`data/edicao.db` (connection `edicao`), with `versao`, a counter every write bumps. Their content has
+real names: never put it in git, a canvas or a public repo. A correction reaches every report that
+reads categories: `report_saude*`, the classified list, the bill items and the investment flows of
+`report_investimentos` (a row corrected to `Investimentos` counts as applied, one corrected away from
+it no longer does). `report_cartao` and `report_liquidity` come from balances and installments.
 
 ## Leak guard
 

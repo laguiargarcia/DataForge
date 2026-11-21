@@ -24,6 +24,7 @@ sys.path.insert(0, str(SCRIPTS / "report"))
 
 from classificacao import classificar
 from edicao import abrir, carga_inicial
+from report_lib import investimentos_per_month
 from saude import saude_por_mes
 
 _ENTRADAS = ["fact_transaction", "fact_fatura_mes", "fact_balance_snapshot", "fact_investment_position"]
@@ -68,6 +69,8 @@ def test_scripts_gravam_tabelas(tmp_path):
     for t in _SAIDAS:
         assert (tmp_path / "curated" / t / "_delta_log").exists(), t
     assert read(tmp_path, "curated", "report_saude").equals(saude_por_mes(classificada))
+    assert not classificada["corrigida"].any()
+    assert read(tmp_path, "curated", "edicao_aplicada")["versao"].to_list() == [0]
 
 
 def test_scripts_rodam_sem_cartao(tmp_path):
@@ -77,6 +80,34 @@ def test_scripts_rodam_sem_cartao(tmp_path):
     assert read(tmp_path, "curated", "report_parcelas").height == 0
     assert read(tmp_path, "curated", "report_fatura_itens").height == 0
     assert read(tmp_path, "curated", "report_saude").height > 0
+
+
+def test_classify_aplica_correcao_e_grava_versao(tmp_path):
+    tabelas = _preparar(tmp_path)
+    # Uma saída de caixa que não é investimento: a correção para Investimentos tem de mudar o aplicado.
+    alvo = tabelas["fact_transaction"].filter(
+        ~pl.col("netting_applied").fill_null(False) & pl.col("cash_flag").fill_null(False)
+        & pl.col("etl_tag").ne_missing("investment") & (pl.col("amount_signed") < 0)
+    )["id"][0]
+    conn = abrir(tmp_path / "edicao")
+    with conn:
+        conn.execute("INSERT INTO correcoes VALUES (?, 'Investimentos'), ('id-que-nao-existe', 'Investimentos')",
+                     (alvo,))
+        conn.execute("INSERT INTO versao (id, numero) VALUES (1, 5)")
+    conn.close()
+    run_script("report", "classify", _ARGV, tmp_path)
+    classificada = read(tmp_path, "curated", "fact_transaction_classified")
+    assert classificada.filter(pl.col("corrigida"))["id"].to_list() == [alvo]
+    assert classificada.filter(pl.col("id") == alvo)["subcategoria"].item() == "Investimentos"
+    # A correção para Investimentos chega também ao fluxo de investimento (df-cns.8).
+    run_script("report", "report_curated", _ARGV, tmp_path)
+    esperado = investimentos_per_month(tabelas["fact_transaction"], tabelas["fact_investment_position"],
+                                       pl.DataFrame({"id": [alvo], "subcategoria": ["Investimentos"]}))
+    assert read(tmp_path, "curated", "report_investimentos").equals(esperado)
+    assert not esperado.equals(investimentos_per_month(tabelas["fact_transaction"], tabelas["fact_investment_position"]))
+    aplicada = read(tmp_path, "curated", "edicao_aplicada")
+    assert aplicada["versao"].to_list() == [5]
+    assert aplicada.schema["aplicada_em"] == pl.Datetime("us", "UTC")
 
 
 def test_classify_sem_banco_falha(tmp_path):

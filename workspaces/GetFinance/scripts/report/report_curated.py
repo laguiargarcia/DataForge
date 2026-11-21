@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import polars as pl
+
 exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
 sys.path.insert(0, str(Path(__file__).parent))
 from cartao_listas import itens_proxima_fatura, parcelas_ativas, ultimo_mes
@@ -27,7 +29,9 @@ positions = read_delta_table(args.source, "fact_investment_position")
 
 # Cartão, investimentos e liquidez (já eram ETL, rodados à mão pelo build_report.py).
 cartao = cartao_per_month(snap, fatura, fact)
-invest = investimentos_per_month(fact, positions)
+# A correção do usuário vale também no fluxo de investimento (df-cns.8): só as linhas corrigidas.
+invest = investimentos_per_month(fact, positions,
+                                 classificada.filter(pl.col("corrigida")).select("id", "subcategoria"))
 liquidez = extend_liquidity_v3(liquidity_per_month(snap, fact), cartao, invest)
 
 # O que antes só existia no workbook.
