@@ -376,6 +376,35 @@ def no_dim_account_rule(dim_account):
             not_in("account_uuid", dim_account["account_uuid"]))
 
 
+MIRROR_WINDOW_DAYS = 3   # the two legs of a bill payment (bank debit, card inflow) are within ±3 days
+
+
+def bill_payment_leg_without_pair_rule(fact, today=None):
+    # A bill payment leg (etl_tag card_payment_bank or card_payment_card) with no leg of the other
+    # side of equal |amount| within MIRROR_WINDOW_DAYS (df-7lp0). The pair of a healthy payment is
+    # always there: when Pluggy renames the category of one side (df-sf61), the leg left alone shows
+    # up here, not months later in a report. A leg of the last MIRROR_WINDOW_DAYS before the run day
+    # (`today`, run_day() by default) may still get its pair, so it does not warn yet. A frame whose
+    # columns are missing or of the wrong type is refused by the column rules; this one stays quiet.
+    name = "a bill payment leg has no leg on the other side"
+    schema = fact.schema
+    if not ({"id", "etl_tag"} <= set(schema) and schema.get("date") == pl.Date
+            and schema.get("amount", pl.Null).is_numeric()):
+        return (name, SUSPICIOUS, pl.lit(False))
+    legs = fact.filter(pl.col("etl_tag").is_in(["card_payment_bank", "card_payment_card"])).select(
+        "id", "etl_tag", "date", pl.col("amount").abs().round(2).alias("_abs"))
+    paired = (
+        legs.join(legs.select(pl.col("etl_tag").alias("_other_tag"), pl.col("date").alias("_other_date"),
+                              "_abs"), on="_abs")
+        .filter((pl.col("_other_tag") != pl.col("etl_tag"))
+                & ((pl.col("date") - pl.col("_other_date")).dt.total_days().abs() <= MIRROR_WINDOW_DAYS))
+        ["id"]
+    )
+    settled = pl.col("date") < pl.lit(today or run_day()) - timedelta(days=MIRROR_WINDOW_DAYS)
+    return (name, SUSPICIOUS,
+            pl.col("id").is_in(legs["id"].implode()) & ~pl.col("id").is_in(paired.implode()) & settled)
+
+
 def read_raw(files):
     # Combine raw partitions (all text; diagonal_relaxed unions the column sets, which differ per
     # fetch, and fills what is missing with null), each with the day of its path as `ingestion_date`
@@ -625,7 +654,7 @@ DIM_ACCOUNT_RULES = [
 
 FACT_TRANSACTION_COLUMNS = [
     "id", "date", "account_uuid", "account_type", "etl_merchant_key", "description_normalized",
-    "amount", "amount_signed", "category", "categoryId", "is_transfer", "counterparty_document",
+    "amount", "amount_signed", "category", "categoryId", "counterparty_document",
     "payment_method", "cc_bill_id", "cc_installment_number", "cc_total_installments",
     "cc_purchase_date", "status", "txn_type", "operation_type", "cash_flag", "etl_tag",
     "netting_applied", "income_source_key",

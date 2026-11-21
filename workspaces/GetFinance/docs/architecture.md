@@ -95,6 +95,10 @@ Delta tables at `data/curated/<table>/`, one table per script under `scripts/cle
   category (`05100000` on both legs; `05060000` on the card, the automatic debit since 07/2026), or by
   mirror, when one leg has its tag, the other one is the same |amount| within `MIRROR_WINDOW_DAYS` on the
   other account (the bank leg of the automatic debit comes as Investments, no category or `05060000`).
+  A Pix `05100000` debit on the bank is a payment only by mirror: Pluggy also files a Pix QR Code paid to
+  a merchant under that category (df-t6h2). A leg with no leg of the other side (`bill_payment_leg_without_pair_rule`
+  in `functions.py`, suspicious, df-7lp0) warns once it is older than `MIRROR_WINDOW_DAYS`: it is what a
+  new category of one side, as in 07/2026 (df-sf61), looks like.
 - `fact_balance_snapshot` — accumulating: MERGE on `(account_uuid, snapshot_date)`,
   keeps all prior days (history lives only here — A11).
 - `fact_investment_position` — accumulating: MERGE on `(holding_uuid, snapshot_date)`,
