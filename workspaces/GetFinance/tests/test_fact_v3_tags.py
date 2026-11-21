@@ -50,13 +50,14 @@ def test_bill_payment_both_legs_category_shape(tmp_path):
     assert t["card-leg"] == "card_payment_card"
 
 
-def test_bill_payment_card_leg_mislabeled_shape_mirror_match(tmp_path):
+@pytest.mark.parametrize("operation_type", ["OUTROS", "PIX"])
+def test_bill_payment_card_leg_mislabeled_shape_mirror_match(tmp_path, operation_type):
     # Shape 2 (Finding B): card leg is mislabeled Shopping/08000000 — only the BANK mirror
-    # (equal |amount|, 05100000, within 3 days) identifies it.
+    # (equal |amount|, 05100000, within 3 days) identifies it. A bill paid by Pix too (df-zpme).
     _seed_cleansed(tmp_path, [
         {"id": "bank-leg", "date": "2026-06-10", "amount": -246.17,
          "category": "Credit card payment", "categoryId": "05100000",
-         "account_type": "BANK", "txn_type": "DEBIT", "operation_type": "OUTROS"},
+         "account_type": "BANK", "txn_type": "DEBIT", "operation_type": operation_type},
         {"id": "card-leg", "date": "2026-06-11", "accountId": "acc-card",
          "account_type": "CREDIT", "amount": 246.17, "category": "Shopping",
          "categoryId": "08000000", "description_normalized": "PAGAMENTO ON LINE",
@@ -140,6 +141,9 @@ def test_pix_debit_filed_as_card_payment_is_a_payment_only_with_its_card_leg(tmp
          "amount": -400.0, "category": "Credit card payment", "categoryId": "05100000",
          "txn_type": "CREDIT"},
         {**pix, "id": "pix-no-op", "date": "2026-05-02", "amount": -70.0, "operation_type": None},
+        {**pix, "id": "pix-far", "date": "2026-08-01", "amount": -55.0},
+        {"id": "refund-far", "date": "2026-08-05", "accountId": "acc-card", "account_type": "CREDIT",
+         "amount": 55.0, "category": "Shopping", "categoryId": "08000000", "txn_type": "CREDIT"},
     ])
     _run_c2c(tmp_path)
     t = _tags(tmp_path)
@@ -147,6 +151,8 @@ def test_pix_debit_filed_as_card_payment_is_a_payment_only_with_its_card_leg(tmp
     assert t["pix-bill"] == "card_payment_bank"
     assert t["card-leg"] == "card_payment_card"
     assert t["pix-no-op"] == "card_payment_bank"
+    assert t["pix-far"] is None
+    assert t["refund-far"] is None
 
 
 def _fact_findings(tmp_path):

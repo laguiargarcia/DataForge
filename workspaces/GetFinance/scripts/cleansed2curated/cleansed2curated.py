@@ -8,8 +8,8 @@ exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding=
 # (checking-side debit + card-side payment) identically across any institution.
 CC_PAYMENT_CATEGORY_ID = "05100000"
 # On the bank, Pluggy also files a Pix QR Code paid to a merchant as 05100000 (measured on the real
-# data, df-t6h2: one in 09/2026, with no card leg). A Pix 05100000 debit is a payment only when the
-# mirror below finds its card leg.
+# data, df-t6h2: one in 09/2026, with no card leg). A Pix 05100000 debit is a payment only when a
+# mirror below finds its card leg, tagged or not (df-zpme).
 PIX_OPERATION_TYPE = "PIX"
 # On the card, the bill payment by automatic debit comes as "Transfer - Internal" (05060000) since
 # 07/2026, measured on the real data (df-sf61); every 05060000 inflow on a card is a bill payment.
@@ -154,6 +154,31 @@ _bank_mirror_ids = (
 )
 df = df.with_columns(
     etl_tag=pl.when(pl.col("id").is_in(_bank_mirror_ids.implode()))
+    .then(pl.lit("card_payment_bank"))
+    .otherwise(pl.col("etl_tag"))
+)
+
+# A bill paid by Pix whose card leg Pluggy mislabeled (df-zpme): an untagged Pix 05100000 debit is
+# the bank leg when an untagged inflow on a card has its |amount| within 3 days; Shape 2 below then
+# tags that inflow. Without it neither leg is tagged and the leg-without-pair warning stays quiet.
+_card_inflows = df.filter(
+    (pl.col("account_type") == "CREDIT") & (pl.col("txn_type") == "CREDIT") & pl.col("etl_tag").is_null()
+).select(pl.col("amount").abs().round(2).alias("_pay_abs"), pl.col("date").alias("_pay_date"))
+_pix_mirror_ids = (
+    df.filter(
+        (pl.col("account_type") == "BANK")
+        & (pl.col("txn_type") == "DEBIT")
+        & (pl.col("categoryId") == CC_PAYMENT_CATEGORY_ID)
+        & (pl.col("operation_type") == PIX_OPERATION_TYPE)
+        & pl.col("etl_tag").is_null()
+    )
+    .select("id", pl.col("amount").abs().round(2).alias("_pay_abs"), "date")
+    .join(_card_inflows, on="_pay_abs")
+    .filter((pl.col("date") - pl.col("_pay_date")).dt.total_days().abs() <= MIRROR_WINDOW_DAYS)["id"]
+    .unique()
+)
+df = df.with_columns(
+    etl_tag=pl.when(pl.col("id").is_in(_pix_mirror_ids.implode()))
     .then(pl.lit("card_payment_bank"))
     .otherwise(pl.col("etl_tag"))
 )
