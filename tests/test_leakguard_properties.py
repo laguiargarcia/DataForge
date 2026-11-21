@@ -117,3 +117,35 @@ def test_cpf_across_a_line_break_is_not_a_document(case, newline):
 def test_numbers_in_a_comma_list_are_not_one_number(digits):
     text = ", ".join(digits)
     assert leakguard_values.real_value_hits(text, {digits: "raw.accounts.number"}) == []
+
+
+# An amount with cents from raw (df-88xr): the guard keeps it as "1234.56", from MIN_AMOUNT up.
+_AMOUNT = st.integers(min_value=10_000, max_value=10**10).filter(lambda c: c % 100).map(
+    lambda cents: (f"{cents // 100}.{cents % 100:02d}", cents))
+
+
+def _as_money(cents, style):
+    """The amount in one of the ways it is written: plain or grouped in thousands, '.' or ',' for cents."""
+    units, rest = f"{cents // 100:,}", f"{cents % 100:02d}"
+    return {"plain.": f"{cents // 100}.{rest}", "plain,": f"{cents // 100},{rest}",
+            "br": f"{units.replace(',', '.')},{rest}", "us": f"{units}.{rest}"}[style]
+
+
+_MONEY_STYLE = st.sampled_from(["plain.", "plain,", "br", "us"])
+
+
+@settings(max_examples=200)
+@given(_AMOUNT, _MONEY_STYLE, st.sampled_from(["", "-", "R$ ", "R$", "(", "valor="]))
+def test_an_amount_is_found_however_it_is_written_as_money(amount, style, before):
+    value, cents = amount
+    hits = leakguard_values.real_value_hits(f"x {before}{_as_money(cents, style)} y", {value: "raw.transactions.amount"})
+    assert [v for _, v, _ in hits] == [value]
+
+
+@given(_AMOUNT, _MONEY_STYLE, st.sampled_from("0123456789"))
+def test_an_amount_inside_a_longer_number_is_not_the_value(amount, style, extra):
+    value, cents = amount
+    values = {value: "raw.transactions.amount"}
+    written = _as_money(cents, style)
+    assert leakguard_values.real_value_hits(f"{extra}{written}", values) == []
+    assert leakguard_values.real_value_hits(f"{written}{extra}", values) == []

@@ -1,12 +1,30 @@
 """The leak guard's real values: where they come from (GETFINANCE_DATA, .leakguard-workspaces, the main
 checkout's workspaces/GetFinance/data/), how they are read (raw parquet, edicao.db, .env) and how they
 are found in a text. Part of scripts/leakguard.py (df-n8ac.36), whose docstring describes the whole
-guard. Only the stdlib at import: polars is imported where raw parquet is read."""
+guard. Only the stdlib at import: polars is imported where raw parquet is read.
+
+Four kinds of real value, each found its own way (df-88xr):
+- an identifier (RAW_COLUMNS, edicao.db, .env): a number with any separator between its digits, a name
+  with any whitespace between its words;
+- a description's own words (DESCRIPTION_COLUMNS): what follows the bank's own wording, the name of a
+  person or a shop ("Pix enviado <name> 12/03"), with any non-letter between its words;
+- an amount with cents (AMOUNT_COLUMNS), written as money: "1234.56", "1.234,56", "1234,56";
+- a card's last four digits (creditCardMetadata.cardNumber, a short accounts.number), only next to the
+  words or marks that name one ("final 1234", "cardNumber": "1234", "**** 1234", "conta-1234").
+
+What is let through on purpose, each with its reason: an amount below MIN_AMOUNT or with no cents
+("45.90", "5000.00"; made-up test values are written like these, and so are version numbers); four
+digits with nothing naming a card around them (a year, a port); a description made of the bank's own
+wording only ("PAGAMENTO RECEBIDO": every word is in VOCABULARY_PHRASES descriptions or more); a
+description's own part of one short word ("PIX TRANSF <first name>"), a word that code and prose use
+too; the dates of a transaction."""
 import ast
 import json
 import os
 import re
 import sqlite3
+from collections import Counter, defaultdict
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from scripts import leakguard_checkout, leakguard_patterns
@@ -35,14 +53,36 @@ NUMBER_LIKE = re.compile(r"[\d\s./-]+")   # digits and separators only: an accou
 SEPARATOR_CHARS = r"\s.\-_/\u2013\u2014"
 GAP = leakguard_patterns._RUN_OR_COMMA.format(SEPARATOR_CHARS)
 DIGIT_SEPARATOR = GAP + "?"
-# Raw columns whose string leaves identify the owner, an account or a counterparty. Amounts, dates
-# and descriptions are left out: they are not identifiers and would match ordinary text.
+# Raw columns whose string leaves identify the owner, an account or a counterparty. Amounts,
+# descriptions and card digits have columns and a way of matching of their own, below.
 RAW_COLUMNS = {
     "accounts": ("id", "itemId", "number", "owner", "taxNumber", "bankData", "creditData"),
     "transactions": ("id", "accountId", "paymentData", "merchant"),
     "investments": ("id", "number", "itemId", "owner", "code"),
     "bills": ("id", "accountId"),
 }
+# Raw columns that hold an amount of money.
+AMOUNT_COLUMNS = {
+    "accounts": ("balance",),
+    "transactions": ("amount", "amountInAccountCurrency", "balance"),
+    "investments": ("balance", "amount", "value", "amountProfit", "amountWithdrawal", "amountOriginal"),
+    "bills": ("totalAmount", "minimumPaymentAmount"),
+}
+AMOUNT_ORIGINS = {f"raw.{entity}.{col}" for entity, columns in AMOUNT_COLUMNS.items() for col in columns}
+MIN_AMOUNT = Decimal(100)   # below it, an amount with cents is as likely a made-up value or a version number
+DESCRIPTION_COLUMNS = ("description", "descriptionRaw")   # of raw transactions
+DESCRIPTION_ORIGINS = {f"raw.transactions.{col}" for col in DESCRIPTION_COLUMNS}
+CARD_METADATA_COLUMN = "creditCardMetadata"   # of raw transactions: its cardNumber is a card's last four digits
+# A word in this many different descriptions or more is the bank's own wording ("PIX", "TRANSF",
+# "enviado"), not a name: a description's own part starts at its first word that is not.
+VOCABULARY_PHRASES = 8
+MIN_OWN_WORDS = 2   # a description's own part of one word is blocked only as long as MIN_WORD_LENGTH
+LETTER_WORD = re.compile(r"[^\W\d_]+")
+BETWEEN_WORDS = r"[\W\d_]+"   # a description's words match with any non-letter between them ("S.A.", a date)
+CARD_FINAL = re.compile(r"\d{4}")   # a card's last four digits: shorter than any identifier (MIN_VALUE_LENGTH)
+# What names a card or an account right before its last four digits: a word, a run of masking marks,
+# or a slug's dash ("conta-1234").
+CARD_CONTEXT = r"(?:(?i:card\w*|cart[aã]o|final|n[uú]mero|number|conta|account)[\W_]{0,4}|[*•xX]{2,}[\s-]?|[a-z]-)"
 
 
 def _parse_nested(text):
@@ -96,15 +136,81 @@ def _expand(leaf):
         yield from (part.strip() for part in leaf.split("/"))
 
 
-def _raw_values(raw):
+def _raw_columns(raw):
+    """{(entity, column): its values in every partition} for every column the guard reads. Each
+    partition is read once: on the owner's machine raw sits on a slow (Windows) disk."""
     import polars as pl   # noqa: PLC0415 -- only where real data exists; CI and a fresh clone never need polars
-    for entity, columns in RAW_COLUMNS.items():
+    wanted = {entity: {*RAW_COLUMNS.get(entity, ()), *AMOUNT_COLUMNS.get(entity, ())}
+              for entity in (*RAW_COLUMNS, *AMOUNT_COLUMNS)}
+    wanted["transactions"] |= {*DESCRIPTION_COLUMNS, CARD_METADATA_COLUMN}
+    columns = defaultdict(list)
+    for entity, names in wanted.items():
         for part in sorted((raw / entity).glob("*/data.parquet")):
-            present = [c for c in columns if c in pl.read_parquet_schema(part)]
+            present = sorted(names & set(pl.read_parquet_schema(part)))
             frame = pl.read_parquet(part, columns=present)
             for col in present:
-                for value in frame[col].to_list():
-                    yield value, f"raw.{entity}.{col}"
+                columns[entity, col] += frame[col].to_list()
+    return columns
+
+
+def _identifier_values(columns):
+    for entity, names in RAW_COLUMNS.items():
+        for col in names:
+            for value in columns.get((entity, col), ()):
+                yield value, f"raw.{entity}.{col}"
+
+
+def _amount_values(columns):
+    """(the amount without sign, as "1234.56", origin) for each amount with cents of MIN_AMOUNT or more."""
+    for entity, names in AMOUNT_COLUMNS.items():
+        for col in names:
+            for value in columns.get((entity, col), ()):
+                try:
+                    amount = abs(Decimal(str(value).strip())).quantize(Decimal("0.01"))
+                except (InvalidOperation, ValueError):
+                    continue
+                if amount >= MIN_AMOUNT and amount % 1:
+                    yield f"{amount:.2f}", f"raw.{entity}.{col}"
+
+
+def description_parts(descriptions):
+    """{a description's own part, lowercased: origin} from [(description, origin)].
+
+    A description is taken as its letter words (a date glued to a name, "FULANO12/03", leaves the
+    name). Its own part runs from its first word that is not the bank's wording (a word in fewer
+    than VOCABULARY_PHRASES different descriptions) to its end, so a common surname after a name
+    stays in. Kept when it has two words or more, or is one word as long as MIN_WORD_LENGTH."""
+    phrases = {}
+    for text, origin in descriptions:
+        phrases.setdefault(tuple(word.lower() for word in LETTER_WORD.findall(text or "")), origin)
+    seen_in = Counter(word for phrase in phrases for word in set(phrase))
+    parts = {}
+    for phrase, origin in phrases.items():
+        start = next((i for i, word in enumerate(phrase) if seen_in[word] < VOCABULARY_PHRASES), None)
+        if start is None:
+            continue
+        own = " ".join(phrase[start:])
+        if len(own) >= MIN_VALUE_LENGTH and (len(phrase) - start >= MIN_OWN_WORDS or len(own) >= MIN_WORD_LENGTH):
+            parts.setdefault(own, origin)
+    return parts
+
+
+def _description_values(columns):
+    descriptions = [(text, f"raw.transactions.{col}") for col in DESCRIPTION_COLUMNS
+                    for text in columns.get(("transactions", col), ())]
+    yield from description_parts(descriptions).items()
+
+
+def _card_final_values(columns):
+    """(four digits, origin) for each creditCardMetadata.cardNumber and each four-digit accounts.number."""
+    for value in columns.get(("transactions", CARD_METADATA_COLUMN), ()):
+        nested = _parse_nested((value or "").strip())
+        final = str(nested.get("cardNumber") or "") if isinstance(nested, dict) else ""
+        if CARD_FINAL.fullmatch(final):
+            yield final, f"raw.transactions.{CARD_METADATA_COLUMN}"
+    for value in columns.get(("accounts", "number"), ()):
+        if value and CARD_FINAL.fullmatch(value.strip()):
+            yield value.strip(), "raw.accounts.number"
 
 
 def _edicao_values(edicao):
@@ -139,9 +245,10 @@ def _env_values(env):
 
 def real_values(workspace):
     """{lowercased real value: where it came from} for one workspace; empty when it has no data."""
-    sources = []
+    sources, raw = [], {}
     if (workspace / "data" / "raw").is_dir():
-        sources.append(_raw_values(workspace / "data" / "raw"))
+        raw = _raw_columns(workspace / "data" / "raw")
+        sources.append(_identifier_values(raw))
     if (workspace / "data" / EDICAO_DB).is_file():
         sources.append(_edicao_values(workspace / "data" / EDICAO_DB))
     if (workspace / ".env").is_file():
@@ -152,10 +259,27 @@ def real_values(workspace):
             for leaf in (x for raw_leaf in _string_leaves(value) for x in _expand(raw_leaf)):
                 if _worth_blocking(leaf):
                     found.setdefault(leaf.lower(), origin)
+    for value, origin in (*_description_values(raw), *_amount_values(raw), *_card_final_values(raw)):
+        found.setdefault(value, origin)   # each already in its final form, kept by its own rule
     return found
 
 
-def _value_pattern(value):
+def _amount_pattern(value):
+    """"1234.56" written as money: "1234.56", "1234,56", "1.234,56", "1,234.56"; not inside a longer number."""
+    units, cents = value.split(".")
+    grouped = f"{int(units):,}"   # "1,234": its commas stand for either mark
+    written = {re.escape(units), r"[.,]".join(re.escape(group) for group in grouped.split(","))}
+    return r"(?<!\d)(?<!\d[.,])(?:" + "|".join(sorted(written)) + r")[.,]" + cents + r"(?!\d)(?![.,]\d)"
+
+
+def _value_pattern(value, source=""):
+    if source in AMOUNT_ORIGINS:
+        return re.compile(_amount_pattern(value))
+    if source in DESCRIPTION_ORIGINS:
+        return re.compile(r"(?<![^\W\d_])" + BETWEEN_WORDS.join(re.escape(w) for w in value.split()) + r"(?![^\W\d_])",
+                          re.IGNORECASE)
+    if CARD_FINAL.fullmatch(value):
+        return re.compile(CARD_CONTEXT + value + r"(?!\d)")
     if _is_number_like(value):
         return re.compile(r"(?<!\d)" + DIGIT_SEPARATOR.join(leakguard_patterns._digits(value)) + r"(?!\d)")
     return re.compile(r"\s+".join(re.escape(word) for word in value.split()), re.IGNORECASE)
@@ -165,26 +289,36 @@ def real_value_hits(text, values):
     """(line number, value, source) for each real value in `text`.
 
     Case-insensitive; a name matches with any whitespace between its words (wrapped across lines), a
-    number with any or no separator between its digits. A cheap substring test on normalized text
-    runs first, so the regex only runs for the few values that may be there."""
+    description's own part with any non-letter between them, a number with any or no separator
+    between its digits, an amount written as money, a card's four digits next to what names a card
+    (the module docstring has each kind). A cheap substring test on normalized text runs first, so
+    the regex only runs for the few values that may be there."""
     spaced = re.sub(r"\s+", " ", text.lower())
+    letters = f" {' '.join(LETTER_WORD.findall(text.lower()))} "
     merged = re.sub(rf"(?<=\d){GAP}(?=\d)", "", text)
     hits = []
     for value, source in values.items():
-        if _is_number_like(value):
+        if source in DESCRIPTION_ORIGINS:
+            if f" {value} " not in letters:
+                continue
+        elif source in AMOUNT_ORIGINS or _is_number_like(value) or CARD_FINAL.fullmatch(value):
             if leakguard_patterns._digits(value) not in merged:
                 continue
         elif re.sub(r"\s+", " ", value) not in spaced:
             continue
-        hits += [(leakguard_patterns._line(text, m.start()), value, source) for m in _value_pattern(value).finditer(text)]
+        hits += [(leakguard_patterns._line(text, m.start()), value, source)
+                 for m in _value_pattern(value, source).finditer(text)]
     return sorted(hits)
 
 
 def _real_value_failures(rel, text, sources, where):
-    """REAL findings; in the attribution files a value read from an owner column is let through."""
+    """REAL findings; in the attribution files a value read from an owner column is let through, and so
+    is any other that is the owner's name or part of it (a Pix to oneself names the owner)."""
     exempt = set()
     if rel in leakguard_patterns.NAME_EXEMPT_PATHS:
-        exempt = {v for _, values in sources for v, src in values.items() if src.endswith(ATTRIBUTION_SOURCES)}
+        owners = {v for _, values in sources for v, src in values.items() if src.endswith(ATTRIBUTION_SOURCES)}
+        exempt = {v for _, values in sources for v in values
+                  if any(re.search(rf"(?<!\w){re.escape(v)}(?!\w)", owner) for owner in owners)}
     return [f"REAL: {where(n)} -> {leakguard_patterns._mask(v, f", {src} from {ws}")}"
             for ws, values in sources
             for n, v, src in real_value_hits(text, {k: s for k, s in values.items() if k not in exempt})]

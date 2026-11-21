@@ -163,8 +163,11 @@ had, df-bsb2.2.2). It runs in pre-commit, on the staged files and on the commit 
 backup, and any binary file other than the app's fonts and images; anywhere: a `.env` other than
 `.env.example`, a `.db`/`.parquet`/`.xlsx`), CPF/CNPJ with valid check digits, account short codes and personal
 e-mails. On the owner's machine it also blocks every **real value** read from the real `data/`
-(Pluggy ids, account numbers, owner and counterparty names, documents), `data/edicao.db` (category
-rules) and the `.env` beside it. Examples in code, docs and tests use fake values only (e.g.
+(Pluggy ids, account numbers, owner and counterparty names, documents; the person or shop named in a
+transaction's description, an amount with cents from 100 up, a card's last four digits next to
+"final", `cardNumber` or `****`), `data/edicao.db` (category rules) and the `.env` beside it. A
+round amount, a small one and the bank's own wording ("Pix enviado", "PAGAMENTO RECEBIDO") pass, so
+a test may use those. Examples in code, docs and tests use fake values only (e.g.
 `901/0001/00012345-6`); a real account number in a docstring example reached the public DataForge
 repo this way (df-k37o). Audit the whole history with `scripts/leakguard.py --history`.
 

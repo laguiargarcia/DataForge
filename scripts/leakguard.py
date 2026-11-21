@@ -18,9 +18,12 @@ audits every version of every file, every commit message and every path ever com
    LEAKGUARD_NAME_PATTERNS and the gitignored .leakguard-local. Every file is read, one with a NUL
    byte too.
 3. Real values, on the owner's machine: identifiers, names and documents read from a workspace's
-   data/raw (Pluggy raw), data/edicao.db (category rules) and .env. A pattern cannot tell a real
-   account number in a docstring example from a fake one (df-k37o); this list can. A number matches
-   with any or no separator between its digits, a name with any whitespace between its words. The
+   data/raw (Pluggy raw), data/edicao.db (category rules) and .env; and from raw, the names and shops
+   in transaction descriptions, amounts with cents and a card's last four digits (df-88xr). A pattern
+   cannot tell a real account number in a docstring example from a fake one (df-k37o); this list
+   can. A number matches with any or no separator between its digits, a name with any whitespace
+   between its words, an amount written as money, four card digits only next to what names a card
+   (leakguard_values says how each kind is found and what it lets through on purpose). The
    data comes from GETFINANCE_DATA (a workspace's data/ directory), from each workspace listed in
    the gitignored .leakguard-workspaces at the main checkout's root, and from the main checkout's
    workspaces/GetFinance/data/ when it holds raw/ or edicao.db and is not the demo's synthetic data

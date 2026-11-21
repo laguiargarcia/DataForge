@@ -8,12 +8,14 @@ import re
 import sqlite3
 from pathlib import Path
 
+import polars as pl
 import pytest
 
 from scripts import leakguard_checkout, leakguard_patterns, leakguard_values
 from tests import leakguard_fixtures
 from tests.leakguard_fixtures import (
-    NO_SOURCE, NUMBER, NUMBER_BARE, OWNER, RECEIVER, SECRET, TRANSFER, make_workspace, run,
+    AMOUNT, CARD_FINAL, NO_SOURCE, NUMBER, NUMBER_BARE, OWNER, PIX_NAME, PIX_SHOPS, RECEIVER, SECRET, TRANSFER,
+    make_workspace, run,
 )
 
 repo = pytest.fixture(leakguard_fixtures.repo)
@@ -41,11 +43,148 @@ def test_real_values_come_from_raw_edicao_and_env(workspace):
         assert values.get(expected) == source, expected
 
 
-def test_amounts_descriptions_dates_short_words_and_temp_files_are_not_real_values(workspace):
+def test_short_descriptions_dates_short_words_and_temp_files_are_not_real_values(workspace):
     values = leakguard_values.real_values(workspace)
-    for absent in ["123456.78", "padaria", "netflix", "x", "conta", "2026-11-20", "2026-11-12t09:00:00.000z",
+    for absent in ["padaria", "netflix", "x", "conta", "2026-11-20", "2026-11-12t09:00:00.000z",
                    "temporario nao lido jamais", "1.5", "true", "12"]:
         assert absent not in values, absent
+
+
+# ---------------------------------------------------------------------------- descriptions, amounts, card digits (df-88xr)
+
+
+def test_descriptions_amounts_and_card_digits_are_real_values(workspace):
+    values = leakguard_values.real_values(workspace)
+    for expected, source in [(PIX_NAME.lower(), "raw.transactions.description"),
+                             (AMOUNT, "raw.transactions.amount"), ("123456.78", "raw.accounts.balance"),
+                             (CARD_FINAL, "raw.transactions.creditCardMetadata")]:
+        assert values.get(expected) == source, expected
+
+
+def test_a_person_named_in_a_pix_description_is_blocked_written_alone(repo, capsys, workspace, monkeypatch):
+    """The bank's wording around the name ("Pix enviado", a date glued to it) is not needed to find it."""
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    code, _, failures = run(capsys, repo("fixture.py", f"x = 1\nWHO = '{PIX_NAME}'\n"))
+    assert code == 1
+    assert failures == [f"REAL: fixture.py:2 -> 'si…' ({len(PIX_NAME)} chars, raw.transactions.description from ws)"]
+
+
+def test_an_amount_with_cents_copied_from_raw_is_blocked(repo, capsys, workspace, monkeypatch):
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    code, _, failures = run(capsys, repo("fixture.py", f"x = 1\nVALOR = -{AMOUNT}\nTEXTO = 'R$ 1.234,56'\n"))
+    assert code == 1
+    assert failures == [f"REAL: fixture.py:{n} -> '12…' ({len(AMOUNT)} chars, raw.transactions.amount from ws)"
+                        for n in (2, 3)]
+
+
+def test_round_amounts_small_amounts_and_the_bank_wording_pass(repo, capsys, workspace, monkeypatch):
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    text = "a = 5000.00\nb = 45.90\nc = 10.00\nd = 'Pix enviado'\ne = 'Loja Alfa'\nf = 4321\n"
+    assert run(capsys, repo("fixture.py", text))[0] == 0
+
+
+def _parts(*descriptions):
+    return set(leakguard_values.description_parts([(d, "raw.transactions.description") for d in descriptions]))
+
+
+def test_a_description_s_own_part_starts_after_the_bank_s_wording():
+    """A word in VOCABULARY_PHRASES descriptions is the bank's ("Pix", "enviado", "Loja" here); a
+    common word after a name stays in. The shops' own part is one short word: not a value."""
+    assert _parts(*PIX_SHOPS, "Pix enviado Beltrano Loja 01/02") == {"beltrano loja"}
+
+
+def test_with_fewer_descriptions_than_the_bank_s_wording_each_is_all_its_own_part():
+    """In one description fewer than VOCABULARY_PHRASES, no word is the bank's: each is all its own part."""
+    seven = PIX_SHOPS[:leakguard_values.VOCABULARY_PHRASES - 1]
+    assert _parts(*seven) == {shop.lower() for shop in seven}
+
+
+def test_a_description_made_of_the_bank_s_wording_only_has_no_own_part():
+    """The same wording with another date is the same description: only different words count."""
+    wording = [f"PAGAMENTO RECEBIDO {shop} {i}/12" for i, shop in enumerate(PIX_SHOPS)]
+    assert _parts(*wording, "PAGAMENTO RECEBIDO 03/04") == set()
+    assert _parts("PAGAMENTO RECEBIDO 01/12", "PAGAMENTO RECEBIDO 02/12") == {"pagamento recebido"}
+
+
+def test_a_date_glued_to_a_name_is_left_out_of_it():
+    assert _parts("PIX TRANSF FULANA BELTRANA12/03") == {"pix transf fulana beltrana"}
+
+
+@pytest.mark.parametrize(("description", "parts"), [("PADARIA", set()), ("Pix", set()), ("IOF X", set()),
+                                                    ("SUPERMERCADOSX", {"supermercadosx"}), (None, set())])
+def test_a_short_one_word_description_is_not_a_value(description, parts):
+    assert _parts(description) == parts
+
+
+@pytest.mark.parametrize("written", [f"WHO = '{PIX_NAME}'", f"{PIX_NAME.upper()}12/03", "sicrano  ficticio\n souza",
+                                     "Sicrano-Ficticio_Souza", "PIX SICRANO FICTICIO SOUZA S.A."])
+def test_a_description_s_own_part_matches_with_any_non_letter_between_its_words(written):
+    values = {PIX_NAME.lower(): "raw.transactions.description"}
+    assert [h[1] for h in leakguard_values.real_value_hits(written, values)] == [PIX_NAME.lower()]
+
+
+@pytest.mark.parametrize("written", ["Sicrano Ficticio Souzas", "XSicrano Ficticio Souza", "Sicrano Souza"])
+def test_a_description_s_own_part_inside_a_longer_word_does_not_match(written):
+    assert leakguard_values.real_value_hits(written, {PIX_NAME.lower(): "raw.transactions.description"}) == []
+
+
+@pytest.mark.parametrize("written", ["1234.56", "1234,56", "1.234,56", "1,234.56", "-1234.56", "R$1.234,56",
+                                     "[1, 1234.56]", "Decimal('1234.56')"])
+def test_an_amount_matches_written_as_money(written):
+    values = {AMOUNT: "raw.transactions.amount"}
+    assert [h[1] for h in leakguard_values.real_value_hits(written, values)] == [AMOUNT]
+
+
+@pytest.mark.parametrize("written", ["11234.56", "1234.567", "1234.5", "1.1234,56", "1234 56", "123456",
+                                     "2.1234.56", "1234-56"])
+def test_an_amount_inside_another_number_or_not_written_as_money_does_not_match(written):
+    assert leakguard_values.real_value_hits(written, {AMOUNT: "raw.transactions.amount"}) == []
+
+
+def test_an_amount_below_a_thousand_has_no_grouped_form():
+    assert leakguard_values.real_value_hits("123.45 e 0.123,45", {"123.45": "raw.transactions.amount"}) == [
+        (1, "123.45", "raw.transactions.amount")]
+
+
+@pytest.mark.parametrize(("amount", "kept"), [("-1234.56", "1234.56"), ("100.01", "100.01"), ("99.99", None),
+                                              ("5000.00", None), ("5000", None), ("abc", None), ("1e3", None),
+                                              (" 250.5 ", "250.50")])
+def test_which_amounts_are_real_values(tmp_path, amount, kept):
+    make_workspace(tmp_path)
+    frame = {"id": ["t-amount-0001"], "amount": [amount]}
+    path = tmp_path / "data" / "raw" / "transactions" / "ingestion_date=2026-11-01" / "data.parquet"
+    pl.DataFrame(frame).write_parquet(path)
+    amounts = {v for v, src in leakguard_values.real_values(tmp_path).items() if src == "raw.transactions.amount"}
+    assert amounts == ({kept} if kept else set())
+
+
+@pytest.mark.parametrize("written", ['"cardNumber": "4321"', "final 4321", "Cartão final: 4321", "**** 4321",
+                                     "•••• 4321", "XXXX-4321", "conta-4321", "account_4321", "numero 4321"])
+def test_a_card_final_matches_next_to_what_names_a_card(written):
+    values = {CARD_FINAL: "raw.transactions.creditCardMetadata"}
+    assert [h[1] for h in leakguard_values.real_value_hits(written, values)] == [CARD_FINAL]
+
+
+@pytest.mark.parametrize("written", ["4321", "ano 4321", "port = 4321", "final 43210", "final 14321", "v1.4321"])
+def test_a_card_final_alone_or_inside_a_number_does_not_match(written):
+    assert leakguard_values.real_value_hits(written, {CARD_FINAL: "raw.transactions.creditCardMetadata"}) == []
+
+
+def test_a_short_account_number_is_a_card_final(tmp_path):
+    make_workspace(tmp_path)
+    path = tmp_path / "data" / "raw" / "accounts" / "ingestion_date=2026-11-01" / "data.parquet"
+    pl.DataFrame({"id": ["acc-uuid-0001-aaaa"], "number": ["8765"]}).write_parquet(path)
+    assert leakguard_values.real_values(tmp_path).get("8765") == "raw.accounts.number"
+
+
+def test_in_the_attribution_files_the_owner_named_in_a_description_passes(repo, capsys, workspace, monkeypatch):
+    """A Pix to oneself names the owner: in LICENSE and README.md that is attribution, elsewhere a leak."""
+    monkeypatch.setenv("GETFINANCE_DATA", str(workspace / "data"))
+    owner_part = " ".join(OWNER.split()[:2])
+    values = {OWNER.lower(): "raw.accounts.owner", owner_part.lower(): "raw.transactions.description"}
+    monkeypatch.setattr(leakguard_values, "real_values", lambda ws: values)
+    assert run(capsys, repo("README.md", f"By {owner_part}.\n"))[0] == 0
+    assert run(capsys, repo("notes.md", f"By {owner_part}.\n"))[0] == 1
 
 
 def test_no_data_means_no_real_values(tmp_path):

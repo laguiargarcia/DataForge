@@ -24,6 +24,11 @@ NUMBER_BARE = NUMBER.replace("-", "")   # the real number written without its da
 TRANSFER = "901/0001/" + NUMBER
 RECEIVER = "Beltrano" + " Recebedor"
 SECRET = "s3cr3t" + "-value"
+PIX_NAME = "Sicrano Ficticio" + " Souza"   # a person named inside a Pix description, nowhere else
+AMOUNT = "1234" + ".56"   # an amount with cents, above the guard's MIN_AMOUNT
+CARD_FINAL = "43" + "21"   # a card's last four digits (creditCardMetadata.cardNumber)
+# The bank's own wording: "Pix enviado" in eight different descriptions, so it is no one's name.
+PIX_SHOPS = [f"Pix enviado Loja {shop}" for shop in ("Alfa", "Beta", "Gama", "Delta", "Epsilon", "Zeta", "Eta", "Teta")]
 
 
 def _with_check_digits(base, cycle):
@@ -129,11 +134,16 @@ def make_workspace(root, owner=OWNER):
     # A partition's temp file (landing2raw writes it, then renames it): never read.
     _write_parquet(raw / "accounts" / "ingestion_date=2026-11-02" / ".data.parquet.tmp",
                    pl.DataFrame({"owner": ["Temporario Nao Lido Jamais"]}))
+    shops = len(PIX_SHOPS)
     _write_parquet(raw / "transactions" / "ingestion_date=2026-11-01" / "data.parquet", pl.DataFrame({
-        "id": ["txn-uuid-0003-cccc"], "accountId": ["acc-uuid-0001-aaaa"], "description": ["PADARIA"],
+        "id": ["txn-uuid-0003-cccc", "txn-uuid-0004-dddd", *[f"txn-shop-{i}" for i in range(shops)]],
+        "accountId": ["acc-uuid-0001-aaaa"] * (2 + shops),
+        "description": ["PADARIA", f"Pix enviado {PIX_NAME.upper()}12/03", *PIX_SHOPS],
+        "amount": ["45.90", f"-{AMOUNT}", "5000.00", *["10.00"] * (shops - 1)],
         "paymentData": [json.dumps({"receiver": {"name": RECEIVER, "documentNumber": {"value": "x"}},
-                                    "ids": [7_654_321, 12]})],
-        "merchant": [None],
+                                    "ids": [7_654_321, 12]}), *[None] * (1 + shops)],
+        "creditCardMetadata": [None, json.dumps({"cardNumber": CARD_FINAL, "billId": "bill-x"}), *[None] * shops],
+        "merchant": [None] * (2 + shops),
     }))
     conn = sqlite3.connect(root / "data" / "edicao.db")
     conn.execute("CREATE TABLE mapeamento (padrao TEXT, subcategoria TEXT)")

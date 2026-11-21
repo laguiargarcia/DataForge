@@ -127,10 +127,10 @@ def test_pendente_que_sumiu():
 
 
 @pytest.mark.parametrize("description,marca", [
-    ("Resgate RES APLIC AUT MAIS", True), ("Aplicação APL APLIC AUT MAIS", True),
-    ("Entrada RES APLIC AUT MAIS AP", True), ("Saída APL APLIC AUT MAIS AP", True),
-    ("REND PAGO APLIC AUT MAIS", False), ("Rendimentos REND PAGO APLIC AUT MAIS", False),
-    ("APLICACAO CDB COFRINHOS", False), ("Débito automático DA OPERADORA FICTICIA", False),
+    ("Resgate RES APLIC AUT FICT", True), ("Aplicação APL APLIC AUT FICT", True),
+    ("Entrada RES APLIC AUT FICT AP", True), ("Saída APL APLIC AUT FICT AP", True),
+    ("REND PAGO APLIC AUT FICT", False), ("Rendimentos REND PAGO APLIC AUT FICT", False),
+    ("APLICACAO CDB FICTICIA", False), ("Débito automático DA OPERADORA FICTICIA", False),
 ])
 def test_aplicacao_automatica(description, marca):
     # Movimento interno conta <-> aplicação automática: o rendimento pago e a aplicação manual não entram.
@@ -157,7 +157,7 @@ def test_um_lancamento_pode_ter_mais_de_um_motivo():
     # Uma linha de resgate automático pendente que veio numa coleta só e sumiu.
     raw = _raw(_coleta(D1, FIXO), _coleta(D2, FIXO, ("r1", "2026-06-02T10:00:00.000Z")),
                _coleta(D3, FIXO, FIM))
-    txns = _transactions(*_base(_txn("r1", "2026-06-02", 50.0, "Entrada RES APLIC AUT MAIS AP", "PENDING")))
+    txns = _transactions(*_base(_txn("r1", "2026-06-02", 50.0, "Entrada RES APLIC AUT FICT AP", "PENDING")))
     assert _motivos(_suspeitos(txns, raw)) == [("r1", APLICACAO), ("r1", PENDENTE), ("r1", SUMIU),
                                                ("r1", UMA_SO)]
 
@@ -232,7 +232,7 @@ def _seed(tmp_path):
                        (D3, [FIXO, FIM, ("a1", "2026-06-03T10:00:00.000Z")])):
         _seed_partition(tmp_path, dia, _raw(_coleta(dia, *itens)).with_columns(amount=pl.lit("1.0")))
     _delta_util.seed(tmp_path, "cleansed", "transactions", _transactions(
-        *_base(_txn("s1", "2026-06-02", -41.0), _txn("a1", "2026-06-03", 618.45, "Resgate RES APLIC AUT MAIS"))))
+        *_base(_txn("s1", "2026-06-02", -41.0), _txn("a1", "2026-06-03", 618.45, "Resgate RES APLIC AUT FICT"))))
     _delta_util.seed(tmp_path, "curated", "dim_account", pl.DataFrame(
         {"pluggy_account_id": [BANK], "account_uuid": ["banco-conta-0001"]}))
     _delta_util.seed(tmp_path, "curated", "conferencia_saldo", CONF.rename({"account_id": "account_uuid"})
