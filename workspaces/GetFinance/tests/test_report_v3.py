@@ -143,6 +143,17 @@ def test_investimentos_flows_split_by_operation_type():
     assert jun["liquido"] == 0.0
 
 
+def test_automatic_investment_lines_are_not_aplicado_nor_resgatado():
+    # df-7twv.2: internal movement account <-> automatic investment, tagged on its own, is no investment flow.
+    fact = _inv_fact([
+        (date(2026, 6, 5), "BANK", -250.0, "investment", True, "APLIC_FINANCEIRA"),
+        (date(2026, 6, 8), "BANK", -900.0, "aplicacao_automatica", True, "OUTROS"),
+        (date(2026, 6, 9), "BANK", 600.0, "aplicacao_automatica", True, "RESGATE_APLIC_FINANCEIRA"),
+    ])
+    jun = investimentos_per_month(fact, _positions([])).filter(pl.col("anomes_key") == 202606).row(0, named=True)
+    assert (jun["aplicado"], jun["resgatado"]) == (250.0, 0.0)
+
+
 def test_investimentos_positions_latest_per_holding_per_month():
     pos = _positions([
         ("h1", date(2026, 6, 2), 500.0, 480.0, -20.0),

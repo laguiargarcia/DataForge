@@ -31,13 +31,14 @@ def _accounts(*rows):
     return pl.DataFrame(list(rows), schema={c: pl.Utf8 for c in rows[0]})
 
 
-def _txn(id_, account, day, amount, status="POSTED"):
+def _txn(id_, account, day, amount, **campos):
+    # campos: status (POSTED) e description (uma compra fictícia), como em cleansed.
     return {"id": id_, "accountId": account, "date": date.fromisoformat(day), "amount": amount,
-            "status": status}
+            "status": "POSTED", "description": "COMPRA FICTICIA", **campos}
 
 
 _TXN_SCHEMA = {"id": pl.Utf8, "accountId": pl.Utf8, "date": pl.Date, "amount": pl.Float64,
-               "status": pl.Utf8}
+               "status": pl.Utf8, "description": pl.Utf8}
 _RAW_SCHEMA = {"id": pl.Utf8, "date": pl.Utf8, "ingested_at": pl.Utf8}
 
 
@@ -76,6 +77,15 @@ def test_intervalo_que_fecha():
         "variacao_saldo": -30.0, "soma_lancamentos": -30.0, "n_lancamentos": 1, "diferenca": 0.0,
         "diferenca_acumulada": 0.0, "estado": FECHA,
     }]
+
+
+def test_linha_de_aplicacao_automatica_nao_entra_na_soma():
+    # df-7twv.2: o saldo é o total (conta + aplicação); aplicar ou resgatar automático não o muda.
+    out = _conferir(_accounts(_snap(BANK, DE, 100.0), _snap(BANK, ATE, 70.0)),
+                    _transactions(_txn("t1", BANK, "2026-06-02", -30.0),
+                                  _txn("a1", BANK, "2026-06-02", -500.0, description="APL APLIC AUT FICT"),
+                                  _txn("r1", BANK, "2026-06-02", 200.0, description="Resgate RES APLIC AUT FICT")))
+    assert out.select("soma_lancamentos", "n_lancamentos", "diferenca", "estado").row(0) == (-30.0, 1, 0.0, FECHA)
 
 
 def test_intervalo_com_lancamento_faltando():

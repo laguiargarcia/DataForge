@@ -207,3 +207,36 @@ def test_a_leg_of_the_last_days_waits_for_its_pair():
     legs = [_leg("old", "card_payment_card", date(2026, 6, 26), 80.0),
             _leg("new", "card_payment_card", date(2026, 6, 27), 90.0)]
     assert _alone(legs, today=date(2026, 6, 30)) == ["old"]
+
+
+# df-7twv.2: an automatic investment or redemption line of a BANK account ("APL APLIC AUT", "RES APLIC AUT",
+# with the prefixes Pluggy puts before them) is internal movement: its own tag, before the investment rule.
+@pytest.mark.parametrize("description", ["APL APLIC AUT FICT", "RES APLIC AUT FICT",
+                                         "Aplicação APL APLIC AUT FICT", "Resgate RES APLIC AUT FICT",
+                                         "Entrada RES APLIC AUT FICT"])
+def test_automatic_investment_line_gets_its_own_tag(tmp_path, description):
+    _seed_cleansed(tmp_path, [
+        {"id": "aut", "amount": -300.0, "categoryId": "03010000", "description": description,
+         "txn_type": "DEBIT", "operation_type": "OUTROS"},
+        {"id": "aut-res", "amount": 300.0, "categoryId": "03010000", "description": description,
+         "txn_type": "CREDIT", "operation_type": "RESGATE_APLIC_FINANCEIRA"},
+    ])
+    _run_c2c(tmp_path)
+    assert _tags(tmp_path) == {"aut": "aplicacao_automatica", "aut-res": "aplicacao_automatica"}
+
+
+def test_paid_yield_cofrinho_redemption_and_card_lines_keep_their_tags(tmp_path):
+    _seed_cleansed(tmp_path, [
+        # the paid yield of the automatic investment is real money
+        {"id": "rend", "amount": 0.47, "categoryId": "03010000", "description": "REND PAGO APLIC AUT FICT",
+         "txn_type": "CREDIT", "operation_type": "OUTROS"},
+        # a piggy-bank redemption without APLIC AUT is still an investment flow
+        {"id": "cofre", "amount": 80.0, "categoryId": "99000000", "description": "RESGATE COFRINHO FICTICIO",
+         "txn_type": "CREDIT", "operation_type": "RESGATE_APLIC_FINANCEIRA"},
+        # the pattern only marks a BANK account's lines, and only as a whole word
+        {"id": "card", "amount": 30.0, "categoryId": "19000000", "description": "APL APLIC AUT FICT",
+         "accountId": "acc-card", "account_type": "CREDIT", "txn_type": "DEBIT"},
+        {"id": "word", "amount": -30.0, "categoryId": "19000000", "description": "XAPL APLIC AUTOMOVEL"},
+    ])
+    _run_c2c(tmp_path)
+    assert _tags(tmp_path) == {"rend": "investment", "cofre": "investment", "card": None, "word": None}

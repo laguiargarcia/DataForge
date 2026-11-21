@@ -1,8 +1,11 @@
 import argparse
+import sys
 import polars as pl
 from pathlib import Path
 
 exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
+from classificacao import TAG_APLICACAO_AUTOMATICA, eh_aplicacao_automatica
 
 # Pluggy taxonomy code for "Credit card payment" — tags both bill-settlement legs
 # (checking-side debit + card-side payment) identically across any institution.
@@ -111,8 +114,16 @@ df = df.with_columns(
 INVESTMENT_CATEGORY_PREFIX = "03"          # Pluggy 03xxxxxx = Investments family
 RESGATE_OPERATION_TYPE = "RESGATE_APLIC_FINANCEIRA"
 
+# df-7twv.2: an automatic investment or redemption line of a BANK account is internal movement (account <->
+# automatic investment), not an investment flow, whatever its category (Pluggy files it as Investments, the
+# redemption as RESGATE_APLIC_FINANCEIRA). The description is cleansed's raw one, not description_normalized.
+_aplicacao_automatica_ids = transactions.filter(
+    (pl.col("account_type") == "BANK") & eh_aplicacao_automatica())["id"]
+
 df = df.with_columns(
-    etl_tag=pl.when(
+    etl_tag=pl.when(pl.col("id").is_in(_aplicacao_automatica_ids.implode()))
+    .then(pl.lit(TAG_APLICACAO_AUTOMATICA))
+    .when(
         pl.col("categoryId").str.starts_with(INVESTMENT_CATEGORY_PREFIX)
         | (pl.col("operation_type") == RESGATE_OPERATION_TYPE)
     )

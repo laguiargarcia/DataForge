@@ -29,6 +29,23 @@ TIPO_PADRAO_SAIDA = "Não Essencial"
 TAG_PAGAMENTO_NO_CARTAO = "card_payment_card"     # a perna da fatura no lado do cartão
 _TAGS_PAGAMENTO_CARTAO = ("card_payment_bank", TAG_PAGAMENTO_NO_CARTAO)
 
+# Linha de aplicação ou resgate automático da conta ("APL APLIC AUT", "RES APLIC AUT", com prefixos como
+# "Aplicação", "Resgate" ou "Entrada"): movimento interno conta <-> aplicação automática, que não mexe no
+# saldo total da conta e que o extrato do banco não tem (df-7twv). O rendimento pago ("REND PAGO APLIC AUT")
+# é dinheiro de verdade e não casa. Fica no cleansed, com o etl_tag TAG_APLICACAO_AUTOMATICA no curated
+# (cleansed2curated.py), e fica fora de receita, despesa, aplicado/resgatado e da conferência pelo saldo
+# (df-7twv.2). Um lugar só: cleansed2curated, conferencia_saldo e lancamentos_suspeitos leem daqui.
+PADRAO_APLICACAO_AUTOMATICA = r"\b(?:APL|RES) APLIC AUT\b"
+TAG_APLICACAO_AUTOMATICA = "aplicacao_automatica"
+SUB_APLICACAO_AUTOMATICA = "Aplicação automática"
+# Subcategorias neutras: o Tipo é a própria subcategoria, nem entrada nem saída.
+_SUBS_NEUTRAS = (SUB_INVESTIMENTOS, SUB_APLICACAO_AUTOMATICA)
+
+
+def eh_aplicacao_automatica() -> pl.Expr:
+    """True na linha cuja description (a do cleansed, sem normalizar) é de aplicação ou resgate automático."""
+    return pl.col("description").str.contains(PADRAO_APLICACAO_AUTOMATICA).fill_null(False)
+
 
 def _vazio_para_nulo(col: str) -> pl.Expr:
     return pl.when(pl.col(col) == "").then(None).otherwise(pl.col(col)).alias(col)
@@ -74,7 +91,8 @@ def _regra_vencedora(fact: pl.DataFrame, mapeamento: pl.DataFrame) -> pl.DataFra
 
 
 _ENTRADA = (pl.col("account_type") == "BANK") & (pl.col("txn_type") == "CREDIT")
-_TAG_ESTRUTURAL = (pl.col("etl_tag") == "investment") | pl.col("etl_tag").is_in(_TAGS_PAGAMENTO_CARTAO)
+_TAG_ESTRUTURAL = (pl.col("etl_tag").is_in(["investment", TAG_APLICACAO_AUTOMATICA])
+                   | pl.col("etl_tag").is_in(_TAGS_PAGAMENTO_CARTAO))
 
 
 def _vivas(fact: pl.DataFrame) -> pl.DataFrame:
@@ -113,6 +131,7 @@ def classificar(fact: pl.DataFrame, dicionario: pl.DataFrame, mapeamento: pl.Dat
     subcategoria = (
         pl.when(pl.col("_corr_sub").is_not_null()).then(pl.col("_corr_sub"))              # (0)
         .when(pl.col("etl_tag") == "investment").then(pl.lit(SUB_INVESTIMENTOS))          # (1)
+        .when(pl.col("etl_tag") == TAG_APLICACAO_AUTOMATICA).then(pl.lit(SUB_APLICACAO_AUTOMATICA))
         .when(pl.col("etl_tag").is_in(_TAGS_PAGAMENTO_CARTAO)).then(pl.lit(SUB_PAGAMENTO_CARTAO))
         .when(pl.col("_regra_vale")).then(pl.col("_regra_sub"))                           # (2)
         .when(_ENTRADA & (chave_origem != "")).then(chave_origem)                           # (3)
@@ -126,7 +145,7 @@ def classificar(fact: pl.DataFrame, dicionario: pl.DataFrame, mapeamento: pl.Dat
 
     # (4) dicionário, com o padrão de passagem.
     tipo = (
-        pl.when(pl.col("subcategoria") == SUB_INVESTIMENTOS).then(pl.lit(SUB_INVESTIMENTOS))
+        pl.when(pl.col("subcategoria").is_in(_SUBS_NEUTRAS)).then(pl.col("subcategoria"))
         .when(pl.col("_d_tipo").is_not_null()).then(pl.col("_d_tipo"))
         .when(_ENTRADA).then(pl.lit(TIPO_PADRAO_ENTRADA))
         .otherwise(pl.lit(TIPO_PADRAO_SAIDA))

@@ -19,19 +19,15 @@ Só marca: ser suspeito não muda nada no dado nem no relatório (df-z4fh). Fun�
 """
 import polars as pl
 
+from classificacao import eh_aplicacao_automatica
 from conferencia_saldo import instantes
-
-# Linhas de aplicação e resgate automático da conta ("APL APLIC AUT", "RES APLIC AUT", com prefixos como
-# "Resgate" ou "Entrada"): movimento interno conta <-> aplicação, que não mexe no saldo total (df-7twv). O
-# rendimento pago ("REND PAGO APLIC AUT") é dinheiro de verdade e não casa.
-PADRAO_APLICACAO_AUTOMATICA = r"\b(?:APL|RES) APLIC AUT\b"
 
 _SUMIU = pl.col("na_janela") & ~pl.col("na_coleta_mais_nova")
 
 MOTIVOS = [
     ("sumiu_da_coleta", _SUMIU),
     ("pendente_que_sumiu", _SUMIU & (pl.col("status") == "PENDING")),
-    ("aplicacao_automatica", pl.col("description").str.contains(PADRAO_APLICACAO_AUTOMATICA)),
+    ("aplicacao_automatica", eh_aplicacao_automatica()),
     ("uma_coleta_so", (pl.col("n_coletas") == 1) & ~pl.col("na_coleta_mais_nova")),
 ]
 
