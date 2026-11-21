@@ -1,8 +1,11 @@
+import subprocess
 import sys
+import threading
 import polars as pl
 import pytest
 from datetime import date, datetime
 
+from dataforge import delta_pool
 from dataforge.compat import curated_dir
 
 
@@ -143,3 +146,52 @@ def test_a_table_name_with_a_non_ascii_letter_is_404(workspace_dir, test_client)
     r = test_client.get("/api/workspaces/test_ws/tables/relat%C3%B3rio")
     assert r.status_code == 404
     assert r.json() == {"detail": "Not found"}
+
+
+# A fresh server process: no Delta read on its main thread, every read on a request thread that
+# then ends, as anyio ends an idle worker. On Windows this died with an access violation in
+# deltalake after a few dozen reads before df-5lk8.
+_READS_ON_ENDING_THREADS = """
+import sys, threading
+from dataforge.api.routers.tables import read_table
+rows = []
+def read():
+    rows.append(len(read_table("test_ws", "historico", eq=None, gte=None, lte=None, limit=10)["rows"]))
+for _ in range(int(sys.argv[1])):
+    thread = threading.Thread(target=read)
+    thread.start()
+    thread.join()
+print(sum(rows))
+"""
+
+
+def test_leituras_em_threads_que_terminam_nao_derrubam_o_servidor(workspace_dir):
+    table = curated_dir(workspace_dir) / "historico"
+    for version in range(2):  # the crash needs a table with more than one commit
+        pl.DataFrame({"v": [version, 1, 2]}).write_delta(str(table), mode="overwrite")
+    reads = 150
+    proc = subprocess.run([sys.executable, "-c", _READS_ON_ENDING_THREADS, str(reads)],
+                          capture_output=True, text=True, timeout=300, check=False)
+    assert proc.returncode == 0, f"exit {proc.returncode}: {proc.stderr[-2000:]}"
+    assert proc.stdout.split() == [str(reads * 3)]
+
+
+def test_delta_pool_roda_em_threads_fixas(workspace_dir):
+    table = curated_dir(workspace_dir) / "t"
+    pl.DataFrame({"v": [1, 2, 3]}).write_delta(str(table))
+    names = set()
+
+    def build(lf):
+        names.add(threading.current_thread().name)
+        return lf.filter(pl.col("v") > 1)
+
+    for _ in range(3 * delta_pool.WORKERS):
+        assert delta_pool.read(table, build)["v"].to_list() == [2, 3]
+    assert all(n.startswith("dataforge-delta") for n in names)
+    assert len(names) <= delta_pool.WORKERS
+
+
+def test_delta_pool_sem_build_le_a_tabela_inteira(workspace_dir):
+    table = curated_dir(workspace_dir) / "t"
+    pl.DataFrame({"v": [1, 2]}).write_delta(str(table))
+    assert delta_pool.read(table).shape == (2, 1)

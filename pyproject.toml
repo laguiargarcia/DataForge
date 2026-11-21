@@ -112,10 +112,13 @@ max-complexity = 10
 "yaml.safe_load".msg = "Read YAML through dataforge.yamlio (libyaml), not yaml directly."
 "yaml.dump".msg = "Write YAML through dataforge.yamlio (libyaml), not yaml directly."
 "yaml.safe_dump".msg = "Write YAML through dataforge.yamlio (libyaml), not yaml directly."
+"polars.scan_delta".msg = "A server reads Delta through dataforge.delta_pool: a read on a thread that ends crashes Windows (df-5lk8)."
+"polars.read_delta".msg = "A server reads Delta through dataforge.delta_pool: a read on a thread that ends crashes Windows (df-5lk8)."
 
 [tool.ruff.lint.per-file-ignores]
 "dataforge/compat.py" = ["TID251"]
 "dataforge/yamlio.py" = ["TID251"]
+"dataforge/delta_pool.py" = ["TID251"]
 # The banned-api rule is for the package only: scripts and tests read their own environment.
 "scripts/**" = ["TID251"]
 "tests/**" = ["TID251", "PLR2004", "ARG", "PLC0415", "S108", "DTZ"]
