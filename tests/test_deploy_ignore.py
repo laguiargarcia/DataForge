@@ -51,7 +51,7 @@ def test_pycache_default_survives_custom_file(tmp_path):
     _mk(tmp_path, "deploy/.deployignore", "scripts/report/\n")
     ig = DeployIgnore.load(tmp_path)
     assert ig.matches("scripts/cleansed2curated/__pycache__/x.pyc") is True
-    assert ig.matches("scripts/report/export_bridge.py") is True
+    assert ig.matches("scripts/report/report_lib.py") is True
 
 
 def test_default_pycache_ignore_is_negatable(tmp_path):

@@ -1,6 +1,6 @@
 ---
 topic: Architecture — Data Flow & Layer Schema
-read_when: When you need the end-to-end pipeline flow, the schema of each storage layer, or the Excel report structure
+read_when: When you need the end-to-end pipeline flow, or the schema of each storage layer
 last_synced_at: "2026-06-03T00:00:00Z"
 related_issues: []
 ---
@@ -28,7 +28,7 @@ data/curated/<table>/    (Delta tables: dim_account, dim_investment, dim_calenda
                           acerto_por_motivo, conferencia_fatura)
    │
    ▼
-scripts/report/export_bridge.py ──► report/bridge/*.csv ──► Power Query ──► develop.xlsx
+API do DataForge (/api/workspaces/<ws>/tables/<table>) ──► app Finanças (apps/financas)
 ```
 
 Compute is **Polars + delta-rs** (`deltalake`). No DuckDB, no `.db` files.
@@ -105,7 +105,7 @@ description VARCHAR, account VARCHAR, ingested_at
   wrote earlier with the foreign value is corrected by the next run's MERGE (the id is still in raw).
 - `accountName` (raw) → `account` (cleansed).
 - `category` carries the raw Pluggy value untranslated (no in-ETL translation — LOCKED decision
-  A10); the workbook's `Mapeamento` layer owns category overrides.
+  A10); the category overrides are the `mapeamento` rules of `scripts/report/classificacao.py`.
 
 ### curated — Delta tables (star schema)
 Delta tables at `data/curated/<table>/`, one table per script under `scripts/cleansed2curated/`:
