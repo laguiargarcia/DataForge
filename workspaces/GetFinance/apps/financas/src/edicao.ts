@@ -25,7 +25,9 @@ export class ErroEdicao extends Error {}
 // app sem ler a URL. No `npm run dev`, o proxy do vite.config.ts leva essas rotas ao backend.
 const endereco = (caminho: string) => `api/${caminho}`
 
-const seg = (valor: string) => encodeURIComponent(valor)
+// Um valor digitado (subcategoria, padrão) vira um segmento só: "/" e também "." viram %XX, para
+// "." e ".." não serem lidos como segmentos de ponto e levarem o pedido a outra rota.
+const seg = (valor: string) => encodeURIComponent(valor).replaceAll('.', '%2E')
 
 async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
   const r = await fetch(endereco(caminho), {

@@ -35,6 +35,14 @@ test('criar e alterar categoria', async () => {
   expect(ultimo()).toMatchObject({ url: 'api/categorias/Casa%2FReforma', method: 'PUT' })
 })
 
+test('nome com ponto não vira segmento de ponto', async () => {
+  responder(204)
+  await excluirCategoria('..')
+  expect(ultimo().url).toBe('api/categorias/%2E%2E')
+  await excluirRegra('LOJA.COM')
+  expect(ultimo().url).toBe('api/regras/LOJA%2ECOM')
+})
+
 test('regra devolve o efeito', async () => {
   responder(201, { regra: {}, efeito: { casa: 2, vence: 1, barradas: 0 } })
   expect(await salvarRegra(null, { padrao: 'UBER', subcategoria: 'Transporte' })).toEqual({ casa: 2, vence: 1, barradas: 0 })
