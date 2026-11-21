@@ -5,6 +5,8 @@ Task 1 (df-u6r): liquidity_per_month — semi-additive liquidity aggregate per m
 
 import polars as pl
 
+from classificacao import SUB_INVESTIMENTOS
+
 MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 
 _OUTPUT_SCHEMA = {
@@ -298,14 +300,30 @@ _INVEST_SCHEMA = {
 }
 
 
-def investimentos_per_month(fact: pl.DataFrame, positions: pl.DataFrame) -> pl.DataFrame:
+def _is_investment(corrections: pl.DataFrame | None) -> pl.Expr:
+    """etl_tag == investment, unless the user corrected the row: then its subcategory decides."""
+    tagged = pl.col("etl_tag") == "investment"
+    if corrections is None or corrections.is_empty():
+        return tagged
+    by_id = dict(corrections.select("id", "subcategoria").iter_rows())
+    corrected_in = [i for i, sub in by_id.items() if sub == SUB_INVESTIMENTOS]
+    return (pl.when(pl.col("id").is_in(list(by_id))).then(pl.col("id").is_in(corrected_in))
+            .otherwise(tagged.fill_null(False)))
+
+
+def investimentos_per_month(fact: pl.DataFrame, positions: pl.DataFrame,
+                            corrections: pl.DataFrame | None = None) -> pl.DataFrame:
     """Per-month investment flows (structural: etl_tag + cash_flag, E2b/E4) + semi-additive
     position figures (latest snapshot per holding per month). Position columns are NULL on
-    months without a snapshot — no fabricated carry-forward."""
+    months without a snapshot — no fabricated carry-forward.
+
+    `corrections` (id, subcategoria) are the user's per-transaction corrections (df-cns.8): a
+    corrected row is an investment flow only when corrected to "Investimentos", whatever its
+    etl_tag, so the correction reaches this report as it reaches the Saúde."""
     flows_agg = None
     if not fact.is_empty():
         flows = fact.filter(
-            (pl.col("etl_tag") == "investment") & pl.col("cash_flag").fill_null(False)
+            _is_investment(corrections) & pl.col("cash_flag").fill_null(False)
         ).with_columns(_anomes_expr("date"))
         if not flows.is_empty():
             flows_agg = flows.group_by("anomes_key").agg(

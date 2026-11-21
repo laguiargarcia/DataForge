@@ -1,4 +1,5 @@
-"""Banco das tabelas editáveis (df-cns etapa 1, Task 1): categorias + mapeamento em SQLite."""
+"""Banco das tabelas editáveis (df-cns etapa 1, Task 1): categorias + mapeamento em SQLite; correções
+e versão (df-cns.8.1)."""
 import sqlite3
 import sys
 from pathlib import Path
@@ -8,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "report"))
 
-from edicao import abrir, carga_inicial, ler_dicionario, ler_tabelas
+from edicao import abrir, carga_inicial, ler_correcoes, ler_dicionario, ler_tabelas, ler_versao
 
 DIC = pl.DataFrame({"subcategoria": ["Groceries", "Salario"],
                     "categoria": ["Alimentação", "Salário"],
@@ -66,3 +67,38 @@ def test_chaves_nao_aceitam_nulo(tmp_path):
                               schema={"padrao": pl.String, "subcategoria": pl.String})
     with pytest.raises(sqlite3.IntegrityError):
         carga_inicial(conn, DIC, sem_padrao)
+
+
+def test_correcoes_e_versao_vazias_num_banco_novo(tmp_path):
+    conn = abrir(tmp_path / "e.db")
+    assert ler_correcoes(conn).columns == ["transacao_id", "subcategoria"]
+    assert ler_correcoes(conn).height == 0
+    assert ler_versao(conn) == 0
+
+
+def test_abrir_banco_antigo_cria_as_tabelas_novas(tmp_path):
+    antigo = sqlite3.connect(tmp_path / "e.db")
+    antigo.executescript("CREATE TABLE categorias (subcategoria TEXT PRIMARY KEY NOT NULL, categoria TEXT, tipo TEXT);"
+                         "CREATE TABLE mapeamento (padrao TEXT PRIMARY KEY NOT NULL, subcategoria TEXT NOT NULL);"
+                         "INSERT INTO categorias VALUES ('Groceries', 'Alimentação', 'Essencial');")
+    antigo.commit()
+    antigo.close()
+    conn = abrir(tmp_path / "e.db")
+    assert ler_dicionario(conn).height == 1
+    assert ler_correcoes(conn).height == 0
+    assert ler_versao(conn) == 0
+
+
+def test_ler_correcoes_e_versao(tmp_path):
+    conn = abrir(tmp_path / "e.db")
+    with conn:
+        conn.execute("INSERT INTO correcoes VALUES ('tx1', 'Groceries')")
+        conn.execute("INSERT INTO versao (id, numero, editado_em) VALUES (1, 7, '2026-11-20T12:00:00Z')")
+    assert ler_correcoes(conn).rows() == [("tx1", "Groceries")]
+    assert ler_versao(conn) == 7
+
+
+def test_versao_tem_uma_linha_so(tmp_path):
+    conn = abrir(tmp_path / "e.db")
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO versao (id, numero) VALUES (2, 1)")

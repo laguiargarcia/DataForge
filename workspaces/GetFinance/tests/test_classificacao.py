@@ -1,4 +1,5 @@
-"""Roteamento E3/E3a (df-cns etapa 1, Task 2) — casos à mão para cada passo e borda (spec §3.1)."""
+"""Roteamento E3/E3a (df-cns etapa 1, Task 2) — casos à mão para cada passo e borda (spec §3.1);
+correções por transação e efeito de uma regra (df-cns.8.1)."""
 import sys
 from datetime import date
 from pathlib import Path
@@ -8,7 +9,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "report"))
 
-from classificacao import TIPOS_ENTRADA, TIPOS_SAIDA, classificar
+from classificacao import TIPOS_ENTRADA, TIPOS_SAIDA, classificar, efeito_da_regra
 
 DIC = pl.DataFrame(
     [("Groceries", "Alimentação", "Essencial"),
@@ -46,9 +47,13 @@ def _rules(*pairs):
     return pl.DataFrame(list(pairs), schema={"padrao": pl.String, "subcategoria": pl.String}, orient="row")
 
 
-def _route(row, rules=None):
+def _corr(*pairs):
+    return pl.DataFrame(list(pairs), schema={"transacao_id": pl.String, "subcategoria": pl.String}, orient="row")
+
+
+def _route(row, rules=None, correcoes=None):
     rules = _rules() if rules is None else rules
-    out = classificar(pl.DataFrame([row], schema=_FACT_SCHEMA), DIC, rules)
+    out = classificar(pl.DataFrame([row], schema=_FACT_SCHEMA), DIC, rules, correcoes)
     assert out.height == 1
     return tuple(out.select("subcategoria", "categoria", "Tipo", "lado").row(0))
 
@@ -146,3 +151,73 @@ def test_anuladas_saem_e_anomes_key():
     assert out["anomes_key"].to_list() == [202606]
     assert out.schema["anomes_key"] == pl.Int32
     assert set(_FACT_SCHEMA) <= set(out.columns)
+
+
+# --- correções por transação (passo 0) -------------------------------------------------------------
+
+@pytest.mark.parametrize("tag", ["investment", "card_payment_bank", "card_payment_card"])
+def test_correcao_vence_etl_tag(tag):
+    row = _row("1", SAIDA, "APLICACAO", etl_tag=tag)
+    assert _route(row, correcoes=_corr(("1", "Groceries"))) == ("Groceries", "Alimentação", "Essencial", "saida")
+
+
+def test_correcao_vence_regra_e_padrao_do_lado():
+    row = _row("1", ENTRADA, "MERCADO X", income_source_key="Fulano")
+    assert _route(row, _rules(("MERCADO", "Groceries")), _corr(("1", "Salario"))) == (
+        "Salario", "Salário", "Salário", "entrada")
+
+
+def test_correcao_sem_dicionario_usa_o_padrao_do_lado():
+    assert _route(_row("1", SAIDA, "X"), correcoes=_corr(("1", "Nova"))) == ("Nova", "Nova", "Não Essencial", "saida")
+
+
+def test_correcao_para_investimentos_fica_neutra():
+    assert _route(_row("1", SAIDA, "X"), correcoes=_corr(("1", "Investimentos")))[2:] == ("Investimentos", "neutro")
+
+
+def test_correcao_so_na_sua_transacao_e_orfa_ignorada():
+    fact = pl.DataFrame([_row("1", SAIDA, "A", category="Shopping"), _row("2", SAIDA, "B", category="Shopping")],
+                        schema=_FACT_SCHEMA)
+    out = classificar(fact, DIC, _rules(), _corr(("2", "Contas"), ("sumiu", "Groceries")))
+    assert out.select("id", "subcategoria", "corrigida").rows() == [("1", "Shopping", False), ("2", "Contas", True)]
+
+
+def test_correcao_de_linha_anulada_nao_traz_a_linha_de_volta():
+    fact = pl.DataFrame([_row("1", SAIDA, "A", netting_applied=True)], schema=_FACT_SCHEMA)
+    assert classificar(fact, DIC, _rules(), _corr(("1", "Contas"))).height == 0
+
+
+def test_sem_correcoes_ninguem_corrigido():
+    out = classificar(pl.DataFrame([_row("1", SAIDA, "A")], schema=_FACT_SCHEMA), DIC, _rules())
+    assert out["corrigida"].to_list() == [False]
+
+
+# --- efeito_da_regra ------------------------------------------------------------------------------
+
+def _fact(*rows):
+    return pl.DataFrame(list(rows), schema=_FACT_SCHEMA)
+
+
+def test_efeito_regra_mais_longa_tira_a_vitoria():
+    fact = _fact(_row("1", SAIDA, "UBER EATS"), _row("2", SAIDA, "UBER X"), _row("3", SAIDA, "TAXI"))
+    rules = _rules(("UBER", "Contas"), ("UBER EATS", "Groceries"))
+    assert efeito_da_regra(fact, DIC, rules, "UBER") == {"casa": 2, "vence": 1, "barradas": 0}
+    assert efeito_da_regra(fact, DIC, rules, "uber eats") == {"casa": 1, "vence": 1, "barradas": 0}
+
+
+def test_efeito_conta_as_barradas_pela_direcao():
+    fact = _fact(_row("1", ENTRADA, "MERCADO REEMBOLSO"), _row("2", SAIDA, "MERCADO X"))
+    assert efeito_da_regra(fact, DIC, _rules(("MERCADO", "Groceries")), "MERCADO") == {
+        "casa": 2, "vence": 2, "barradas": 1}
+
+
+def test_efeito_nao_conta_etl_tag_nem_correcao_nem_anulada():
+    fact = _fact(_row("1", SAIDA, "MERCADO", etl_tag="investment"), _row("2", SAIDA, "MERCADO"),
+                 _row("3", SAIDA, "MERCADO"), _row("4", SAIDA, "MERCADO", netting_applied=True))
+    efeito = efeito_da_regra(fact, DIC, _rules(("MERCADO", "Groceries")), "MERCADO", _corr(("2", "Contas")))
+    assert efeito == {"casa": 3, "vence": 1, "barradas": 0}
+
+
+def test_efeito_de_padrao_que_nao_casa():
+    assert efeito_da_regra(_fact(_row("1", SAIDA, "A")), DIC, _rules(("ZZZ", "Contas")), "ZZZ") == {
+        "casa": 0, "vence": 0, "barradas": 0}

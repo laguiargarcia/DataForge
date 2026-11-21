@@ -1,4 +1,5 @@
-"""edicao.py — as tabelas que o usuário edita (dicionário de categorias e mapeamento), em SQLite.
+"""edicao.py — as tabelas que o usuário edita (dicionário de categorias, mapeamento e correções por
+transação), em SQLite, e a versão delas.
 
 O banco fica em data/ (conexão `edicao` do connections.yaml): é ambiente, nenhum deploy o leva,
 então uma edição nunca é sobrescrita e cada workspace tem as suas. O ETL só lê; quem escreve é a
@@ -11,10 +12,13 @@ import polars as pl
 
 T_CATEGORIAS = "categorias"
 T_MAPEAMENTO = "mapeamento"
+T_CORRECOES = "correcoes"
+T_VERSAO = "versao"
 
 # Colunas no banco -> colunas no DataFrame (o v3 chama a coluna de "Tipo").
 COLS_DICIONARIO = {"subcategoria": "subcategoria", "categoria": "categoria", "tipo": "Tipo"}
 COLS_MAPEAMENTO = {"padrao": "padrao", "subcategoria": "subcategoria"}
+COLS_CORRECOES = {"transacao_id": "transacao_id", "subcategoria": "subcategoria"}
 
 _ESQUEMA = f"""
 CREATE TABLE IF NOT EXISTS {T_CATEGORIAS} (
@@ -25,6 +29,17 @@ CREATE TABLE IF NOT EXISTS {T_CATEGORIAS} (
 CREATE TABLE IF NOT EXISTS {T_MAPEAMENTO} (
     padrao       TEXT PRIMARY KEY NOT NULL,
     subcategoria TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS {T_CORRECOES} (
+    transacao_id TEXT PRIMARY KEY NOT NULL,
+    subcategoria TEXT NOT NULL
+);
+-- Uma linha só: quem grava nas tabelas acima soma 1 em `numero` na mesma transação. O classify
+-- grava a versão que leu em curated.edicao_aplicada; a tela compara as duas (df-cns.8).
+CREATE TABLE IF NOT EXISTS {T_VERSAO} (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    numero     INTEGER NOT NULL,
+    editado_em TEXT
 );
 """
 
@@ -49,6 +64,16 @@ def ler_dicionario(conn: sqlite3.Connection) -> pl.DataFrame:
 
 def ler_mapeamento(conn: sqlite3.Connection) -> pl.DataFrame:
     return _ler(conn, T_MAPEAMENTO, COLS_MAPEAMENTO)
+
+
+def ler_correcoes(conn: sqlite3.Connection) -> pl.DataFrame:
+    return _ler(conn, T_CORRECOES, COLS_CORRECOES)
+
+
+def ler_versao(conn: sqlite3.Connection) -> int:
+    """Quantas gravações as tabelas editáveis já tiveram (0 antes da primeira)."""
+    row = conn.execute(f"SELECT numero FROM {T_VERSAO} WHERE id = 1").fetchone()  # noqa: S608 -- tabela é constante do módulo
+    return row[0] if row else 0
 
 
 def ler_tabelas(conn: sqlite3.Connection) -> tuple[pl.DataFrame, pl.DataFrame]:

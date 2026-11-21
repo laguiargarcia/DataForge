@@ -238,3 +238,24 @@ def test_extend_liquidity_v3_missing_months_degrade():
     assert out["disponivel_gastar"] == 100.0
     assert out["investimentos_posicao"] is None    # unknown ≠ zero
     assert out["patrimonio"] is None               # incomplete inputs → null, never a wrong number
+
+
+def test_investimentos_follow_user_corrections():
+    # df-cns.8: a correction beats etl_tag here too. "a" was tagged investment and corrected to
+    # Groceries (leaves the flows); "b" had no tag and was corrected to Investimentos (enters);
+    # "c" is tagged and uncorrected (stays); a correction to a non-investment subcategory of an
+    # untagged row ("d") changes nothing.
+    fact = pl.DataFrame({
+        "id": ["a", "b", "c", "d"],
+        "date": [date(2026, 6, 5)] * 4,
+        "account_type": ["BANK"] * 4,
+        "amount_signed": [-100.0, -40.0, -7.0, -3.0],
+        "etl_tag": ["investment", None, "investment", None],
+        "cash_flag": [True] * 4,
+        "operation_type": [None] * 4,
+    })
+    corrections = pl.DataFrame({"id": ["a", "b", "d"], "subcategoria": ["Groceries", "Investimentos", "Contas"]})
+    jun = investimentos_per_month(fact, _positions([]), corrections).row(0, named=True)
+    assert jun["aplicado"] == 47.0
+    assert investimentos_per_month(fact, _positions([])).row(0, named=True)["aplicado"] == 107.0
+    assert investimentos_per_month(fact, _positions([]), corrections.clear()).row(0, named=True)["aplicado"] == 107.0
