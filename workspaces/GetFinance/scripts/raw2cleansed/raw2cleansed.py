@@ -3,12 +3,15 @@ import ast
 import glob as _glob
 import os
 import re
+import sys
 import yaml
 import polars as pl
 from datetime import date
 from pathlib import Path
 
 exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
+from conferencia_fatura import copias_pela_fatura
 
 # df-s65 (A5 freeze): description_normalized + etl_merchant_key are derived ONCE here at the
 # cleansed insert (mirroring the df-pzu counterparty freeze) and carried by cleansed2curated.
@@ -198,7 +201,7 @@ acc_files = sorted(_glob.glob(acc_glob))
 # column present in at least one file, so project them as typed NULL if entirely absent — keeps
 # reprocess over the full raw history lossless (mirrors raw2cleansed_bills' projection guard).
 for _col in ("type", "paymentData", "creditCardMetadata", "status", "operationType",
-             "amountInAccountCurrency"):
+             "amountInAccountCurrency", "createdAt"):
     if _col not in txn_latest.columns:
         txn_latest = txn_latest.with_columns(pl.lit(None, dtype=pl.Utf8).alias(_col))
 
@@ -284,6 +287,31 @@ known = pl.concat([new_rows.select(_STATE).with_columns(pl.col("date").cast(pl.U
                   ).unique("id", keep="first", maintain_order=True)
 per_account, removed = gone_from_latest_fetch(known, latest_fetch, previous["id"])
 validate(per_account, "cleansed.transactions vs latest fetch", FETCH_REMOVALS_RULES, key="accountId")
+new_rows = new_rows.filter(~pl.col("id").is_in(removed["id"].implode()))
+
+# df-mk25: Pluggy returns a card entry under two ids, and the bill is the card's judge. The rule runs on the
+# card as the latest fetch shows it, after the gone ids left: so when the first id of a pair stops coming
+# back, the second one is alone and stays, and the purchase is never lost twice. A copy leaves only when its
+# bill has more entries than its total and removing it makes the bill close to the centavo
+# (report/conferencia_fatura.py); a bill where that is not one clear choice keeps everything (a suspicious
+# finding). Raw keeps both ids, so the copy is judged again on every run.
+_card = (new_rows.filter(pl.col("account_type") == "CREDIT")
+         .join(txn_latest.select("id", "createdAt"), on="id", how="left"))
+_bills = (read_delta_table("cleansed", "bills") if delta_table_exists("cleansed", "bills")
+          else pl.DataFrame(schema={c: pl.Utf8 for c in ("id", "accountId", "dueDate", "updatedAt")}
+                            | {"totalAmount": pl.Float64}))
+_bills = _bills.with_columns(pl.col("dueDate").str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False)
+                             .alias("due_date"), pl.col("accountId").alias("account_uuid"))
+_statements = (_bills.filter(pl.col("id").is_in(kept_bill_ids(_bills, _card["cc_bill_id"].drop_nulls()).implode()))
+               .select("account_uuid", pl.col("id").alias("statement_id"), "due_date",
+                       pl.col("totalAmount").cast(pl.Float64).alias("statement_amount")))
+copies, per_statement = copias_pela_fatura(
+    _statements, _bills.select("id", "account_uuid", "due_date"),
+    _card.select(pl.col("accountId").alias("account_uuid"), "date", "amount", "categoryId", "cc_bill_id",
+                 "id", "txn_type", "createdAt"),
+    run_day())
+validate(per_statement, "cleansed.transactions vs bills", CARD_COPIES_RULES, key="statement_id")
+removed = pl.concat([removed, copies.select("id", pl.col("account_uuid").alias("accountId"))])
 kept = ~pl.col("id").is_in(removed["id"].implode())
 new_rows = new_rows.filter(kept)
 
@@ -304,7 +332,8 @@ upsert_delta_table("cleansed", "transactions", new_rows, ["id"])
 # with txn_latest, so a row lost on the way to the MERGE is caught too), every id cleansed had before
 # this run is still there (the table accumulates), both but for the removed ids, and those are gone.
 # The three use the same `removed` that decided the removal: they catch a row lost or deleted outside
-# it, not a wrong decision of gone_from_latest_fetch (only its guard and its tests stand against that).
+# it, not a wrong decision of gone_from_latest_fetch or copias_pela_fatura (only their guards and tests
+# stand against that).
 written = read_delta_table("cleansed", "transactions")
 validate(layer_totals(txn_latest.filter(kept), written, ["id"]), "cleansed.transactions vs raw",
          IDS_KEPT_RULES)
@@ -316,5 +345,8 @@ validate(layer_totals(removed, written, ["id"]), "cleansed.transactions vs remov
 for account_id, newly, ids_removed in per_account.select("accountId", "ids_newly_removed", "ids_removed").rows():
     if newly and ids_removed:
         print(f"transactions: account {account_id}: {newly} ids gone from the latest fetch removed")
+# Every run says the copies again: raw keeps both ids, so the rule removes each copy on every run.
+for copy_id, kept_id in copies.select("id", "mantido").rows():
+    print(f"transactions: card entry copied under two ids, the bill settles it: kept {kept_id}, removed {copy_id}")
 
 print(f"transactions: {written.height} rows written to cleansed")

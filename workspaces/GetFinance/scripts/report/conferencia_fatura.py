@@ -26,8 +26,11 @@ Estados (cada conta tem o seu):
 - sem_total: a fatura não tem total;
 - nao_fecha: o resto.
 
-Só mede: nada aqui altera lançamento nenhum (df-z4fh). Funções puras, sem I/O.
+conferencia_fatura só mede: não altera lançamento nenhum (df-z4fh). copias_pela_fatura usa a mesma conta para
+decidir as cópias que a fatura prova (df-mk25): o Pluggy devolve um lançamento do cartão sob dois ids, a fatura
+sobra exatamente o valor da cópia, e o raw2cleansed tira as que esta função aponta. Funções puras, sem I/O.
 """
+import itertools
 from datetime import date, timedelta
 
 import polars as pl
@@ -163,3 +166,84 @@ def conferencia_fatura(faturas: pl.DataFrame, bills: pl.DataFrame, lancamentos: 
         .select(list(COLUNAS))
         .cast(COLUNAS)
     )
+
+
+# Cópias que a fatura prova (df-mk25). Candidatos: lançamentos que não são pagamento, da mesma fatura (o
+# statement, gêmeos reemitidos juntos), com mesmo valor e mesmo tipo; o dia e a descrição não entram (a cópia
+# pode vir com outro texto ou outra data; uma compra repetida de verdade tem a fatura que fecha).
+CHAVE_COPIA = ["account_uuid", "statement_id", "amount", "txn_type"]
+
+# Acima disto de combinações a fatura não diz quais são as cópias: nada sai, e a fatura vira achado.
+MAX_COMBINACOES = 4096
+
+COPIAS_COLUNAS = {"id": pl.String, "mantido": pl.String, "account_uuid": pl.String, "statement_id": pl.String}
+POR_FATURA_COLUNAS = {"statement_id": pl.String, "candidatos": pl.Int64, "removidos": pl.Int64,
+                      "retida": pl.Boolean}
+
+
+def _centavos(valor: float) -> int:
+    return round(valor * 100)
+
+
+def _combinacoes(grupos: list[pl.DataFrame], sobra: int) -> list[tuple[int, ...]] | None:
+    # Quantas cópias tirar de cada grupo (0 até o tamanho dele menos 1: o primeiro sempre fica) para a fatura
+    # fechar: a soma do que sai é a sobra, a até um centavo (TOLERANCIA). None quando são combinações demais.
+    total = 1
+    for g in grupos:
+        total *= g.height
+    if total > MAX_COMBINACOES:
+        return None
+    valores = [_centavos(g["amount"][0]) for g in grupos]
+    return [n for n in itertools.product(*(range(g.height) for g in grupos))
+            if any(n) and abs(sum(k * v for k, v in zip(n, valores, strict=True)) - sobra) <= _centavos(TOLERANCIA)]
+
+
+def _ordem_clara(grupo: pl.DataFrame) -> bool:
+    # Dá para dizer qual foi criado primeiro: todo createdAt existe e nenhum se repete.
+    criado = grupo["criado"]
+    return criado.null_count() == 0 and criado.n_unique() == grupo.height
+
+
+def copias_pela_fatura(faturas: pl.DataFrame, bills: pl.DataFrame, lancamentos: pl.DataFrame,
+                       hoje: date) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """As cópias que a fatura prova, e o que cada fatura com candidatos decidiu.
+
+    faturas, bills e hoje: os de conferencia_fatura. lancamentos: os de conferencia_fatura mais id, txn_type
+      e createdAt (texto ISO do Pluggy).
+    Uma fatura com estado_lancamentos nao_fecha cujos lançamentos sobram perde cópias só quando uma única
+    combinação de candidatos soma a sobra; de cada grupo saem os de createdAt mais recente. Mais de uma
+    combinação, combinações demais ou createdAt ausente ou repetido: nada sai, e a fatura fica retida (um
+    achado). Nenhuma combinação: a sobra não é de cópia, nada sai e não há achado (a conferência mostra a
+    fatura). Fatura que fecha, sem total, com histórico incompleto ou ainda aberta (fora de faturas): nada sai.
+
+    Devolve (copias, por_fatura): copias tem uma linha por id que sai (id, o id mantido do grupo, account_uuid,
+    statement_id); por_fatura, uma por fatura que não fecha e tem candidatos (statement_id, candidatos,
+    removidos, retida).
+    """
+    conferencia = conferencia_fatura(faturas, bills, lancamentos, hoje)
+    candidatos = (
+        lancamentos.filter(~eh_pagamento(), pl.col("amount").is_not_null())
+        .join(_fatura_de_cada_bill(faturas, bills), on="cc_bill_id")
+        .filter(pl.len().over(CHAVE_COPIA) > 1)
+        .with_columns(pl.col("createdAt").str.to_datetime(strict=False, time_zone="UTC").alias("criado"))
+    )
+    copias, por_fatura = [], []
+    nao_fecham = conferencia.filter(pl.col("estado_lancamentos") == NAO_FECHA)
+    for statement_id, diferenca in nao_fecham.select("statement_id", "diferenca_lancamentos").iter_rows():
+        grupos = [g.sort("criado", nulls_last=True) for _, g in
+                  candidatos.filter(pl.col("statement_id") == statement_id)
+                  .group_by(CHAVE_COPIA, maintain_order=True)]
+        if not grupos:
+            continue
+        sols = _combinacoes(grupos, _centavos(-diferenca))
+        unica = sols is not None and len(sols) == 1
+        tirar = [(n, g) for n, g in zip(sols[0], grupos, strict=True) if n] if unica else []
+        retida = sols is None or len(sols) > 1 or not all(_ordem_clara(g) for _, g in tirar)
+        if not retida:
+            for n, g in tirar:
+                mantido = g["id"][0]
+                copias += [(i, mantido, g["account_uuid"][0], statement_id) for i in g["id"].tail(n)]
+        por_fatura.append((statement_id, sum(g.height for g in grupos),
+                           0 if retida else sum(n for n, _ in tirar), retida))
+    return (pl.DataFrame(copias, schema=COPIAS_COLUNAS, orient="row"),
+            pl.DataFrame(por_fatura, schema=POR_FATURA_COLUNAS, orient="row"))

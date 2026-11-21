@@ -518,6 +518,102 @@ def test_window_is_per_account_and_reads_timestamps_and_dates():
 # CREDIT (we were paid). NO fallback to the other side
 # (the other side is our own account holder).
 
+# ── df-mk25: a card entry Pluggy returns under two ids, and the bill proves it ───────────────────────────
+# The rule (report/conferencia_fatura.py, copias_pela_fatura) runs on the card after the gone ids left: a copy
+# leaves cleansed only when its bill has more entries than its total and removing it closes the bill. Raw keeps
+# both ids, so the copy is judged, removed and said again on every run.
+COPIES_CHECK_FILE = "cleansed.transactions_vs_bills.json"
+COPIES_RULE = "card entries that look copied and the bill does not tell which: none removed"
+EARLY, LATE = "2026-03-20T10:00:00.000Z", "2026-05-02T08:30:00.000Z"
+CARD_COLS = ("status", "createdAt")
+
+
+def _card_entry(id_, day, amount, created):
+    return {"id": id_, "date": day, "amount": str(amount), "accountId": "acc-card", "status": "POSTED",
+            "categoryId": "09000000", "createdAt": created, "creditCardMetadata": "{'billId': 'bill-04'}"}
+
+
+A, B, C = (_card_entry("A", "2026-03-01", 10.0, EARLY), _card_entry("B", "2026-03-20", 140.0, EARLY),
+           _card_entry("C", "2026-03-21", 140.0, LATE))
+
+
+def _seed_card_fetch(tmp_path, rows, ingestion_date):
+    _seed_raw(tmp_path / "raw", rows, BANK_AND_CARD, ingestion_date, extra_cols=CARD_COLS)
+
+
+def _seed_bill(tmp_path, total=150.0):
+    _delta_util.seed(tmp_path, "cleansed", "bills", pl.DataFrame({
+        "id": ["bill-04"], "accountId": ["acc-card"], "dueDate": ["2026-04-17T00:00:00.000Z"],
+        "totalAmount": [total], "updatedAt": ["2026-04-10T00:00:00.000Z"]}))
+
+
+def _copies_findings(tmp_path):
+    path = tmp_path / "validation" / COPIES_CHECK_FILE
+    return [(f["rule"], f["keys"]) for f in json.loads(path.read_text(encoding="utf-8"))["findings"]]
+
+
+KEPT_LINE = "transactions: card entry copied under two ids, the bill settles it: kept B, removed C"
+
+
+def test_copy_the_bill_proves_leaves_cleansed_on_every_run(tmp_path, capsys):
+    _seed_card_fetch(tmp_path, [A, B, C], "2026-04-20")
+    _seed_bill(tmp_path)
+    raw_before = _raw_bytes(tmp_path)
+    for _ in range(2):   # raw still has C: the next run removes it again, and says it
+        _run(tmp_path)
+        assert _ids(tmp_path) == {"A", "B"}
+        assert KEPT_LINE in capsys.readouterr().out
+        assert _copies_findings(tmp_path) == []
+    assert _raw_bytes(tmp_path) == raw_before
+
+
+def test_copy_already_in_cleansed_is_deleted(tmp_path):
+    _seed_card_fetch(tmp_path, [A, B, C], "2026-04-20")
+    _run(tmp_path)   # no cleansed.bills yet: the rule has no judge and removes nothing
+    assert _ids(tmp_path) == {"A", "B", "C"}
+    _seed_bill(tmp_path)
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "B"}
+
+
+def test_a_pair_whose_first_id_is_gone_keeps_the_second(tmp_path):
+    # B stops coming back: the gone rule removes it before the copy rule runs, C is alone and stays. In the
+    # other order the purchase would be lost twice (C as the copy, B as gone).
+    _seed_bill(tmp_path)
+    _seed_card_fetch(tmp_path, [A, B, C], "2026-04-20")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "B"}
+    _seed_card_fetch(tmp_path, [A, C], "2026-04-21")
+    for _ in range(2):
+        _run(tmp_path)
+        assert _ids(tmp_path) == {"A", "C"}
+
+
+def test_bill_that_cannot_tell_which_keeps_everything_and_warns(tmp_path, capsys):
+    _seed_card_fetch(tmp_path, [A, B, {**C, "createdAt": EARLY}], "2026-04-20")
+    _seed_bill(tmp_path)
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "B", "C"}
+    assert _copies_findings(tmp_path) == [(COPIES_RULE, ["bill-04"])]
+    assert "card entry copied" not in capsys.readouterr().out
+
+
+def test_repeated_purchase_in_a_bill_that_closes_stays(tmp_path):
+    _seed_card_fetch(tmp_path, [A, B, C], "2026-04-20")
+    _seed_bill(tmp_path, total=290.0)
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "B", "C"}
+    assert _copies_findings(tmp_path) == []
+
+
+def test_bank_rows_are_never_judged_by_a_bill(tmp_path):
+    bank = [{**r, "accountId": "acc-1", "amount": str(-float(r["amount"]))} for r in (A, B, C)]
+    _seed_card_fetch(tmp_path, bank, "2026-04-20")
+    _seed_bill(tmp_path)
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "B", "C"}
+
+
 def _cp_row(tmp_path, txn_type, payment_data):
     _seed_raw(tmp_path / "raw", transactions=[
         {"id": "T", "date": "2026-01-01", "amount": "-5.0" if txn_type == "DEBIT" else "5.0",

@@ -313,6 +313,23 @@ def gone_from_latest_fetch(known, latest_fetch, in_cleansed):
     return per_account, removed.select("id", "accountId")
 
 
+def kept_bill_ids(bills, referenced_bill_ids):
+    # The bill ids that stand for their statement (df-hog). Pluggy may re-issue a statement under a new
+    # bill id and keep returning the old one, so the bills of one account and due month are one statement:
+    # the one kept is a bill some charge references (the re-issue re-keys the charges), then the latest
+    # updatedAt, then the greatest id. A bill without a due date (or one that does not parse) is a
+    # statement of its own.
+    # `bills` has id, accountId, dueDate (text, the day in its first 10 characters) and updatedAt;
+    # `referenced_bill_ids` is the cc_bill_id of the card transactions. fact_card_statement and the copy
+    # rule of raw2cleansed (df-mk25) read the statements through this one choice.
+    month = pl.col("dueDate").str.slice(0, 10).str.to_date("%Y-%m-%d", strict=False).dt.truncate("1mo")
+    return (bills.with_columns(_referenced=pl.col("id").is_in(pl.Series(list(referenced_bill_ids),
+                                                                        dtype=pl.Utf8).implode()))
+            .sort(["_referenced", "updatedAt", "id"], descending=True, nulls_last=True)
+            .filter(month.is_null() | (pl.int_range(pl.len()).over("accountId", month) == 0))
+            ["id"])
+
+
 # --- Data validation (ADR 0004: df-ahua.3 rules, df-ahua.22 reconciliation) ----------------------
 # Every run checks the data BEFORE the write it protects, with validate() and a rule list below.
 # A rule is data: (name, severity, check). `check` is a Polars expression that is True on every row
@@ -682,6 +699,14 @@ CLEANSED_TRANSACTIONS_RULES = [
 FETCH_REMOVALS_RULES = [
     ("too many ids to remove from the latest fetch: none removed from the account", SUSPICIOUS,
      INCOMPLETE_FETCH),
+]
+
+# raw -> cleansed: the per-statement frame of copias_pela_fatura (df-mk25, report/conferencia_fatura.py).
+# Suspicious: the bill has more entries than its total and copies could explain it, but not in one way only
+# or not with a clear createdAt order, so nothing leaves; a person decides which entry is the copy.
+CARD_COPIES_RULES = [
+    ("card entries that look copied and the bill does not tell which: none removed", SUSPICIOUS,
+     pl.col("retida")),
 ]
 
 # Reconciliation (df-ahua.22), on layer_totals frames.
