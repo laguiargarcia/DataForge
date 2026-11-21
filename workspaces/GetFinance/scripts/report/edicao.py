@@ -128,6 +128,9 @@ class Recusa(ValueError):
         self.motivo = motivo
 
 
+_CAMPO_SUBCATEGORIA = "a subcategoria"
+
+
 def _texto(valor: str | None, campo: str) -> str:
     texto = (valor or "").strip()
     if not texto:
@@ -167,7 +170,7 @@ def salvar_categoria(conn: sqlite3.Connection, antiga: str | None, subcategoria:
                      categoria: str, tipo: str) -> None:
     """Cria (antiga None) ou altera a categoria `antiga`. Renomear leva junto as regras e as
     correções que apontam para ela."""
-    subcategoria = _texto(subcategoria, "a subcategoria")
+    subcategoria = _texto(subcategoria, _CAMPO_SUBCATEGORIA)
     categoria = _texto(categoria, "a categoria")
     if tipo not in TIPOS:
         raise Recusa("invalido", f"Tipo {tipo!r} fora da lista: {', '.join(TIPOS)}")
@@ -210,7 +213,7 @@ def salvar_regra(conn: sqlite3.Connection, antigo: str | None, padrao: str, subc
         raise Recusa("invalido", "o padrão não pode ficar vazio")
     if padrao != padrao.strip():
         raise Recusa("invalido", "o padrão não pode começar nem terminar com espaço")
-    subcategoria = _texto(subcategoria, "a subcategoria")
+    subcategoria = _texto(subcategoria, _CAMPO_SUBCATEGORIA)
     with _gravacao(conn):
         if antigo is not None and not _existe(conn, T_MAPEAMENTO, "padrao", antigo):
             raise Recusa("ausente", f"a regra {antigo!r} não existe")
@@ -237,7 +240,7 @@ def salvar_correcao(conn: sqlite3.Connection, transacao_id: str, subcategoria: s
     """Cria ou troca a correção de uma transação. Se a transação existe é o backend que confere:
     este módulo não lê o curated."""
     transacao_id = _texto(transacao_id, "o id da transação")
-    subcategoria = _texto(subcategoria, "a subcategoria")
+    subcategoria = _texto(subcategoria, _CAMPO_SUBCATEGORIA)
     with _gravacao(conn):
         _exigir_subcategoria(conn, subcategoria)
         conn.execute(
