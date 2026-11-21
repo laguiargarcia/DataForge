@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from dataforge import app_backends, compat, liveness
+from dataforge import app_backend_host, app_backends, compat, liveness
 from dataforge.app_backends import BackendSupervisor, BackendUnavailable, _Running
 from dataforge.app_backend_host import wait_for_eof
 from dataforge.app_guard import TOKEN_HEADER
@@ -312,3 +312,60 @@ def test_stdin_ilegivel_nao_e_eof():
     os.close(read_end)
     os.close(write_end)
     assert wait_for_eof(read_end) is False
+
+
+class _FakeServer:
+    should_exit = False
+
+
+def test_eof_no_stdin_para_o_backend_com_prazo(monkeypatch):
+    started = []
+
+    class Timer:
+        def __init__(self, seconds, fn, args):
+            started.append((seconds, fn, args))
+
+        def start(self):
+            started.append("start")
+
+    monkeypatch.setattr(app_backend_host, "wait_for_eof", lambda: True)
+    monkeypatch.setattr(app_backend_host.threading, "Timer", Timer)
+    server = _FakeServer()
+    app_backend_host._stop_with_parent(server)
+    assert server.should_exit is True
+    assert started == [(5, os._exit, (0,)), "start"]
+
+
+def test_stdin_ilegivel_avisa_e_nao_para_o_backend(monkeypatch, capsys):
+    monkeypatch.setattr(app_backend_host, "wait_for_eof", lambda: False)
+    server = _FakeServer()
+    app_backend_host._stop_with_parent(server)
+    assert server.should_exit is False
+    assert "will not stop with its supervisor" in capsys.readouterr().err
+
+
+def test_main_sobe_o_app_no_loopback_e_vigia_o_pai(monkeypatch):
+    seen = {}
+
+    class Server:
+        def __init__(self, config):
+            seen["config"] = config
+
+        def run(self):
+            seen["ran"] = True
+
+    class Thread:
+        def __init__(self, target, args, daemon, name):
+            seen["watch"] = (target, daemon)
+
+        def start(self):
+            seen["watching"] = True
+
+    monkeypatch.setattr(app_backend_host.uvicorn, "Server", Server)
+    monkeypatch.setattr(app_backend_host.threading, "Thread", Thread)
+    app_backend_host.main(["backend.main:app", "8123"])
+    config = seen["config"]
+    assert (config.app, config.host, config.port) == ("backend.main:app", "127.0.0.1", 8123)
+    assert seen["watch"] == (app_backend_host._stop_with_parent, True)
+    assert seen["watching"]
+    assert seen["ran"]
