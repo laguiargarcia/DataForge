@@ -3,6 +3,8 @@
 Task 1 (df-u6r): liquidity_per_month — semi-additive liquidity aggregate per month.
 """
 
+from datetime import timedelta
+
 import polars as pl
 
 from classificacao import SUB_INVESTIMENTOS
@@ -311,15 +313,67 @@ def _is_investment(corrections: pl.DataFrame | None) -> pl.Expr:
             .otherwise(tagged.fill_null(False)))
 
 
+# df-dsy4: a bank may keep sending a matured holding as ACTIVE with its last balance, frozen (a Tesouro
+# kept the same balance for months after it was redeemed at maturity). Such a holding leaves the position only
+# once the redemption is proven in the account: an investment credit on the maturity day or up to
+# RESGATE_JANELA_DIAS later, of at least RESGATE_FRACAO_MINIMA of the holding's value at maturity (the
+# credit can be gross of tax, so it may be larger). Without that credit the holding keeps counting.
+RESGATE_JANELA_DIAS = 10
+RESGATE_FRACAO_MINIMA = 0.95
+
+
+def _resgates_no_vencimento(fact: pl.DataFrame, positions: pl.DataFrame, holdings: pl.DataFrame | None,
+                            corrections: pl.DataFrame | None) -> dict[str, object]:
+    """holding_uuid -> the day its redemption at maturity reached the account (df-dsy4).
+
+    Each credit proves one holding at most; holdings are matched in maturity order."""
+    # A dim_investment written before df-dsy4 has no due_date until dim_investments runs again.
+    if (holdings is None or "due_date" not in holdings.columns or holdings.is_empty()
+            or fact.is_empty() or positions.is_empty()):
+        return {}
+    venc = holdings.filter(pl.col("due_date").is_not_null()).select("holding_uuid", "due_date")
+    valor_no_vencimento = (
+        positions.join(venc, on="holding_uuid", how="inner")
+        .filter(pl.col("snapshot_date") <= pl.col("due_date"))
+        .sort("snapshot_date")
+        .group_by("holding_uuid").agg(pl.col("current_value").last().alias("valor"))
+    )
+    alvos = (venc.join(valor_no_vencimento, on="holding_uuid", how="inner")
+             .filter(pl.col("valor") > 0).sort("due_date", "holding_uuid"))
+    creditos = (
+        fact.filter(_is_investment(corrections) & pl.col("cash_flag").fill_null(False)
+                    & (pl.col("amount_signed") > 0)
+                    & pl.col("operation_type").ne_missing("RENDIMENTO_APLIC_FINANCEIRA"))
+        .with_row_index("_credito")
+        .select("_credito", "date", "amount_signed")
+        .sort("date", "_credito")
+    )
+    usados: set[int] = set()
+    resgatados: dict[str, object] = {}
+    for alvo in alvos.iter_rows(named=True):
+        fim = alvo["due_date"] + timedelta(days=RESGATE_JANELA_DIAS)
+        for c in creditos.iter_rows(named=True):
+            if (c["_credito"] not in usados and alvo["due_date"] <= c["date"] <= fim
+                    and c["amount_signed"] >= RESGATE_FRACAO_MINIMA * alvo["valor"]):
+                usados.add(c["_credito"])
+                resgatados[alvo["holding_uuid"]] = c["date"]
+                break
+    return resgatados
+
+
 def investimentos_per_month(fact: pl.DataFrame, positions: pl.DataFrame,
-                            corrections: pl.DataFrame | None = None) -> pl.DataFrame:
+                            corrections: pl.DataFrame | None = None,
+                            holdings: pl.DataFrame | None = None) -> pl.DataFrame:
     """Per-month investment flows (structural: etl_tag + cash_flag, E2b/E4) + semi-additive
     position figures (latest snapshot per holding per month). Position columns are NULL on
     months without a snapshot — no fabricated carry-forward.
 
     `corrections` (id, subcategoria) are the user's per-transaction corrections (df-cns.8): a
     corrected row is an investment flow only when corrected to "Investimentos", whatever its
-    etl_tag, so the correction reaches this report as it reaches the Saúde."""
+    etl_tag, so the correction reaches this report as it reaches the Saúde.
+
+    `holdings` (holding_uuid, due_date) is dim_investment: a matured holding whose redemption reached
+    the account leaves the position from that day on (df-dsy4, _resgates_no_vencimento)."""
     flows_agg = None
     if not fact.is_empty():
         flows = fact.filter(
@@ -347,6 +401,15 @@ def investimentos_per_month(fact: pl.DataFrame, positions: pl.DataFrame,
         pos_latest = pos.join(latest, on=["anomes_key", "holding_uuid"], how="inner").filter(
             pl.col("snapshot_date") == pl.col("latest_date")
         )
+        # The month's latest snapshot decides: a holding redeemed during the month is worth 0 in that
+        # month (zeroed, not dropped, so a month whose holdings were all redeemed shows 0, not "no data").
+        resgatados = _resgates_no_vencimento(fact, positions, holdings, corrections)
+        if resgatados:
+            resgate = pl.DataFrame({"holding_uuid": list(resgatados), "resgatado_em": list(resgatados.values())},
+                                   schema={"holding_uuid": pl.String, "resgatado_em": pl.Date})
+            fora = pl.col("resgatado_em").is_not_null() & (pl.col("snapshot_date") >= pl.col("resgatado_em"))
+            pos_latest = pos_latest.join(resgate, on="holding_uuid", how="left").with_columns(
+                [pl.when(fora).then(0.0).otherwise(pl.col(c)).alias(c) for c in ("current_value", "return")])
         # principal = posição − rentabilidade (df-9uv), NOT Σ invested_amount: on some banks,
         # invested_amount is gross-ever-deposited (partial withdrawals never subtract), so the
         # raw sum overstates the capital actually still invested. Derived this way the panel
