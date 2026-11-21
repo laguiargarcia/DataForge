@@ -137,7 +137,8 @@ Statements hold real names and amounts: never put one in git, a canvas or a publ
 ## Report logic and the editable tables (since 2026-11-09, df-cns)
 
 The Excel workbooks under `report/` are **ignored**: not maintained, not deleted. Don't read, refresh
-or edit them for report work, and don't reason about the report from `docs/workbook.md` (history).
+or edit them for report work, and don't reason about the report from `docs/workbook.md` (history). The scripts
+that refreshed them (`export_bridge.py`, `build_report.py`) were removed (DataForge df-wfiu); git keeps them.
 The report logic lives in `scripts/report/`:
 
 - pure modules: `classificacao.py` (category routing E3/E3a), `saude.py` (Saúde do mês + breakdown),

@@ -109,8 +109,3 @@ def test_finance_daily_has_dim_counterparty_task():
     assert t["params"] == {"source": "cleansed", "target": "curated"}
     # reads cleansed.transactions (the frozen counterparty columns), so it depends on transform.
     assert "transform" in t["depends_on"]
-
-
-def test_export_bridge_emits_dim_counterparty():
-    bridge = (_delta_util.SCRIPTS / "report" / "export_bridge.py").read_text(encoding="utf-8")
-    assert '"dim_counterparty"' in bridge, "export_bridge SUPPORTING must include dim_counterparty"

@@ -28,7 +28,7 @@ snap = read_delta_table(args.source, "fact_balance_snapshot")
 positions = read_delta_table(args.source, "fact_investment_position")
 holdings = read_delta_table(args.source, "dim_investment")
 
-# Cartão, investimentos e liquidez (já eram ETL, rodados à mão pelo build_report.py).
+# Cartão, investimentos e liquidez.
 cartao = cartao_per_month(snap, fatura, fact)
 # A correção do usuário vale também no fluxo de investimento (df-cns.8): só as linhas corrigidas.
 invest = investimentos_per_month(fact, positions,
