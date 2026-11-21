@@ -98,6 +98,33 @@ def test_sqlite_url_only_in_compat_and_tests(tmp_path, monkeypatch):
     assert rules_for(tmp_path, monkeypatch, "tests/test_x.py", source) == []
 
 
+def test_app_backend_reads_delta_only_through_the_pool(tmp_path, monkeypatch):
+    """df-vpo3: in a workspace app's backend a direct Delta read is a finding (df-5lk8); a comment,
+    a string, another name or a file outside backend/ is not."""
+    source = (
+        "import polars as pl\n"
+        "from polars import scan_delta\n"
+        "df = pl.read_delta('t')\n"
+        "# pl.read_delta in a comment is fine\n"
+        "s = 'read_delta'\n"
+        "ok = delta_pool.read('t')\n"
+        "x = read_delta_count\n"
+    )
+    backend = "workspaces/ws/apps/painel/backend/main.py"
+    assert rules_for(tmp_path, monkeypatch, backend, source) == [("DF003", 2), ("DF003", 3)]
+    assert rules_for(tmp_path, monkeypatch, "workspaces/ws/apps/painel/backend/sub/lib.py", source) == [
+        ("DF003", 2), ("DF003", 3)]
+    for elsewhere in ("workspaces/ws/scripts/curated.py", "workspaces/ws/apps/painel/front.py",
+                      "workspaces/ws/apps/painel/backend.py", "tests/test_x.py"):
+        assert rules_for(tmp_path, monkeypatch, elsewhere, source) == []
+
+
+def test_the_real_app_backends_pass_df003():
+    backends = [p.relative_to(gate.ROOT).as_posix() for p in gate.ROOT.glob("workspaces/*/apps/*/backend/**/*.py")]
+    assert backends, "no app backend found: the rule would check nothing"
+    assert [f for f in gate.project_rules(backends) if f.code == "DF003"] == []
+
+
 def test_a_file_that_does_not_tokenize_is_left_to_ruff(tmp_path, monkeypatch):
     """An unterminated string or bytes that are not UTF-8 stop tokenizing: no project finding
     for that file, and the files after it are still judged."""
