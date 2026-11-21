@@ -79,6 +79,7 @@ def test_job_loads_and_has_all_branches():
         "lancamentos_suspeitos",
         "extrato",
         "veredito_suspeitos",
+        "conferencia_fatura",
         # The data checks and the failure path (df-ahua.3); when each one runs is tested in
         # test_job_wiring.py.
         "data_warnings",
@@ -231,7 +232,7 @@ def test_extrato_runs_after_the_last_curated_writer_and_before_the_warnings():
 
 def test_veredito_suspeitos_runs_after_the_suspects_and_the_statement_and_before_the_warnings():
     """veredito_suspeitos reads curated.lancamentos_suspeitos (which must have succeeded) and the statement tables
-    (df-z4fh.3), whatever extrato's outcome; it is the last curated writer and runs before data_warnings."""
+    (df-z4fh.3), whatever extrato's outcome, and runs before data_warnings."""
     job = _load()
     lvl = _level_index(job)
     assert lvl["lancamentos_suspeitos"] < lvl["extrato"] < lvl["veredito_suspeitos"] < lvl["data_warnings"]
@@ -241,3 +242,20 @@ def test_veredito_suspeitos_runs_after_the_suspects_and_the_statement_and_before
         "lancamentos_suspeitos": ["succeeded"], "extrato": ["succeeded", "failed"]}
     edges = {e.task: e.when for e in _by_name(job)["data_warnings"].depends_on}
     assert edges["veredito_suspeitos"] == edges["extrato"]
+
+
+def test_conferencia_fatura_runs_after_the_statements_and_the_last_curated_writer_and_before_the_warnings():
+    """conferencia_fatura reads curated.fact_card_statement (which must have succeeded), cleansed.bills and
+    cleansed.transactions (df-acz4); it is serialized after the last curated writer (veredito_suspeitos, whatever
+    its outcome), so it is now the last one, and runs before data_warnings."""
+    job = _load()
+    lvl = _level_index(job)
+    for upstream in ("transform", "transform_bills", "fact_card_statement", "veredito_suspeitos"):
+        assert lvl[upstream] < lvl["conferencia_fatura"], f"conferencia_fatura must run after {upstream}"
+    assert lvl["conferencia_fatura"] < lvl["data_warnings"]
+    task = _by_name(job)["conferencia_fatura"]
+    assert task.params == {"source": "cleansed", "target": "curated"}
+    assert {e.task: e.when for e in task.depends_on} == {
+        "fact_card_statement": ["succeeded"], "veredito_suspeitos": ["succeeded", "failed", "skipped"]}
+    edges = {e.task: e.when for e in _by_name(job)["data_warnings"].depends_on}
+    assert edges["conferencia_fatura"] == edges["extrato"]
