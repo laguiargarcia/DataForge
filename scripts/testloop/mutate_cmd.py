@@ -343,7 +343,7 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
         "[tool.mutmut]",
         f"source_paths = {json.dumps([source])}",
         f"only_mutate = {json.dumps([module])}",
-        f"pytest_add_cli_args = {json.dumps(pytest_args(config))}",
+        f"pytest_add_cli_args = {json.dumps(pytest_args(config, module))}",
         f"pytest_add_cli_args_test_selection = {json.dumps(tests)}",
     ]
     # mutmut's default ("fork") runs the clean suite in its main process, then forks each mutant from
@@ -596,7 +596,7 @@ def _mutate(job: _Mutation, deadline: float) -> tuple[Path, int]:
 
     # 2. Baseline: the copy's tests must pass before anything is mutated.
     code, out = _run(
-        [python, "-m", "pytest", *pytest_args(job.config), *job.tests],
+        [python, "-m", "pytest", *pytest_args(job.config, job.module), *job.tests],
         copy, env, deadline,
     )
     if code != 0:

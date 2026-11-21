@@ -57,7 +57,7 @@ def main(config: Config, module: str) -> tuple[Path, int]:
     with tempfile.TemporaryDirectory(prefix="testloop-") as tmp:
         junit = Path(tmp) / "junit.xml"
         cmd = [
-            config.python, "-m", "pytest", *pytest_args(config), f"--junitxml={junit}", *tests,
+            config.python, "-m", "pytest", *pytest_args(config, module), f"--junitxml={junit}", *tests,
         ]
         env = test_env(config)
         try:

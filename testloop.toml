@@ -286,3 +286,29 @@ copy = ["scripts/prod/*.py", "tests/__init__.py", "tests/conftest.py"]
 # 172 mutants, 167 killed. The 5 survivors are Equivalent: the manifest's encoding="utf-8" turned into
 # None, "UTF-8" or dropped, on read and write; the mirror runs in WSL, whose default is UTF-8.
 min_score = 0.9709
+
+# GetFinance's report scripts (df-mbi7). The workspace tests import them by bare name (a sys.path.insert
+# of scripts/report), and its `tests` package is the one copied here, not the engine's.
+[targets."workspaces/GetFinance/scripts/report/classificacao.py"]
+tests = ["workspaces/GetFinance/tests/test_classificacao.py", "workspaces/GetFinance/tests/test_saude.py"]
+copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspaces/GetFinance/tests/conftest.py", "workspaces/GetFinance/scripts/report/*.py"]
+bare_import = true
+# Its tests start polars' thread pool: a forked mutant would wait on it until the timeout (df-kmx0).
+process_isolation = "forkserver"
+check_args = []
+# 561 mutants, 543 killed (35 s). The 18 survivors: row order that no test pins (maintain_order and
+# unique/group_by arguments, 7), the winning-rule sort direction (1), the entry-type branch of the rule
+# test (1), netting_applied's null default (1) and the helper columns classificar drops (8).
+min_score = 0.9679
+
+[targets."workspaces/GetFinance/scripts/report/report_lib.py"]
+tests = ["workspaces/GetFinance/tests/test_report_build.py", "workspaces/GetFinance/tests/test_report_v3.py", "workspaces/GetFinance/tests/test_saude.py"]
+copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspaces/GetFinance/tests/conftest.py", "workspaces/GetFinance/scripts/report/*.py"]
+bare_import = true
+# Its tests start polars' thread pool: a forked mutant would wait on it until the timeout (df-kmx0).
+process_isolation = "forkserver"
+check_args = []
+# 1238 mutants, 1060 killed (142 s, no shards). 178 survivors, to strengthen in df-xkhx.4: mostly
+# _comprometido_parcelas (63), _resgates_no_vencimento (25), investimentos_per_month (23) and
+# liquidity_per_month (20).
+min_score = 0.8562
