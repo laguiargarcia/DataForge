@@ -61,8 +61,9 @@ DIRECT_DELTA_READS = {"read_delta", "scan_delta"}
 # "run reprocess.py" message). A script kept to be run by hand says so on a line of its own (df-aq85).
 WORKSPACE_SCRIPT = re.compile(r"workspaces/(?P<ws>[^/]+)/scripts/(?P<rel>.+\.py)")
 JOB_SCRIPT = re.compile(r"^\s*script:\s*['\"]?(?P<rel>[^'\"\s#]+\.py)", re.MULTILINE)
-PY_NAME = re.compile(r"[\w-]+\.py\b")
-MANUAL_SCRIPT = re.compile(r"#\s*gate:\s*manual-script\s--\s*\S")
+# Splits a string into words that can be file names; a word ending in ".py" names that file.
+NOT_A_NAME = re.compile(r"[^\w.-]+")
+MANUAL_SCRIPT = "gate: manual-script --"
 # A module of the package is alive when another module of it imports it or spells its dotted name
 # ("dataforge.api.app:app"), or the packaging, CI or repo tooling names it (entry points, `-m`).
 # Tests do not count: a module only tests reach is not part of the product.
@@ -290,8 +291,33 @@ def _named_files(tokens: list[tokenize.TokenInfo]) -> set[str]:
         elif importing and tok.type == tokenize.NAME:
             names.add(tok.string + ".py")
         if tok.type in STRING_TOKENS:
-            names.update(PY_NAME.findall(tok.string))
+            names.update(w for w in (w.strip(".") for w in NOT_A_NAME.split(tok.string)) if w.endswith(".py"))
     return names
+
+
+def _is_manual_script(rel: str) -> bool:
+    """A comment line '# gate: manual-script -- why', with a reason after the marker."""
+    for tok in _tokens(rel):
+        body = tok.string.lstrip("#").strip() if tok.type == tokenize.COMMENT else ""
+        if body.startswith(MANUAL_SCRIPT) and body[len(MANUAL_SCRIPT):].strip():
+            return True
+    return False
+
+
+def _workspace_orphans(ws: str, rels: list[str]) -> list[Finding]:
+    jobs = {m["rel"] for job in (ROOT / "workspaces" / ws / "jobs").rglob("*.yaml")
+            for m in JOB_SCRIPT.finditer(job.read_text(encoding="utf-8"))}
+    named = {r: _named_files(_tokens(r)) for r in rels if not _is_workspace_test(r)}
+    found = []
+    for rel in rels:
+        m = WORKSPACE_SCRIPT.fullmatch(rel)
+        if m is None or m["rel"] in jobs or _is_manual_script(rel):
+            continue
+        name = Path(rel).name
+        if not any(name in names for other, names in named.items() if other != rel):
+            found.append(Finding(rel, "DF004", 1, "no job runs this script and no other file of the workspace "
+                                 "names it: remove it, or mark a hand-run tool '# gate: manual-script -- why'"))
+    return found
 
 
 def orphan_scripts(files: list[str]) -> list[Finding]:
@@ -300,24 +326,7 @@ def orphan_scripts(files: list[str]) -> list[Finding]:
     for rel in files:
         if rel.startswith("workspaces/") and rel.count("/") > 1:
             by_ws[rel.split("/")[1]].append(rel)
-    found = []
-    for ws, rels in by_ws.items():
-        jobs = {m["rel"] for job in (ROOT / "workspaces" / ws / "jobs").rglob("*.yaml")
-                for m in JOB_SCRIPT.finditer(job.read_text(encoding="utf-8"))}
-        callers = [r for r in rels if not _is_workspace_test(r)]
-        named = {r: _named_files(_tokens(r)) for r in callers}
-        for rel in rels:
-            m = WORKSPACE_SCRIPT.fullmatch(rel)
-            if m is None or m["rel"] in jobs:
-                continue
-            name = Path(rel).name
-            if any(name in names for other, names in named.items() if other != rel):
-                continue
-            if any(t.type == tokenize.COMMENT and MANUAL_SCRIPT.search(t.string) for t in _tokens(rel)):
-                continue
-            found.append(Finding(rel, "DF004", 1, "no job runs this script and no other file of the workspace "
-                                 "names it: remove it, or mark a hand-run tool '# gate: manual-script -- why'"))
-    return found
+    return [f for ws, rels in by_ws.items() for f in _workspace_orphans(ws, rels)]
 
 
 def _module_name(rel: str) -> str:
@@ -356,16 +365,18 @@ def orphan_modules(files: list[str]) -> list[Finding]:
     imported = {r: _imported_names(r) for r in files if r.startswith(PACKAGE)}
     outside = {m for pattern in PACKAGE_CALLER_FILES for f in ROOT.glob(pattern) if f.is_file()
                for m in PACKAGE_MODULE_NAME.findall(f.read_text(encoding="utf-8", errors="replace"))}
-    found = []
-    for rel in modules:
-        name = _module_name(rel)
-        def names_it(n: str, name: str = name) -> bool:
-            return n == name or n.startswith(name + ".")
-        if any(names_it(n) for other, ns in imported.items() if other != rel for n in ns) or any(map(names_it, outside)):
-            continue
-        found.append(Finding(rel, "DF004", 1, "no module of the package imports this one and nothing in pyproject, "
-                             "CI or scripts/ names it: remove it (tests alone do not keep it alive)"))
-    return found
+    return [Finding(rel, "DF004", 1, "no module of the package imports this one and nothing in pyproject, "
+                    "CI or scripts/ names it: remove it (tests alone do not keep it alive)")
+            for rel in modules if not _names_module(_callers_of(rel, imported) | outside, _module_name(rel))]
+
+
+def _callers_of(rel: str, imported: dict[str, set[str]]) -> set[str]:
+    """Every dotted name the package's other files import or spell."""
+    return {n for other, names in imported.items() if other != rel for n in names}
+
+
+def _names_module(names: set[str], module: str) -> bool:
+    return any(n == module or n.startswith(module + ".") for n in names)
 
 
 def collect_full(public: list[str], private: list[str]) -> list[Finding]:
