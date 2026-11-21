@@ -33,8 +33,8 @@ export function FaixaPendencia({ pendente, onAtualizado }: Readonly<Props>) {
         setFaixa({ fase: 'falhou', motivo: e.message })
       },
     )
-    consultar()
-    const timer = setInterval(consultar, INTERVALO_MS)
+    void consultar()
+    const timer = setInterval(() => { void consultar() }, INTERVALO_MS)
     return () => { viva = false; clearInterval(timer) }
   }, [execucao, onAtualizado])
 
@@ -49,8 +49,7 @@ export function FaixaPendencia({ pendente, onAtualizado }: Readonly<Props>) {
   const falhou = atual.fase === 'falhou'
 
   return (
-    <div
-      role="status"
+    <output
       className={`rounded-[24px] px-6 py-3 flex items-center justify-between gap-4 flex-wrap ${falhou ? 'bg-alerta-fundo text-alerta' : 'bg-cartao'}`}
     >
       <span className="text-[15px] font-medium">{texto}</span>
@@ -62,6 +61,6 @@ export function FaixaPendencia({ pendente, onAtualizado }: Readonly<Props>) {
           Aplicar
         </button>
       )}
-    </div>
+    </output>
   )
 }

@@ -21,10 +21,13 @@ export type Andamento = { status: StatusExecucao; reason: string | null }
 /** Recusa do backend, com a mensagem que a tela mostra na própria linha. */
 export class ErroEdicao extends Error {}
 
+// Os segmentos da URL voltam codificados (como em api.ts): o pedido fica sempre no mesmo app.
 function endereco(caminho: string): string {
-  const m = /^(\/apps\/[^/]+\/[^/]+)\//.exec(location.pathname)
-  const base = m ? m[1] : `/apps/${encodeURIComponent(import.meta.env.VITE_WORKSPACE || 'GetFinance')}/financas`
-  return `${base}/api/${caminho}`
+  const m = /^\/apps\/([^/]+)\/([^/]+)\//.exec(location.pathname)
+  const [ws, app] = m
+    ? [decodeURIComponent(m[1]), decodeURIComponent(m[2])]
+    : [import.meta.env.VITE_WORKSPACE || 'GetFinance', 'financas']
+  return `/apps/${encodeURIComponent(ws)}/${encodeURIComponent(app)}/api/${caminho}`
 }
 
 const seg = (valor: string) => encodeURIComponent(valor)
@@ -100,7 +103,10 @@ export function textoFaixa(faixa: Faixa): string | null {
     case 'em_dia': return null
     case 'pendente': return 'Há edições ainda não recalculadas.'
     case 'rodando': return faixa.status === 'pending' ? 'Na fila: esperando outro job do workspace terminar…' : 'Recalculando…'
-    case 'falhou': return `O recálculo falhou${faixa.motivo ? `: ${faixa.motivo}` : ''}. As edições continuam salvas.`
+    case 'falhou': {
+      const motivo = faixa.motivo ? ': ' + faixa.motivo : ''
+      return `O recálculo falhou${motivo}. As edições continuam salvas.`
+    }
   }
 }
 
