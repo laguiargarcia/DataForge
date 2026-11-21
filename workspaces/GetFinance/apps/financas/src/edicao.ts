@@ -21,14 +21,9 @@ export type Andamento = { status: StatusExecucao; reason: string | null }
 /** Recusa do backend, com a mensagem que a tela mostra na própria linha. */
 export class ErroEdicao extends Error {}
 
-// Os segmentos da URL voltam codificados (como em api.ts): o pedido fica sempre no mesmo app.
-function endereco(caminho: string): string {
-  const m = /^\/apps\/([^/]+)\/([^/]+)\//.exec(location.pathname)
-  const [ws, app] = m
-    ? [decodeURIComponent(m[1]), decodeURIComponent(m[2])]
-    : [import.meta.env.VITE_WORKSPACE || 'GetFinance', 'financas']
-  return `/apps/${encodeURIComponent(ws)}/${encodeURIComponent(app)}/api/${caminho}`
-}
+// Relativo à página do app (/apps/<ws>/financas/, sempre com a barra final): o pedido fica no mesmo
+// app sem ler a URL. No `npm run dev`, o proxy do vite.config.ts leva essas rotas ao backend.
+const endereco = (caminho: string) => `api/${caminho}`
 
 const seg = (valor: string) => encodeURIComponent(valor)
 

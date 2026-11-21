@@ -15,32 +15,24 @@ function responder(status: number, corpo: unknown = {}) {
 }
 const ultimo = () => pedidos[pedidos.length - 1]
 
-beforeEach(() => { pedidos = []; vi.stubGlobal('location', { pathname: '/apps/GetFinance/financas/' }) })
+beforeEach(() => { pedidos = [] })
 afterEach(() => { vi.unstubAllGlobals() })
 
 // --- cliente ---------------------------------------------------------------------------------------
 
-test('lê a edição pelo backend do app da URL', async () => {
-  vi.stubGlobal('location', { pathname: '/apps/Meu%20WS/financas/' })
+test('pede ao backend relativo à página do app', async () => {
   responder(200, { versao: 3 })
   expect(await lerEdicao()).toEqual({ versao: 3 })
-  expect(ultimo()).toEqual({ url: '/apps/Meu%20WS/financas/api/edicao', method: 'GET', body: undefined })
-})
-
-test('sem segmento apps (dev) usa o workspace padrão', async () => {
-  vi.stubGlobal('location', { pathname: '/' })
-  responder(200, {})
-  await lerEdicao()
-  expect(ultimo().url).toBe('/apps/GetFinance/financas/api/edicao')
+  expect(ultimo()).toEqual({ url: 'api/edicao', method: 'GET', body: undefined })
 })
 
 test('criar e alterar categoria', async () => {
   const c = { subcategoria: 'Casa/Reforma', categoria: 'Casa', tipo: 'Essencial' }
   responder(201, c)
   await salvarCategoria(null, c)
-  expect(ultimo()).toEqual({ url: '/apps/GetFinance/financas/api/categorias', method: 'POST', body: c })
+  expect(ultimo()).toEqual({ url: 'api/categorias', method: 'POST', body: c })
   await salvarCategoria('Casa/Reforma', c)
-  expect(ultimo()).toMatchObject({ url: '/apps/GetFinance/financas/api/categorias/Casa%2FReforma', method: 'PUT' })
+  expect(ultimo()).toMatchObject({ url: 'api/categorias/Casa%2FReforma', method: 'PUT' })
 })
 
 test('regra devolve o efeito', async () => {
@@ -48,29 +40,29 @@ test('regra devolve o efeito', async () => {
   expect(await salvarRegra(null, { padrao: 'UBER', subcategoria: 'Transporte' })).toEqual({ casa: 2, vence: 1, barradas: 0 })
   expect(ultimo().method).toBe('POST')
   await salvarRegra('UBER', { padrao: 'UBER X', subcategoria: 'Transporte' })
-  expect(ultimo()).toMatchObject({ url: '/apps/GetFinance/financas/api/regras/UBER', method: 'PUT' })
+  expect(ultimo()).toMatchObject({ url: 'api/regras/UBER', method: 'PUT' })
 })
 
 test('excluir, corrigir e desfazer', async () => {
   responder(204)
   await excluirCategoria('Lazer')
-  expect(ultimo()).toMatchObject({ url: '/apps/GetFinance/financas/api/categorias/Lazer', method: 'DELETE' })
+  expect(ultimo()).toMatchObject({ url: 'api/categorias/Lazer', method: 'DELETE' })
   await excluirRegra('PIX* LOJA')
-  expect(ultimo().url).toBe('/apps/GetFinance/financas/api/regras/PIX*%20LOJA')
+  expect(ultimo().url).toBe('api/regras/PIX*%20LOJA')
   await desfazerCorrecao('t1')
-  expect(ultimo()).toMatchObject({ url: '/apps/GetFinance/financas/api/correcoes/t1', method: 'DELETE' })
+  expect(ultimo()).toMatchObject({ url: 'api/correcoes/t1', method: 'DELETE' })
   responder(200, {})
   await corrigir('t1', 'Contas')
-  expect(ultimo()).toEqual({ url: '/apps/GetFinance/financas/api/correcoes/t1', method: 'PUT', body: { subcategoria: 'Contas' } })
+  expect(ultimo()).toEqual({ url: 'api/correcoes/t1', method: 'PUT', body: { subcategoria: 'Contas' } })
 })
 
 test('aplicar e andamento', async () => {
   responder(202, { execution_id: 'r1' })
   expect(await aplicar()).toBe('r1')
-  expect(ultimo()).toMatchObject({ url: '/apps/GetFinance/financas/api/aplicar', method: 'POST' })
+  expect(ultimo()).toMatchObject({ url: 'api/aplicar', method: 'POST' })
   responder(200, { status: 'running', reason: null })
   expect(await andamento('r1')).toEqual({ status: 'running', reason: null })
-  expect(ultimo().url).toBe('/apps/GetFinance/financas/api/aplicar/r1')
+  expect(ultimo().url).toBe('api/aplicar/r1')
 })
 
 test('a recusa do backend vira ErroEdicao com a mensagem dele', async () => {
