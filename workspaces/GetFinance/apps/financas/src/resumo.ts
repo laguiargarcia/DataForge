@@ -14,6 +14,10 @@ export type TxClassificada = {
   categoria: string
   Tipo: string
   cash_flag: boolean
+  description_normalized: string | null
+  subcategoria: string
+  etl_tag: string | null
+  corrigida: boolean
 }
 export type Liquidez = { anomes_key: number; caixa_saldo: number | null }
 export type Investimentos = { anomes_key: number; posicao: number | null }

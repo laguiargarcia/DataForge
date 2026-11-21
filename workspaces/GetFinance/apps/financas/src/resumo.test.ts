@@ -7,7 +7,8 @@ import {
 function tx(p: Partial<TxClassificada> & { id: string }): TxClassificada {
   return {
     date: '2026-06-10', anomes_key: 202606, account_type: 'BANK', etl_merchant_key: 'Loja',
-    amount_signed: -1, categoria: 'Mercado', Tipo: 'Essencial', cash_flag: true, ...p,
+    amount_signed: -1, categoria: 'Mercado', Tipo: 'Essencial', cash_flag: true,
+    description_normalized: 'LOJA', subcategoria: 'Groceries', etl_tag: null, corrigida: false, ...p,
   }
 }
 
