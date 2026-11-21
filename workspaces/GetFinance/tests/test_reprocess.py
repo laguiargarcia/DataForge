@@ -178,8 +178,9 @@ def test_reprocess_all_routes_every_entity(tmp_path):
     calls = []
     _reprocess(tmp_path, ["--source", "raw", "--target", "cleansed", "--entity", "all"],
                _spy_runner(calls))
-    assert calls == ["raw2cleansed", "raw2cleansed_accounts",
-                     "raw2cleansed_investments", "raw2cleansed_bills"]
+    # bills before transactions: the copy rule of raw2cleansed reads cleansed.bills (df-mk25).
+    assert calls == ["raw2cleansed_accounts", "raw2cleansed_bills",
+                     "raw2cleansed", "raw2cleansed_investments"]
 
 
 def test_connection_resolution_works_for_depth1_script(tmp_path):

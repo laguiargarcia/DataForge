@@ -21,12 +21,13 @@ from pathlib import Path
 exec(open(Path(__file__).parent / "functions" / "functions.py", encoding="utf-8").read())
 
 # entity -> (transform script relative to scripts/, target Delta table). raw -> cleansed only;
-# curated is already DROP+CREATE every run, so it needs no reprocess.
+# curated is already DROP+CREATE every run, so it needs no reprocess. `all` runs them in this order:
+# bills before transactions, whose copy rule reads cleansed.bills (df-mk25).
 ROUTING = {
-    "transactions": ("raw2cleansed/raw2cleansed.py", "transactions"),
     "accounts": ("raw2cleansed/raw2cleansed_accounts.py", "accounts"),
-    "investments": ("raw2cleansed/raw2cleansed_investments.py", "investments"),
     "bills": ("raw2cleansed/raw2cleansed_bills.py", "bills"),
+    "transactions": ("raw2cleansed/raw2cleansed.py", "transactions"),
+    "investments": ("raw2cleansed/raw2cleansed_investments.py", "investments"),
 }
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])

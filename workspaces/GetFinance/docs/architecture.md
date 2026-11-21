@@ -84,6 +84,18 @@ description VARCHAR, account VARCHAR, ingested_at
   in the window, the fetch looks incomplete: nothing leaves that account and the check
   `cleansed.transactions vs latest fetch` records a suspicious finding. A removal applied on an earlier
   run does not count again (with an empty cleansed, as after `reprocess.py`, every removal is new).
+- Copied by Pluggy, proven by the bill (DataForge df-mk25): Pluggy may return a card entry under two ids. On
+  the card rows left after the gone ids (so a pair whose first id stopped coming back keeps the second),
+  `copias_pela_fatura` (`scripts/report/conferencia_fatura.py`) groups the entries that are not bill payments
+  by statement (re-issued twins together, the choice of `kept_bill_ids`), amount and type; day and
+  description do not count. A closed bill whose entries exceed its total (`estado_lancamentos` `nao_fecha`,
+  the same sum as `conferencia_fatura`) loses copies only when exactly one combination of candidates adds up
+  to the excess: of each group the ones created last (`createdAt`, read as an instant) leave cleansed, and
+  the run prints `kept <id>, removed <id>` for each. More than one combination, too many, or a `createdAt`
+  missing or repeated: nothing leaves, and the check `cleansed.transactions vs bills` records a suspicious
+  finding. No combination (the excess is not a copy), a bill that closes, an open bill and one with
+  incomplete history lose nothing. Raw keeps both ids, so each copy is judged and removed on every run;
+  `reprocess.py --entity all` rebuilds `bills` before `transactions` for this.
 - `amount` is in the account's currency (BRL), the value curated sums (DataForge df-ahua.3.1). For a
   purchase in another currency Pluggy sends the foreign value in `amount`, its code in `currencyCode`
   and the BRL value the bank converted in `amountInAccountCurrency` (null on every BRL row): cleansed
@@ -282,7 +294,8 @@ pago, n_pagamentos, diferenca_pagamento (= total_fatura - pago), estado_pagament
   before the due date, or the payment window); `a_vencer` (payment only) when it does not close and the
   payment window has not ended on the run day; `sem_total` when the bill has no total; `nao_fecha` otherwise.
 - It reconciles one row per `fact_card_statement` statement before the write. It only measures: nothing here
-  changes a transaction (df-z4fh), and it has no suspicious rule, so a bill that does not close never warns
+  changes a transaction (df-z4fh; the same sum decides the card copies earlier, in `raw2cleansed`, df-mk25),
+  and it has no suspicious rule, so a bill that does not close never warns
   (owner's call; a warning for a new bill is DataForge df-5g8b). The task prints the count per state of each
   check, never an amount. The source is Pluggy's own total; the bank's bill PDF as an independent one is
   DataForge df-lxdb.

@@ -124,8 +124,10 @@ for row in joined.iter_rows(named=True):
 
 # Re-issued-bill dedup: within (account, due-month), multiple bills are one re-issued
 # statement — deduped unconditionally (fact_fatura_mes's one-row-per-month contract).
-# Keep the id charges reference (the re-issue re-keys charges); tie-break latest updatedAt.
+# Keep the id charges reference (the re-issue re-keys charges); tie-break latest updatedAt
+# (kept_bill_ids, the choice raw2cleansed's copy rule reads too, df-mk25).
 # The dropped twin's payments[] still feeds the pool below.
+_kept_bill_ids = set(kept_bill_ids(bills, _referenced_bill_ids).to_list())
 _by_acct = {}
 for b in parsed_bills:
     _by_acct.setdefault(b["account_uuid"], []).append(b)
@@ -143,8 +145,7 @@ for _acct, _blist in sorted(_by_acct.items()):
         # ONE closed row per (account, due-month) is fact_fatura_mes's contract — dedup
         # unconditionally, even when the re-issue revised the amount (review finding,
         # 2026-07-02); the kept twin's statement_amount wins, and both are logged.
-        _ref = [b for b in _group if b["statement_id"] in _referenced_bill_ids]
-        _pick = max(_ref or _group, key=lambda b: (b["updated_at"] or ""))
+        _pick = next(b for b in _group if b["statement_id"] in _kept_bill_ids)
         kept_bills.append(_pick)
         for b in _group:
             if b is not _pick:

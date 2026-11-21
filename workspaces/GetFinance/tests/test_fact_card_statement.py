@@ -398,3 +398,22 @@ def test_live_panorama_jun_2026(tmp_path):
         assert r["statement_id"] in expected
         assert r["paid_amount"] == expected[r["statement_id"]], r["statement_id"]
         assert r["paid_in_full"] is True, r["statement_id"]
+
+
+# kept_bill_ids: the one choice of the bill that stands for a re-issued statement, read by this script and by
+# raw2cleansed's copy rule (df-mk25).
+def test_kept_bill_ids_prefers_referenced_then_latest_update_per_account_and_month():
+    F = _delta_util.exec_functions({})
+    bills = pl.DataFrame({
+        "id": ["may-old", "may-new", "jun-a", "jun-b", "other-may", "undated-1", "undated-2"],
+        "accountId": ["card-1", "card-1", "card-1", "card-1", "card-2", "card-1", "card-1"],
+        "dueDate": ["2026-05-17T00:00:00.000Z", "2026-05-18T00:00:00.000Z", "2026-06-17T00:00:00.000Z",
+                    "2026-06-17T00:00:00.000Z", "2026-05-17T00:00:00.000Z", None, "not a date"],
+        "updatedAt": ["2026-07-01T00:00:00.000Z", "2026-06-01T00:00:00.000Z", "2026-07-01T00:00:00.000Z",
+                      "2026-06-01T00:00:00.000Z", None, None, None],
+    })
+    # May: the referenced bill wins over a later update; June: nothing referenced, the latest update wins.
+    assert set(F["kept_bill_ids"](bills, {"may-new"}).to_list()) == {
+        "may-new", "jun-a", "other-may", "undated-1", "undated-2"}
+    assert set(F["kept_bill_ids"](bills, set()).to_list()) == {
+        "may-old", "jun-a", "other-may", "undated-1", "undated-2"}

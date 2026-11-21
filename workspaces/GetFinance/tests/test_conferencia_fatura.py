@@ -16,12 +16,13 @@ from tests import _delta_util
 
 sys.path.insert(0, str(_delta_util.SCRIPTS / "report"))
 
-from conferencia_fatura import (A_VENCER, CATEGORIAS_PAGAMENTO, COLUNAS, FECHA, HISTORICO_INCOMPLETO,
-                                JANELA_PAGAMENTO_DIAS, NAO_FECHA, SEM_TOTAL, TOLERANCIA, conferencia_fatura)
+from conferencia_fatura import (A_VENCER, CATEGORIAS_PAGAMENTO, COLUNAS, COPIAS_COLUNAS, FECHA,
+                                HISTORICO_INCOMPLETO, JANELA_PAGAMENTO_DIAS, MAX_COMBINACOES, NAO_FECHA,
+                                POR_FATURA_COLUNAS, SEM_TOTAL, TOLERANCIA, conferencia_fatura, copias_pela_fatura)
 
 CARTAO, OUTRO = "cartao-0001", "cartao-0002"
 COMPRA, ESTORNO = "09000000", "16030000"
-PAGAMENTO, DEBITO_AUTOMATICO = CATEGORIAS_PAGAMENTO
+PAGAMENTO, PAGAMENTO_DESDE_JULHO = CATEGORIAS_PAGAMENTO
 HOJE = date(2026, 6, 30)
 
 _FATURAS_SCHEMA = {"account_uuid": pl.Utf8, "statement_id": pl.Utf8, "due_date": pl.Date,
@@ -69,7 +70,7 @@ LANCAMENTOS = (
     ("2026-03-01", 10.0, COMPRA, "f4"), ("2026-03-20", 140.0, COMPRA, "f4"),
     ("2026-04-17", -150.0, PAGAMENTO, "f5"),           # pagamento da f4, com o billId da fatura seguinte
     ("2026-04-20", 100.0, COMPRA, "f5"), ("2026-04-25", -20.0, ESTORNO, "f5"),
-    ("2026-05-18", -80.0, DEBITO_AUTOMATICO, None),    # pagamento da f5, sem billId
+    ("2026-05-18", -80.0, PAGAMENTO_DESDE_JULHO, None),    # pagamento da f5, sem billId
 )
 
 
@@ -267,6 +268,148 @@ def test_propriedade_compra_copiada_muda_so_a_sua_fatura(compras, data):
     assert _por_fatura(out.filter(pl.col("estado_lancamentos") != FECHA), "diferenca_lancamentos") == {
         f"f{m}": (-copia[1],)}
     assert set(out["estado_pagamento"]) == {FECHA}
+
+
+# --- cópias que a fatura prova (df-mk25) ------------------------------------------------------------------------
+# O Pluggy devolve um lançamento do cartão sob dois ids. Sai a cópia (o de createdAt mais recente) só quando a
+# fatura sobra e uma única combinação de candidatos (mesma fatura, valor e tipo) soma a sobra.
+
+_LANC_COPIA_SCHEMA = _LANC_SCHEMA | {"id": pl.Utf8, "txn_type": pl.Utf8, "createdAt": pl.Utf8}
+CEDO, TARDE = "2026-03-20T10:00:00.000Z", "2026-05-02T08:30:00.000Z"
+
+
+def _lanc_c(*rows):
+    # (id, date, amount, categoryId, cc_bill_id, createdAt[, txn_type]): o tipo sai do sinal, como no cartão.
+    return pl.DataFrame(
+        [(CARTAO, _d(r[1]), r[2], r[3], r[4], r[0], r[6] if len(r) > 6 else ("DEBIT" if r[2] > 0 else "CREDIT"),
+          r[5]) for r in rows], schema=_LANC_COPIA_SCHEMA, orient="row")
+
+
+def _copias(faturas, lancamentos, bills=None):
+    if bills is None:
+        bills = faturas.select("statement_id", "account_uuid", "due_date").rename({"statement_id": "id"})
+    copias, por_fatura = copias_pela_fatura(faturas, bills, lancamentos, HOJE)
+    assert copias.schema == pl.Schema(COPIAS_COLUNAS)
+    assert por_fatura.schema == pl.Schema(POR_FATURA_COLUNAS)
+    return (sorted(copias.select("id", "mantido").rows()),
+            {r["statement_id"]: (r["candidatos"], r["removidos"], r["retida"]) for r in por_fatura.to_dicts()})
+
+
+F4 = _faturas(("f4", "2026-04-17", 150.0))
+BASE = (("a", "2026-03-01", 10.0, COMPRA, "f4", CEDO), ("b", "2026-03-20", 140.0, COMPRA, "f4", CEDO))
+
+
+def test_copia_que_a_fatura_prova_sai_e_fica_a_criada_primeiro():
+    # A cópia vem com outra data e é a criada depois: o dia não entra na chave.
+    assert _copias(F4, _lanc_c(*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE))) == (
+        [("c", "b")], {"f4": (2, 1, False)})
+
+
+def test_fica_a_criada_primeiro_tambem_quando_vem_depois_na_lista():
+    rows = (BASE[0], ("c", "2026-03-20", 140.0, COMPRA, "f4", TARDE), BASE[1])
+    assert _copias(F4, _lanc_c(*rows))[0] == [("c", "b")]
+
+
+def test_createdat_e_comparado_como_instante_nao_como_texto():
+    # Como texto, '...12:00:00Z' fica depois de '...12:00:00.500Z'; como instante, antes.
+    rows = (BASE[0], ("b", "2026-03-20", 140.0, COMPRA, "f4", "2026-06-16T12:00:00.500Z"),
+            ("c", "2026-03-20", 140.0, COMPRA, "f4", "2026-06-16T12:00:00Z"))
+    assert _copias(F4, _lanc_c(*rows))[0] == [("b", "c")]
+
+
+def test_compra_repetida_de_verdade_numa_fatura_que_fecha_fica():
+    assert _copias(_faturas(("f4", "2026-04-17", 290.0)),
+                   _lanc_c(*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE))) == ([], {})
+
+
+def test_sobra_que_nao_e_de_copia_nao_tira_nada_e_nao_e_achado():
+    # Sobram 145, os candidatos só explicam 140: a conferência mostra a fatura; nada sai.
+    rows = (*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE), ("d", "2026-03-22", 5.0, COMPRA, "f4", CEDO))
+    assert _copias(F4, _lanc_c(*rows)) == ([], {"f4": (2, 0, False)})
+
+
+def test_mais_de_uma_combinacao_retem_a_fatura():
+    # Sobram 60: duas cópias de 30 ou uma de 60. Nada sai.
+    rows = (("a", "2026-03-01", 30.0, COMPRA, "f4", CEDO), ("b", "2026-03-02", 30.0, COMPRA, "f4", TARDE),
+            ("c", "2026-03-03", 30.0, COMPRA, "f4", "2026-07-01T00:00:00.000Z"),
+            ("d", "2026-03-04", 60.0, COMPRA, "f4", CEDO), ("e", "2026-03-05", 60.0, COMPRA, "f4", TARDE))
+    assert _copias(_faturas(("f4", "2026-04-17", 150.0)), _lanc_c(*rows)) == ([], {"f4": (5, 0, True)})
+
+
+def test_combinacoes_demais_retem_a_fatura():
+    # Grupos de 2 lançamentos: 2 ** 13 combinações passa de MAX_COMBINACOES, nada sai.
+    n = (MAX_COMBINACOES - 1).bit_length() + 1
+    rows = [(f"{k}{i}", "2026-03-01", float(k + 1), COMPRA, "f4", (CEDO, TARDE)[i]) for k in range(n) for i in (0, 1)]
+    total = sum(k + 1 for k in range(n))
+    assert _copias(_faturas(("f4", "2026-04-17", float(total))), _lanc_c(*rows)) == ([], {"f4": (2 * n, 0, True)})
+
+
+def test_createdat_ausente_ou_igual_retem_a_fatura():
+    for criado in (None, CEDO):
+        rows = (*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", criado))
+        assert _copias(F4, _lanc_c(*rows)) == ([], {"f4": (2, 0, True)})
+
+
+def test_createdat_que_nao_le_retem_a_fatura():
+    rows = (*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", "ontem"))
+    assert _copias(F4, _lanc_c(*rows)) == ([], {"f4": (2, 0, True)})
+
+
+def test_duas_copias_em_grupos_diferentes_saem_juntas():
+    rows = (*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE), ("d", "2026-03-01", 10.0, COMPRA, "f4", TARDE))
+    assert _copias(F4, _lanc_c(*rows)) == ([("c", "b"), ("d", "a")], {"f4": (4, 2, False)})
+
+
+def test_estorno_copiado_sai_e_estorno_de_compra_nao_e_copia():
+    # O estorno anula a compra (tipos e sinais diferentes, nunca um grupo); o mesmo estorno sob dois ids deixa a
+    # fatura com crédito a mais, e a cópia sai.
+    f = _faturas(("f4", "2026-04-17", 120.0))
+    rows = (("a", "2026-03-01", 140.0, COMPRA, "f4", CEDO), ("e", "2026-03-05", -20.0, ESTORNO, "f4", CEDO))
+    assert _copias(f, _lanc_c(*rows)) == ([], {})
+    copia = ("e2", "2026-03-05", -20.0, ESTORNO, "f4", TARDE)
+    assert _copias(_faturas(("f4", "2026-04-17", 120.0)), _lanc_c(*rows, copia)) == ([("e2", "e")], {"f4": (2, 1, False)})
+
+
+def test_tipo_diferente_nao_e_o_mesmo_grupo():
+    rows = (*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE, "CREDIT"))
+    assert _copias(F4, _lanc_c(*rows)) == ([], {})
+
+
+def test_pagamento_de_fatura_nunca_e_candidato():
+    rows = (*BASE, ("p1", "2026-04-17", -150.0, PAGAMENTO, "f4", CEDO), ("p2", "2026-04-17", -150.0, PAGAMENTO, "f4", TARDE),
+            ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE))
+    assert _copias(F4, _lanc_c(*rows))[0] == [("c", "b")]
+
+
+def test_copias_sob_gemeos_reemitidos_sao_da_mesma_fatura():
+    bills = _bills(("f4", "2026-04-17"), ("f4-reemitida", "2026-04-17"))
+    rows = (*BASE, ("c", "2026-03-21", 140.0, COMPRA, "f4-reemitida", TARDE))
+    assert _copias(F4, _lanc_c(*rows), bills) == ([("c", "b")], {"f4": (2, 1, False)})
+
+
+def test_fatura_aberta_ou_com_historico_incompleto_nao_perde_nada():
+    copia = ("c", "2026-03-21", 140.0, COMPRA, "f4", TARDE)
+    # Aberta: a fatura dos lançamentos ainda não está em faturas.
+    assert _copias(_faturas(("f3", "2026-03-17", 0.0)), _lanc_c(*BASE, copia)) == ([], {})
+    # Histórico incompleto: o primeiro lançamento do cartão é depois do início do ciclo.
+    tarde = tuple((r[0], "2026-04-01", *r[2:]) for r in (*BASE, copia))
+    assert _copias(F4, _lanc_c(*tarde)) == ([], {})
+
+
+# Propriedade: faturas que fecham, com compras de valores diferentes; copiar algumas compras (com createdAt
+# posterior) faz a regra tirar exatamente as cópias, e as faturas voltam a fechar.
+@settings(max_examples=60, deadline=None)
+@given(valores=st.lists(_centavos, min_size=1, max_size=8, unique=True), data=st.data())
+def test_propriedade_tira_exatamente_as_copias(valores, data):
+    total = sum(valores) / 100
+    faturas = _faturas(("f4", "2026-04-17", round(total, 2)))
+    rows = [(f"o{i}", "2026-03-01", v / 100, COMPRA, "f4", CEDO) for i, v in enumerate(valores)]
+    copiados = data.draw(st.sets(st.integers(0, len(valores) - 1), min_size=1))
+    copias = [(f"c{i}", "2026-03-11", valores[i] / 100, COMPRA, "f4", TARDE) for i in sorted(copiados)]
+    removidas, _ = _copias(faturas, _lanc_c(*rows, *copias))
+    assert removidas == sorted((f"c{i}", f"o{i}") for i in copiados)
+    sobra = _lanc_c(*rows, *copias).filter(~pl.col("id").is_in([c for c, _ in removidas]))
+    assert set(_conferir(faturas, sobra.drop("id", "txn_type", "createdAt"))["estado_lancamentos"]) == {FECHA}
 
 
 # --- a task ---------------------------------------------------------------------------------------------------

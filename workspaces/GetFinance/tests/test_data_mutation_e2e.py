@@ -37,9 +37,10 @@ def _partition(ws, entity, rows, day):
 
 
 def _workspace(root):
-    # Only what raw2cleansed.py reads: functions.py, the script, the connections, a merchant config.
+    # Only what raw2cleansed.py reads: functions.py, the script, the bill check its copy rule imports
+    # (df-mk25), the connections, a merchant config.
     ws = root / "ws"
-    for rel in ("functions/functions.py", "raw2cleansed/raw2cleansed.py"):
+    for rel in ("functions/functions.py", "raw2cleansed/raw2cleansed.py", "report/conferencia_fatura.py"):
         (ws / "scripts" / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(_delta_util.SCRIPTS / rel, ws / "scripts" / rel)
     shutil.copytree(_delta_util.ROOT / "connections", ws / "connections")
