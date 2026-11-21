@@ -55,7 +55,7 @@ def test_finance_daily_clean_run_succeeds_and_the_trip_wire_stays_off(tmp_path, 
 # The bug the trip-wire fixes: before it, a failed fetch (all else skipped) ended as success.
 @pytest.mark.parametrize("failing", ["fetch", "transform", "curate", "fact_card_statement",
                                      "classify", "report", "conferencia_saldo", "lancamentos_suspeitos",
-                                     "extrato", "veredito_suspeitos", "calendar"])
+                                     "extrato", "veredito_suspeitos", "conferencia_fatura", "calendar"])
 def test_finance_daily_fails_when_any_task_fails(tmp_path, db_url, global_engine, outcomes, failing):
     outcomes[failing] = 1
     status, results = _run("finance_daily", tmp_path, db_url, global_engine)
@@ -106,6 +106,25 @@ def test_finance_daily_warnings_run_when_the_verdict_fails(tmp_path, db_url, glo
     assert results["job_failed"] == 1
 
 
+# Nor does a failure of the card check by each bill (df-acz4).
+def test_finance_daily_warnings_run_when_the_card_check_fails(tmp_path, db_url, global_engine, outcomes):
+    outcomes["conferencia_fatura"] = 1
+    status, results = _run("finance_daily", tmp_path, db_url, global_engine)
+    assert status == "failed"
+    assert results["data_warnings"] == 0
+    assert results["job_failed"] == 1
+
+
+# The card check needs the statements: without fact_card_statement it is skipped, and the warnings still run
+# (df-acz4).
+def test_finance_daily_card_check_is_skipped_without_the_statements(tmp_path, db_url, global_engine, outcomes):
+    outcomes["fact_card_statement"] = 1
+    status, results = _run("finance_daily", tmp_path, db_url, global_engine)
+    assert status == "failed"
+    assert results["conferencia_fatura"] == "skipped"
+    assert results["job_failed"] == 1
+
+
 # extrato reads the statements once: a retry would read the same files (df-z4fh.5).
 def test_extrato_runs_once(monkeypatch, tmp_path):
     job = load_job(WORKSPACE, "finance_daily")
@@ -147,7 +166,7 @@ def test_finance_daily_alerts_once_activated(tmp_path, db_url, global_engine, ou
 
 
 @pytest.mark.parametrize("failing", ["transform", "conferencia_saldo", "lancamentos_suspeitos", "extrato",
-                                     "veredito_suspeitos"])
+                                     "veredito_suspeitos", "conferencia_fatura"])
 def test_finance_daily_failure_alerts_and_fails_once_activated(tmp_path, db_url, global_engine,
                                                                outcomes, failing):
     outcomes[failing] = 1

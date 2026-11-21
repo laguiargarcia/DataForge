@@ -718,6 +718,26 @@ CONFERENCIA_SALDO_RULES = [
 ]
 
 
+# The card check by each bill's total (df-acz4): one row per closed statement of fact_card_statement. It only
+# measures: no rule here is suspicious, so a bill that does not close never warns (owner's call, df-5g8b).
+CONFERENCIA_FATURA_COLUMNS = [
+    "account_uuid", "statement_id", "due_date", "total_fatura", "saldo_anterior", "soma_lancamentos",
+    "n_lancamentos", "diferenca_lancamentos", "estado_lancamentos", "pago", "n_pagamentos",
+    "diferenca_pagamento", "estado_pagamento",
+]
+CONFERENCIA_FATURA_RULES = [
+    expected_columns_rule(CONFERENCIA_FATURA_COLUMNS),
+    null_rule("account_uuid"),
+    ("more than one row per statement", IMPOSSIBLE, duplicated("statement_id")),
+    ("estado_lancamentos is not a known state", IMPOSSIBLE,
+     pl.col("estado_lancamentos").is_null()
+     | not_in("estado_lancamentos", ["fecha", "nao_fecha", "historico_incompleto", "sem_total"])),
+    ("estado_pagamento is not a known state", IMPOSSIBLE,
+     pl.col("estado_pagamento").is_null()
+     | not_in("estado_pagamento", ["fecha", "nao_fecha", "historico_incompleto", "a_vencer", "sem_total"])),
+]
+
+
 # Rank of the balance-check interval that warns, newest first: two snapshots later, a transaction posted
 # after a weekend or one sync late has arrived, so an older break is a real one (df-z4fh.1).
 BALANCE_WARN_RANK = 3

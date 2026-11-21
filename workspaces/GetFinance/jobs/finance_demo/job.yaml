@@ -238,6 +238,21 @@ tasks:
       - lancamentos_suspeitos
       - {task: extrato, when: completed}
 
+  # Conferência do cartão pela fatura (df-acz4): por fatura fechada de curated.fact_card_statement, o total
+  # menos os lançamentos do cartão dela (cleansed.transactions pelo cc_bill_id) e menos os pagamentos de fatura
+  # lançados perto do vencimento; grava curated.conferencia_fatura. Real data deps: curated.fact_card_statement
+  # (fact_card_statement), cleansed.bills and cleansed.transactions (upstream of it). The veredito_suspeitos edge
+  # only serializes it after the last curated writer, whatever that task ended with. It only measures: no
+  # suspicious finding (df-5g8b).
+  - name: conferencia_fatura
+    script: cleansed2curated/cleansed2curated_conferencia_fatura.py
+    params:
+      source: cleansed
+      target: curated
+    depends_on:
+      - fact_card_statement
+      - {task: veredito_suspeitos, when: [completed, skipped]}
+
   # ── Data checks and alerts (ADR 0004, df-ahua.3) ────────────────────────────
   # The checks themselves run inside the scripts above, before each write (validate() in
   # functions.py). An IMPOSSIBLE finding makes its task fail, so everything after it is skipped and
@@ -255,8 +270,9 @@ tasks:
   # the engine default, 3 attempts 30 s apart. It runs whether conferencia_saldo succeeded or failed
   # (`when: completed`), so a failure of the balance check does not hide the other tasks' warnings; that
   # failure still fails the run through job_failed. The same for lancamentos_suspeitos, which is also
-  # skipped when the balance check failed, for extrato, and for veredito_suspeitos, skipped when the suspect
-  # marking did not succeed. When report did not succeed, conferencia_saldo is skipped and so is this task.
+  # skipped when the balance check failed, for extrato, for veredito_suspeitos, skipped when the suspect
+  # marking did not succeed, and for conferencia_fatura, skipped when fact_card_statement did not succeed.
+  # When report did not succeed, conferencia_saldo is skipped and so is this task.
   - name: data_warnings
     script: validation/data_warnings.py
     depends_on:
@@ -264,6 +280,7 @@ tasks:
       - {task: lancamentos_suspeitos, when: [completed, skipped]}
       - {task: extrato, when: [completed, skipped]}
       - {task: veredito_suspeitos, when: [completed, skipped]}
+      - {task: conferencia_fatura, when: [completed, skipped]}
     retry:
       attempts: 1
       delay_seconds: 0
@@ -287,7 +304,7 @@ tasks:
 
   # Sends the failure alert. INACTIVE for the same reason (df-ahua.3.2). Same edges as job_failed:
   # report did not succeed (something upstream failed and the rest was skipped), conferencia_saldo,
-  # lancamentos_suspeitos, extrato or veredito_suspeitos failed, or calendar failed.
+  # lancamentos_suspeitos, extrato, veredito_suspeitos or conferencia_fatura failed, or calendar failed.
   - name: alert_failure
     type: message
     active: false
@@ -298,6 +315,7 @@ tasks:
       - {task: lancamentos_suspeitos, when: failed}
       - {task: extrato, when: failed}
       - {task: veredito_suspeitos, when: failed}
+      - {task: conferencia_fatura, when: failed}
       - {task: calendar, when: failed}
     params:
       channels: []
@@ -326,6 +344,7 @@ tasks:
       - {task: lancamentos_suspeitos, when: failed}
       - {task: extrato, when: failed}
       - {task: veredito_suspeitos, when: failed}
+      - {task: conferencia_fatura, when: failed}
       - {task: calendar, when: failed}
       - {task: data_warnings, when: skipped}
     params:

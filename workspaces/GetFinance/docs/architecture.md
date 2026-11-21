@@ -25,7 +25,7 @@ data/curated/<table>/    (Delta tables: dim_account, dim_investment, dim_calenda
                           fact_transaction, fact_balance_snapshot, fact_investment_position,
                           conferencia_saldo, lancamentos_suspeitos, extrato, extrato_saldos,
                           extrato_arquivos, veredito_suspeitos, extrato_sem_lancamento,
-                          acerto_por_motivo)
+                          acerto_por_motivo, conferencia_fatura)
    │
    ▼
 scripts/report/export_bridge.py ──► report/bridge/*.csv ──► Power Query ──► develop.xlsx
@@ -101,6 +101,7 @@ Delta tables at `data/curated/<table>/`, one table per script under `scripts/cle
   See below.
 - `veredito_suspeitos`, `extrato_sem_lancamento`, `acerto_por_motivo` — the statement's verdict on each suspect
   (df-z4fh.3), full overwrite. See below.
+- `conferencia_fatura` — the card check by each bill's total (df-acz4), full overwrite. See below.
 
 Per-table column schemas are specified in the data-model redesign spec
 (`docs/superpowers/specs/2026-05-26-finance-data-model-redesign-design.md`).
@@ -230,6 +231,41 @@ acerto_por_motivo:      motivo, n, n_no_extrato, n_fora_do_extrato (one row per 
   old statement would repeat the same finding every day; the task prints counts per verdict and per reason, the
   lines without a transaction and the transactions of the covered period without a line, never an id or an
   amount. It only reads and records (df-z4fh).
+
+### curated — `conferencia_fatura` (built by `cleansed2curated_conferencia_fatura.py`)
+The card has no balance per fetch the way a BANK account has (`conferencia_saldo` covers BANK only); it has
+the bill. One row per closed statement of `fact_card_statement` (the total Pluggy returns in `/bills`, without
+the re-issued twins), with two checks against that total:
+```
+account_uuid, statement_id, due_date, total_fatura,
+saldo_anterior, soma_lancamentos, n_lancamentos,
+diferenca_lancamentos (= total_fatura - saldo_anterior - soma_lancamentos), estado_lancamentos,
+pago, n_pagamentos, diferenca_pagamento (= total_fatura - pago), estado_pagamento
+```
+- The rule is in `scripts/report/conferencia_fatura.py`. A bill payment is a card transaction with
+  `amount < 0` and a `categoryId` of `CATEGORIAS_PAGAMENTO`: `05100000` up to 06/2026, and `05060000` for the
+  automatic debit since 07/2026 (measured, df-acz4). Everything else on the card (purchases, fees, refunds,
+  balance-adjustment credits) is a transaction of the bill.
+- Transactions: the card transactions of `cleansed.transactions` whose `cc_bill_id` is the bill (or a
+  re-issued twin of the same account and due month), payments left out. `saldo_anterior` is what the
+  previous bill left unpaid (its total minus its `pago`), never negative: an extra payment shows only in the
+  payment check. A negative `diferenca_lancamentos` is a transaction too many (the purchase Pluggy returned
+  under two ids, DataForge df-mk25), a positive one a transaction missing.
+- Payment: each payment counts for the bill of the same card whose due date is nearest to it, within
+  `JANELA_PAGAMENTO_DIAS` (10) days; outside every window it counts for none. Its `cc_bill_id` is not used:
+  up to 03/2026 it was the paid bill's, since then the next bill's. A negative `diferenca_pagamento` is a
+  payment too many (the payment copy Pluggy stopped returning, DataForge df-75ol), a positive one a bill not
+  (fully) paid.
+- `estado_lancamentos` and `estado_pagamento`: `fecha` when `|diferenca| <= TOLERANCIA` (0.01: on the real data
+  every bill that closes does so to the centavo); `historico_incompleto` when it does not close and the card's
+  first transaction is later than the start of what the check looks at (the cycle, `DIAS_DO_CICLO` = 40 days
+  before the due date, or the payment window); `a_vencer` (payment only) when it does not close and the
+  payment window has not ended on the run day; `sem_total` when the bill has no total; `nao_fecha` otherwise.
+- It reconciles one row per `fact_card_statement` statement before the write. It only measures: nothing here
+  changes a transaction (df-z4fh), and it has no suspicious rule, so a bill that does not close never warns
+  (owner's call; a warning for a new bill is DataForge df-5g8b). The task prints the count per state of each
+  check, never an amount. The source is Pluggy's own total; the bank's bill PDF as an independent one is
+  DataForge df-lxdb.
 
 ### curated — `dim_calendar` (built by `dim_calendar.py`)
 ```
