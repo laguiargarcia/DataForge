@@ -42,8 +42,18 @@ difference is that the demo's `calendar` waits for `fetch`): change a task in bo
 ## The Finanças app
 
 `apps/financas` is a React app over the `curated.report_*` tables. `dataforge serve` publishes its
-committed `dist/` at `/apps/GetFinance/financas/` (no Node needed to run it). Node is needed only to
-change it, from the app folder after `npm ci`:
+committed `dist/` at `/apps/GetFinance/financas/` (no Node needed to run it).
+
+Its backend, `apps/financas/backend/main.py` (`backend:` in `app.yaml`), is what the edit screens call
+at `/apps/GetFinance/financas/api/...`: `GET /edicao` (categories, rules, corrections with `encontrada`,
+the allowed Tipos, `versao`, `aplicada`, `pendente`), create/change/delete of `/categorias`, `/regras`
+(the answer carries the rule's `efeito`: how many transactions it matches, wins and the direction gate
+leaves out) and `/correcoes/{id}`, and `POST /aplicar` (asks DataForge for a `reclassificar` run, queued
+behind any job of the workspace) with `GET /aplicar/{id}` for its status. Saving writes straight to
+`data/edicao.db`; the validations live in `scripts/report/edicao.py`, the one module that writes there.
+Tests: `tests/test_backend_edicao.py`.
+
+Node is needed only to change the front end, from the app folder after `npm ci`:
 
 - `npm test`: the unit tests (vitest).
 - `npm run build`: type-check and rebuild `dist/`. Commit `dist/` with every change to `src/`; CI
@@ -73,7 +83,7 @@ change it, from the app folder after `npm ci`:
 | Data | Rebuildable? | How |
 |---|---|---|
 | `data/raw/` | **No.** Pluggy only returns a short window of history | Backed up weekly by the `backup` job |
-| `data/edicao.db` (categories and rules you edit) | **No** | Same backup |
+| `data/edicao.db` (categories, rules and corrections you edit) | **No** | Same backup |
 | `data/extratos/` (the bank statement PDFs you drop there) | **No.** The bank's app exports them | Same backup |
 | `data/cleansed/` | Yes | `scripts/reprocess.py --source raw --target cleansed --entity all` |
 | `data/curated/` | Yes | Dropped and recreated on every run (`finance_daily` or `reclassificar`) |
