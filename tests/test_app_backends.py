@@ -1,5 +1,6 @@
 """Backend supervisor (real uvicorn processes) and the secret-checking middleware."""
 import asyncio
+import os
 import subprocess
 import sys
 import time
@@ -8,8 +9,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from dataforge import app_backends, compat
+from dataforge import app_backends, compat, liveness
 from dataforge.app_backends import BackendSupervisor, BackendUnavailable, _Running
+from dataforge.app_backend_host import wait_for_eof
 from dataforge.app_guard import TOKEN_HEADER
 from dataforge.presence import PresenceRegistry
 
@@ -241,3 +243,61 @@ def test_janela_vista_zera_ao_reiniciar(sup, info):
     run(sup.target(info))
     reg.leave("w1")
     assert sup.sweep(time.time(), reg) == []  # new start: no window seen yet
+
+
+# A server that starts the app's backend the way BackendSupervisor does, then hangs until killed.
+_SERVER = """
+import sys, time
+from pathlib import Path
+from dataforge.app_backends import _free_port, _spawn
+from dataforge.apps import load_app
+port = _free_port()
+_spawn(load_app(Path(sys.argv[1]), sys.argv[2]), port, "t", Path(sys.argv[3]))
+print(port, flush=True)
+time.sleep(600)
+"""
+
+
+def _backend_pid(port: int, token: str) -> int:
+    deadline = time.monotonic() + app_backends.START_TIMEOUT_SECONDS
+    while True:
+        try:
+            return get(port, "/pid", token).json()["pid"]
+        except httpx.TransportError:
+            assert time.monotonic() < deadline, "the backend never answered"
+            time.sleep(0.1)
+
+
+def test_backend_morre_com_o_servidor_que_o_subiu(info, workspace_dir, tmp_path):
+    """df-xy7c: a server killed before it stops its backends (a native crash, Stop-Process) leaves none behind."""
+    server = subprocess.Popen(
+        [sys.executable, "-c", _SERVER, str(workspace_dir), info.name, str(tmp_path / "app.log")],
+        stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        pid = _backend_pid(int(server.stdout.readline()), "t")
+    finally:
+        server.kill()
+        server.wait(5)
+        server.stdout.close()
+    deadline = time.monotonic() + app_backends._STOP_WAIT_SECONDS + 5
+    while liveness.process_start(pid) is not None:
+        assert time.monotonic() < deadline, f"backend {pid} outlived the server that started it"
+        time.sleep(0.1)
+
+
+def test_fim_do_stdin_e_eof():
+    read_end, write_end = os.pipe()
+    os.write(write_end, b"x")
+    os.close(write_end)
+    try:
+        assert wait_for_eof(read_end) is True
+    finally:
+        os.close(read_end)
+
+
+def test_stdin_ilegivel_nao_e_eof():
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    os.close(write_end)
+    assert wait_for_eof(read_end) is False
