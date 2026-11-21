@@ -90,7 +90,11 @@ Delta tables at `data/curated/<table>/`, one table per script under `scripts/cle
 - `dim_account` — one row per stable account identity (`account_uuid`). Full overwrite.
 - `dim_investment` — one row per stable investment identity. Full overwrite.
 - `dim_calendar` — date dimension (see below). Full overwrite.
-- `fact_transaction` — full overwrite each run from the durable raw source.
+- `fact_transaction` — full overwrite each run from the durable raw source. The two legs of a bill
+  payment get `etl_tag` `card_payment_bank` / `card_payment_card` (rules in `cleansed2curated.py`): by
+  category (`05100000` on both legs; `05060000` on the card, the automatic debit since 07/2026), or by
+  mirror, when one leg has its tag, the other one is the same |amount| within `MIRROR_WINDOW_DAYS` on the
+  other account (the bank leg of the automatic debit comes as Investments, no category or `05060000`).
 - `fact_balance_snapshot` — accumulating: MERGE on `(account_uuid, snapshot_date)`,
   keeps all prior days (history lives only here — A11).
 - `fact_investment_position` — accumulating: MERGE on `(holding_uuid, snapshot_date)`,

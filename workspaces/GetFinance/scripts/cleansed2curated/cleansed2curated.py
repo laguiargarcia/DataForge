@@ -7,6 +7,9 @@ exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding=
 # Pluggy taxonomy code for "Credit card payment" — tags both bill-settlement legs
 # (checking-side debit + card-side payment) identically across any institution.
 CC_PAYMENT_CATEGORY_ID = "05100000"
+# On the card, the bill payment by automatic debit comes as "Transfer - Internal" (05060000) since
+# 07/2026, measured on the real data (df-sf61); every 05060000 inflow on a card is a bill payment.
+CARD_SIDE_PAYMENT_CATEGORY_IDS = (CC_PAYMENT_CATEGORY_ID, "05060000")
 
 
 parser = argparse.ArgumentParser()
@@ -106,7 +109,7 @@ df = df.with_columns(
 # df-dnc + E2b: structural etl_tag (E3 precedence step 1 — user rules can never override).
 INVESTMENT_CATEGORY_PREFIX = "03"          # Pluggy 03xxxxxx = Investments family
 RESGATE_OPERATION_TYPE = "RESGATE_APLIC_FINANCEIRA"
-MIRROR_WINDOW_DAYS = 3                     # card-side payment leg within ±3 days of the BANK leg
+MIRROR_WINDOW_DAYS = 3                     # the two legs of a bill payment are within ±3 days
 
 df = df.with_columns(
     etl_tag=pl.when(
@@ -119,10 +122,36 @@ df = df.with_columns(
     .when(
         (pl.col("account_type") == "CREDIT")
         & (pl.col("txn_type") == "CREDIT")
-        & (pl.col("categoryId") == CC_PAYMENT_CATEGORY_ID)
+        & pl.col("categoryId").is_in(CARD_SIDE_PAYMENT_CATEGORY_IDS)
     )
     .then(pl.lit("card_payment_card"))
     .otherwise(None)
+)
+
+# Shape 3 (df-sf61): the BANK leg of the automatic debit carries no stable category (03000000, null
+# or 05060000 from 07/2026 on), so mirror-match BANK debits against the card-side payment legs: equal
+# |amount|, within 3 days. It overrides a category-made `investment` tag: Pluggy filed two of these
+# debits as Investments. Same known limitation as Shape 2, mirrored: a genuine debit (an investment
+# included) equal to the centavo to a bill payment within the window is taken as the payment.
+_card_legs = df.filter(pl.col("etl_tag") == "card_payment_card").select(
+    pl.col("amount").abs().round(2).alias("_pay_abs"),
+    pl.col("date").alias("_pay_date"),
+)
+_bank_mirror_ids = (
+    df.filter(
+        (pl.col("account_type") == "BANK")
+        & (pl.col("txn_type") == "DEBIT")
+        & (pl.col("etl_tag").is_null() | (pl.col("etl_tag") == "investment"))
+    )
+    .select("id", pl.col("amount").abs().round(2).alias("_pay_abs"), "date")
+    .join(_card_legs, on="_pay_abs")
+    .filter((pl.col("date") - pl.col("_pay_date")).dt.total_days().abs() <= MIRROR_WINDOW_DAYS)["id"]
+    .unique()
+)
+df = df.with_columns(
+    etl_tag=pl.when(pl.col("id").is_in(_bank_mirror_ids.implode()))
+    .then(pl.lit("card_payment_bank"))
+    .otherwise(pl.col("etl_tag"))
 )
 
 # Shape 2 (Finding B): the card-side leg is mislabeled (Shopping/08000000), so mirror-match
