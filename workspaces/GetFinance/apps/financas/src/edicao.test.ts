@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import {
-  aplicar, andamento, corrigir, desfazerCorrecao, ErroEdicao, excluirCategoria, excluirRegra, faseDoAndamento,
-  lerEdicao, salvarCategoria, salvarRegra, textoEfeito, textoFaixa,
+  aplicar, andamento, corrigir, desfazerCorrecao, desfazerExplicacao, ErroEdicao, excluirCategoria, excluirRegra,
+  explicar, faseDoAndamento, lerEdicao, salvarCategoria, salvarRegra, textoEfeito, textoFaixa,
 } from './edicao'
 
 type Pedido = { url: string; method: string; body: unknown }
@@ -33,6 +33,18 @@ test('criar e alterar categoria', async () => {
   expect(ultimo()).toEqual({ url: 'api/categorias', method: 'POST', body: c })
   await salvarCategoria('Casa/Reforma', c)
   expect(ultimo()).toMatchObject({ url: 'api/categorias/Casa%2FReforma', method: 'PUT' })
+})
+
+test('marcar e desfazer a divergência explicada de um intervalo', async () => {
+  responder(200, {})
+  await explicar('conta-a', '2026-05-28T19:23:28.936000+00:00', 'seguro antes da coleta')
+  expect(ultimo()).toEqual({
+    url: 'api/explicacoes/conta-a/2026-05-28T19%3A23%3A28%2E936000%2B00%3A00', method: 'PUT',
+    body: { motivo: 'seguro antes da coleta' },
+  })
+  responder(204)
+  await desfazerExplicacao('conta-a', '2026-05-28T19:23:28+00:00')
+  expect(ultimo()).toMatchObject({ url: 'api/explicacoes/conta-a/2026-05-28T19%3A23%3A28%2B00%3A00', method: 'DELETE' })
 })
 
 test('nome com ponto não vira segmento de ponto', async () => {

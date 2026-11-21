@@ -1,4 +1,5 @@
 """Backend do app Finanças (df-cns.8): edita as tabelas do data/edicao.db e dispara o reclassificar.
+Também marca um intervalo da conferência pelo saldo como divergência explicada (df-y26v).
 
 Roda como processo próprio, que o DataForge sobe e para o qual encaminha /apps/<ws>/financas/api/...
 (docs/workspace-layout.md, "Writing a backend"). Salvar grava direto no banco oficial, sem rascunho;
@@ -50,6 +51,10 @@ class Regra(BaseModel):
 
 class Correcao(BaseModel):
     subcategoria: str
+
+
+class Explicacao(BaseModel):
+    motivo: str
 
 
 def _workspace() -> Path:
@@ -108,6 +113,7 @@ def ler_edicao() -> dict:
         categorias = edicao.ler_dicionario(conn).rename({"Tipo": "tipo"}).to_dicts()
         regras = edicao.ler_mapeamento(conn).to_dicts()
         correcoes = edicao.ler_correcoes(conn).to_dicts()
+        explicacoes = edicao.ler_explicacoes(conn).to_dicts()
         versao = edicao.ler_versao(conn)
     finally:
         conn.close()
@@ -116,8 +122,9 @@ def ler_edicao() -> dict:
         correcao["encontrada"] = correcao["transacao_id"] in ids
     aplicada_df = _curated("edicao_aplicada")
     aplicada = None if aplicada_df is None or aplicada_df.is_empty() else aplicada_df["versao"][0]
-    return {"categorias": categorias, "regras": regras, "correcoes": correcoes, "tipos": list(edicao.TIPOS),
-            "versao": versao, "aplicada": aplicada, "pendente": versao > (aplicada or 0)}
+    return {"categorias": categorias, "regras": regras, "correcoes": correcoes, "explicacoes": explicacoes,
+            "tipos": list(edicao.TIPOS), "versao": versao, "aplicada": aplicada,
+            "pendente": versao > (aplicada or 0)}
 
 
 @app.post("/categorias", status_code=201, responses=_RECUSA_ESCRITA)
@@ -166,6 +173,40 @@ def corrigir(transacao_id: str, corpo: Correcao) -> dict:
 @app.delete("/correcoes/{transacao_id:path}", status_code=204, responses=_AUSENTE)
 def desfazer_correcao(transacao_id: str) -> None:
     _gravar(edicao.excluir_correcao, transacao_id)
+
+
+# Os estados da conferência que uma marca de explicado pode cobrir (os outros já fecham).
+_ESTADOS_SEM_FECHAR = ("nao_fecha", "em_aberto", "explicado")
+
+
+def _instante(ate: str):
+    """O fim do intervalo como a conferência o guarda (datetime UTC), ou 422 se o texto não for um instante."""
+    valor = pl.Series([ate]).str.to_datetime(time_unit="us", time_zone="UTC", strict=False)[0]
+    if valor is None:
+        raise HTTPException(status_code=422, detail="o fim do intervalo não é um instante")
+    return valor
+
+
+@app.put("/explicacoes/{conta}/{ate:path}", responses=_RECUSA_ESCRITA)
+def explicar(conta: str, ate: str, corpo: Explicacao) -> dict:
+    """Marca o intervalo como divergência explicada, com a diferença que ele tem agora no curated."""
+    instante = _instante(ate)
+    conferencia = _curated("conferencia_saldo")
+    linha = (None if conferencia is None else
+             conferencia.filter((pl.col("account_uuid") == conta) & (pl.col("ate") == instante)))
+    if linha is None or linha.is_empty():
+        raise HTTPException(status_code=422, detail="intervalo não encontrado na conferência")
+    intervalo = linha.row(0, named=True)
+    if intervalo["estado"] not in _ESTADOS_SEM_FECHAR:
+        raise HTTPException(status_code=422, detail="esse intervalo já fecha: não há divergência a explicar")
+    _gravar(edicao.salvar_explicacao, conta, instante.isoformat(), intervalo["diferenca"], corpo.motivo)
+    return {"conta": conta, "ate": instante.isoformat(), "diferenca": intervalo["diferenca"],
+            "motivo": corpo.motivo.strip()}
+
+
+@app.delete("/explicacoes/{conta}/{ate:path}", status_code=204, responses=_AUSENTE | {422: {"description": "pedido inválido"}})
+def desfazer_explicacao(conta: str, ate: str) -> None:
+    _gravar(edicao.excluir_explicacao, conta, _instante(ate).isoformat())
 
 
 def _api() -> httpx.Client:

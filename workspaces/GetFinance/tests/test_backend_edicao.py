@@ -45,6 +45,16 @@ def _fact():
     )
 
 
+def _conferencia():
+    # Dois intervalos da conta: um que não fecha (+9,93) e um que fecha.
+    utc = pl.Datetime("us", "UTC")
+    return pl.DataFrame({
+        "account_uuid": ["conta-ficticia", "conta-ficticia"],
+        "ate": ["2026-05-28T19:23:28.936Z", "2026-05-29T19:00:00Z"],
+        "diferenca": [9.93, 0.0], "estado": ["nao_fecha", "fecha"],
+    }).with_columns(pl.col("ate").str.to_datetime(time_unit="us", time_zone="UTC").cast(utc))
+
+
 @pytest.fixture
 def ws(tmp_path, monkeypatch):
     """Workspace em tmp_path: connections.yaml do de verdade, curated com 4 transações (t4 anulada),
@@ -56,6 +66,7 @@ def ws(tmp_path, monkeypatch):
     fact.write_delta(str(curated / "fact_transaction"))
     fact.filter(~pl.col("netting_applied")).select("id").write_delta(str(curated / "fact_transaction_classified"))
     pl.DataFrame({"versao": [0]}).write_delta(str(curated / "edicao_aplicada"))
+    _conferencia().write_delta(str(curated / "conferencia_saldo"))
     conn = edicao.abrir(tmp_path / "data" / "edicao.db")
     edicao.carga_inicial(conn, DIC, REGRAS)
     conn.close()
@@ -93,6 +104,7 @@ def test_ler_edicao(cliente):
     assert corpo["categorias"][0] == {"subcategoria": "Groceries", "categoria": "Alimentação", "tipo": "Essencial"}
     assert corpo["regras"] == [{"padrao": "MERCADO", "subcategoria": "Groceries"}]
     assert corpo["correcoes"] == []
+    assert corpo["explicacoes"] == []
     assert corpo["tipos"] == list(edicao.TIPOS)
     assert (corpo["versao"], corpo["aplicada"], corpo["pendente"]) == (0, 0, False)
 
@@ -303,3 +315,49 @@ def test_aplicar_com_erro_do_dataforge(cliente, monkeypatch):
     monkeypatch.setattr(backend, "_api", lambda: httpx.Client(
         base_url="http://df", transport=httpx.MockTransport(lambda _: httpx.Response(404, json={}))))
     assert cliente.post("/aplicar").status_code == 502
+
+
+# --- divergência explicada da conferência pelo saldo (df-y26v) -----------------------------------
+
+ATE = "2026-05-28T19:23:28.936000+00:00"
+ROTA = "/explicacoes/conta-ficticia/"
+
+
+def test_explicar_grava_a_diferenca_do_curated_e_desfazer_apaga(cliente, ws):
+    # O app manda o ate como a API de tabelas o serve; o banco guarda o instante normalizado.
+    r = cliente.put(ROTA + "2026-05-28T19:23:28.936Z", json={"motivo": " seguro debitado antes da coleta "})
+    assert r.status_code == 200
+    assert r.json() == {"conta": "conta-ficticia", "ate": ATE, "diferenca": 9.93,
+                        "motivo": "seguro debitado antes da coleta"}
+    corpo = cliente.get("/edicao").json()
+    assert corpo["explicacoes"] == [{"conta": "conta-ficticia", "ate": ATE, "diferenca": 9.93,
+                                     "motivo": "seguro debitado antes da coleta"}]
+    assert corpo["pendente"] is True
+    assert cliente.delete(ROTA + ATE).status_code == 204
+    assert cliente.get("/edicao").json()["explicacoes"] == []
+    assert cliente.delete(ROTA + ATE).status_code == 404
+
+
+@pytest.mark.parametrize("caminho,trecho", [
+    (ROTA + "2026-05-29T19:00:00Z", "já fecha"),                     # intervalo que fecha
+    (ROTA + "2026-05-27T19:00:00Z", "não encontrado"),               # intervalo que não existe
+    ("/explicacoes/outra-conta/2026-05-28T19:23:28.936Z", "não encontrado"),
+    (ROTA + "ontem", "não é um instante"),
+])
+def test_explicar_recusa(cliente, caminho, trecho):
+    r = cliente.put(caminho, json={"motivo": "um motivo"})
+    assert r.status_code == 422
+    assert trecho in r.json()["detail"]
+
+
+def test_explicar_com_o_ate_codificado_como_o_app_manda(cliente):
+    # O app codifica ':', '.' e '+' do instante (seg() em edicao.ts).
+    r = cliente.put(ROTA + "2026-05-28T19%3A23%3A28%2E936000%2B00%3A00", json={"motivo": "um motivo"})
+    assert (r.status_code, r.json()["ate"]) == (200, ATE)
+    assert cliente.delete(ROTA + "2026-05-28T19%3A23%3A28%2E936000%2B00%3A00").status_code == 204
+
+
+def test_explicar_sem_motivo(cliente):
+    r = cliente.put(ROTA + ATE, json={"motivo": "  "})
+    assert r.status_code == 422
+    assert "motivo" in r.json()["detail"]

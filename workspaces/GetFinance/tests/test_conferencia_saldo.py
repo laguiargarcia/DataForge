@@ -15,8 +15,9 @@ from tests import _delta_util
 
 sys.path.insert(0, str(_delta_util.SCRIPTS / "report"))
 
-from conferencia_saldo import (EM_ABERTO, ESTADOS, FECHA, FECHA_COM_VIZINHO, NAO_FECHA, TOLERANCIA,
-                               conferencia_saldo)
+from conferencia_saldo import (EM_ABERTO, ESTADOS, EXPLICADO, FECHA, FECHA_COM_VIZINHO, NAO_FECHA, TOLERANCIA,
+                               aplicar_explicacoes, conferencia_saldo)
+from edicao import SCHEMA_EXPLICACOES, abrir, salvar_explicacao
 
 BANK, OUTRA, CARTAO = "p-bank-1", "p-bank-2", "p-card-1"
 
@@ -236,8 +237,61 @@ def test_o_mais_novo_que_nao_fecha_sozinho_fica_em_aberto():
     assert _estados(-20.0, -8.70) == [NAO_FECHA, EM_ABERTO]
 
 
-def test_estados_sao_os_quatro():
-    assert set(ESTADOS) == {FECHA, FECHA_COM_VIZINHO, EM_ABERTO, NAO_FECHA}
+def test_estados_sao_os_cinco():
+    assert set(ESTADOS) == {FECHA, FECHA_COM_VIZINHO, EXPLICADO, EM_ABERTO, NAO_FECHA}
+
+
+# --- as divergências que o dono explicou (df-y26v) -----------------------------------------------
+
+MOTIVO = "seguro debitado antes da primeira coleta"
+
+
+def _explicacoes(*linhas):
+    # (conta, ate ISO, diferença marcada, motivo)
+    return pl.DataFrame(list(linhas), schema=SCHEMA_EXPLICACOES, orient="row")
+
+
+def _explicar(conf, *linhas):
+    return aplicar_explicacoes(conf.with_columns(pl.col("account_id").alias("account_uuid")), _explicacoes(*linhas))
+
+
+# Três intervalos: 01->02 não fecha (-20), 02->03 fecha, 03->04 em aberto (-5).
+TRES = _conferir(_serie(100.0, 80.0, 80.0, 75.0), _transactions())
+ATE_1, ATE_3 = "2026-06-02T19:00:00+00:00", "2026-06-04T19:00:00.000Z"
+
+
+def test_intervalo_marcado_com_a_mesma_diferenca_fica_explicado():
+    out = _explicar(TRES, (BANK, ATE_1, -20.0, MOTIVO), (BANK, ATE_3, -5.0, "outro motivo"))
+    assert out.select("estado", "explicacao").rows() == [(EXPLICADO, MOTIVO), (FECHA, None), (EXPLICADO, "outro motivo")]
+    # A diferença e a acumulada continuam as de verdade.
+    assert out["diferenca"].to_list() == TRES["diferenca"].to_list()
+    assert out["diferenca_acumulada"].to_list() == TRES["diferenca_acumulada"].to_list()
+
+
+def test_marca_cuja_diferenca_mudou_nao_vale():
+    out = _explicar(TRES, (BANK, ATE_1, -9.90, MOTIVO))
+    assert out.select("estado", "explicacao").row(0) == (NAO_FECHA, None)
+    assert _explicar(TRES, (BANK, ATE_1, -20.01, MOTIVO))["estado"][0] == NAO_FECHA
+
+
+def test_marca_de_outro_intervalo_ou_conta_ou_de_intervalo_que_fecha_nao_muda_nada():
+    for linha in [(OUTRA, ATE_1, -20.0, MOTIVO), (BANK, "2026-06-02T19:00:01+00:00", -20.0, MOTIVO),
+                  (BANK, "2026-06-03T19:00:00+00:00", 0.0, MOTIVO), (BANK, "não é data", -20.0, MOTIVO)]:
+        out = _explicar(TRES, linha)
+        assert out["estado"].to_list() == TRES["estado"].to_list()
+        assert out["explicacao"].to_list() == [None, None, None]
+
+
+def test_sem_marcas_so_ganha_a_coluna():
+    out = _explicar(TRES)
+    assert out["estado"].to_list() == TRES["estado"].to_list()
+    assert out["explicacao"].to_list() == [None, None, None]
+
+
+def test_intervalo_explicado_nao_avisa():
+    conf = _explicar(_conferir(QUEBRA_ANTIGA, _transactions()), (BANK, ATE_1, -20.0, MOTIVO))
+    regra = F["new_balance_break_rule"](today=JUN[4])[2]
+    assert F["_offenders"](conf, regra, ["ate"]) == (0, [])
 
 
 # --- o aviso: o terceiro intervalo mais novo, na rodada que trouxe snapshot novo -------------------
@@ -359,9 +413,21 @@ def test_task_imprime_contagens_e_os_mais_novos_sem_valores(tmp_path, capsys):
     _seed(tmp_path, 40.0, 40.0, 30.0)
     _run(tmp_path, 5)
     printed = capsys.readouterr().out
-    assert ("conferencia_saldo: 4 intervalos (tolerância 1.00): fecha 2, fecha_com_vizinho 0, em_aberto 1, "
-            "nao_fecha 1") in printed
+    assert ("conferencia_saldo: 4 intervalos (tolerância 1.00): fecha 2, fecha_com_vizinho 0, explicado 0, "
+            "em_aberto 1, nao_fecha 1") in printed
     assert "entre os 3 mais novos, 2026-06-04 19:00 -> 2026-06-05 19:00 não fecha (em_aberto)" in printed
     # O intervalo de 01/06 não está entre os 3 mais novos; nenhum valor sai no log.
     assert "2026-06-01 19:00 ->" not in printed
     assert not any(v in printed for v in ("-20", "-10", "20.00", "10.00"))
+
+
+def test_task_le_as_explicacoes_do_banco_de_edicao(tmp_path):
+    # df-y26v: a marca feita no app (edicao.db) chega à tabela; o aviso da quebra não sai para ela.
+    _seed(tmp_path, 40.0, 40.0)
+    conn = abrir(tmp_path / "edicao")   # a conexão edicao do teste é o próprio arquivo
+    salvar_explicacao(conn, "banco-conta-0001", "2026-06-02T19:00:00+00:00", -20.0, MOTIVO)
+    conn.close()
+    _run(tmp_path, 4)
+    out = _delta_util.read(tmp_path, "curated", "conferencia_saldo").sort("ate")
+    assert out.select("estado", "explicacao").rows() == [(EXPLICADO, MOTIVO), (FECHA, None), (FECHA, None)]
+    assert _findings(tmp_path) == []

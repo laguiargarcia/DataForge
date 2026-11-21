@@ -18,6 +18,8 @@ Cada intervalo tem um `estado`:
   data do lançamento; cada intervalo entra em no máximo um par;
 - em_aberto: o intervalo mais novo da conta, quando não fecha sozinho nem com o anterior: o vizinho
   seguinte ainda não existe;
+- explicado: um intervalo nao_fecha ou em_aberto que o dono marcou como divergência explicada (df-y26v, a
+  tabela explicacoes do edicao.db, via aplicar_explicacoes), enquanto a diferença for a da marcação;
 - nao_fecha: o resto.
 A `diferenca` crua fica sempre na linha, e `coletado_em` é o dia em que o snapshot `ate` chegou pela
 primeira vez (a regra do aviso, em functions.py, olha se o snapshot mais novo da conta chegou na rodada).
@@ -34,8 +36,12 @@ from classificacao import eh_aplicacao_automatica
 # o rendimento crescer com o saldo sem esconder uma quebra.
 TOLERANCIA = 1.00
 
-FECHA, FECHA_COM_VIZINHO, EM_ABERTO, NAO_FECHA = "fecha", "fecha_com_vizinho", "em_aberto", "nao_fecha"
-ESTADOS = (FECHA, FECHA_COM_VIZINHO, EM_ABERTO, NAO_FECHA)
+FECHA, FECHA_COM_VIZINHO, EXPLICADO, EM_ABERTO, NAO_FECHA = (
+    "fecha", "fecha_com_vizinho", "explicado", "em_aberto", "nao_fecha")
+ESTADOS = (FECHA, FECHA_COM_VIZINHO, EXPLICADO, EM_ABERTO, NAO_FECHA)
+
+# Uma marca de explicado vale enquanto a diferença do intervalo for a marcada, ao centavo (df-y26v).
+TOLERANCIA_EXPLICACAO = 0.005
 
 COLUNAS = {
     "account_id": pl.String,
@@ -163,3 +169,30 @@ def conferencia_saldo(accounts_raw: pl.DataFrame, transactions: pl.DataFrame,
     estados = [e for _, conta in out.group_by("account_id", maintain_order=True)
                for e in _estados(conta["diferenca"].to_list())]
     return out.with_columns(pl.Series("estado", estados, dtype=pl.String)).select(list(COLUNAS)).cast(COLUNAS)
+
+
+def aplicar_explicacoes(conferencia: pl.DataFrame, explicacoes: pl.DataFrame) -> pl.DataFrame:
+    """A conferência com as divergências que o dono explicou (df-y26v) e a coluna `explicacao` (o motivo).
+
+    conferencia: a de conferencia_saldo, já com account_uuid. explicacoes: edicao.ler_explicacoes (conta =
+    account_uuid, ate em texto ISO UTC, diferenca da marcação, motivo).
+    Um intervalo nao_fecha ou em_aberto vira explicado quando tem marca e a diferença dele ainda é a marcada
+    (a até TOLERANCIA_EXPLICACAO); `explicacao` é o motivo nesse caso e nula nos outros. Uma marca de um
+    intervalo que fecha, ou cuja diferença mudou, não muda nada: o dinheiro novo volta a acusar.
+    """
+    marcas = explicacoes.select(
+        pl.col("conta").alias("account_uuid"),
+        _instante("ate").alias("ate"),
+        pl.col("diferenca").alias("_marcada"),
+        pl.col("motivo").alias("_motivo"),
+    ).drop_nulls(["account_uuid", "ate"])
+    vale = (pl.col("estado").is_in([NAO_FECHA, EM_ABERTO])
+            & ((pl.col("diferenca") - pl.col("_marcada")).abs() <= TOLERANCIA_EXPLICACAO)).fill_null(False)
+    return (
+        conferencia.join(marcas, on=["account_uuid", "ate"], how="left")
+        .with_columns(
+            pl.when(vale).then(pl.lit(EXPLICADO)).otherwise(pl.col("estado")).alias("estado"),
+            pl.when(vale).then(pl.col("_motivo")).otherwise(pl.lit(None, dtype=pl.String)).alias("explicacao"),
+        )
+        .drop("_marcada", "_motivo")
+    )

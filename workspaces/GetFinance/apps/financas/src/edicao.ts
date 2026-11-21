@@ -5,10 +5,13 @@
 export type Categoria = { subcategoria: string; categoria: string; tipo: string }
 export type Regra = { padrao: string; subcategoria: string }
 export type Correcao = { transacao_id: string; subcategoria: string; encontrada: boolean }
+/** Um intervalo da conferência pelo saldo marcado como divergência explicada (df-y26v). */
+export type Explicacao = { conta: string; ate: string; diferenca: number; motivo: string }
 export type Edicao = {
   categorias: Categoria[]
   regras: Regra[]
   correcoes: Correcao[]
+  explicacoes: Explicacao[]
   tipos: string[]
   versao: number
   aplicada: number | null
@@ -61,6 +64,13 @@ export const corrigir = (transacaoId: string, subcategoria: string) =>
   pedir<unknown>('PUT', `correcoes/${seg(transacaoId)}`, { subcategoria })
 
 export const desfazerCorrecao = (transacaoId: string) => pedir<void>('DELETE', `correcoes/${seg(transacaoId)}`)
+
+// O intervalo é a conta e o fim dele (o `ate` como a tabela da conferência o traz).
+export const explicar = (conta: string, ate: string, motivo: string) =>
+  pedir<Explicacao>('PUT', `explicacoes/${seg(conta)}/${seg(ate)}`, { motivo })
+
+export const desfazerExplicacao = (conta: string, ate: string) =>
+  pedir<void>('DELETE', `explicacoes/${seg(conta)}/${seg(ate)}`)
 
 export async function aplicar(): Promise<string> {
   return (await pedir<{ execution_id: string }>('POST', 'aplicar')).execution_id

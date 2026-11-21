@@ -826,7 +826,7 @@ FACT_BALANCE_SNAPSHOT_RULES = [
 # its end `ate`; `coletado_em` is the day its `ate` snapshot first arrived.
 CONFERENCIA_SALDO_COLUMNS = [
     "account_uuid", "de", "ate", "coletado_em", "saldo_de", "saldo_ate", "variacao_saldo",
-    "soma_lancamentos", "n_lancamentos", "diferenca", "diferenca_acumulada", "estado",
+    "soma_lancamentos", "n_lancamentos", "diferenca", "diferenca_acumulada", "estado", "explicacao",
 ]
 CONFERENCIA_SALDO_RULES = [
     expected_columns_rule(CONFERENCIA_SALDO_COLUMNS),
@@ -834,7 +834,10 @@ CONFERENCIA_SALDO_RULES = [
     ("more than one row per account and interval end", IMPOSSIBLE, duplicated("account_uuid", "ate")),
     ("de is not before ate", IMPOSSIBLE, pl.col("de") >= pl.col("ate")),
     ("estado is not a known state", IMPOSSIBLE,
-     pl.col("estado").is_null() | not_in("estado", ["fecha", "fecha_com_vizinho", "em_aberto", "nao_fecha"])),
+     pl.col("estado").is_null()
+     | not_in("estado", ["fecha", "fecha_com_vizinho", "explicado", "em_aberto", "nao_fecha"])),
+    ("an explained interval has no reason", IMPOSSIBLE,
+     (pl.col("estado") == "explicado") & pl.col("explicacao").is_null()),
 ]
 
 

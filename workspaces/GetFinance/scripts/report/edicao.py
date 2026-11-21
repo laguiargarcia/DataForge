@@ -1,5 +1,5 @@
-"""edicao.py — as tabelas que o usuário edita (dicionário de categorias, mapeamento e correções por
-transação), em SQLite, e a versão delas.
+"""edicao.py — as tabelas que o usuário edita (dicionário de categorias, mapeamento, correções por
+transação e divergências da conferência pelo saldo marcadas como explicadas), em SQLite, e a versão delas.
 
 O banco fica em data/ (conexão `edicao` do connections.yaml): é ambiente, nenhum deploy o leva,
 então uma edição nunca é sobrescrita e cada workspace tem as suas. O ETL só lê; quem escreve é a
@@ -24,12 +24,14 @@ TIPOS = TIPOS_SAIDA + TIPOS_ENTRADA
 T_CATEGORIAS = "categorias"
 T_MAPEAMENTO = "mapeamento"
 T_CORRECOES = "correcoes"
+T_EXPLICACOES = "explicacoes"
 T_VERSAO = "versao"
 
 # Colunas no banco -> colunas no DataFrame (o v3 chama a coluna de "Tipo").
 COLS_DICIONARIO = {"subcategoria": "subcategoria", "categoria": "categoria", "tipo": "Tipo"}
 COLS_MAPEAMENTO = {"padrao": "padrao", "subcategoria": "subcategoria"}
 COLS_CORRECOES = {"transacao_id": "transacao_id", "subcategoria": "subcategoria"}
+SCHEMA_EXPLICACOES = {"conta": pl.String, "ate": pl.String, "diferenca": pl.Float64, "motivo": pl.String}
 
 _ESQUEMA = f"""
 CREATE TABLE IF NOT EXISTS {T_CATEGORIAS} (
@@ -44,6 +46,16 @@ CREATE TABLE IF NOT EXISTS {T_MAPEAMENTO} (
 CREATE TABLE IF NOT EXISTS {T_CORRECOES} (
     transacao_id TEXT PRIMARY KEY NOT NULL,
     subcategoria TEXT NOT NULL
+);
+-- Divergências da conferência pelo saldo que o dono explicou (df-y26v): um intervalo (conta = account_uuid,
+-- ate = o fim do intervalo em ISO UTC), a diferença que ele tinha na marcação e o motivo. A conferência só o
+-- mostra como explicado enquanto a diferença for essa: dinheiro novo no intervalo volta a acusar.
+CREATE TABLE IF NOT EXISTS {T_EXPLICACOES} (
+    conta     TEXT NOT NULL,
+    ate       TEXT NOT NULL,
+    diferenca REAL NOT NULL,
+    motivo    TEXT NOT NULL,
+    PRIMARY KEY (conta, ate)
 );
 -- Uma linha só: quem grava nas tabelas acima soma 1 em `numero` na mesma transação. O classify
 -- grava a versão que leu em curated.edicao_aplicada; a tela compara as duas (df-cns.8).
@@ -79,6 +91,11 @@ def ler_mapeamento(conn: sqlite3.Connection) -> pl.DataFrame:
 
 def ler_correcoes(conn: sqlite3.Connection) -> pl.DataFrame:
     return _ler(conn, T_CORRECOES, COLS_CORRECOES)
+
+
+def ler_explicacoes(conn: sqlite3.Connection) -> pl.DataFrame:
+    rows = conn.execute(f"SELECT {', '.join(SCHEMA_EXPLICACOES)} FROM {T_EXPLICACOES} ORDER BY rowid").fetchall()  # noqa: S608 -- nomes vêm das constantes do módulo
+    return pl.DataFrame(rows, schema=SCHEMA_EXPLICACOES, orient="row")
 
 
 def ler_versao(conn: sqlite3.Connection) -> int:
@@ -254,3 +271,23 @@ def excluir_correcao(conn: sqlite3.Connection, transacao_id: str) -> None:
     with _gravacao(conn):
         if conn.execute(f"DELETE FROM {T_CORRECOES} WHERE transacao_id = ?", (transacao_id,)).rowcount == 0:  # noqa: S608 -- tabela é constante do módulo
             raise Recusa("ausente", "essa transação não tem correção")
+
+
+def salvar_explicacao(conn: sqlite3.Connection, conta: str, ate: str, diferenca: float, motivo: str) -> None:
+    """Marca (ou remarca) o intervalo (conta, ate) da conferência pelo saldo como divergência explicada. Se o
+    intervalo existe, e qual a diferença dele, é o backend que confere: este módulo não lê o curated."""
+    conta = _texto(conta, "a conta")
+    ate = _texto(ate, "o fim do intervalo")
+    motivo = _texto(motivo, "o motivo")
+    with _gravacao(conn):
+        conn.execute(
+            f"INSERT INTO {T_EXPLICACOES} (conta, ate, diferenca, motivo) VALUES (?, ?, ?, ?) "  # noqa: S608 -- tabela é constante do módulo
+            "ON CONFLICT(conta, ate) DO UPDATE SET diferenca = excluded.diferenca, motivo = excluded.motivo",
+            (conta, ate, diferenca, motivo),
+        )
+
+
+def excluir_explicacao(conn: sqlite3.Connection, conta: str, ate: str) -> None:
+    with _gravacao(conn):
+        if conn.execute(f"DELETE FROM {T_EXPLICACOES} WHERE conta = ? AND ate = ?", (conta, ate)).rowcount == 0:  # noqa: S608 -- tabela é constante do módulo
+            raise Recusa("ausente", "esse intervalo não está marcado como explicado")

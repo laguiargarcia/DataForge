@@ -17,26 +17,36 @@ async function carregar(): Promise<Conferencia> {
   return montarConferencia(intervalos, suspeitos)
 }
 
-export function TelaConferencia() {
+// aplicada: a versão do banco de edição que o último Aplicar levou ao curated; quando muda, a conferência
+// é relida (uma marca de explicado só aparece depois do Aplicar). onMudou: uma marca foi salva ou desfeita.
+type Props = { aplicada: number | null; onMudou: () => void }
+
+export function TelaConferencia({ aplicada, onMudou }: Readonly<Props>) {
   const [estado, setEstado] = useState<Estado>({ fase: 'carregando' })
   const [ativo, setAtivo] = useState<string | null>(null)
 
-  const abrir = useCallback(() => {
+  const abrir = useCallback((manter: string | null = null) => {
     setEstado({ fase: 'carregando' })
-    setAtivo(null)
+    setAtivo(manter)
     carregar().then(
       conferencia => setEstado({ fase: 'ok', conferencia }),
       () => setEstado({ fase: 'erro' }),
     )
   }, [])
+  const [ultimaAplicada, setUltimaAplicada] = useState(aplicada)
   useEffect(() => { abrir() }, [abrir])
+  useEffect(() => {
+    if (aplicada === ultimaAplicada) return
+    setUltimaAplicada(aplicada)
+    abrir(ativo)
+  }, [aplicada, ultimaAplicada, abrir, ativo])
 
   const conferencia = estado.fase === 'ok' ? estado.conferencia : null
   const intervalo = conferencia?.intervalos.find(i => i.id === ativo) ?? null
 
   let cartao: ReactNode = null
-  if (estado.fase === 'erro') cartao = <FalhaCarga onTentar={abrir} />
-  else if (intervalo) cartao = <CartaoIntervalo intervalo={intervalo} onVoltar={() => setAtivo(null)} />
+  if (estado.fase === 'erro') cartao = <FalhaCarga onTentar={() => abrir()} />
+  else if (intervalo) cartao = <CartaoIntervalo intervalo={intervalo} onVoltar={() => setAtivo(null)} onMudou={onMudou} />
   else if (conferencia) cartao = <CartaoConferencia conferencia={conferencia} />
 
   return (
