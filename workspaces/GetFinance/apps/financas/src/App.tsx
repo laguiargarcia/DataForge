@@ -164,14 +164,12 @@ export function App() {
           </div>
         )}
         {tela === 'conferencia' && <TelaConferencia />}
-        {(tela === 'categorias' || tela === 'transacoes') && (
-          edicao
-            ? (tela === 'categorias'
-              ? <TelaCategorias edicao={edicao} onMudou={lerBanco} />
-              : <TelaTransacoes transacoes={dados?.transacoes ?? null} edicao={edicao} onMudou={lerBanco} />)
-            : estadoEdicao.fase === 'erro' && (
-              <section className="bg-cartao rounded-[36px] p-8"><FalhaCarga onTentar={lerBanco} /></section>
-            )
+        {tela === 'categorias' && edicao && <TelaCategorias edicao={edicao} onMudou={lerBanco} />}
+        {tela === 'transacoes' && edicao && (
+          <TelaTransacoes transacoes={dados?.transacoes ?? null} edicao={edicao} onMudou={lerBanco} />
+        )}
+        {(tela === 'categorias' || tela === 'transacoes') && estadoEdicao.fase === 'erro' && (
+          <section className="bg-cartao rounded-[36px] p-8"><FalhaCarga onTentar={lerBanco} /></section>
         )}
       </div>
     </div>

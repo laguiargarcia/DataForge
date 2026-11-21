@@ -3,7 +3,7 @@ import { corrigir, desfazerCorrecao, type Edicao } from '../edicao'
 import { brl, type TxClassificada } from '../resumo'
 import {
   LIMITE_LINHAS, SEM_CATEGORIA, categoriasDe, correcoesPorId, dataCurta, estadoCorrecao, filtrar, mesesDe, orfas,
-  rotuloAnomes, textoConfirmacao, textoEstado, type Filtro,
+  rotuloAnomes, textoConfirmacao, textoContagem, textoEstado, type Filtro,
 } from '../transacoes'
 
 type Props = { transacoes: TxClassificada[] | null; edicao: Edicao; onMudou: () => void }
@@ -86,9 +86,7 @@ export function TelaTransacoes({ transacoes, edicao, onMudou }: Readonly<Props>)
           </select>
         </div>
         <p className="m-0 mx-4 text-[14px] text-secundario">
-          {lista.length > LIMITE_LINHAS
-            ? `Mostrando ${LIMITE_LINHAS} de ${lista.length} transações; refine a busca ou os filtros.`
-            : `${lista.length} ${lista.length === 1 ? 'transação' : 'transações'}`}
+          {textoContagem(lista.length)}
         </p>
 
         {lista.slice(0, LIMITE_LINHAS).map(t => {

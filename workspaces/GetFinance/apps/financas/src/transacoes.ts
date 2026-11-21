@@ -35,6 +35,12 @@ export function categoriasDe(txs: TxClassificada[]): string[] {
   return txs.some(t => t.categoria === SEM_CATEGORIA) ? [SEM_CATEGORIA, ...todas] : todas
 }
 
+/** Quantas linhas a lista tem e, acima do limite, quantas ela mostra. */
+export function textoContagem(n: number): string {
+  if (n > LIMITE_LINHAS) return `Mostrando ${LIMITE_LINHAS} de ${n} transações; refine a busca ou os filtros.`
+  return n === 1 ? '1 transação' : `${n} transações`
+}
+
 export const dataCurta = (data: string) => `${data.slice(8, 10)}/${data.slice(5, 7)}/${data.slice(0, 4)}`
 
 /** Marcação automática do ETL que uma correção sobrepõe, em palavras, ou null. */

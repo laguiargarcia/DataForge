@@ -2,7 +2,7 @@ import { expect, test } from 'vitest'
 import type { TxClassificada } from './resumo'
 import {
   SEM_CATEGORIA, categoriasDe, correcoesPorId, dataCurta, estadoCorrecao, filtrar, marcacaoAutomatica, mesesDe, orfas,
-  rotuloAnomes, textoConfirmacao, textoEstado,
+  rotuloAnomes, textoConfirmacao, textoContagem, textoEstado,
 } from './transacoes'
 
 function tx(p: Partial<TxClassificada> & { id: string }): TxClassificada {
@@ -93,4 +93,11 @@ test('texto de cada estado', () => {
 test('órfãs são as correções sem transação', () => {
   const c = [{ transacao_id: 'x', subcategoria: 'A', encontrada: true }, { transacao_id: 'z', subcategoria: 'B', encontrada: false }]
   expect(orfas(c)).toEqual([c[1]])
+})
+
+test('texto da contagem, com o limite de linhas', () => {
+  expect(textoContagem(0)).toBe('0 transações')
+  expect(textoContagem(1)).toBe('1 transação')
+  expect(textoContagem(300)).toBe('300 transações')
+  expect(textoContagem(301)).toBe('Mostrando 300 de 301 transações; refine a busca ou os filtros.')
 })
