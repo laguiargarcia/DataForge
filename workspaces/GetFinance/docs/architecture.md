@@ -243,7 +243,9 @@ Default range 2024-01-01 … 2027-12-31, overridable via `--start` / `--end`.
 Since 2026-11-09 (DataForge df-cns) the report logic runs in the ETL: `scripts/report/classify.py`
 writes `curated.fact_transaction_classified` and `scripts/report/report_curated.py` writes
 `curated.report_*`, both at the end of `finance_daily` and alone as the job `reclassificar`. The
-Finanças app (`apps/financas`) reads those tables. The Excel workbooks under `report/` are ignored
+Finanças app (`apps/financas`) reads those tables, and its backend (`apps/financas/backend`) edits the
+categories, rules and per-transaction corrections in `data/edicao.db` and asks DataForge for a
+`reclassificar` run when the user clicks Aplicar (DataForge df-cns.8). The Excel workbooks under `report/` are ignored
 (history only; `docs/workbook.md` describes the old Power Pivot design).
 
 ## Data checks (ADR 0004, DataForge df-ahua.3 and df-ahua.22)
