@@ -258,6 +258,61 @@ def latest_by_key(frames, keys, order_by):
     )
 
 
+# A transaction gone from the latest fetch leaves cleansed only where its absence means it is not real
+# (df-7twv): on a card (the bill is the card's judge, and the gone rows are the bill payments Pluggy
+# generates from the bill and later drops, with a live twin) and, on a bank account, only when it was
+# PENDING (a pending row that vanishes is a duplicate of the posted one). A POSTED bank row that vanishes
+# is money that really moved: the account balance and the bank statement show it, so it stays.
+GONE_IS_REMOVED = ((pl.col("account_type") == "CREDIT")
+                   | ((pl.col("account_type") == "BANK") & (pl.col("status") == "PENDING")))
+
+# An account where this run would remove more than GONE_MIN ids AND more than GONE_PERCENT % of its ids
+# inside the window looks like an incomplete fetch, not like removals (df-75ol): nothing leaves it.
+GONE_MIN = 20
+GONE_PERCENT = 10
+INCOMPLETE_FETCH = ((pl.col("ids_newly_removed") > GONE_MIN)
+                    & (pl.col("ids_newly_removed") * 100 > pl.col("ids_in_window") * GONE_PERCENT))
+
+
+def gone_from_latest_fetch(known, latest_fetch, in_cleansed):
+    # The transactions to remove from cleansed (df-75ol, rule of df-7twv). Pluggy returns an account's
+    # whole window on every fetch, so the latest fetch covers, for each account in it, the days from that
+    # account's earliest date in it on. A known id of such an account, dated inside that window and
+    # absent from the latest fetch, is gone; it is removed when GONE_IS_REMOVED holds for it. An account
+    # absent from the latest fetch and an id dated before the window are not judged.
+    # `known` has one row per id (id, accountId, date, status, account_type: its latest known state, raw
+    # or cleansed); `latest_fetch` has id, accountId and date (raw text or a typed date: the day is the
+    # first 10 characters); `in_cleansed` is the ids cleansed holds before this run.
+    # The guard counts only what this run newly removes (ids still in cleansed, or every removal when
+    # cleansed is empty, as after reprocess.py): a removal applied once is not counted again, so an old
+    # removal never holds an account for good, and an account held today is held again tomorrow while
+    # the fetch stays the same.
+    # Returns (per_account, removed): per account of the latest fetch, its ids inside the window, the ids
+    # gone, the ids newly removed and the ids removed (0 when INCOMPLETE_FETCH holds the account); and the
+    # removed rows (id, accountId).
+    window = (latest_fetch.select("accountId", _day("date").alias("day"))
+              .group_by("accountId").agg(pl.col("day").min().alias("window_start")))
+    new_if_empty = in_cleansed.is_empty()
+    in_window = (known.with_columns(_day("date").alias("day"))
+                 .join(window, on="accountId", how="inner")
+                 .filter(pl.col("day") >= pl.col("window_start"))
+                 .with_columns(gone=~pl.col("id").is_in(latest_fetch["id"].implode()))
+                 .with_columns(to_remove=pl.col("gone") & GONE_IS_REMOVED.fill_null(False))
+                 .with_columns(newly=pl.col("to_remove")
+                               & (pl.lit(new_if_empty) | pl.col("id").is_in(in_cleansed.implode()))))
+    per_account = (in_window.group_by("accountId", maintain_order=True)
+                   .agg(ids_in_window=pl.len(), ids_gone=pl.col("gone").sum().cast(pl.UInt32),
+                        ids_newly_removed=pl.col("newly").sum().cast(pl.UInt32),
+                        ids_to_remove=pl.col("to_remove").sum().cast(pl.UInt32))
+                   .with_columns(ids_removed=pl.when(INCOMPLETE_FETCH).then(0).otherwise(pl.col("ids_to_remove"))
+                                 .cast(pl.UInt32))
+                   .drop("ids_to_remove")
+                   .sort("accountId"))
+    held = per_account.filter(INCOMPLETE_FETCH)["accountId"]
+    removed = in_window.filter(pl.col("to_remove") & ~pl.col("accountId").is_in(held.implode()))
+    return per_account, removed.select("id", "accountId")
+
+
 # --- Data validation (ADR 0004: df-ahua.3 rules, df-ahua.22 reconciliation) ----------------------
 # Every run checks the data BEFORE the write it protects, with validate() and a rule list below.
 # A rule is data: (name, severity, check). `check` is a Polars expression that is True on every row
@@ -622,12 +677,23 @@ CLEANSED_TRANSACTIONS_RULES = [
      pl.col("ingested_at").str.slice(0, 10) < pl.col("cleansed_ingested_at").str.slice(0, 10)),
 ]
 
+# raw -> cleansed: the per_account frame of gone_from_latest_fetch (df-75ol). Suspicious: the write goes
+# on without removing anything from the account, and the next complete fetch removes what is gone.
+FETCH_REMOVALS_RULES = [
+    ("too many ids to remove from the latest fetch: none removed from the account", SUSPICIOUS,
+     INCOMPLETE_FETCH),
+]
+
 # Reconciliation (df-ahua.22), on layer_totals frames.
 ROWS_KEPT_RULES = [
     ("rows lost", IMPOSSIBLE, pl.col("rows_after") < pl.col("rows_before")),
 ]
 IDS_KEPT_RULES = ROWS_KEPT_RULES + [
     ("id written more than once", IMPOSSIBLE, pl.col("rows_after") > 1),
+]
+# Before: the rows a write had to delete; after: the table it left (df-75ol).
+ROWS_REMOVED_RULES = [
+    ("removed id still written", IMPOSSIBLE, (pl.col("rows_before") > 0) & (pl.col("rows_after") > 0)),
 ]
 ROWS_CARRIED_RULES = [
     ("rows not carried one to one", IMPOSSIBLE, pl.col("rows_after") != pl.col("rows_before")),
@@ -930,11 +996,27 @@ def upsert_delta_table(layer, table, df, keys):
     # no-op that leaves prior rows intact (and skips a pointless merge).
     if df.is_empty():
         return
-    predicate = " AND ".join(f"t.{k} = s.{k}" for k in keys)
     (
-        df.write_delta(str(path), mode="merge",
-                       delta_merge_options={"predicate": predicate, "source_alias": "s", "target_alias": "t"})
+        df.write_delta(str(path), mode="merge", delta_merge_options=_merge_options(keys))
         .when_matched_update_all()
         .when_not_matched_insert_all()
         .execute()
     )
+
+
+def delete_delta_rows(layer, table, df, keys):
+    # Delete the rows of the table whose `keys` match a row of `df` (a MERGE with only a delete clause;
+    # rows that match nothing are left alone). No table yet, or nothing to delete: a no-op.
+    if df.is_empty() or not delta_table_exists(layer, table):
+        return
+    (
+        df.select(keys).write_delta(str(delta_table_path(layer, table)), mode="merge",
+                                    delta_merge_options=_merge_options(keys))
+        .when_matched_delete()
+        .execute()
+    )
+
+
+def _merge_options(keys):
+    predicate = " AND ".join(f"t.{k} = s.{k}" for k in keys)
+    return {"predicate": predicate, "source_alias": "s", "target_alias": "t"}
