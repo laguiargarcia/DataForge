@@ -50,6 +50,11 @@ SKIP_PARTS = {"node_modules", ".venv", "venv", "__pycache__"}
 TESTS = "tests/"
 # Only compat may spell a SQLite URL (docs/subsystems/compat.md); this file names it to find it.
 SQLITE_URL_HOMES = {"dataforge/compat.py", Path(__file__).resolve().relative_to(ROOT).as_posix()}
+# A workspace app's backend is a long-lived server: it reads Delta through dataforge.delta_pool, because
+# on Windows a Delta read on a thread that then ends crashes the process (df-5lk8). Ruff's banned-api
+# (TID251) covers the package; workspaces/** ignores TID251 (their scripts read os.environ), so DF003.
+APP_BACKEND = re.compile(r"workspaces/[^/]+/apps/[^/]+/backend/.+\.py")
+DIRECT_DELTA_READS = {"read_delta", "scan_delta"}
 # Findings that only the full gate produces; the fast gate leaves their counts alone.
 FULL_ONLY_PREFIXES = ("vulture:", "import-contract", "deptry:")
 # The installed package: its files import each other by package name, never as bare siblings.
@@ -228,7 +233,8 @@ def dependencies(public: list[str]) -> list[Finding]:
 
 
 def project_rules(files: list[str]) -> list[Finding]:
-    """DF001 suppression without a reason; DF002 SQLite URL spelled outside dataforge.compat."""
+    """DF001 suppression without a reason; DF002 SQLite URL spelled outside dataforge.compat;
+    DF003 an app backend reading Delta without dataforge.delta_pool."""
     found = []
     for rel in files:
         try:
@@ -236,11 +242,12 @@ def project_rules(files: list[str]) -> list[Finding]:
         except (tokenize.TokenError, SyntaxError, UnicodeDecodeError):
             continue  # ruff reports the syntax error
         sqlite_allowed = rel in SQLITE_URL_HOMES or rel.startswith(TESTS)
-        found += [f for tok in tokens if (f := _token_rule(rel, tok, sqlite_allowed)) is not None]
+        backend = APP_BACKEND.fullmatch(rel) is not None
+        found += [f for tok in tokens if (f := _token_rule(rel, tok, sqlite_allowed, backend)) is not None]
     return found
 
 
-def _token_rule(rel: str, tok: tokenize.TokenInfo, sqlite_allowed: bool) -> Finding | None:
+def _token_rule(rel: str, tok: tokenize.TokenInfo, sqlite_allowed: bool, backend: bool) -> Finding | None:
     """The project-rule finding one token breaks, if any."""
     if tok.type == tokenize.COMMENT:
         m = SUPPRESSION.search(tok.string)
@@ -248,6 +255,8 @@ def _token_rule(rel: str, tok: tokenize.TokenInfo, sqlite_allowed: bool) -> Find
             return Finding(rel, "DF001", tok.start[0], "suppression without a reason: end it with ' -- why'")
     elif tok.type in STRING_TOKENS and not sqlite_allowed and "sqlite:///" in tok.string:
         return Finding(rel, "DF002", tok.start[0], "SQLite URL spelled inline: use dataforge.compat.db_url()")
+    elif tok.type == tokenize.NAME and backend and tok.string in DIRECT_DELTA_READS:
+        return Finding(rel, "DF003", tok.start[0], f"app backend calls {tok.string}: read Delta through dataforge.delta_pool.read (df-5lk8)")
     return None
 
 
