@@ -10,11 +10,15 @@ import { CartaoDetalhe } from './components/CartaoDetalhe'
 import { ListaCategorias } from './components/ListaCategorias'
 import { FalhaCarga } from './components/FalhaCarga'
 import { TelaConferencia } from './components/TelaConferencia'
+import { TelaCategorias } from './components/TelaCategorias'
+import { FaixaPendencia } from './components/FaixaPendencia'
+import { lerEdicao, type Edicao } from './edicao'
 
 type Estado = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; dados: Dados }
-type Tela = 'resumo' | 'conferencia'
+type Tela = 'resumo' | 'conferencia' | 'categorias'
+type EstadoEdicao = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; edicao: Edicao }
 
-const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência']]
+const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência'], ['categorias', 'Categorias']]
 
 // Tudo vem pronto do ETL (tasks classify e report do finance_daily).
 async function carregar(): Promise<Dados> {
@@ -53,6 +57,17 @@ export function App() {
     )
   }, [])
   useEffect(() => { abrir() }, [abrir])
+
+  // O banco de edição (backend do app). Recarrega depois de cada gravação, para a faixa de
+  // pendência e as tabelas mostrarem o que está no banco.
+  const [estadoEdicao, setEstadoEdicao] = useState<EstadoEdicao>({ fase: 'carregando' })
+  const lerBanco = useCallback(() => {
+    lerEdicao().then(edicao => setEstadoEdicao({ fase: 'ok', edicao }), () => setEstadoEdicao({ fase: 'erro' }))
+  }, [])
+  useEffect(() => { lerBanco() }, [lerBanco])
+  const edicao = estadoEdicao.fase === 'ok' ? estadoEdicao.edicao : null
+  // Depois do Aplicar: os números novos do ETL e a versão aplicada.
+  const atualizado = useCallback(() => { abrir(); lerBanco() }, [abrir, lerBanco])
 
   const dados = estado.fase === 'ok' ? estado.dados : null
   const lista = useMemo(() => (dados ? meses(dados) : []), [dados])
@@ -136,7 +151,9 @@ export function App() {
           )}
         </header>
 
-        {tela === 'resumo' ? (
+        <FaixaPendencia pendente={edicao?.pendente ?? false} onAtualizado={atualizado} />
+
+        {tela === 'resumo' && (
           <div className="flex flex-wrap gap-5 items-stretch">
             <section className="flex-[1_1_440px] min-w-0 bg-cartao rounded-[36px] p-8 box-border flex flex-col gap-7">
               {cartao}
@@ -144,8 +161,14 @@ export function App() {
 
             <ListaCategorias categorias={resumo?.categorias ?? []} ativa={categoria?.id ?? null} onEscolher={escolher} />
           </div>
-        ) : (
-          <TelaConferencia />
+        )}
+        {tela === 'conferencia' && <TelaConferencia />}
+        {tela === 'categorias' && (
+          edicao
+            ? <TelaCategorias edicao={edicao} onMudou={lerBanco} />
+            : estadoEdicao.fase === 'erro' && (
+              <section className="bg-cartao rounded-[36px] p-8"><FalhaCarga onTentar={lerBanco} /></section>
+            )
         )}
       </div>
     </div>
