@@ -11,14 +11,15 @@ import { ListaCategorias } from './components/ListaCategorias'
 import { FalhaCarga } from './components/FalhaCarga'
 import { TelaConferencia } from './components/TelaConferencia'
 import { TelaCategorias } from './components/TelaCategorias'
+import { TelaTransacoes } from './components/TelaTransacoes'
 import { FaixaPendencia } from './components/FaixaPendencia'
 import { lerEdicao, type Edicao } from './edicao'
 
 type Estado = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; dados: Dados }
-type Tela = 'resumo' | 'conferencia' | 'categorias'
+type Tela = 'resumo' | 'conferencia' | 'categorias' | 'transacoes'
 type EstadoEdicao = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; edicao: Edicao }
 
-const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência'], ['categorias', 'Categorias']]
+const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência'], ['categorias', 'Categorias'], ['transacoes', 'Transações']]
 
 // Tudo vem pronto do ETL (tasks classify e report do finance_daily).
 async function carregar(): Promise<Dados> {
@@ -163,9 +164,11 @@ export function App() {
           </div>
         )}
         {tela === 'conferencia' && <TelaConferencia />}
-        {tela === 'categorias' && (
+        {(tela === 'categorias' || tela === 'transacoes') && (
           edicao
-            ? <TelaCategorias edicao={edicao} onMudou={lerBanco} />
+            ? (tela === 'categorias'
+              ? <TelaCategorias edicao={edicao} onMudou={lerBanco} />
+              : <TelaTransacoes transacoes={dados?.transacoes ?? null} edicao={edicao} onMudou={lerBanco} />)
             : estadoEdicao.fase === 'erro' && (
               <section className="bg-cartao rounded-[36px] p-8"><FalhaCarga onTentar={lerBanco} /></section>
             )
