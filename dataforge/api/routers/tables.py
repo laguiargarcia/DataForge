@@ -6,6 +6,7 @@ from typing import Annotated, Any
 import polars as pl
 from fastapi import APIRouter, HTTPException, Query
 
+from dataforge import delta_pool
 from dataforge.compat import curated_dir, resolve_workspace
 
 router = APIRouter()
@@ -56,26 +57,26 @@ def read_table(
     if not (table_path / "_delta_log").is_dir():
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
-    lf = pl.scan_delta(str(table_path))
-    schema = lf.collect_schema()
-    for raw in eq or []:
-        col, val = _parse_filter(raw, schema)
-        lf = lf.filter(pl.col(col) == val)
-    for raw in gte or []:
-        col, val = _parse_filter(raw, schema)
-        lf = lf.filter(pl.col(col) >= val)
-    for raw in lte or []:
-        col, val = _parse_filter(raw, schema)
-        lf = lf.filter(pl.col(col) <= val)
+    def build(lf: pl.LazyFrame) -> pl.LazyFrame:
+        schema = lf.collect_schema()
+        for raw in eq or []:
+            col, val = _parse_filter(raw, schema)
+            lf = lf.filter(pl.col(col) == val)
+        for raw in gte or []:
+            col, val = _parse_filter(raw, schema)
+            lf = lf.filter(pl.col(col) >= val)
+        for raw in lte or []:
+            col, val = _parse_filter(raw, schema)
+            lf = lf.filter(pl.col(col) <= val)
+        float_cols = [c for c, t in schema.items() if t in (pl.Float32, pl.Float64)]
+        if float_cols:
+            # NaN and +/-inf have no JSON form: both become null.
+            lf = lf.with_columns(
+                pl.when(pl.col(c).is_finite()).then(pl.col(c)).alias(c) for c in float_cols
+            )
+        return lf.head(limit + 1)
 
-    float_cols = [c for c, t in schema.items() if t in (pl.Float32, pl.Float64)]
-    if float_cols:
-        # NaN and +/-inf have no JSON form: both become null.
-        lf = lf.with_columns(
-            pl.when(pl.col(c).is_finite()).then(pl.col(c)).alias(c) for c in float_cols
-        )
-
-    df = lf.head(limit + 1).collect()
+    df = delta_pool.read(table_path, build)
     truncated = df.height > limit
     if truncated:
         df = df.head(limit)

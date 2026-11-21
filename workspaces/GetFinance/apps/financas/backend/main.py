@@ -17,6 +17,7 @@ import yaml
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from dataforge import delta_pool
 from dataforge.app_guard import AppTokenMiddleware
 
 # O código do report mora no workspace: o mesmo que o ETL roda, sem cópia.
@@ -64,7 +65,7 @@ def _conexao(nome: str) -> Path:
 
 def _curated(tabela: str) -> pl.DataFrame | None:
     caminho = _conexao("curated") / tabela
-    return pl.read_delta(str(caminho)) if (caminho / "_delta_log").exists() else None
+    return delta_pool.read(caminho) if (caminho / "_delta_log").exists() else None
 
 
 def _abrir():
