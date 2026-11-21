@@ -27,6 +27,11 @@ from classificacao import efeito_da_regra
 JOB_APLICAR = "reclassificar"
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
+# As recusas que cada rota pode dar, para o OpenAPI (o corpo é sempre {"detail": <mensagem>}).
+_RECUSA_ESCRITA = {422: {"description": "pedido inválido"}, 409: {"description": "choca com o que já está no banco"}}
+_AUSENTE = {404: {"description": "a linha não existe"}}
+_SEM_DATAFORGE = {502: {"description": "a API do DataForge falhou ou não respondeu"}}
+
 app = FastAPI(title="Finanças")
 app.add_middleware(AppTokenMiddleware)
 
@@ -114,41 +119,41 @@ def ler_edicao() -> dict:
             "versao": versao, "aplicada": aplicada, "pendente": versao > (aplicada or 0)}
 
 
-@app.post("/categorias", status_code=201)
+@app.post("/categorias", status_code=201, responses=_RECUSA_ESCRITA)
 def criar_categoria(corpo: Categoria) -> Categoria:
     _gravar(edicao.salvar_categoria, None, corpo.subcategoria, corpo.categoria, corpo.tipo)
     return corpo
 
 
-@app.put("/categorias/{subcategoria:path}")
+@app.put("/categorias/{subcategoria:path}", responses=_RECUSA_ESCRITA | _AUSENTE)
 def alterar_categoria(subcategoria: str, corpo: Categoria) -> Categoria:
     _gravar(edicao.salvar_categoria, subcategoria, corpo.subcategoria, corpo.categoria, corpo.tipo)
     return corpo
 
 
-@app.delete("/categorias/{subcategoria:path}", status_code=204)
+@app.delete("/categorias/{subcategoria:path}", status_code=204, responses=_RECUSA_ESCRITA | _AUSENTE)
 def excluir_categoria(subcategoria: str) -> None:
     _gravar(edicao.excluir_categoria, subcategoria)
 
 
-@app.post("/regras", status_code=201)
+@app.post("/regras", status_code=201, responses=_RECUSA_ESCRITA)
 def criar_regra(corpo: Regra) -> dict:
     _gravar(edicao.salvar_regra, None, corpo.padrao, corpo.subcategoria)
     return {"regra": corpo, "efeito": _efeito(corpo.padrao)}
 
 
-@app.put("/regras/{padrao:path}")
+@app.put("/regras/{padrao:path}", responses=_RECUSA_ESCRITA | _AUSENTE)
 def alterar_regra(padrao: str, corpo: Regra) -> dict:
     _gravar(edicao.salvar_regra, padrao, corpo.padrao, corpo.subcategoria)
     return {"regra": corpo, "efeito": _efeito(corpo.padrao)}
 
 
-@app.delete("/regras/{padrao:path}", status_code=204)
+@app.delete("/regras/{padrao:path}", status_code=204, responses=_AUSENTE)
 def excluir_regra(padrao: str) -> None:
     _gravar(edicao.excluir_regra, padrao)
 
 
-@app.put("/correcoes/{transacao_id:path}")
+@app.put("/correcoes/{transacao_id:path}", responses=_RECUSA_ESCRITA)
 def corrigir(transacao_id: str, corpo: Correcao) -> dict:
     ids = _ids_vivos()
     if ids is None or transacao_id not in ids:
@@ -157,7 +162,7 @@ def corrigir(transacao_id: str, corpo: Correcao) -> dict:
     return {"transacao_id": transacao_id, "subcategoria": corpo.subcategoria}
 
 
-@app.delete("/correcoes/{transacao_id:path}", status_code=204)
+@app.delete("/correcoes/{transacao_id:path}", status_code=204, responses=_AUSENTE)
 def desfazer_correcao(transacao_id: str) -> None:
     _gravar(edicao.excluir_correcao, transacao_id)
 
@@ -182,13 +187,13 @@ def _pedir(metodo: str, caminho: str, **kwargs) -> httpx.Response:
     return resposta
 
 
-@app.post("/aplicar", status_code=202)
+@app.post("/aplicar", status_code=202, responses=_SEM_DATAFORGE)
 def aplicar() -> dict:
     """Pede uma execução do reclassificar; ela espera na fila se outro job do workspace roda."""
     return {"execution_id": _pedir("POST", f"/jobs/{JOB_APLICAR}/run").json()["execution_id"]}
 
 
-@app.get("/aplicar/{execution_id}")
+@app.get("/aplicar/{execution_id}", responses=_SEM_DATAFORGE | {404: {"description": "execução não encontrada"}})
 def andamento(execution_id: str) -> dict:
     itens = _pedir("GET", "/executions", params={"limit": 100}).json()["items"]
     execucao = next((i for i in itens if i["run_id"] == execution_id), None)
