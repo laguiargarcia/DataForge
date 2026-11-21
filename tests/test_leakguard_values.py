@@ -111,9 +111,17 @@ def test_a_date_glued_to_a_name_is_left_out_of_it():
 
 
 @pytest.mark.parametrize(("description", "parts"), [("PADARIA", set()), ("Pix", set()), ("IOF X", set()),
-                                                    ("SUPERMERCADOSX", {"supermercadosx"}), (None, set())])
-def test_a_short_one_word_description_is_not_a_value(description, parts):
+                                                    ("SUPERMERCADO", {"supermercado"}), ("SUPERMERCAD", set()),
+                                                    ("Jo Ana", {"jo ana"}), ("Jo Al", set()), (None, set()),
+                                                    ("", set())])
+def test_a_short_description_is_not_a_value(description, parts):
+    """Two words or more from MIN_VALUE_LENGTH characters; one word from MIN_WORD_LENGTH."""
     assert _parts(description) == parts
+
+
+def test_a_description_of_the_bank_s_wording_only_does_not_stop_the_ones_after_it():
+    wording = [f"PAGAMENTO RECEBIDO {shop}" for shop in PIX_SHOPS]
+    assert _parts("PAGAMENTO RECEBIDO", *wording, "PAGAMENTO RECEBIDO Beltrano Silva") == {"beltrano silva"}
 
 
 @pytest.mark.parametrize("written", [f"WHO = '{PIX_NAME}'", f"{PIX_NAME.upper()}12/03", "sicrano  ficticio\n souza",
@@ -147,7 +155,8 @@ def test_an_amount_below_a_thousand_has_no_grouped_form():
 
 
 @pytest.mark.parametrize(("amount", "kept"), [("-1234.56", "1234.56"), ("100.01", "100.01"), ("99.99", None),
-                                              ("5000.00", None), ("5000", None), ("abc", None), ("1e3", None),
+                                              ("5000.00", None), ("5001.00", None), ("5000", None), ("abc", None),
+                                              ("1e3", None),
                                               (" 250.5 ", "250.50")])
 def test_which_amounts_are_real_values(tmp_path, amount, kept):
     make_workspace(tmp_path)
@@ -170,11 +179,34 @@ def test_a_card_final_alone_or_inside_a_number_does_not_match(written):
     assert leakguard_values.real_value_hits(written, {CARD_FINAL: "raw.transactions.creditCardMetadata"}) == []
 
 
+def test_amounts_are_read_from_every_partition_past_a_value_that_is_not_one(tmp_path):
+    make_workspace(tmp_path)
+    transactions = tmp_path / "data" / "raw" / "transactions"
+    pl.DataFrame({"id": ["t-1", "t-2"], "amount": ["abc", AMOUNT]}).write_parquet(
+        transactions / "ingestion_date=2026-11-01" / "data.parquet")
+    (transactions / "ingestion_date=2026-11-02").mkdir()
+    pl.DataFrame({"id": ["t-3"], "amount": ["250.75"]}).write_parquet(
+        transactions / "ingestion_date=2026-11-02" / "data.parquet")
+    amounts = {v for v, src in leakguard_values.real_values(tmp_path).items() if src == "raw.transactions.amount"}
+    assert amounts == {AMOUNT, "250.75"}
+
+
 def test_a_short_account_number_is_a_card_final(tmp_path):
     make_workspace(tmp_path)
     path = tmp_path / "data" / "raw" / "accounts" / "ingestion_date=2026-11-01" / "data.parquet"
-    pl.DataFrame({"id": ["acc-uuid-0001-aaaa"], "number": ["8765"]}).write_parquet(path)
+    pl.DataFrame({"id": ["acc-uuid-0001-aaaa", "acc-uuid-0002-aaaa"], "number": [None, " 8765 "]}).write_parquet(path)
     assert leakguard_values.real_values(tmp_path).get("8765") == "raw.accounts.number"
+
+
+@pytest.mark.parametrize(("metadata", "final"), [('{"cardNumber": "4321"}', "4321"), ('{"cardNumber": 4321}', "4321"),
+                                                 ('{"billId": "4321"}', None), ('{"cardNumber": "54321"}', None),
+                                                 ("4321", None), ("", None)])
+def test_which_card_metadata_gives_a_card_final(tmp_path, metadata, final):
+    make_workspace(tmp_path)
+    path = tmp_path / "data" / "raw" / "transactions" / "ingestion_date=2026-11-01" / "data.parquet"
+    pl.DataFrame({"id": ["t-card-0001"], "creditCardMetadata": [metadata]}).write_parquet(path)
+    finals = {v for v, src in leakguard_values.real_values(tmp_path).items() if src == "raw.transactions.creditCardMetadata"}
+    assert finals == ({final} if final else set())
 
 
 def test_in_the_attribution_files_the_owner_named_in_a_description_passes(repo, capsys, workspace, monkeypatch):

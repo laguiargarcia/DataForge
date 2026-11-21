@@ -140,8 +140,7 @@ def _raw_columns(raw):
     """{(entity, column): its values in every partition} for every column the guard reads. Each
     partition is read once: on the owner's machine raw sits on a slow (Windows) disk."""
     import polars as pl   # noqa: PLC0415 -- only where real data exists; CI and a fresh clone never need polars
-    wanted = {entity: {*RAW_COLUMNS.get(entity, ()), *AMOUNT_COLUMNS.get(entity, ())}
-              for entity in (*RAW_COLUMNS, *AMOUNT_COLUMNS)}
+    wanted = {entity: {*RAW_COLUMNS[entity], *AMOUNT_COLUMNS[entity]} for entity in RAW_COLUMNS}
     wanted["transactions"] |= {*DESCRIPTION_COLUMNS, CARD_METADATA_COLUMN}
     columns = defaultdict(list)
     for entity, names in wanted.items():
@@ -156,7 +155,7 @@ def _raw_columns(raw):
 def _identifier_values(columns):
     for entity, names in RAW_COLUMNS.items():
         for col in names:
-            for value in columns.get((entity, col), ()):
+            for value in columns[entity, col]:
                 yield value, f"raw.{entity}.{col}"
 
 
@@ -164,7 +163,7 @@ def _amount_values(columns):
     """(the amount without sign, as "1234.56", origin) for each amount with cents of MIN_AMOUNT or more."""
     for entity, names in AMOUNT_COLUMNS.items():
         for col in names:
-            for value in columns.get((entity, col), ()):
+            for value in columns[entity, col]:
                 try:
                     amount = abs(Decimal(str(value).strip())).quantize(Decimal("0.01"))
                 except (InvalidOperation, ValueError):
@@ -182,7 +181,8 @@ def description_parts(descriptions):
     stays in. Kept when it has two words or more, or is one word as long as MIN_WORD_LENGTH."""
     phrases = {}
     for text, origin in descriptions:
-        phrases.setdefault(tuple(word.lower() for word in LETTER_WORD.findall(text or "")), origin)
+        if text:
+            phrases.setdefault(tuple(word.lower() for word in LETTER_WORD.findall(text)), origin)
     seen_in = Counter(word for phrase in phrases for word in set(phrase))
     parts = {}
     for phrase, origin in phrases.items():
@@ -197,18 +197,17 @@ def description_parts(descriptions):
 
 def _description_values(columns):
     descriptions = [(text, f"raw.transactions.{col}") for col in DESCRIPTION_COLUMNS
-                    for text in columns.get(("transactions", col), ())]
+                    for text in columns["transactions", col]]
     yield from description_parts(descriptions).items()
 
 
 def _card_final_values(columns):
     """(four digits, origin) for each creditCardMetadata.cardNumber and each four-digit accounts.number."""
-    for value in columns.get(("transactions", CARD_METADATA_COLUMN), ()):
-        nested = _parse_nested((value or "").strip())
-        final = str(nested.get("cardNumber") or "") if isinstance(nested, dict) else ""
-        if CARD_FINAL.fullmatch(final):
-            yield final, f"raw.transactions.{CARD_METADATA_COLUMN}"
-    for value in columns.get(("accounts", "number"), ()):
+    for value in columns["transactions", CARD_METADATA_COLUMN]:
+        nested = _parse_nested(value.strip()) if value else None
+        if isinstance(nested, dict) and CARD_FINAL.fullmatch(str(nested.get("cardNumber"))):
+            yield str(nested["cardNumber"]), f"raw.transactions.{CARD_METADATA_COLUMN}"
+    for value in columns["accounts", "number"]:
         if value and CARD_FINAL.fullmatch(value.strip()):
             yield value.strip(), "raw.accounts.number"
 
@@ -245,7 +244,7 @@ def _env_values(env):
 
 def real_values(workspace):
     """{lowercased real value: where it came from} for one workspace; empty when it has no data."""
-    sources, raw = [], {}
+    sources, raw = [], defaultdict(list)
     if (workspace / "data" / "raw").is_dir():
         raw = _raw_columns(workspace / "data" / "raw")
         sources.append(_identifier_values(raw))
@@ -272,7 +271,7 @@ def _amount_pattern(value):
     return r"(?<!\d)(?<!\d[.,])(?:" + "|".join(sorted(written)) + r")[.,]" + cents + r"(?!\d)(?![.,]\d)"
 
 
-def _value_pattern(value, source=""):
+def _value_pattern(value, source):
     if source in AMOUNT_ORIGINS:
         return re.compile(_amount_pattern(value))
     if source in DESCRIPTION_ORIGINS:
