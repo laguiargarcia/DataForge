@@ -1,5 +1,6 @@
 """Backend supervisor (real uvicorn processes) and the secret-checking middleware."""
 import asyncio
+import os
 import subprocess
 import sys
 import time
@@ -8,8 +9,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from dataforge import app_backends, compat
+from dataforge import app_backend_host, app_backends, compat, liveness
 from dataforge.app_backends import BackendSupervisor, BackendUnavailable, _Running
+from dataforge.app_backend_host import wait_for_eof
 from dataforge.app_guard import TOKEN_HEADER
 from dataforge.presence import PresenceRegistry
 
@@ -241,3 +243,129 @@ def test_janela_vista_zera_ao_reiniciar(sup, info):
     run(sup.target(info))
     reg.leave("w1")
     assert sup.sweep(time.time(), reg) == []  # new start: no window seen yet
+
+
+# A server that starts the app's backend the way BackendSupervisor does, then hangs until killed.
+_SERVER = """
+import sys, time
+from pathlib import Path
+from dataforge.app_backends import _free_port, _spawn
+from dataforge.apps import load_app
+port = _free_port()
+# Kept referenced, as the supervisor keeps it: on Windows a collected Popen closes its stdin, which
+# stops the backend (on POSIX subprocess._active keeps it alive until the child is reaped).
+backend = _spawn(load_app(Path(sys.argv[1]), sys.argv[2]), port, "t", Path(sys.argv[3]))
+print(port, flush=True)
+time.sleep(600)
+"""
+
+
+def _backend_pid(port: int, token: str) -> int:
+    deadline = time.monotonic() + app_backends.START_TIMEOUT_SECONDS
+    while True:
+        try:
+            return get(port, "/pid", token).json()["pid"]
+        except httpx.TransportError:
+            assert time.monotonic() < deadline, "the backend never answered"
+            time.sleep(0.1)
+
+
+def _server_python() -> str:
+    """The interpreter prod's server runs on: pythonw.exe on Windows (no console), else this one."""
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    return str(pythonw) if sys.platform == "win32" and pythonw.exists() else sys.executable
+
+
+def test_backend_morre_com_o_servidor_que_o_subiu(info, workspace_dir, tmp_path):
+    """df-xy7c: a server killed before it stops its backends (a native crash, Stop-Process) leaves none behind."""
+    server = subprocess.Popen(
+        [_server_python(), "-c", _SERVER, str(workspace_dir), info.name, str(tmp_path / "app.log")],
+        stdout=subprocess.PIPE, text=True,
+    )
+    try:
+        port = int(server.stdout.readline())
+        pid = _backend_pid(port, "t")
+        time.sleep(1)  # a backend that stopped by itself would pass the check below for the wrong reason
+        assert get(port, "/pid", "t").json()["pid"] == pid
+    finally:
+        server.kill()
+        server.wait(5)
+        server.stdout.close()
+    deadline = time.monotonic() + app_backends._STOP_WAIT_SECONDS + 5
+    while liveness.process_start(pid) is not None:
+        assert time.monotonic() < deadline, f"backend {pid} outlived the server that started it"
+        time.sleep(0.1)
+
+
+def test_fim_do_stdin_e_eof():
+    read_end, write_end = os.pipe()
+    os.write(write_end, b"x")
+    os.close(write_end)
+    try:
+        assert wait_for_eof(read_end) is True
+    finally:
+        os.close(read_end)
+
+
+def test_stdin_ilegivel_nao_e_eof():
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    os.close(write_end)
+    assert wait_for_eof(read_end) is False
+
+
+class _FakeServer:
+    should_exit = False
+
+
+def test_eof_no_stdin_para_o_backend_com_prazo(monkeypatch):
+    started = []
+
+    class Timer:
+        def __init__(self, seconds, fn, args):
+            started.append((seconds, fn, args))
+
+        def start(self):
+            started.append("start")
+
+    monkeypatch.setattr(app_backend_host, "wait_for_eof", lambda: True)
+    monkeypatch.setattr(app_backend_host.threading, "Timer", Timer)
+    server = _FakeServer()
+    app_backend_host._stop_with_parent(server)
+    assert server.should_exit is True
+    assert started == [(5, os._exit, (0,)), "start"]
+
+
+def test_stdin_ilegivel_avisa_e_nao_para_o_backend(monkeypatch, capsys):
+    monkeypatch.setattr(app_backend_host, "wait_for_eof", lambda: False)
+    server = _FakeServer()
+    app_backend_host._stop_with_parent(server)
+    assert server.should_exit is False
+    assert "will not stop with its supervisor" in capsys.readouterr().err
+
+
+def test_main_sobe_o_app_no_loopback_e_vigia_o_pai(monkeypatch):
+    seen = {}
+
+    class Server:
+        def __init__(self, config):
+            seen["config"] = config
+
+        def run(self):
+            seen["ran"] = True
+
+    class Thread:
+        def __init__(self, target, args, daemon, name):
+            seen["watch"] = (target, daemon)
+
+        def start(self):
+            seen["watching"] = True
+
+    monkeypatch.setattr(app_backend_host.uvicorn, "Server", Server)
+    monkeypatch.setattr(app_backend_host.threading, "Thread", Thread)
+    app_backend_host.main(["backend.main:app", "8123"])
+    config = seen["config"]
+    assert (config.app, config.host, config.port) == ("backend.main:app", "127.0.0.1", 8123)
+    assert seen["watch"] == (app_backend_host._stop_with_parent, True)
+    assert seen["watching"]
+    assert seen["ran"]

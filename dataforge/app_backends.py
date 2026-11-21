@@ -1,9 +1,10 @@
 """Runs a workspace app's ASGI backend as a separate uvicorn process, one per app.
 
 Started on first use on a free loopback port with a per-start secret, restarted when it died or
-its ``backend/`` code changed, stopped when its windows closed or it sat idle. The ``.env`` of the
-workspace is never passed on: the backend only gets what the user's own environment has plus the
-DATAFORGE_* variables below.
+its ``backend/`` code changed, stopped when its windows closed or it sat idle. It runs under
+``dataforge.app_backend_host``, which stops it when this process ends in any way, a crash included
+(df-xy7c). The ``.env`` of the workspace is never passed on: the backend only gets what the user's
+own environment has plus the DATAFORGE_* variables below.
 """
 import asyncio
 import hashlib
@@ -110,6 +111,8 @@ def _terminate(process: subprocess.Popen) -> None:
         except subprocess.TimeoutExpired:
             process.kill()
     process.wait()
+    if process.stdin is not None:
+        process.stdin.close()
 
 
 _AFTER_ACCEPT_SECONDS = 0.3  # a foreign listener on the port makes our uvicorn exit right after binding
@@ -125,9 +128,12 @@ def _spawn(info: AppInfo, port: int, token: str, logfile: Path) -> subprocess.Po
         "DATAFORGE_APP_TOKEN": token,
     }
     with open(logfile, "wb") as log:  # the child keeps its own copy of the handle
+        # stdin is a pipe whose write end only this process holds (Popen.stdin): the OS closes it
+        # when this process ends, and app_backend_host then stops the backend. Keep the Popen referenced
+        # while the backend should live: on Windows a collected Popen closes that end too.
         return subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", info.backend, "--host", "127.0.0.1", "--port", str(port)],
-            cwd=info.app_dir, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+            [sys.executable, "-m", "dataforge.app_backend_host", info.backend, str(port)],
+            cwd=info.app_dir, env=env, stdin=subprocess.PIPE, stdout=log, stderr=subprocess.STDOUT,
         )
 
 
