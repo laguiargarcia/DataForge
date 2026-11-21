@@ -270,25 +270,51 @@ new_rows = (
     )
 )
 
-# The rows about to be merged, next to the ingested_at each id already has in cleansed.
 previous = (read_delta_table("cleansed", "transactions") if delta_table_exists("cleansed", "transactions")
             else new_rows.clear())
+
+# df-75ol, rule of df-7twv: a transaction gone from the latest fetch leaves cleansed on a card, and on a
+# bank account only when it was PENDING (raw keeps it). The latest fetch is the raw partition with the
+# greatest ingestion_date. Every id raw or cleansed knows is judged by its latest known state (raw wins
+# over cleansed); an account whose fetch looks incomplete is held (a suspicious finding).
+_STATE = ["id", "accountId", "date", "status", "account_type"]
+latest_fetch = txn_raw.filter(pl.col("ingestion_date") == pl.col("ingestion_date").max())
+known = pl.concat([new_rows.select(_STATE).with_columns(pl.col("date").cast(pl.Utf8)),
+                   previous.select(_STATE).with_columns(pl.col("date").cast(pl.Utf8))]
+                  ).unique("id", keep="first", maintain_order=True)
+per_account, removed = gone_from_latest_fetch(known, latest_fetch, previous["id"])
+validate(per_account, "cleansed.transactions vs latest fetch", FETCH_REMOVALS_RULES, key="accountId")
+kept = ~pl.col("id").is_in(removed["id"].implode())
+new_rows = new_rows.filter(kept)
+
+# The rows about to be merged, next to the ingested_at each id already has in cleansed.
 validate(
     new_rows.join(previous.select("id", pl.col("ingested_at").alias("cleansed_ingested_at")),
                   on="id", how="left"),
     "cleansed.transactions", CLEANSED_TRANSACTIONS_RULES,
 )
 
-# Accumulate: refreshed ids replace, ids absent from this fetch persist. The Delta MERGE
-# (when_matched_update_all + when_not_matched_insert_all) leaves non-matched target rows
-# untouched — exactly the accumulate semantic. The schema is fixed by this script.
+# Accumulate: refreshed ids replace, ids absent from this fetch persist but for the ones removed above,
+# deleted first. The Delta MERGE (when_matched_update_all + when_not_matched_insert_all) leaves
+# non-matched target rows untouched — exactly the accumulate semantic. The schema is fixed by this script.
+delete_delta_rows("cleansed", "transactions", removed, ["id"])
 upsert_delta_table("cleansed", "transactions", new_rows, ["id"])
 
 # Reconciliation (df-ahua.22, df-ahua.4.8): every id of the latest raw is in cleansed once (compared
-# with txn_latest, so a row lost on the way to the MERGE is caught too), and every id cleansed had
-# before this run is still there (the table accumulates).
+# with txn_latest, so a row lost on the way to the MERGE is caught too), every id cleansed had before
+# this run is still there (the table accumulates), both but for the removed ids, and those are gone.
+# The three use the same `removed` that decided the removal: they catch a row lost or deleted outside
+# it, not a wrong decision of gone_from_latest_fetch (only its guard and its tests stand against that).
 written = read_delta_table("cleansed", "transactions")
-validate(layer_totals(txn_latest, written, ["id"]), "cleansed.transactions vs raw", IDS_KEPT_RULES)
-validate(layer_totals(previous, written, ["id"]), "cleansed.transactions vs last run", ROWS_KEPT_RULES)
+validate(layer_totals(txn_latest.filter(kept), written, ["id"]), "cleansed.transactions vs raw",
+         IDS_KEPT_RULES)
+validate(layer_totals(previous.filter(kept), written, ["id"]), "cleansed.transactions vs last run",
+         ROWS_KEPT_RULES)
+validate(layer_totals(removed, written, ["id"]), "cleansed.transactions vs removed", ROWS_REMOVED_RULES)
+
+# What this run took out, per account (a removal applied on an earlier run is not said again).
+for account_id, newly, ids_removed in per_account.select("accountId", "ids_newly_removed", "ids_removed").rows():
+    if newly and ids_removed:
+        print(f"transactions: account {account_id}: {newly} ids gone from the latest fetch removed")
 
 print(f"transactions: {written.height} rows written to cleansed")

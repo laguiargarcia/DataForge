@@ -22,7 +22,8 @@ from tests import _delta_util
 SCRIPTS = _delta_util.SCRIPTS
 RULE_LISTS = [
     "RAW_TRANSACTIONS_RULES", "RAW_ACCOUNTS_RULES", "RAW_BILLS_RULES", "RAW_INVESTMENTS_RULES",
-    "CLEANSED_TRANSACTIONS_RULES", "ROWS_KEPT_RULES", "IDS_KEPT_RULES", "ROWS_CARRIED_RULES",
+    "CLEANSED_TRANSACTIONS_RULES", "FETCH_REMOVALS_RULES", "ROWS_KEPT_RULES", "IDS_KEPT_RULES",
+    "ROWS_REMOVED_RULES", "ROWS_CARRIED_RULES",
     "TOTALS_CONSERVED_RULES", "DIM_ACCOUNT_RULES", "FACT_TRANSACTION_RULES",
     "FACT_CARD_STATEMENT_RULES", "FACT_FATURA_MES_RULES", "FACT_BALANCE_SNAPSHOT_RULES",
     "FACT_INVESTMENT_POSITION_RULES", "FACT_TRANSACTION_CLASSIFIED_RULES", "CONFERENCIA_SALDO_RULES",
@@ -245,6 +246,7 @@ FUTURE, PAST = "2999-01-01", "1999-12-31"
 CLEANSED_TXN = dict(id=["t1"], amount=[-10.0], account_type=["BANK"], txn_type=["DEBIT"],
                     ingested_at=["2026-01-15"], cleansed_ingested_at=["2026-01-14"])
 TOTALS = dict(id=["g"], rows_before=[1], rows_after=[1], total_before=[10.0], total_after=[10.0])
+GONE = dict(accountId=["a1"], ids_in_window=[100], ids_newly_removed=[21])
 DIM_ACC = dict(id=["a1", "a2"], pluggy_account_id=["a1", "a2"],
                account_uuid=["bank-checking-0001", "bank-credit-0002"],
                institution=["Banco Fictício", "Banco Fictício"])
@@ -390,6 +392,9 @@ RULE_CASES = [
     ("IDS_KEPT_RULES", "rows lost", _frame, TOTALS, _set(TOTALS, rows_after=[0])),
     ("IDS_KEPT_RULES", "id written more than once", _frame, TOTALS,
      _set(TOTALS, rows_before=[1], rows_after=[2])),
+    ("FETCH_REMOVALS_RULES", "too many ids to remove from the latest fetch: none removed from the account",
+     _frame, _set(GONE, ids_newly_removed=[20]), GONE),
+    ("ROWS_REMOVED_RULES", "removed id still written", _frame, _set(TOTALS, rows_after=[0]), TOTALS),
     ("ROWS_CARRIED_RULES", "rows not carried one to one", _frame, TOTALS,
      _set(TOTALS, rows_after=[2])),
     ("TOTALS_CONSERVED_RULES", "rows not carried one to one", _frame, TOTALS,
@@ -764,7 +769,8 @@ def test_read_raw_adds_the_partition_day(F, tmp_path):
 
 VALIDATED_SCRIPTS = {
     "raw2cleansed/raw2cleansed.py": ["RAW_TRANSACTIONS_RULES", "CLEANSED_TRANSACTIONS_RULES",
-                                     "IDS_KEPT_RULES", "ROWS_KEPT_RULES"],
+                                     "FETCH_REMOVALS_RULES", "IDS_KEPT_RULES", "ROWS_KEPT_RULES",
+                                     "ROWS_REMOVED_RULES"],
     "raw2cleansed/raw2cleansed_accounts.py": ["RAW_ACCOUNTS_RULES", "IDS_KEPT_RULES"],
     "raw2cleansed/raw2cleansed_bills.py": ["RAW_BILLS_RULES", "IDS_KEPT_RULES"],
     "raw2cleansed/raw2cleansed_investments.py": ["RAW_INVESTMENTS_RULES", "IDS_KEPT_RULES"],

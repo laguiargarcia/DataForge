@@ -1,4 +1,6 @@
+import hashlib
 import json
+import shutil
 
 import polars as pl
 import pytest
@@ -290,7 +292,8 @@ def test_foreign_row_without_the_converted_amount_warns_and_keeps_amount(tmp_pat
 # Partitions older than the currency fields: in the combined raw with a newer one (diagonal concat
 # fills the column with null), and alone (the script projects the absent column as null).
 def test_partition_without_the_currency_columns(tmp_path):
-    _seed_raw(tmp_path / "raw", transactions=[_card("old", "20.0")], accounts=CARD,
+    # "old" is dated before the latest fetch's window, so it is not gone from that fetch (df-75ol).
+    _seed_raw(tmp_path / "raw", transactions=[_card("old", "20.0", date="2026-01-05")], accounts=CARD,
               ingestion_date="2026-01-01")
     _seed_raw(tmp_path / "raw", transactions=[_card("new", "10.0", "USD", "52.5")], accounts=CARD,
               ingestion_date="2026-01-02", extra_cols=CURRENCY_COLS)
@@ -323,6 +326,191 @@ def test_merge_corrects_a_row_cleansed_holds_with_the_foreign_amount(tmp_path):
     assert after["amount"].to_list() == [35.9, 52.5]
     assert after.drop("amount").equals(before.drop("amount"))
     assert DeltaTable(str(table)).history(1)[0]["operation"] == "MERGE"
+
+
+# ── df-75ol, rule of df-7twv: what a transaction gone from the latest fetch means ─────────
+# The latest fetch (the raw partition with the greatest ingestion_date) covers, for each account in it,
+# the days from its earliest date on. An id of that account dated inside that window and absent from
+# that fetch is gone. It leaves cleansed on a card, and on a bank account only when it was PENDING; a
+# POSTED bank row that vanishes is money that really moved, and stays. Raw stays as it was. When the
+# run would remove more than GONE_MIN ids and more than GONE_PERCENT % of an account's window, the
+# fetch is taken as incomplete: nothing leaves that account and the check records a suspicious finding.
+GONE_CHECK_FILE = "cleansed.transactions_vs_latest_fetch.json"
+GONE_RULE = "too many ids to remove from the latest fetch: none removed from the account"
+STATUS = ("status",)
+BANK_AND_CARD = [{"id": "acc-1", "type": "BANK"}, {"id": "acc-2", "type": "BANK"},
+                 {"id": "acc-card", "type": "CREDIT"}]
+
+
+def _txn(id_, day, account="acc-1", status="POSTED"):
+    return {"id": id_, "date": day, "amount": "-5.0" if account != "acc-card" else "5.0",
+            "accountId": account, "status": status}
+
+
+def _seed_fetch(tmp_path, rows, ingestion_date):
+    _seed_raw(tmp_path / "raw", rows, BANK_AND_CARD, ingestion_date, extra_cols=STATUS)
+
+
+def _ids(tmp_path):
+    return {r["id"] for r in _read_cleansed(tmp_path)}
+
+
+def _raw_bytes(tmp_path):
+    return {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted((tmp_path / "raw").rglob("*")) if p.is_file()}
+
+
+def _gone_findings(tmp_path):
+    path = tmp_path / "validation" / GONE_CHECK_FILE
+    return [f["rule"] for f in json.loads(path.read_text(encoding="utf-8"))["findings"]]
+
+
+def test_gone_pending_bank_row_leaves_and_gone_posted_bank_row_stays(tmp_path, capsys):
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("P", "2026-01-15", status="PENDING"),
+                           _txn("Q", "2026-01-16"), _txn("C", "2026-01-20")], "2026-02-01")
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("C", "2026-01-20")], "2026-02-02")
+    raw_before = _raw_bytes(tmp_path)
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "Q", "C"}
+    assert _raw_bytes(tmp_path) == raw_before
+    out = capsys.readouterr().out
+    assert "transactions: account acc-1: 1 ids gone from the latest fetch removed" in out
+    assert _gone_findings(tmp_path) == []
+
+
+def test_gone_card_row_leaves_whatever_its_status(tmp_path):
+    _seed_fetch(tmp_path, [_txn("K1", "2026-01-10", "acc-card"), _txn("K2", "2026-01-15", "acc-card"),
+                           _txn("K3", "2026-01-16", "acc-card", status="PENDING")], "2026-02-01")
+    _seed_fetch(tmp_path, [_txn("K1", "2026-01-10", "acc-card")], "2026-02-02")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"K1"}
+
+
+def test_gone_row_already_in_cleansed_is_deleted_and_does_not_come_back(tmp_path, capsys):
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("P", "2026-01-15", status="PENDING"),
+                           _txn("K", "2026-01-15", "acc-card"), _txn("L", "2026-01-12", "acc-card")],
+                "2026-02-01")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "P", "K", "L"}
+
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("L", "2026-01-12", "acc-card")], "2026-02-02")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "L"}
+    capsys.readouterr()
+    _run(tmp_path)   # the next run neither puts them back nor fails, and has nothing new to say
+    assert _ids(tmp_path) == {"A", "L"}
+    assert "ids gone from the latest fetch removed" not in capsys.readouterr().out
+
+
+def test_row_only_in_cleansed_is_judged_by_its_cleansed_state(tmp_path):
+    # Ids cleansed holds but no raw partition has (raw restored from an older backup) are judged too.
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("P", "2026-01-15", status="PENDING"),
+                           _txn("Q", "2026-01-16")], "2026-02-01")
+    _run(tmp_path)
+    shutil.rmtree(tmp_path / "raw")
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10")], "2026-02-02")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "Q"}
+
+
+def test_pending_that_posted_under_the_same_id_stays(tmp_path):
+    # The state that decides is the latest one: P was PENDING, came back POSTED, then vanished.
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("P", "2026-01-15", status="PENDING")], "2026-02-01")
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10"), _txn("P", "2026-01-15")], "2026-02-02")
+    _seed_fetch(tmp_path, [_txn("A", "2026-01-10")], "2026-02-03")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"A", "P"}
+
+
+def test_id_dated_before_the_window_and_account_absent_from_the_fetch_stay(tmp_path):
+    _seed_fetch(tmp_path, [_txn("OLD", "2026-01-05", "acc-card"), _txn("B", "2026-01-15", "acc-card"),
+                           _txn("X", "2026-01-20", "acc-2", status="PENDING")], "2026-02-01")
+    _seed_fetch(tmp_path, [_txn("B", "2026-01-15", "acc-card"), _txn("C", "2026-01-20", "acc-card")],
+                "2026-02-02")
+    _run(tmp_path)
+    assert _ids(tmp_path) == {"OLD", "B", "C", "X"}
+
+
+def test_incomplete_fetch_removes_nothing_from_the_account_and_warns(tmp_path, capsys):
+    full = [_txn(f"T{n:02d}", f"2026-01-{n + 1:02d}", "acc-card") for n in range(30)]
+    other = [_txn("Y1", "2026-01-10", "acc-2", "PENDING"), _txn("Y2", "2026-01-20", "acc-2", "PENDING")]
+    _seed_fetch(tmp_path, full + other, "2026-02-01")
+    _run(tmp_path)
+    _seed_fetch(tmp_path, full[:5] + other[:1], "2026-02-02")   # 25 of 30 gone from the card
+    _run(tmp_path)
+    assert _ids(tmp_path) == {r["id"] for r in full} | {"Y1"}   # acc-2 still loses its one gone id
+    assert _gone_findings(tmp_path) == [GONE_RULE]
+    out = capsys.readouterr().out
+    assert "account acc-card:" not in out
+    assert "transactions: account acc-2: 1 ids gone from the latest fetch removed" in out
+
+    _run(tmp_path)   # the same incomplete fetch tomorrow: still held, still warned
+    assert _ids(tmp_path) == {r["id"] for r in full} | {"Y1"}
+    assert _gone_findings(tmp_path) == [GONE_RULE]
+
+
+def _gone(known_rows, latest_rows, in_cleansed):
+    F = _delta_util.exec_functions({})
+    known = pl.DataFrame(known_rows, schema=["id", "accountId", "date", "status", "account_type"],
+                         orient="row")
+    latest = pl.DataFrame(latest_rows, schema=["id", "accountId", "date"], orient="row")
+    return F["gone_from_latest_fetch"](known, latest, pl.Series("id", in_cleansed, dtype=pl.Utf8))
+
+
+# The guard holds an account only when BOTH limits are passed: more than 20 ids newly removed AND more
+# than 10% of the account's ids inside the window. With an empty cleansed (first run, reprocess.py) every
+# removal is new.
+@pytest.mark.parametrize("in_window,gone,held", [
+    (100, 20, False),    # 20 is not more than 20
+    (100, 21, True),
+    (210, 21, False),    # exactly 10%
+    (209, 21, True),
+    (1000, 25, False),
+    (5, 4, False),       # most ids of a small account gone: below the absolute limit
+])
+def test_guard_needs_both_limits(in_window, gone, held):
+    known = [(f"t{n}", "a", "2026-01-10", "POSTED", "CREDIT") for n in range(in_window)]
+    latest = [(i, a, d) for i, a, d, _, _ in known[gone:]]
+    per_account, removed = _gone(known, latest, [])
+    assert per_account.rows(named=True) == [{"accountId": "a", "ids_in_window": in_window, "ids_gone": gone,
+                                             "ids_newly_removed": gone, "ids_removed": 0 if held else gone}]
+    assert removed.height == (0 if held else gone)
+
+
+def test_guard_does_not_count_removals_already_applied():
+    # 25 card ids gone, but only 3 of them are still in cleansed: the other 22 left on earlier runs.
+    known = [(f"t{n}", "a", "2026-01-10", "POSTED", "CREDIT") for n in range(100)]
+    latest = [(i, a, d) for i, a, d, _, _ in known[25:]]
+    still_there = [f"t{n}" for n in range(22, 100)]
+    per_account, removed = _gone(known, latest, still_there)
+    assert per_account.select("ids_gone", "ids_newly_removed", "ids_removed").row(0) == (25, 3, 25)
+    assert removed.height == 25
+
+
+def test_only_card_rows_and_pending_bank_rows_are_removed():
+    known = [("card-posted", "c", "2026-01-10", "POSTED", "CREDIT"),
+             ("card-pending", "c", "2026-01-10", "PENDING", "CREDIT"),
+             ("bank-posted", "b", "2026-01-10", "POSTED", "BANK"),
+             ("bank-pending", "b", "2026-01-10", "PENDING", "BANK"),
+             ("bank-no-status", "b", "2026-01-10", None, "BANK"),
+             ("other-pending", "o", "2026-01-10", "PENDING", None)]
+    latest = [("c-now", "c", "2026-01-10"), ("b-now", "b", "2026-01-10"), ("o-now", "o", "2026-01-10")]
+    per_account, removed = _gone(known, latest, [])
+    assert sorted(removed["id"].to_list()) == ["bank-pending", "card-pending", "card-posted"]
+    assert dict(per_account.select("accountId", "ids_gone").rows()) == {"b": 3, "c": 2, "o": 1}
+
+
+# The window is per account and starts at the earliest date (the first 10 characters, as raw holds
+# full timestamps and cleansed holds dates) of that account in the latest fetch.
+def test_window_is_per_account_and_reads_timestamps_and_dates():
+    known = [("a-in", "a", "2026-01-12T10:00:00.000Z", "POSTED", "CREDIT"),
+             ("a-edge", "a", "2026-01-10T00:00:00.000Z", "POSTED", "CREDIT"),
+             ("a-before", "a", "2026-01-09T23:59:59.000Z", "POSTED", "CREDIT"),
+             ("b-in", "b", "2026-01-02", "POSTED", "CREDIT"),
+             ("c-in", "c", "2026-01-30", "POSTED", "CREDIT")]
+    latest = [("a-now", "a", "2026-01-10T03:00:00.000Z"), ("b-now", "b", "2026-01-01")]
+    _, removed = _gone(known, latest, [])
+    assert sorted(removed["id"].to_list()) == ["a-edge", "a-in", "b-in"]
 
 
 # ── df-pzu: paymentData -> 4 frozen counterparty columns ──────────────────────────────────

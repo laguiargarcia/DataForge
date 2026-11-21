@@ -73,6 +73,17 @@ id VARCHAR, date DATE, amount DOUBLE, category VARCHAR,
 description VARCHAR, account VARCHAR, ingested_at
 ```
 - Deduplicated: MERGE on `id`, keeping the latest `ingested_at`.
+- Gone from the latest fetch (DataForge df-75ol, rule of df-7twv): Pluggy returns an account's whole
+  window on every fetch, so the latest fetch (the raw partition with the greatest `ingestion_date`)
+  covers, for each account in it, the days from that account's earliest date in it on. An id of that
+  account dated inside the window and absent from that fetch is gone. It leaves cleansed (raw keeps it)
+  on a CREDIT account, and on a BANK account only when its latest known `status` is PENDING (a pending
+  row that vanishes is a duplicate); a POSTED bank row that vanishes stays, because the account balance
+  and the bank statement show the money moved. An id dated before the window and an account absent from
+  the fetch stay. When a run would newly remove more than 20 ids and more than 10 % of an account's ids
+  in the window, the fetch looks incomplete: nothing leaves that account and the check
+  `cleansed.transactions vs latest fetch` records a suspicious finding. A removal applied on an earlier
+  run does not count again (with an empty cleansed, as after `reprocess.py`, every removal is new).
 - `amount` is in the account's currency (BRL), the value curated sums (DataForge df-ahua.3.1). For a
   purchase in another currency Pluggy sends the foreign value in `amount`, its code in `currencyCode`
   and the BRL value the bank converted in `amountInAccountCurrency` (null on every BRL row): cleansed
@@ -309,7 +320,8 @@ rules, key)` in `functions.py`, and rule lists kept as data next to it (`RAW_*_R
 
 Where they run: the four `raw2cleansed` scripts check the combined raw before `latest_by_key` (the
 live check of Pluggy's payload, too), the transactions frame before the merge, and after the write
-that every id of the latest raw is in cleansed and no id cleansed had is gone. The curated scripts
+that every id of the latest raw is in cleansed and no id cleansed had is gone, but for the ids removed
+as gone from the latest fetch, which must be gone. The curated scripts
 check keys, nulls and sign conventions before each write, and `cleansed2curated.py` checks that each
 account's rows and amount total are carried from cleansed to `fact_transaction`.
 
