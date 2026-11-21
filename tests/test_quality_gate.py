@@ -125,6 +125,69 @@ def test_the_real_app_backends_pass_df003():
     assert [f for f in gate.project_rules(backends) if f.code == "DF003"] == []
 
 
+def tree(tmp_path, monkeypatch, files: dict[str, str]) -> list[str]:
+    """Write these files under a fake ROOT and return their paths, as the gate lists them."""
+    monkeypatch.setattr(gate, "ROOT", tmp_path)
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    return sorted(r for r in files if r.endswith(".py"))
+
+
+def test_df004_a_workspace_script_nobody_calls(tmp_path, monkeypatch):
+    s = "workspaces/ws/scripts/"
+    files = tree(tmp_path, monkeypatch, {
+        "workspaces/ws/jobs/diario/job.yaml": "tasks:\n  - name: a\n    script: etapa/run.py\n"
+                                              "  - name: b\n    script: 'etapa/outro.py'  # comentario\n",
+        s + "etapa/run.py": "exec(open(base / 'functions' / 'functions.py').read())\nfrom lib import f\n",
+        s + "etapa/outro.py": "print('roda: reprocess.py --entity all')\n",
+        s + "lib.py": "def f(): ...\n",
+        s + "functions/functions.py": "x = 1\n",
+        s + "reprocess.py": "x = 1\n",
+        s + "orfao.py": "import lib\n",                       # it calls others; nobody calls it
+        s + "so_o_teste.py": "x = 1\n",
+        s + "so_comentario.py": "x = 1\n",
+        s + "manual.py": "# gate: manual-script -- rodado à mão para refazer o histórico\n",
+        s + "manual_sem_motivo.py": "# gate: manual-script\n",
+        "workspaces/ws/tests/test_x.py": "import so_o_teste\n",
+        "workspaces/ws/apps/app/backend/main.py": "# so_comentario.py fica só num comentário\n",
+        "workspaces/outro/scripts/lib.py": "x = 1\n",      # another workspace's lib.py is its own orphan
+    })
+    found = sorted(f.file.removeprefix(s) for f in gate.orphan_scripts(files) if f.code == "DF004")
+    assert found == ["manual_sem_motivo.py", "orfao.py", "so_comentario.py", "so_o_teste.py",
+                     "workspaces/outro/scripts/lib.py"]
+
+
+def test_df004_a_package_module_nothing_imports(tmp_path, monkeypatch):
+    files = tree(tmp_path, monkeypatch, {
+        "pyproject.toml": "[project.scripts]\ndataforge = 'dataforge.cli:app'\n",
+        ".github/workflows/ci.yml": "run: python -m dataforge.ferramenta\n",
+        "dataforge/__init__.py": "",
+        "dataforge/__main__.py": "",
+        "dataforge/cli.py": "from .api import rotas\nfrom dataforge.engine.run import go\nimport dataforge.db\n",
+        "dataforge/api/__init__.py": "",
+        "dataforge/api/rotas.py": "from ..compat import paths\nAPP = 'dataforge.api.servidor:app'\n",
+        "dataforge/api/servidor.py": "",
+        "dataforge/engine/__init__.py": "",
+        "dataforge/engine/run.py": "",
+        "dataforge/db.py": "",
+        "dataforge/compat.py": "",
+        "dataforge/ferramenta.py": "",
+        "dataforge/so_teste.py": "",
+        "dataforge/engine/orfao.py": "from dataforge.engine import run\n",
+        "tests/test_x.py": "import dataforge.so_teste\n",
+    })
+    found = sorted(f.file for f in gate.orphan_modules(files + ["tests/test_x.py"]) if f.code == "DF004")
+    assert found == ["dataforge/engine/orfao.py", "dataforge/so_teste.py"]
+
+
+def test_the_real_repo_passes_df004():
+    public, private = gate.public_files(), gate.private_files()
+    assert any(f.startswith("dataforge/") for f in public)
+    assert gate.orphan_modules(public) == []
+    assert gate.orphan_scripts(public + private) == []
+
+
 def test_a_file_that_does_not_tokenize_is_left_to_ruff(tmp_path, monkeypatch):
     """An unterminated string or bytes that are not UTF-8 stop tokenizing: no project finding
     for that file, and the files after it are still judged."""
@@ -415,6 +478,8 @@ def test_vulture_findings_in_a_workspace_tests_dir_are_dropped_but_its_scripts_a
     monkeypatch.setattr(gate, "project_rules", lambda files: [])
     monkeypatch.setattr(gate, "import_contracts", lambda: [])
     monkeypatch.setattr(gate, "dependencies", lambda files: [])
+    monkeypatch.setattr(gate, "orphan_scripts", lambda files: [])
+    monkeypatch.setattr(gate, "orphan_modules", lambda files: [])
     private = ["workspaces/Priv/scripts/a.py", "workspaces/Priv/tests/test_a.py", "workspaces/Priv/tools/t.py"]
     found = gate.collect_full([], private)
     assert sorted(f.file for f in found) == ["workspaces/Priv/scripts/a.py", "workspaces/Priv/tools/t.py"]
@@ -428,6 +493,8 @@ def test_vulture_findings_in_a_published_workspace_tests_dir_are_dropped_too(mon
     monkeypatch.setattr(gate, "project_rules", lambda files: [])
     monkeypatch.setattr(gate, "import_contracts", lambda: [])
     monkeypatch.setattr(gate, "dependencies", lambda files: [])
+    monkeypatch.setattr(gate, "orphan_scripts", lambda files: [])
+    monkeypatch.setattr(gate, "orphan_modules", lambda files: [])
     public = ["dataforge/a.py", "tests/test_a.py", "workspaces/Pub/scripts/b.py", "workspaces/Pub/tests/data.py"]
     found = gate.collect_full(public, [])
     assert sorted(f.file for f in found) == ["dataforge/a.py", "workspaces/Pub/scripts/b.py"]

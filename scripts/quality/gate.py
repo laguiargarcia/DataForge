@@ -22,6 +22,7 @@ See docs/quality-gate.md.
 from __future__ import annotations
 
 import argparse
+import ast
 import io
 import json
 import re
@@ -55,8 +56,21 @@ SQLITE_URL_HOMES = {"dataforge/compat.py", Path(__file__).resolve().relative_to(
 # (TID251) covers the package; workspaces/** ignores TID251 (their scripts read os.environ), so DF003.
 APP_BACKEND = re.compile(r"workspaces/[^/]+/apps/[^/]+/backend/.+\.py")
 DIRECT_DELTA_READS = {"read_delta", "scan_delta"}
+# A workspace script (workspaces/<ws>/scripts/**) is alive when a job.yaml runs it or another file of the
+# workspace outside its tests names it: imports it, or spells "<name>.py" in a string (exec(open(...)), a
+# "run reprocess.py" message). A script kept to be run by hand says so on a line of its own (df-aq85).
+WORKSPACE_SCRIPT = re.compile(r"workspaces/(?P<ws>[^/]+)/scripts/(?P<rel>.+\.py)")
+JOB_SCRIPT = re.compile(r"^\s*script:\s*['\"]?(?P<rel>[^'\"\s#]+\.py)", re.MULTILINE)
+PY_NAME = re.compile(r"[\w-]+\.py\b")
+MANUAL_SCRIPT = re.compile(r"#\s*gate:\s*manual-script\s--\s*\S")
+# A module of the package is alive when another module of it imports it or spells its dotted name
+# ("dataforge.api.app:app"), or the packaging, CI or repo tooling names it (entry points, `-m`).
+# Tests do not count: a module only tests reach is not part of the product.
+PACKAGE_MODULE_NAME = re.compile(r"dataforge(?:\.\w+)+")
+PACKAGE_CALLER_FILES = ("pyproject.toml", ".github/workflows/*.y*ml", "scripts/**/*.py", "scripts/**/*.sh",
+                        "scripts/**/*.ps1")
 # Findings that only the full gate produces; the fast gate leaves their counts alone.
-FULL_ONLY_PREFIXES = ("vulture:", "import-contract", "deptry:")
+FULL_ONLY_PREFIXES = ("vulture:", "import-contract", "deptry:", "DF004")
 # The installed package: its files import each other by package name, never as bare siblings.
 PACKAGE = "dataforge/"
 
@@ -232,15 +246,20 @@ def dependencies(public: list[str]) -> list[Finding]:
     ]
 
 
+def _tokens(rel: str) -> list[tokenize.TokenInfo]:
+    try:
+        return list(tokenize.generate_tokens(io.StringIO((ROOT / rel).read_text(encoding="utf-8")).readline))
+    except (tokenize.TokenError, SyntaxError, UnicodeDecodeError):
+        return []  # ruff reports the syntax error
+
+
 def project_rules(files: list[str]) -> list[Finding]:
     """DF001 suppression without a reason; DF002 SQLite URL spelled outside dataforge.compat;
-    DF003 an app backend reading Delta without dataforge.delta_pool."""
+    DF003 an app backend reading Delta without dataforge.delta_pool. (DF004 needs the whole workspace:
+    orphan_scripts, in the full gate.)"""
     found = []
     for rel in files:
-        try:
-            tokens = list(tokenize.generate_tokens(io.StringIO((ROOT / rel).read_text(encoding="utf-8")).readline))
-        except (tokenize.TokenError, SyntaxError, UnicodeDecodeError):
-            continue  # ruff reports the syntax error
+        tokens = _tokens(rel)
         sqlite_allowed = rel in SQLITE_URL_HOMES or rel.startswith(TESTS)
         backend = APP_BACKEND.fullmatch(rel) is not None
         found += [f for tok in tokens if (f := _token_rule(rel, tok, sqlite_allowed, backend)) is not None]
@@ -260,9 +279,99 @@ def _token_rule(rel: str, tok: tokenize.TokenInfo, sqlite_allowed: bool, backend
     return None
 
 
+def _named_files(tokens: list[tokenize.TokenInfo]) -> set[str]:
+    """The "<name>.py" files these tokens import or spell in a string."""
+    names, importing = set(), False
+    for tok in tokens:
+        if tok.type == tokenize.NAME and tok.string in ("import", "from"):
+            importing = True
+        elif tok.type == tokenize.NEWLINE:
+            importing = False
+        elif importing and tok.type == tokenize.NAME:
+            names.add(tok.string + ".py")
+        if tok.type in STRING_TOKENS:
+            names.update(PY_NAME.findall(tok.string))
+    return names
+
+
+def orphan_scripts(files: list[str]) -> list[Finding]:
+    """DF004 a workspace script that no job runs and no other file of the workspace names (df-aq85)."""
+    by_ws = defaultdict(list)
+    for rel in files:
+        if rel.startswith("workspaces/") and rel.count("/") > 1:
+            by_ws[rel.split("/")[1]].append(rel)
+    found = []
+    for ws, rels in by_ws.items():
+        jobs = {m["rel"] for job in (ROOT / "workspaces" / ws / "jobs").rglob("*.yaml")
+                for m in JOB_SCRIPT.finditer(job.read_text(encoding="utf-8"))}
+        callers = [r for r in rels if not _is_workspace_test(r)]
+        named = {r: _named_files(_tokens(r)) for r in callers}
+        for rel in rels:
+            m = WORKSPACE_SCRIPT.fullmatch(rel)
+            if m is None or m["rel"] in jobs:
+                continue
+            name = Path(rel).name
+            if any(name in names for other, names in named.items() if other != rel):
+                continue
+            if any(t.type == tokenize.COMMENT and MANUAL_SCRIPT.search(t.string) for t in _tokens(rel)):
+                continue
+            found.append(Finding(rel, "DF004", 1, "no job runs this script and no other file of the workspace "
+                                 "names it: remove it, or mark a hand-run tool '# gate: manual-script -- why'"))
+    return found
+
+
+def _module_name(rel: str) -> str:
+    parts = list(Path(rel).with_suffix("").parts)
+    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
+
+
+def _imported_names(rel: str) -> set[str]:
+    """Dotted names this package file imports (relative imports resolved) or spells in a string."""
+    try:
+        tree = ast.parse((ROOT / rel).read_text(encoding="utf-8"))
+    except (SyntaxError, UnicodeDecodeError):
+        return set()  # ruff reports the syntax error
+    here = _module_name(rel).split(".")
+    package = here if rel.endswith("__init__.py") else here[:-1]
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                base = ".".join(package[: len(package) - node.level + 1] + ([node.module] if node.module else []))
+            names.add(base)
+            names.update(f"{base}.{a.name}" for a in node.names)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            names.update(PACKAGE_MODULE_NAME.findall(node.value))
+    return names
+
+
+def orphan_modules(files: list[str]) -> list[Finding]:
+    """DF004 a module of the package that nothing outside the tests imports or names (df-aq85)."""
+    modules = [r for r in files if r.startswith(PACKAGE) and Path(r).name not in ("__init__.py", "__main__.py")]
+    if not modules:
+        return []
+    imported = {r: _imported_names(r) for r in files if r.startswith(PACKAGE)}
+    outside = {m for pattern in PACKAGE_CALLER_FILES for f in ROOT.glob(pattern) if f.is_file()
+               for m in PACKAGE_MODULE_NAME.findall(f.read_text(encoding="utf-8", errors="replace"))}
+    found = []
+    for rel in modules:
+        name = _module_name(rel)
+        def names_it(n: str, name: str = name) -> bool:
+            return n == name or n.startswith(name + ".")
+        if any(names_it(n) for other, ns in imported.items() if other != rel for n in ns) or any(map(names_it, outside)):
+            continue
+        found.append(Finding(rel, "DF004", 1, "no module of the package imports this one and nothing in pyproject, "
+                             "CI or scripts/ names it: remove it (tests alone do not keep it alive)"))
+    return found
+
+
 def collect_full(public: list[str], private: list[str]) -> list[Finding]:
     every = public + private
-    found = ruff(every) + project_rules(every) + import_contracts() + dependencies(public)
+    found = (ruff(every) + project_rules(every) + import_contracts() + dependencies(public)
+             + orphan_scripts(every) + orphan_modules(public))
     # Tests count as callers, but their own findings are fixtures and mocks, not dead code.
     # So are a published workspace's own tests (workspaces/<ws>/tests/), as for a private one below.
     found += [f for f in vulture(public) if not f.file.startswith(TESTS) and not _is_workspace_test(f.file)]
