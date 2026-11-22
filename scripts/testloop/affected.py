@@ -130,7 +130,7 @@ def _imported_names(tree: ast.AST, package: list[str]) -> set[str]:
     return names
 
 
-def _bare_folders(repo: Path, rel: str) -> tuple[str, ...]:
+def _bare_folders(repo: Path, rel: str) -> list[str]:
     """Folders of the repo where a bare import in `rel` may find a module: a script's own folder (it
     runs with that folder on sys.path), and scripts/ for a test. In a workspace (workspaces/<ws>/), a
     script has its own folder and the workspace root (`pythonpath = .`), and a test has the root, its
@@ -138,19 +138,19 @@ def _bare_folders(repo: Path, rel: str) -> tuple[str, ...]:
     parts = Path(rel).parts
     top = parts[0]
     if top == SCRIPTS:
-        return (Path(rel).parent.as_posix(),)
+        return [Path(rel).parent.as_posix()]
     if top == "tests":
-        return (SCRIPTS,)
+        return [SCRIPTS]
     if top != WORKSPACES or len(parts) < WORKSPACE_DEPTH:
-        return ()
+        return []
     root = Path(*parts[:2])
     if parts[2] == SCRIPTS:
-        return (Path(rel).parent.as_posix(), root.as_posix())
+        return [Path(rel).parent.as_posix(), root.as_posix()]
     if parts[2] == "tests":
         scripts = repo / root / SCRIPTS
         folders = sorted(p.relative_to(repo).as_posix() for p in scripts.glob("**/") if p.is_dir())
-        return (root.as_posix(), *folders)
-    return ()
+        return [root.as_posix(), *folders]
+    return []
 
 
 def _imports(repo: Path, rel: str) -> set[str]:
