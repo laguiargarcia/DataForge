@@ -5,7 +5,14 @@ them. A job outside that reach goes red while auto-merge carries the PR in anywa
 orders and windows-smoke failed unnoticed. A required job that runs `if: always()` passes even when
 a job it needs failed, unless its steps read that need's result.
 """
+import re
+import shutil
+import stat
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 from dataforge import yamlio
 
@@ -138,3 +145,141 @@ def test_a_pr_splits_by_the_costs_that_built_the_cache_it_reuses():
     assert split["with"]["path"] == "${{ runner.temp }}/split"
     assert ok.index(split) < ok.index(keep) < ok.index(save)
     assert keep["if"] == split["if"] == save["if"]
+
+
+# --- The steps that gate are run, not read (df-g2ot.1) ---------------------------------------------
+# A text search finds a line that was deleted, not a `|| exit 1` turned into `|| echo`, or a pipe to
+# tee that no longer fails because the shell lost pipefail. So each gating step's script runs here, in
+# bash, the way GitHub runs it, and must exit non-zero when what it gates failed.
+
+pytestmark_bash = pytest.mark.skipif(
+    sys.platform == "win32" or shutil.which("bash") is None, reason="runs the steps' scripts with bash"
+)
+EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
+NEED_RESULT = re.compile(r"needs\.([\w-]+)\.result")
+# The tools a step pipes into tee; each is replaced by a stub that exits with $STUB_RC (jq lists a target).
+STUBBED = ("uv", "npm", "pytest", "python", "jq")
+STUB = '#!/bin/bash\n[ "${0##*/}" = jq ] && echo target\nexit "${STUB_RC:-0}"\n'
+# defaults.run.shell of the GitHub Actions docs, with the script path in place of {0}.
+SHELLS = {
+    "default": ["bash", "-e"],
+    "bash": ["bash", "--noprofile", "--norc", "-eo", "pipefail"],
+}
+
+
+def _all_jobs(jobs: dict) -> set[str]:
+    reached, todo = set(), list(REQUIRED)
+    while todo:
+        name = todo.pop()
+        if name not in reached:
+            reached.add(name)
+            todo.extend(_needs(jobs[name]))
+    return reached
+
+
+def _shell(job: dict, step: dict) -> list[str] | None:
+    shell = step.get("shell") or job.get("defaults", {}).get("run", {}).get("shell")
+    if shell is None:
+        return None if "windows" in str(job.get("runs-on")) else SHELLS["default"]
+    return SHELLS.get(shell)
+
+
+def _run_step(job: dict, step: dict, workdir: Path, needs: dict[str, str], stub_rc: int) -> int:
+    """Run the step's script with each ${{ needs.X.result }} replaced from `needs` and any other
+    expression by "x"; the commands it pipes into tee are the stubs, exiting `stub_rc`."""
+    def fill(text):
+        return EXPRESSION.sub(lambda m: needs.get(m[1].strip().removeprefix("needs.").removesuffix(".result"), "x"), text)
+    stubs = workdir / "stubs"
+    stubs.mkdir(exist_ok=True)
+    for tool in STUBBED:
+        (stubs / tool).write_text(STUB)
+        (stubs / tool).chmod(stat.S_IRWXU)
+    script = workdir / "step.sh"
+    script.write_text(fill(step["run"]))
+    env = {k: fill(str(v)) for k, v in step.get("env", {}).items()}
+    env |= {"PATH": f"{stubs}:/usr/bin:/bin", "HOME": str(workdir), "STUB_RC": str(stub_rc),
+            "GITHUB_STEP_SUMMARY": str(workdir / "summary"), "RUNNER_TEMP": str(workdir),
+            "GITHUB_WORKSPACE": str(workdir)}
+    shell = _shell(job, step)
+    assert shell is not None, f"{step.get('name')}: no bash shell"
+    return subprocess.run([*shell, str(script)], cwd=workdir, env=env, capture_output=True, check=False).returncode
+
+
+def _needs_checks(jobs: dict, tmp: Path) -> list[str]:
+    """Problems of the steps reading `needs.<n>.result`: all success must pass, and each need failed
+    or cancelled, one at a time, must fail."""
+    problems = []
+    for name in sorted(REQUIRED):
+        job = jobs[name]
+        for step in job.get("steps", []):
+            used = sorted(set(NEED_RESULT.findall(str(step.get("env", "")) + str(step.get("run", "")))))
+            if not used:
+                continue
+            label = f"{name} / {step.get('name')}"
+            ok = dict.fromkeys(used, "success")
+            if _run_step(job, step, tmp, ok, 0) != 0:
+                problems.append(f"{label} fails when every need succeeded")
+            for need in used:
+                for result in ("failure", "cancelled"):
+                    if _run_step(job, step, tmp, ok | {need: result}, 0) == 0:
+                        problems.append(f"{label} passes when {need} is {result}")
+    return problems
+
+
+def _tee_checks(jobs: dict, tmp: Path) -> list[str]:
+    """Problems of the steps that pipe a command into tee: a failing command must fail the step."""
+    problems = []
+    for name in sorted(_all_jobs(jobs)):
+        job = jobs[name]
+        for step in job.get("steps", []):
+            if "| tee" not in str(step.get("run", "")):
+                continue
+            label = f"{name} / {step.get('name')}"
+            if _shell(job, step) is None:
+                problems.append(f"{label} pipes into tee without bash")
+            elif _run_step(job, step, tmp, {}, 0) != 0:
+                problems.append(f"{label} fails when its commands succeed")
+            elif _run_step(job, step, tmp, {}, 1) == 0:
+                problems.append(f"{label} passes when its commands fail")
+    return problems
+
+
+def _broken(*swaps: tuple[str, str]) -> dict:
+    text = CI.read_text(encoding="utf-8")
+    for old, new in swaps:
+        assert old in text, old
+        text = text.replace(old, new)
+    return yamlio.load(text)["jobs"]
+
+
+@pytestmark_bash
+def test_a_step_reading_a_need_fails_when_the_need_did_not_succeed(tmp_path):
+    assert _needs_checks(_jobs(), tmp_path) == []
+
+
+@pytestmark_bash
+def test_a_step_piping_into_tee_fails_when_the_command_fails(tmp_path):
+    assert _tee_checks(_jobs(), tmp_path) == []
+
+
+@pytestmark_bash
+def test_the_checks_cover_the_steps_that_matter(tmp_path):
+    jobs = _jobs()
+    read = {n for r in REQUIRED for s in jobs[r].get("steps", []) for n in NEED_RESULT.findall(str(s.get("env", "")))}
+    assert {"mutation-targets", "mutation", "tests-shard", "windows-smoke"} <= read
+    piped = [s["name"] for n in _all_jobs(jobs) for s in jobs[n].get("steps", []) if "| tee" in str(s.get("run", ""))]
+    assert "Gate each target on its shards" in piped
+
+
+@pytestmark_bash
+@pytest.mark.parametrize(
+    ("check", "swaps"),
+    [
+        (_needs_checks, [('[ "$PICK" = "success" ] || exit 1', '[ "$PICK" = "success" ] || echo')]),
+        (_needs_checks, [('[ "$MUTATION" = "skipped" ] || exit 1', '[ "$MUTATION" = "skipped" ] || echo')]),
+        (_tee_checks, [("        shell: bash\n        env: { TARGETS", "        env: { TARGETS")]),
+    ],
+    ids=["pick-not-gated", "mutation-not-gated", "tee-without-pipefail"],
+)
+def test_the_checks_catch_the_bugs_df_g2ot_injected(check, swaps, tmp_path):
+    assert check(_broken(*swaps), tmp_path) != []
