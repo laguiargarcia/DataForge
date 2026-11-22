@@ -362,6 +362,19 @@ jobs:
           echo "orders $ORDER: --randomly-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
           uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
             -n auto --randomly-seed="$seed" 2>&1 | tee "report/orders-$ORDER.txt"
+      # The GetFinance suite too (df-xkhx.1): tests-getfinance runs it in one order, seed run id. Its own
+      # process, as in tests-getfinance (its `tests` package cannot share one with the engine's). It runs
+      # even when the engine suite failed, so one red order does not hide the other suite's.
+      - name: GetFinance suite in another random order
+        if: "!cancelled()"
+        shell: bash
+        env: { ORDER: "${{ matrix.order }}", RUN: "${{ github.run_id }}" }
+        run: |
+          mkdir -p report
+          seed=$(( RUN + ORDER ))
+          echo "orders $ORDER GetFinance: --randomly-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
+          uv run --frozen --no-sync python -m pytest workspaces/GetFinance -m 'not integration' -p no:cacheprovider \
+            -n auto --randomly-seed="$seed" 2>&1 | tee "report/orders-getfinance-$ORDER.txt"
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: "report-orders-${{ matrix.order }}", path: report/, if-no-files-found: ignore }
