@@ -67,3 +67,36 @@ def test_commands_run_the_engine_tests_with_branch_coverage_and_judge_every_line
     assert {"--compare-branch=main", "--branch-coverage", "--fail-under=100"} <= set(diff)
     assert env["QT"] == "offscreen"
     assert Path(env["COVERAGE_FILE"]).parent == Path(diff[3]).parent  # the data stays in the temp dir
+
+
+def test_a_workspace_with_its_own_pytest_ini_runs_in_its_own_process_and_its_report_is_judged_too(fake):
+    """df-xkhx.3: its `tests` package cannot share a process with the engine's, so it is a second pytest run."""
+    ws = fake["config"].repo / "workspaces" / "W"
+    ws.mkdir(parents=True)
+    (ws / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    (fake["config"].repo / "workspaces" / "NoTests").mkdir()  # no pytest.ini: not a suite
+    diffcover_cmd.main(fake["config"], "main")
+    (engine, _), (workspace, ws_env), (diff, _) = fake["calls"]
+    assert "--cov=dataforge" in engine
+    assert "workspaces/W" not in engine
+    assert workspace[:5] == ["py", "-m", "pytest", "-p", "no:randomly"]
+    assert {"workspaces/W", "--cov=workspaces/W/scripts", "--cov-branch"} <= set(workspace)
+    assert workspace[workspace.index("-m", 3) + 1] == "not integration"
+    reports = [a for a in diff if a.endswith(".xml")]
+    assert reports == [a.split(":", 1)[1] for a in (engine[-1], workspace[-1])]
+    assert ws_env["COVERAGE_FILE"] != fake["calls"][0][1]["COVERAGE_FILE"]
+
+
+def test_a_failing_workspace_suite_names_the_workspace(fake, monkeypatch):
+    ws = fake["config"].repo / "workspaces" / "W"
+    ws.mkdir(parents=True)
+    (ws / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    real = diffcover_cmd.subprocess.run
+
+    def run(cmd, **kwargs):
+        done = real(cmd, **kwargs)
+        return subprocess.CompletedProcess(cmd, 1, "1 failed", "") if "workspaces/W" in cmd else done
+
+    monkeypatch.setattr(diffcover_cmd.subprocess, "run", run)
+    with pytest.raises(ToolError, match="workspaces/W tests failed"):
+        diffcover_cmd.main(fake["config"], "main")
