@@ -42,7 +42,8 @@ def seen(tmp_path):
 
 
 def test_on_ci_the_default_profile_tries_the_same_examples_every_run(seen):
-    assert seen() == seen()
+    first_run = seen()
+    assert seen() == first_run
 
 
 def test_the_explore_profile_draws_from_the_seed_and_repeats_with_it(seen):
