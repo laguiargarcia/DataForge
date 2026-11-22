@@ -15,7 +15,9 @@ kept when one of them is
 - the target's module, one of its test files, or a first-party module either of them imports,
   directly or through other first-party modules (imports inside functions included); a module under
   scripts/ counts too, imported as `scripts.x` or by its bare name: from a script in its own folder,
-  from a test in scripts/ (df-n8ac.36);
+  from a test in scripts/ (df-n8ac.36); in workspaces/<ws>/, a script finds its own folder and the
+  workspace root, a test the root and every folder under its scripts/ (df-mbi7);
+- a workspace test's conftest.py files, followed like any module (df-mbi7);
 - shared by every target: the test loop code that `mutate` runs, the test package setup, the
   install, the workflow's mutation jobs or top-level keys, and testloop.toml outside its
   [targets] tables (df-n8ac.40: the other test loop tools and the other CI jobs cannot move a
@@ -47,6 +49,9 @@ FIRST_PARTY = ("dataforge", "tests")
 # Repo tooling: its modules are followed too (a script split into sibling modules, df-n8ac.36), but a
 # file there that is not Python is no shared file: scripts/ holds many tools no target runs.
 SCRIPTS = "scripts"
+# A workspace's scripts and tests import each other by bare name too (df-mbi7).
+WORKSPACES = "workspaces"
+WORKSPACE_DEPTH = 4   # workspaces/<ws>/<scripts|tests>/<file>: a path with fewer parts is no workspace code
 
 # The test loop's config: compared table by table against the base (_config_changes).
 CONFIG = "testloop.toml"
@@ -125,13 +130,27 @@ def _imported_names(tree: ast.AST, package: list[str]) -> set[str]:
     return names
 
 
-def _bare_folders(rel: str) -> tuple[str, ...]:
+def _bare_folders(repo: Path, rel: str) -> tuple[str, ...]:
     """Folders of the repo where a bare import in `rel` may find a module: a script's own folder (it
-    runs with that folder on sys.path), and scripts/ for a test."""
-    top = rel.split("/")[0]
+    runs with that folder on sys.path), and scripts/ for a test. In a workspace (workspaces/<ws>/), a
+    script has its own folder and the workspace root (`pythonpath = .`), and a test has the root, its
+    scripts/ and every folder under it (the tests put them on sys.path; df-mbi7)."""
+    parts = Path(rel).parts
+    top = parts[0]
     if top == SCRIPTS:
         return (Path(rel).parent.as_posix(),)
-    return (SCRIPTS,) if top == "tests" else ()
+    if top == "tests":
+        return (SCRIPTS,)
+    if top != WORKSPACES or len(parts) < WORKSPACE_DEPTH:
+        return ()
+    root = Path(*parts[:2])
+    if parts[2] == SCRIPTS:
+        return (Path(rel).parent.as_posix(), root.as_posix())
+    if parts[2] == "tests":
+        scripts = repo / root / SCRIPTS
+        folders = sorted(p.relative_to(repo).as_posix() for p in scripts.glob("**/") if p.is_dir())
+        return (root.as_posix(), *folders)
+    return ()
 
 
 def _imports(repo: Path, rel: str) -> set[str]:
@@ -145,16 +164,27 @@ def _imports(repo: Path, rel: str) -> set[str]:
         # `import a.b.c` runs a, a.b and a.b.c.
         parts = name.split(".")
         found.update(
-            path for folder in ("", *_bare_folders(rel)) for i in range(1, len(parts) + 1)
+            path for folder in ("", *_bare_folders(repo, rel)) for i in range(1, len(parts) + 1)
             if (path := _module_file(repo, ".".join(parts[:i]), folder)) is not None
         )
     return found
 
 
+def _conftests(repo: Path, rel: str) -> list[str]:
+    """The conftest.py files pytest loads for a test in a workspace (workspaces/<ws>/...): no import
+    names them. The engine's tests/conftest.py is shared by every target (SHARED) instead."""
+    parts = Path(rel).parts
+    if parts[0] != WORKSPACES or len(parts) < WORKSPACE_DEPTH:
+        return []
+    folders = [Path(*parts[:i]) for i in range(2, len(parts))]
+    return [(folder / "conftest.py").as_posix() for folder in folders if (repo / folder / "conftest.py").is_file()]
+
+
 def dependencies(repo: Path, roots: list[str]) -> set[str]:
-    """`roots` plus every first-party file they import, transitively."""
+    """`roots` plus every first-party file they import, transitively, and the conftest.py files of the
+    workspace tests among them."""
     seen: set[str] = set()
-    todo = list(roots)
+    todo = [*roots, *(c for rel in roots if "/tests/" in rel for c in _conftests(repo, rel))]
     while todo:
         rel = todo.pop()
         if rel in seen:

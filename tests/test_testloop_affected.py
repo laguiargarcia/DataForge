@@ -314,6 +314,58 @@ def test_a_change_to_a_script_module_picks_the_targets_that_import_it(script_rep
     assert picked(script_repo, changed) == expected
 
 
+# ---------------------------------------------------------------- workspace targets (df-mbi7)
+# A workspace's tests put its scripts folders on sys.path and import them by bare name; its scripts
+# import their siblings bare, or from the workspace root (pythonpath = .); `tests.x` is the workspace's
+# own package; its conftest.py (and what that imports) is loaded for each of its tests.
+WS = "workspaces/W"
+ENGINE = "dataforge/plan.py"
+WS_FILES = {
+    "testloop.toml": "".join(
+        f'[targets."{WS}/scripts/report/{name}.py"]\ntests = ["{WS}/tests/test_{name}.py"]\n\n'
+        for name in ("lib", "rules")) + f'[targets."{ENGINE}"]\ntests = ["tests/test_plan.py"]\n',
+    "dataforge/__init__.py": "",
+    "dataforge/db.py": "",
+    ENGINE: "",
+    "tests/__init__.py": "",
+    "tests/test_plan.py": "from dataforge import plan\n",
+    f"{WS}/tests/__init__.py": "",
+    f"{WS}/tests/conftest.py": "from dataforge.db import init_db\n",
+    f"{WS}/tests/helper.py": "",
+    f"{WS}/tests/test_lib.py": "from tests.helper import x\nfrom lib import f\nfrom sibling import s\n",
+    f"{WS}/tests/test_rules.py": "from rules import g\n",
+    f"{WS}/scripts/report/lib.py": "from rules import g\nfrom shared import k\n",
+    f"{WS}/scripts/report/rules.py": "",
+    f"{WS}/scripts/report/sibling.py": "",
+    f"{WS}/scripts/report/unused.py": "",
+    f"{WS}/shared.py": "",
+}
+LIB, RULES = f"{WS}/scripts/report/lib.py", f"{WS}/scripts/report/rules.py"
+
+
+@pytest.fixture
+def ws_repo(tmp_path):
+    for rel, text in WS_FILES.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.parametrize("changed, expected", [
+    ([RULES], [LIB, RULES]),                        # lib imports rules by its bare name
+    ([LIB], [LIB]),
+    ([f"{WS}/tests/test_lib.py"], [LIB]),           # only a test of lib
+    ([f"{WS}/tests/helper.py"], [LIB]),             # `from tests.helper`: the workspace's package, not the engine's
+    ([f"{WS}/scripts/report/sibling.py"], [LIB]),   # a test of lib imports a sibling script bare
+    ([f"{WS}/shared.py"], [LIB]),                   # a script imports from the workspace root
+    ([f"{WS}/tests/conftest.py"], [LIB, RULES]),    # the workspace's conftest: its targets only, not the engine's
+    (["dataforge/db.py"], [LIB, RULES]),            # what that conftest imports
+    ([f"{WS}/scripts/report/unused.py"], []),
+])
+def test_a_change_in_a_workspace_picks_the_targets_that_reach_it(ws_repo, changed, expected):
+    assert picked(ws_repo, changed) == expected
+
+
 # ---------------------------------------------------------------- packing by measured cost (df-n8ac.39)
 
 def item(module, shard=1, shards=1):

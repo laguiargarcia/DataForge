@@ -17,6 +17,7 @@ RESULT_DIR = ".testloop"
 # Windows instead of surviving under Linux's UTF-8 locale. See plugins/testloop_ascii_locale.py.
 PLUGIN_DIR = Path(__file__).resolve().parent / "plugins"
 LOCALE_PLUGIN = "testloop_ascii_locale"
+BARE_IMPORT_PLUGIN = "testloop_bare_imports"
 
 
 class ToolError(Exception):
@@ -52,9 +53,14 @@ def load_config(repo: Path) -> Config:
     )
 
 
-def pytest_args(config: Config) -> list[str]:
-    """The arguments every test run of the tool passes to pytest, before the test files."""
-    return [*config.pytest_args, "-p", LOCALE_PLUGIN, *config.check_args]
+def pytest_args(config: Config, module: str | None = None) -> list[str]:
+    """The arguments every test run of the tool passes to pytest, before the test files. A target's
+    own `check_args` replace the global ones (the GetFinance tests do not register the engine's
+    Hypothesis profile), and `bare_import = true` loads the module under its dotted name too, for
+    tests that import it by its bare name (df-mbi7)."""
+    target = config.targets.get(module, {})
+    bare = ["-p", BARE_IMPORT_PLUGIN, "--bare-import", module] if target.get("bare_import") else []
+    return [*config.pytest_args, "-p", LOCALE_PLUGIN, *bare, *target.get("check_args", config.check_args)]
 
 
 def test_env(config: Config, **extra: str) -> dict[str, str]:

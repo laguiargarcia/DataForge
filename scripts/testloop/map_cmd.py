@@ -35,7 +35,7 @@ def run(config: Config, module: str) -> dict:
         env = test_env(config, COVERAGE_FILE=str(Path(tmp) / ".coverage"))
         report = Path(tmp) / "coverage.json"
         pytest_cmd = [
-            config.python, "-m", "pytest", *pytest_args(config), *tests,
+            config.python, "-m", "pytest", *pytest_args(config, module), *tests,
             f"--cov={_dotted(module)}", "--cov-branch", "--cov-context=test",
             "--cov-report=",
         ]
