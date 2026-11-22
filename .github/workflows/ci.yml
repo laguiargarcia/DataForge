@@ -339,7 +339,9 @@ jobs:
   orders:
     # More shuffles of the engine suite on every PR and push, in parallel (df-n8ac.14): an
     # order-dependent test fails here with its seed in the run summary instead of in a later run.
-    # Reproduce with the same pytest command plus --randomly-seed=<seed> (docs/testing.md).
+    # Reproduce with the same pytest command plus --randomly-seed=<seed> (docs/testing.md). The
+    # properties draw new examples here (profile explore, df-91aq), from the same seed:
+    # --hypothesis-profile=explore --hypothesis-seed=<seed> reproduces them.
     name: orders (${{ matrix.order }}/2)
     strategy:
       fail-fast: false
@@ -359,9 +361,9 @@ jobs:
         run: |
           mkdir -p report
           seed=$(( RUN + ORDER ))
-          echo "orders $ORDER: --randomly-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
+          echo "orders $ORDER: --randomly-seed=$seed --hypothesis-profile=explore --hypothesis-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
           uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
-            -n auto --randomly-seed="$seed" 2>&1 | tee "report/orders-$ORDER.txt"
+            -n auto --randomly-seed="$seed" --hypothesis-profile=explore --hypothesis-seed="$seed" 2>&1 | tee "report/orders-$ORDER.txt"
       # The GetFinance suite too (df-xkhx.1): tests-getfinance runs it in one order, seed run id. Its own
       # process, as in tests-getfinance (its `tests` package cannot share one with the engine's). It runs
       # even when the engine suite failed, so one red order does not hide the other suite's.
@@ -372,9 +374,9 @@ jobs:
         run: |
           mkdir -p report
           seed=$(( RUN + ORDER ))
-          echo "orders $ORDER GetFinance: --randomly-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
+          echo "orders $ORDER GetFinance: --randomly-seed=$seed --hypothesis-profile=explore --hypothesis-seed=$seed" >> "$GITHUB_STEP_SUMMARY"
           uv run --frozen --no-sync python -m pytest workspaces/GetFinance -m 'not integration' -p no:cacheprovider \
-            -n auto --randomly-seed="$seed" 2>&1 | tee "report/orders-getfinance-$ORDER.txt"
+            -n auto --randomly-seed="$seed" --hypothesis-profile=explore --hypothesis-seed="$seed" 2>&1 | tee "report/orders-getfinance-$ORDER.txt"
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: "report-orders-${{ matrix.order }}", path: report/, if-no-files-found: ignore }
