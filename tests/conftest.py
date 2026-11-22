@@ -7,19 +7,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from pathlib import Path
-from hypothesis import settings
 from fastapi.testclient import TestClient
 from dataforge.db import init_db
 from dataforge.compat import db_url as make_db_url
 
-settings.register_profile("deterministic", derandomize=True, database=None, deadline=None)
-# Ordinary runs: the profile Hypothesis picked on its own ("default" locally: random, with the example
-# database; "ci" when it detects CI, which already has no deadline), without the 200 ms per-example
-# deadline, so a property on a slow disk fails on its rule, never on time. Hypothesis's pytest plugin
-# loads a profile named on the command line (--hypothesis-profile, as `testloop check` passes) after
-# this file is imported, so that one still wins.
-settings.register_profile("no-deadline", settings.default, deadline=None)
-settings.load_profile("no-deadline")
+# The Hypothesis profiles and the fixtures db_url, dataforge_home and global_engine, shared with the
+# workspaces' tests (df-xkhx.7).
+pytest_plugins = ["dataforge.testing"]
 
 
 def pytest_configure(config):
@@ -42,22 +36,6 @@ def isolated_dataforge_home(request, tmp_path_factory, monkeypatch):
 
 
 @pytest.fixture
-def db_url(tmp_path):
-    """Isolated SQLite DB per test. Never use a real path."""
-    return make_db_url(tmp_path / "dataforge.db")
-
-
-@pytest.fixture
-def dataforge_home(tmp_path, monkeypatch):
-    """Sets DATAFORGE_HOME to a temp dir and creates workspaces/ subdirectory."""
-    home = tmp_path / "dataforge_home"
-    home.mkdir()
-    (home / "workspaces").mkdir()
-    monkeypatch.setenv("DATAFORGE_HOME", str(home))
-    return home
-
-
-@pytest.fixture
 def workspace_dir(dataforge_home):
     """Creates test workspace under DATAFORGE_HOME/workspaces/test_ws."""
     ws = dataforge_home / "workspaces" / "test_ws"
@@ -66,13 +44,6 @@ def workspace_dir(dataforge_home):
     (ws / "jobs").mkdir()
     (ws / "scripts").mkdir()
     return ws
-
-
-@pytest.fixture
-def global_engine(dataforge_home):
-    """SQLAlchemy engine for the global DB at DATAFORGE_HOME/dataforge.db."""
-    url = make_db_url(dataforge_home / "dataforge.db")
-    return init_db(url)
 
 
 @pytest.fixture

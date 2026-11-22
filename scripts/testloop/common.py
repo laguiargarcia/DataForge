@@ -54,13 +54,11 @@ def load_config(repo: Path) -> Config:
 
 
 def pytest_args(config: Config, module: str | None = None) -> list[str]:
-    """The arguments every test run of the tool passes to pytest, before the test files. A target's
-    own `check_args` replace the global ones (the GetFinance tests do not register the engine's
-    Hypothesis profile), and `bare_import = true` loads the module under its dotted name too, for
-    tests that import it by its bare name (df-mbi7)."""
-    target = config.targets.get(module, {})
-    bare = ["-p", BARE_IMPORT_PLUGIN, "--bare-import", module] if target.get("bare_import") else []
-    return [*config.pytest_args, "-p", LOCALE_PLUGIN, *bare, *target.get("check_args", config.check_args)]
+    """The arguments every test run of the tool passes to pytest, before the test files. A target with
+    `bare_import = true` also loads the module under its dotted name, for tests that import it by its
+    bare name (df-mbi7)."""
+    bare = ["-p", BARE_IMPORT_PLUGIN, "--bare-import", module] if config.targets.get(module, {}).get("bare_import") else []
+    return [*config.pytest_args, "-p", LOCALE_PLUGIN, *bare, *config.check_args]
 
 
 def test_env(config: Config, **extra: str) -> dict[str, str]:

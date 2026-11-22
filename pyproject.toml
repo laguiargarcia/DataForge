@@ -141,8 +141,10 @@ ignore_names = ["*Event", "test_*", "pytest_*", "pytestmark", "side_effect", "re
 # other as siblings (--known-first-party). Every exception below says why.
 [tool.deptry]
 # A workspace's own tests are test code, like tests/ (deptry's default exclude): pytest and
-# hypothesis come from the dev group there (df-bsb2.2.2).
-extend_exclude = ["workspaces/[^/]+/tests/"]
+# hypothesis come from the dev group there (df-bsb2.2.2). So is dataforge.testing, the pytest plugin
+# that tests/conftest.py and each workspace's tests/conftest.py load (df-xkhx.7): it lives in the
+# package because that is the one place both suites import, but no module of the package imports it.
+extend_exclude = ["workspaces/[^/]+/tests/", "dataforge/testing\\.py"]
 
 # Distribution -> import name, spelled out so the answer is the same where the packages are not
 # installed (CI's quality job, the pre-commit environment) as where they are.
