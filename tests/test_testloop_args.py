@@ -1,5 +1,4 @@
-"""scripts/testloop/common.py pytest_args: what a target changes in the pytest arguments (df-mbi7), and the
-plugin its `bare_import` turns on."""
+"""scripts/testloop/common.py pytest_args: the plugin a target's `bare_import` turns on (df-mbi7)."""
 
 import os
 import subprocess
@@ -13,11 +12,10 @@ from common import Config, pytest_args  # the test loop tools are scripts, not a
 PLUGINS = Path(__file__).resolve().parents[1] / "scripts" / "testloop" / "plugins"
 
 
-def test_a_targets_check_args_replace_the_global_ones_and_bare_import_adds_its_plugin(tmp_path):
+def test_bare_import_adds_its_plugin_and_every_target_gets_the_global_check_args(tmp_path):
     config = Config(repo=tmp_path, pytest_args=["-x"], check_args=["--g"], targets={
-        "a/b/mod.py": {"check_args": []}, "a/c.py": {"bare_import": True}, "a/d.py": {}})
+        "a/c.py": {"bare_import": True}, "a/d.py": {}})
     plugin = ["-p", "testloop_ascii_locale"]
-    assert pytest_args(config, "a/b/mod.py") == ["-x", *plugin]
     assert pytest_args(config, "a/c.py") == ["-x", *plugin, "-p", "testloop_bare_imports", "--bare-import", "a/c.py", "--g"]
     assert pytest_args(config, "a/d.py") == pytest_args(config) == ["-x", *plugin, "--g"]
 

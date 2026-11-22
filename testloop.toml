@@ -302,7 +302,6 @@ copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspa
 bare_import = true
 # Its tests start polars' thread pool: a forked mutant would wait on it until the timeout (df-kmx0).
 process_isolation = "forkserver"
-check_args = []
 # 561 mutants, 543 killed (37 s). The 18 survivors: row order that no test pins (maintain_order and
 # unique/group_by arguments, 7), the winning-rule sort direction (1), the entry-type branch of the rule
 # test (1), netting_applied's null default (1) and the helper columns classificar drops (8).
@@ -313,7 +312,6 @@ tests = ["workspaces/GetFinance/tests/test_report_build.py", "workspaces/GetFina
 copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspaces/GetFinance/tests/conftest.py", "workspaces/GetFinance/scripts/report/*.py"]
 bare_import = true
 process_isolation = "forkserver"
-check_args = []
 # 1238 mutants, 1068 killed (137 s, no shards). 170 survivors, to strengthen in df-xkhx.4: mostly
 # _comprometido_parcelas (63), _resgates_no_vencimento (25), investimentos_per_month (23) and
 # liquidity_per_month (20).
