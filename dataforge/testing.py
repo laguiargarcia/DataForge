@@ -21,6 +21,11 @@ settings.register_profile("deterministic", derandomize=True, database=None, dead
 # loads a profile named on the command line (--hypothesis-profile) after this module is imported, so
 # that one still wins.
 settings.register_profile("no-deadline", settings.default, deadline=None)
+# CI's orders job (df-91aq): new examples on every run. Hypothesis's own "ci" profile, which every other
+# CI run starts from, is derandomized: each property tries the same examples on every PR. Here they
+# are drawn from --hypothesis-seed, which the job prints, so a failure reproduces locally with the
+# same seed. No example database (a CI runner keeps nothing), and the failing example's blob printed.
+settings.register_profile("explore", derandomize=False, database=None, deadline=None, print_blob=True)
 settings.load_profile("no-deadline")
 
 
