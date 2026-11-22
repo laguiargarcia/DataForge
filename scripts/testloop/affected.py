@@ -17,6 +17,7 @@ kept when one of them is
   scripts/ counts too, imported as `scripts.x` or by its bare name: from a script in its own folder,
   from a test in scripts/ (df-n8ac.36); in workspaces/<ws>/, a script finds its own folder and the
   workspace root, a test the root and every folder under its scripts/ (df-mbi7);
+- a workspace test's conftest.py files, followed like any module (df-mbi7);
 - shared by every target: the test loop code that `mutate` runs, the test package setup, the
   install, the workflow's mutation jobs or top-level keys, and testloop.toml outside its
   [targets] tables (df-n8ac.40: the other test loop tools and the other CI jobs cannot move a
@@ -169,10 +170,21 @@ def _imports(repo: Path, rel: str) -> set[str]:
     return found
 
 
+def _conftests(repo: Path, rel: str) -> list[str]:
+    """The conftest.py files pytest loads for a test in a workspace (workspaces/<ws>/...): no import
+    names them. The engine's tests/conftest.py is shared by every target (SHARED) instead."""
+    parts = Path(rel).parts
+    if parts[0] != WORKSPACES or len(parts) < WORKSPACE_DEPTH:
+        return []
+    folders = [Path(*parts[:i]) for i in range(2, len(parts))]
+    return [(folder / "conftest.py").as_posix() for folder in folders if (repo / folder / "conftest.py").is_file()]
+
+
 def dependencies(repo: Path, roots: list[str]) -> set[str]:
-    """`roots` plus every first-party file they import, transitively."""
+    """`roots` plus every first-party file they import, transitively, and the conftest.py files of the
+    workspace tests among them."""
     seen: set[str] = set()
-    todo = list(roots)
+    todo = [*roots, *(c for rel in roots if "/tests/" in rel for c in _conftests(repo, rel))]
     while todo:
         rel = todo.pop()
         if rel in seen:
@@ -239,8 +251,6 @@ def _ci_changes(head_text: str | None, base_text: str | None) -> str | None:
 def _shared(repo: Path, rel: str) -> bool:
     if rel in SHARED or _invisible(repo, rel):
         return True
-    if rel.startswith(f"{WORKSPACES}/") and rel.endswith("/tests/conftest.py"):
-        return True   # a workspace's fixtures reach every test, and no import names them
     return rel.startswith(SHARED_DIRS) and rel not in NOT_MUTATE
 
 
