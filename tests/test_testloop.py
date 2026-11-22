@@ -565,6 +565,29 @@ def test_diff_cover_judges_only_changed_lines(change_repo):
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_diff_cover_judges_a_workspaces_scripts_with_its_own_tests(change_repo):
+    """df-xkhx.3: a workspace with its own pytest.ini and `tests` package; a new script line no test of
+    the workspace runs is listed, and passes once one does."""
+    ws = change_repo / "workspaces" / "W"
+    (ws / "scripts").mkdir(parents=True)
+    (ws / "tests").mkdir()
+    (ws / "pytest.ini").write_text("[pytest]\ntestpaths = tests\npythonpath = scripts\n"
+                                   "markers =\n    integration: real data\n")
+    (ws / "tests" / "__init__.py").write_text("")
+    (ws / "scripts" / "calc.py").write_text("def double(x):\n    return x * 2\n")
+    (ws / "tests" / "test_calc.py").write_text("from calc import double\n\n\ndef test_double():\n    assert double(2) == 4\n")
+    _git(change_repo, "add", "-A")
+    _git(change_repo, "commit", "-qm", "workspace")  # on main: the workspace is old code, its next edit the change
+    (ws / "scripts" / "calc.py").write_text("def double(x):\n    return x * 2\n\n\ndef triple(x):\n    return x * 3\n")
+    proc = run(change_repo, "diff-cover", "--compare-branch", "main")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "workspaces/W/scripts/calc.py" in proc.stdout
+
+    (ws / "tests" / "test_triple.py").write_text("from calc import triple\n\n\ndef test_triple():\n    assert triple(1) == 3\n")
+    proc = run(change_repo, "diff-cover", "--compare-branch", "main")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_diff_cover_with_failing_tests_exits_2(change_repo):
     (change_repo / "tests" / "test_broken.py").write_text("def test_broken():\n    assert False\n")
     proc = run(change_repo, "diff-cover", "--compare-branch", "main")
