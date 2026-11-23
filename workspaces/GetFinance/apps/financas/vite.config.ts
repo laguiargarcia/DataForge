@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         // As rotas do backend do app (src/edicao.ts pede `api/...` relativo à página).
-        '^/api/(edicao|categorias|regras|correcoes|aplicar)(/|$)': {
+        '^/api/(edicao|categorias|regras|correcoes|explicacoes|extratos|aplicar)(/|$)': {
           target: 'http://127.0.0.1:8000',
           rewrite: (caminho: string) => caminho.replace(/^\/api/, `/apps/${workspace}/financas/api`),
         },
