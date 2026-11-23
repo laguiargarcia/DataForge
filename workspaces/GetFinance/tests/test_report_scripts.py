@@ -27,7 +27,9 @@ from edicao import abrir, carga_inicial
 from report_lib import investimentos_per_month
 from saude import saude_por_mes
 
-_ENTRADAS = ["fact_transaction", "fact_fatura_mes", "fact_balance_snapshot", "fact_investment_position"]
+# As tabelas do curated que as tasks classify e report leem e não gravam (test_job_wiring confere com os scripts).
+ENTRADAS = ["fact_transaction", "fact_fatura_mes", "fact_balance_snapshot", "fact_investment_position",
+            "dim_investment"]
 _SAIDAS = ["report_saude", "report_saude_categoria", "report_parcelas", "report_fatura_itens",
            "report_liquidity", "report_cartao", "report_investimentos"]
 _ARGV = ["--source", "curated", "--target", "curated"]
@@ -47,7 +49,7 @@ def _dic_rules():
 
 
 def _preparar(tmp_path, so_banco=False, carregar=True):
-    tabelas = {t: _real(t) for t in _ENTRADAS}
+    tabelas = {t: _real(t) for t in ENTRADAS}
     if so_banco:
         tabelas["fact_transaction"] = tabelas["fact_transaction"].filter(pl.col("account_type") == "BANK")
         tabelas["fact_fatura_mes"] = tabelas["fact_fatura_mes"].clear()
@@ -102,9 +104,11 @@ def test_classify_aplica_correcao_e_grava_versao(tmp_path):
     # A correção para Investimentos chega também ao fluxo de investimento (df-cns.8).
     run_script("report", "report_curated", _ARGV, tmp_path)
     esperado = investimentos_per_month(tabelas["fact_transaction"], tabelas["fact_investment_position"],
-                                       pl.DataFrame({"id": [alvo], "subcategoria": ["Investimentos"]}))
+                                       pl.DataFrame({"id": [alvo], "subcategoria": ["Investimentos"]}),
+                                       tabelas["dim_investment"])
     assert read(tmp_path, "curated", "report_investimentos").equals(esperado)
-    assert not esperado.equals(investimentos_per_month(tabelas["fact_transaction"], tabelas["fact_investment_position"]))
+    assert not esperado.equals(investimentos_per_month(tabelas["fact_transaction"], tabelas["fact_investment_position"],
+                                                       holdings=tabelas["dim_investment"]))
     aplicada = read(tmp_path, "curated", "edicao_aplicada")
     assert aplicada["versao"].to_list() == [5]
     assert aplicada.schema["aplicada_em"] == pl.Datetime("us", "UTC")

@@ -5,6 +5,8 @@ which tasks fail, and the run status and the trip-wire task are checked.
 
 The jobs are read from this checkout (_delta_util.ROOT).
 """
+import re
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,7 @@ from dataforge.engine import run_job, run_task_with_retry
 from dataforge.models import RetryConfig
 from dataforge.parser import load_job
 from tests import _delta_util
+from tests.test_report_scripts import ENTRADAS
 
 WORKSPACE = _delta_util.SCRIPTS.parent
 NO_RETRY = RetryConfig(attempts=1, delay_seconds=0)
@@ -242,3 +245,14 @@ def test_extrato_job_runs_on_demand_and_never_calls_the_bank():
     finance_daily = {t.name: t for t in load_job(WORKSPACE, "finance_daily").tasks}
     for t in job.tasks[:2]:
         assert (t.script, t.params) == (finance_daily[t.name].script, finance_daily[t.name].params)
+
+
+def test_report_scripts_tests_seed_every_table_the_report_tasks_read():
+    """test_report_scripts.py copies the real curated into a temp folder and only runs where that data
+    exists, so CI never sees it break. A table the report tasks start reading has to be in its list
+    (df-8rbr: dim_investment was not, and four tests failed only on the real data)."""
+    scripts = [(WORKSPACE / "scripts" / "report" / f"{name}.py").read_text(encoding="utf-8")
+               for name in ("classify", "report_curated")]
+    read = {t for s in scripts for t in re.findall(r'read_delta_table\(args\.source, "(\w+)"\)', s)}
+    written = {t for s in scripts for t in re.findall(r'write_delta_overwrite\(args\.target, "(\w+)"', s)}
+    assert read - written == set(ENTRADAS)
