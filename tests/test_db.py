@@ -139,9 +139,11 @@ def test_the_engine_of_a_database_file_leaves_no_connection_open(db_url):
     assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
 
 
-def test_an_in_memory_database_keeps_its_one_connection():
-    """The database is the connection: a second session still finds the schema and the first one's row."""
-    engine = init_db("sqlite://")
+@pytest.mark.parametrize("url", ["sqlite://", "sqlite:///", "sqlite:///:memory:"])
+def test_an_in_memory_database_keeps_its_one_connection(url):
+    """The database is the connection: a second session still finds the schema and the first one's
+    row, under each of the three ways SQLite's URL names a database in memory."""
+    engine = init_db(url)
     try:
         with Session(engine) as session:
             session.add(ExecucaoORM(job="j", task="t"))
