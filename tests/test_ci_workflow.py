@@ -59,20 +59,6 @@ def test_every_job_is_required_or_needed_by_a_required_job():
     assert set(jobs) - _gating_jobs(jobs) - NOT_GATING == set()
 
 
-def test_a_required_job_that_always_runs_checks_each_need_it_gates():
-    """A need may go unchecked only when a failure of it still blocks the merge: it is required
-    itself, or another required job reads its result (sonar needs coverage, which tests gates)."""
-    jobs = _jobs()
-    gated = {n for r in REQUIRED for n in _needs(jobs[r]) if f"needs.{n}.result" in str(jobs[r]["steps"])}
-    for name in REQUIRED:
-        job = jobs[name]
-        if "always()" not in str(job.get("if", "")):
-            continue
-        steps = str(job["steps"])
-        unchecked = [n for n in _needs(job) if n not in REQUIRED | gated and f"needs.{n}.result" not in steps]
-        assert unchecked == [], f"{name} passes even when {unchecked} failed"
-
-
 def _uses(steps: list[dict], action: str) -> list[dict]:
     return [s for s in steps if str(s.get("uses", "")).startswith(action)]
 
@@ -182,7 +168,10 @@ SHELLS = {
     "bash": ["bash", "--noprofile", "--norc", "-eo", "pipefail"],
 }
 # The needs whose result may be `skipped`, per job; anywhere else skipped means nothing ran.
-SKIPPED_OK = {"mutation-ok": {"mutation"}}  # skipped when no target was picked; PICK gates the pick
+# mutation-ok's mutation is skipped when no target was picked. PICK gates a failed pick; a mutation
+# job skipped while targets were picked is held only by the gate, which refuses a target with no mutate
+# result (scripts/testloop/gate_cmd.py, _load).
+SKIPPED_OK = {"mutation-ok": {"mutation"}}
 # The only continue-on-error a gating job may have, (job, artifact downloaded): why it is safe.
 CONTINUE_OK = {
     ("coverage", "coverage-part-*"): "a part that died early leaves none; its own job fails tests",
@@ -206,7 +195,8 @@ def _tokens(expr: str) -> list[tuple[str, str]]:
     tokens, at, expr = [], 0, expr.strip()
     while at < len(expr):
         match = TOKEN.match(expr, at)
-        assert match, f"cannot read {expr!r} at {at}"
+        if not match:
+            raise ValueError(f"cannot read {expr!r} at {at}")
         string, op, name = match.groups()
         tokens.append(("str", string.replace("''", "'")) if string is not None else ("op", op) if op else ("name", name))
         at = match.end()
@@ -215,15 +205,17 @@ def _tokens(expr: str) -> list[tuple[str, str]]:
 
 class _Expression:
     """A GitHub Actions expression, in the subset ci.yml uses: strings, names looked up in `names`
-    (null when absent), ==, !=, !, &&, || (which return an operand, as GitHub's do), parentheses and
-    the status functions in `status`."""
+    (a name it does not hold is a ValueError: the test would only guess its value), ==, != (of two
+    values of one type: GitHub coerces mixed ones to numbers), !, &&, || (which return an operand, as
+    GitHub's do), parentheses and the status functions in `status`."""
 
     def __init__(self, expr: str, names: dict, status: dict):
         self.expr, self.tokens, self.names, self.status = expr, _tokens(expr), names, status
 
     def value(self):
         value = self.either()
-        assert self.tokens == [], f"{self.expr!r}: left {self.tokens}"
+        if self.tokens:
+            raise ValueError(f"{self.expr!r}: left {self.tokens}")
         return value
 
     def peek(self):
@@ -233,7 +225,8 @@ class _Expression:
         value = self.both()
         while self.peek() == ("op", "||"):
             self.tokens.pop(0)
-            value = value or self.both()
+            right = self.both()
+            value = value or right
         return value
 
     def both(self):
@@ -250,7 +243,9 @@ class _Expression:
             return left
         negate = self.tokens.pop(0)[1] == "!="
         right = self.unary()
-        if isinstance(left, str) and isinstance(right, str):
+        if type(left) is not type(right):
+            raise ValueError(f"{self.expr!r} compares {left!r} with {right!r}, which GitHub coerces to numbers")
+        if isinstance(left, str):
             left, right = left.lower(), right.lower()
         return (left == right) != negate
 
@@ -261,19 +256,30 @@ class _Expression:
         return self.atom()
 
     def atom(self):
+        if not self.tokens:
+            raise ValueError(f"{self.expr!r} ends early")
         kind, value = self.tokens.pop(0)
         if kind == "str":
             return value
         if value == "(":
             inner = self.either()
-            assert self.tokens.pop(0) == ("op", ")"), self.expr
+            self.expect(")")
             return inner
         if self.peek() == ("op", "("):
-            assert self.tokens[:2] == [("op", "("), ("op", ")")], self.expr
-            del self.tokens[:2]
+            self.expect("(")
+            self.expect(")")
             return self.status[value]
-        assert kind == "name", self.expr
-        return {"true": True, "false": False, "null": None}.get(value, self.names.get(value))
+        if kind != "name":
+            raise ValueError(f"{self.expr!r}: unexpected {value!r}")
+        literals = {"true": True, "false": False, "null": None}
+        if value not in literals and value not in self.names:
+            raise ValueError(f"{self.expr!r}: the test gives no value for {value}")
+        return literals[value] if value in literals else self.names[value]
+
+    def expect(self, op: str):
+        if (self.tokens or [None])[0] != ("op", op):
+            raise ValueError(f"{self.expr!r}: expected {op!r}")
+        self.tokens.pop(0)
 
 
 def _condition(expr, names: dict, status: dict) -> bool:
@@ -286,6 +292,14 @@ def _condition(expr, names: dict, status: dict) -> bool:
     if not STATUS.search(expr):
         expr = f"success() && ({expr})"
     return bool(_Expression(expr, names, status).value())
+
+
+def _why_skipped(expr, names: dict, status: dict) -> str | None:
+    """None when the `if:` runs; else why: it is skipped, or the test cannot evaluate it."""
+    try:
+        return None if _condition(expr, names, status) else "is skipped"
+    except ValueError as error:
+        return f"has an if: the test cannot evaluate ({error})"
 
 
 def _text(value) -> str:
@@ -401,11 +415,18 @@ def _needs_if_checks(jobs: dict) -> list[str]:
 
 
 def _job_env(job: dict, names: dict) -> dict[str, str]:
-    """The job's env as its steps' `if:` reads it (env.X), each expression evaluated from `names`."""
+    """The job's env as its steps' `if:` reads it (env.X), each expression evaluated from `names`; a
+    value the test cannot evaluate is left out, so an `if:` reading it cannot be evaluated either."""
     def fill(match):
         return _text(_Expression(match[1], names, RUNNING).value())
 
-    return {f"env.{k}": EXPRESSION.sub(fill, str(v)) for k, v in job.get("env", {}).items()}
+    env = {}
+    for key, value in job.get("env", {}).items():
+        try:
+            env[f"env.{key}"] = EXPRESSION.sub(fill, str(value))
+        except ValueError:
+            continue
+    return env
 
 
 def _work_checks(jobs: dict) -> list[str]:
@@ -418,8 +439,8 @@ def _work_checks(jobs: dict) -> list[str]:
         for event in EVENTS:
             context = names | {"github.event_name": event}
             context |= _job_env(job, context)
-            if not _condition(step.get("if"), context, RUNNING):
-                problems.append(f"{_label(name, step)} is skipped on a {event} with work to gate")
+            if why := _why_skipped(step.get("if"), context, RUNNING):
+                problems.append(f"{_label(name, step)} {why} on a {event} with work to gate")
     return problems
 
 
@@ -430,11 +451,32 @@ def _job_if_checks(jobs: dict) -> list[str]:
     for name in sorted(REQUIRED):
         job = jobs[name]
         for failed in [None, *_needs(job)]:
-            names = {f"needs.{n}.result": "failure" if n == failed else "success" for n in _needs(job)}
             for event in EVENTS:
-                status = RUNNING if failed is None else NEED_FAILED
-                if not _condition(job.get("if"), names | {"github.event_name": event}, status):
-                    problems.append(f"{name} is skipped on a {event} when {failed or 'nothing'} failed")
+                if why := _why_skipped(job.get("if"), *_scenario(job, failed, event)):
+                    problems.append(f"{name} {why} on a {event} when {failed or 'nothing'} failed")
+    return problems
+
+
+def _scenario(job: dict, failed: str | None, event: str) -> tuple[dict, dict]:
+    """The names and status functions of a job's `if:` on `event` when its need `failed` failed (None:
+    every need succeeded)."""
+    names = {f"needs.{n}.result": "failure" if n == failed else "success" for n in _needs(job)}
+    return names | {"github.event_name": event}, RUNNING if failed is None else NEED_FAILED
+
+
+def _unread_needs_checks(jobs: dict) -> list[str]:
+    """A required job that runs when a need failed passes unless it reads that need's result. A need
+    may go unread only when its failure still blocks the merge: it is required itself, or another
+    required job reads its result (sonar needs coverage, which tests gates)."""
+    gated = {n for r in REQUIRED for n in _needs(jobs[r]) if f"needs.{n}.result" in str(jobs[r].get("steps", []))}
+    problems = []
+    for name in sorted(REQUIRED):
+        job = jobs[name]
+        for need in _needs(job):
+            if need in REQUIRED | gated or f"needs.{need}.result" in str(job.get("steps", [])):
+                continue
+            if any(_why_skipped(job.get("if"), *_scenario(job, need, event)) is None for event in EVENTS):
+                problems.append(f"{name} passes even when {need} failed")
     return problems
 
 
@@ -445,6 +487,7 @@ CHECKS = [
     pytest.param(_needs_if_checks, id="needs-step-if"),
     pytest.param(_work_checks, id="step-if"),
     pytest.param(_job_if_checks, id="job-if"),
+    pytest.param(_unread_needs_checks, id="unread-needs"),
 ]
 
 
@@ -490,6 +533,14 @@ def _replace(job: str, step: str, old: str, new: str):
     return inject
 
 
+def _not_cancelled_without_orders(jobs: dict):
+    """A loophole: tests runs on !cancelled() and its "Every part passed" no longer reads orders."""
+    jobs["tests"]["if"] = "!cancelled()"
+    step = _step(jobs, "tests", "Every part passed")
+    del step["env"]["ORDERS"]
+    step["run"] = step["run"].replace(' && [ "$ORDERS" = "success" ]', "")
+
+
 GATE = "Gate each target on its shards"
 CHECK_MUTATION = "Check the mutation jobs"
 LOOPHOLES = [
@@ -516,6 +567,13 @@ LOOPHOLES = [
     ("mutation-ok-on-success", _job_if_checks, _set("mutation-ok", None, {"if": "success()"})),
     ("sonar-only-after-coverage", _job_if_checks,
      _set("sonar", None, {"if": "!cancelled() && needs.coverage.result == 'success'"})),
+    ("tests-on-not-cancelled-orders-unread", _unread_needs_checks, _not_cancelled_without_orders),
+    # A name the test gives no value for: the step or job may be skipped on the PRs it names.
+    ("gate-not-for-a-bot", _work_checks, _set("mutation-ok", GATE, {"if": "env.GATE == 'true' && github.actor != 'renovate[bot]'"})),
+    ("gate-not-for-a-branch", _work_checks, _set("mutation-ok", GATE, {"if": "env.GATE == 'true' && github.head_ref != 'renovate/lock'"})),
+    ("gate-not-on-a-draft", _work_checks, _set("mutation-ok", GATE, {"if": "env.GATE == 'true' && !github.event.pull_request.draft"})),
+    ("tests-not-for-a-bot", _job_if_checks, _set("tests", None, {"if": "always() && github.actor != 'renovate[bot]'"})),
+    ("quality-not-for-a-bot", _job_if_checks, _set("quality", None, {"if": "github.actor != 'renovate[bot]'"})),
     # (5) a non-required job's step that gates by a plain exit.
     ("mutate-swallows-a-failure", _command_checks, _replace("mutation", "Mutate", "|| failed=1", "|| true")),
     ("committed-dist-exits-0", _command_checks, _replace("app-financas", "Committed dist is the build", "exit 1", "exit 0")),
@@ -541,3 +599,32 @@ def test_the_checks_catch_each_loophole(check, inject):
     jobs = _jobs()
     inject(jobs)
     assert check(jobs) != []
+
+
+@pytest.mark.parametrize(
+    ("expr", "expected"),
+    [
+        ("success() || failure()", True),
+        ("failure() || success()", True),
+        ("github.event_name == 'pull_request' || github.event_name == 'push'", True),
+        ("success() && (github.event_name == 'push' || github.event_name == 'pull_request')", True),
+        ("github.event_name != 'pull_request' && always()", False),
+        ("!(env.GATE == 'TRUE') || cancelled()", False),
+        ("env.GATE && 'x'", "x"),
+        ("'' || env.GATE", "true"),
+        ("'it''s' == 'it''s'", True),
+    ],
+)
+def test_an_expression_evaluates_as_github_does(expr, expected):
+    names = {"github.event_name": "pull_request", "env.GATE": "true"}
+    assert _Expression(expr, names, RUNNING).value() == expected
+
+
+@pytest.mark.parametrize(
+    "expr",
+    ["github.actor != 'renovate[bot]'", "!github.event.pull_request.draft", "null == ''", "env.GATE == true",
+     "always(", "success() success()", "env.GATE == 'true' &&", "hashFiles('x')"],
+)
+def test_an_expression_the_test_cannot_evaluate_fails_loudly(expr):
+    with pytest.raises(ValueError):
+        _Expression(expr, {"github.event_name": "pull_request", "env.GATE": "true"}, RUNNING).value()
