@@ -296,6 +296,8 @@ min_score = 0.9709
 # test_lancamentos_suspeitos.py and test_veredito_extrato.py, which exec the pipeline's functions.py and
 # task scripts (deltalake) at import: with them every forked mutant hung until mutmut's timeout (444 of
 # 561 timed out, the 900 s budget ran out), and they killed no mutant the others do not.
+# test_classificacao_propriedades.py and test_report_v3_propriedades.py (df-2edm): each example runs polars,
+# and hundreds of examples for every mutant took classificacao.py from 37 s past the 900 s budget.
 [targets."workspaces/GetFinance/scripts/report/classificacao.py"]
 tests = ["workspaces/GetFinance/tests/test_classificacao.py", "workspaces/GetFinance/tests/test_saude.py", "workspaces/GetFinance/tests/test_edicao.py", "workspaces/GetFinance/tests/test_cartao_listas.py", "workspaces/GetFinance/tests/test_report_build.py", "workspaces/GetFinance/tests/test_report_v3.py"]
 copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspaces/GetFinance/tests/conftest.py", "workspaces/GetFinance/scripts/report/*.py"]
@@ -312,7 +314,7 @@ tests = ["workspaces/GetFinance/tests/test_report_build.py", "workspaces/GetFina
 copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspaces/GetFinance/tests/conftest.py", "workspaces/GetFinance/scripts/report/*.py"]
 bare_import = true
 process_isolation = "forkserver"
-# 1238 mutants, 1068 killed (137 s, no shards). 170 survivors, to strengthen in df-xkhx.4: mostly
+# 1238 mutants, 1068 killed (137 s, no shards). 170 survivors, to strengthen in df-xkhx.10: mostly
 # _comprometido_parcelas (63), _resgates_no_vencimento (25), investimentos_per_month (23) and
 # liquidity_per_month (20).
 min_score = 0.8626
