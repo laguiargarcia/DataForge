@@ -786,6 +786,27 @@ def test_a_cached_mutate_with_the_same_tests_reruns_only_the_changed_function(tm
     assert verdicts(second) == verdicts(fresh)
 
 
+@pytest.mark.parametrize("key", ["timeout_multiplier = 30", 'process_isolation = "forkserver"'])
+def test_a_cache_written_under_another_tool_config_is_not_restored(tmp_path, key):
+    """df-n8ac.48: mutmut keeps a killed verdict through a new timeout_multiplier or process_isolation,
+    the two keys that decide whether a mutant is killed or times out."""
+    repo, marker = marked_repo(tmp_path)
+    cache = tmp_path / "cache"
+    first = mutate_cached(repo, cache)
+    every = mutants_run(marker)
+    assert len(every) == first["total"] - len(first["not_tested"])
+
+    toml = repo / "testloop.toml"
+    toml.write_text(toml.read_text() + key + "\n")
+    second = mutate_cached(repo, cache)
+    assert (second["cache"], second["cached"], second["cached_survivors"]) == ("none", 0, 0)
+    assert mutants_run(marker) == every
+    # The new cache is the new config's: the next run reuses it.
+    third = mutate_cached(repo, cache)
+    assert (third["cache"], third["cached"]) == ("restored", second["total"])
+    assert mutants_run(marker) == set()
+
+
 def test_a_cached_shard_with_no_change_runs_no_mutant(tmp_path):
     repo, marker = marked_repo(tmp_path)
     (repo / "testloop.toml").write_text((repo / "testloop.toml").read_text() + "shards = 2\n")
@@ -845,7 +866,8 @@ def test_the_cache_holds_only_mutmut_state_and_no_path_of_the_copy(tmp_path):
     mutate_cached(repo, cache)
     files = sorted(p.relative_to(cache).as_posix() for p in cache.rglob("*") if p.is_file())
     assert files == ["mutants/mutmut-stats.json", "mutants/sample/mod.py.meta",
-                     "mutants/testloop-function-text.json", "mutants/testloop-test-files.json"]
+                     "mutants/testloop-function-text.json", "mutants/testloop-test-files.json",
+                     "mutants/testloop-tool-config.json"]
     assert all("testloop-mutate-" not in (cache / f).read_text(encoding="utf-8") for f in files)
 
 
