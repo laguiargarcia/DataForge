@@ -65,7 +65,7 @@ export function TelaExtratos({ onMudou }: Readonly<Props>) {
           className={`self-start min-h-11 px-[18px] rounded-[999px] bg-acento text-cartao text-[15px] font-semibold flex items-center ${enviando ? 'opacity-60' : 'cursor-pointer'}`}
         >
           <input type="file" accept=".pdf,application/pdf" className="sr-only" disabled={enviando} onChange={escolher} />
-          Escolher PDF
+          <span>Escolher PDF</span>
         </label>
         {envio && (
           <output className={`rounded-[20px] py-[14px] px-[18px] flex flex-col gap-2 text-[15px] ${problema ? 'bg-alerta-fundo text-alerta' : 'bg-faixa'}`}>
