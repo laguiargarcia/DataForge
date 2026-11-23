@@ -1,0 +1,37 @@
+name: extrato
+# Relê os PDFs de data/extratos e refaz o veredito dos suspeitos a partir do raw, cleansed e curated que já
+# existem (df-7xk9.1). NÃO chama o Pluggy. É o que o envio de um extrato pela tela do app Finanças dispara,
+# para o veredito sair na hora e não na rodada do dia seguinte. Sem schedule: roda sob demanda.
+tasks:
+  # As mesmas tasks, scripts e params do finance_daily. Um PDF ruim fica de fora, os bons são gravados e a
+  # task falha nomeando o ruim: uma tentativa só, porque outra leria os mesmos arquivos.
+  - name: extrato
+    script: cleansed2curated/cleansed2curated_extrato.py
+    params:
+      source: extratos
+      target: curated
+    retry:
+      attempts: 1
+      delay_seconds: 0
+
+  # `when: completed`: quando a task extrato falha ela gravou os arquivos bons ou nada (ficam as tabelas de
+  # antes), e os dois são um extrato para ler. Lê curated.lancamentos_suspeitos da última rodada do
+  # finance_daily ou do reclassificar.
+  - name: veredito_suspeitos
+    script: cleansed2curated/cleansed2curated_veredito_suspeitos.py
+    params:
+      source: raw
+      target: curated
+    depends_on:
+      - {task: extrato, when: completed}
+
+  # Trip-wire (ADR 0004, df-ahua.3): o veredito roda mesmo com a task extrato falhada e, sendo a folha,
+  # deixaria o run `success`; esta task de erro o torna `failed` quando qualquer uma das duas falha.
+  - name: job_failed
+    type: error
+    match: any
+    depends_on:
+      - {task: extrato, when: failed}
+      - {task: veredito_suspeitos, when: [failed, skipped]}
+    params:
+      message: "extrato: uma tarefa falhou"

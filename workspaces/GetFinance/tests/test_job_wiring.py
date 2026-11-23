@@ -1,4 +1,4 @@
-"""How finance_daily and reclassificar end when a task fails or the data checks warn (ADR 0004,
+"""How finance_daily, reclassificar and extrato end when a task fails or the data checks warn (ADR 0004,
 df-ahua.3). The engine decides a run's status from its leaves and its error tasks only, so these
 tests run the real job.yaml through the real engine with a fake task runner: each scenario states
 which tasks fail, and the run status and the trip-wire task are checked.
@@ -220,3 +220,25 @@ def test_reclassificar_fails_when_a_task_fails(tmp_path, db_url, global_engine, 
         outcomes[failing] = 1
     status, _ = _run("reclassificar", tmp_path, db_url, global_engine)
     assert status == expected
+
+
+# The statement job (df-7xk9.1): the verdict still runs over what a failed statement task left, and the
+# run fails all the same.
+@pytest.mark.parametrize("case", [(None, "success", 0), ("extrato", "failed", 0),
+                                  ("veredito_suspeitos", "failed", 1)])
+def test_extrato_job_fails_when_a_task_fails(tmp_path, db_url, global_engine, outcomes, case):
+    failing, expected, veredito = case
+    if failing:
+        outcomes[failing] = 1
+    status, results = _run("extrato", tmp_path, db_url, global_engine)
+    assert status == expected
+    assert results["veredito_suspeitos"] == veredito
+
+
+def test_extrato_job_runs_on_demand_and_never_calls_the_bank():
+    job = load_job(WORKSPACE, "extrato")
+    assert [t.name for t in job.tasks] == ["extrato", "veredito_suspeitos", "job_failed"]
+    assert job.schedule is None
+    finance_daily = {t.name: t for t in load_job(WORKSPACE, "finance_daily").tasks}
+    for t in job.tasks[:2]:
+        assert (t.script, t.params) == (finance_daily[t.name].script, finance_daily[t.name].params)

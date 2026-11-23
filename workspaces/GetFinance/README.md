@@ -137,6 +137,8 @@ Then every suspect transaction gets the statement's verdict (`curated.veredito_s
 statement, not in it, or not covered), the statement lines with no transaction go to
 `curated.extrato_sem_lancamento`, and `curated.acerto_por_motivo` counts how often each suspect reason is
 right (df-z4fh.3).
+The job `extrato` runs only these two tasks, on demand and without calling the bank: it reads the
+folder again and redoes the verdict over the data the last `finance_daily` left (df-7xk9.1).
 Statements hold real names and amounts: never put one in git, a canvas or a public repo.
 
 ## Report logic and the editable tables (since 2026-11-09, df-cns)
