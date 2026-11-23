@@ -112,12 +112,12 @@ min_score = 0.9572
 
 
 [targets."dataforge/apps.py"]
-tests = ["tests/test_apps*.py"]
+# Not tests/test_apps_proxy.py (df-7szn): it starts real servers (9 s of the suite's 10 s) and kills no
+# mutant the two others miss, yet it ran for every survivor of _read_manifest, one function that no
+# shard splits: 241 s in one CI job. Without it, the whole target takes 36 s and scores the same 148/182.
+tests = ["tests/test_apps.py", "tests/test_apps_static.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.8073
-# 182 mutants, 207 s of mutate in one CI job (df-n8ac.41). With two jobs, one of them still took
-# 244 s on a main push run: three (df-7szn).
-shards = 3
 
 [targets."dataforge/cron.py"]
 tests = ["tests/test_cron*.py"]
