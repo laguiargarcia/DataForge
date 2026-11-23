@@ -255,15 +255,17 @@ def _mutants_dir(root, tag):
 
 
 TESTS_HASHES = {"tests/test_mod.py": "sha256:t"}
+TOOL_CONFIG = "[tool.mutmut]\ntimeout_multiplier = 3.0\n"
 
 
 def test_the_cache_keeps_only_mutmuts_state(tmp_path):
     copy = tmp_path / "copy"
     _mutants_dir(copy / "mutants", "run")
-    mutate_cmd.save_cache(copy, tmp_path / "cache", "pkg/mod.py", {"x_f": "sha256:1"}, TESTS_HASHES)
+    mutate_cmd.save_cache(copy, tmp_path / "cache", "pkg/mod.py", {"x_f": "sha256:1"}, TESTS_HASHES, TOOL_CONFIG)
     assert _tree(tmp_path / "cache") == {
         "mutants/mutmut-stats.json": "run mutmut-stats.json", "mutants/pkg/mod.py.meta": "run pkg/mod.py.meta",
-        "mutants/testloop-function-text.json": TEXTS, "mutants/testloop-test-files.json": TESTS}
+        "mutants/testloop-function-text.json": TEXTS, "mutants/testloop-test-files.json": TESTS,
+        "mutants/testloop-tool-config.json": CONFIG}
 
 
 def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
@@ -273,33 +275,43 @@ def test_a_new_cache_replaces_the_old_one_and_its_leftovers(tmp_path):
     _mutants_dir(cache / "mutants.new", "cut short")
     copy = tmp_path / "copy"
     _mutants_dir(copy / "mutants", "new")
-    mutate_cmd.save_cache(copy, cache, "pkg/mod.py", {"x_f": "sha256:1"}, TESTS_HASHES)
+    mutate_cmd.save_cache(copy, cache, "pkg/mod.py", {"x_f": "sha256:1"}, TESTS_HASHES, TOOL_CONFIG)
     assert _tree(cache) == {
         "mutants/mutmut-stats.json": "new mutmut-stats.json", "mutants/pkg/mod.py.meta": "new pkg/mod.py.meta",
-        "mutants/testloop-function-text.json": TEXTS, "mutants/testloop-test-files.json": TESTS}
+        "mutants/testloop-function-text.json": TEXTS, "mutants/testloop-test-files.json": TESTS,
+        "mutants/testloop-tool-config.json": CONFIG}
 
 
 def test_a_restored_cache_brings_back_the_state_and_an_empty_one_nothing(tmp_path):
     cache, copy = tmp_path / "cache", tmp_path / "copy"
-    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") is None
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", TOOL_CONFIG) is None
     assert not (copy / "mutants").exists()
     _mutants_dir(cache / "mutants", "cached")
+    # no tool config recorded (a cache from before df-n8ac.48): nothing is restored
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", TOOL_CONFIG) is None
+    assert not (copy / "mutants").exists()
+    (cache / "mutants" / "testloop-tool-config.json").write_text(CONFIG)
     # no texts and no test files recorded: nothing but killed verdicts can be reused
-    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == mutate_cmd.Cached(texts={}, tests=None)
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", TOOL_CONFIG) == mutate_cmd.Cached(texts={}, tests=None)
     assert _tree(copy) == {
         "mutants/mutmut-stats.json": "cached mutmut-stats.json", "mutants/pkg/mod.py.meta": "cached pkg/mod.py.meta"}
 
 
 TEXTS = '{\n  "pkg/mod.py": {\n    "x_f": "sha256:1"\n  }\n}'
 TESTS = '{\n  "pkg/mod.py": {\n    "tests/test_mod.py": "sha256:t"\n  }\n}'
+CONFIG = '{\n  "pkg/mod.py": "[tool.mutmut]\\ntimeout_multiplier = 3.0\\n"\n}'
 
 
 def test_a_restored_cache_returns_the_texts_and_tests_it_was_found_on_and_leaves_the_meta_as_it_was(tmp_path):
     cache, copy = tmp_path / "cache", tmp_path / "copy"
     mutate_cmd.save_cache(_mutants_dir(tmp_path / "run" / "mutants", "run").parent, cache, "pkg/mod.py",
-                          {"x_f": "sha256:1"}, TESTS_HASHES)
-    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py") == mutate_cmd.Cached({"x_f": "sha256:1"}, TESTS_HASHES)
-    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py") == mutate_cmd.Cached({}, None)
+                          {"x_f": "sha256:1"}, TESTS_HASHES, TOOL_CONFIG)
+    # another module, or this one under another config: nothing is restored (df-n8ac.48)
+    assert mutate_cmd.restore_cache(cache, copy, "other/mod.py", TOOL_CONFIG) is None
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", TOOL_CONFIG.replace("3.0", "4.0")) is None
+    assert not (copy / "mutants").exists()
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", TOOL_CONFIG) == mutate_cmd.Cached(
+        {"x_f": "sha256:1"}, TESTS_HASHES)
     assert (copy / "mutants" / "pkg" / "mod.py.meta").read_text() == "run pkg/mod.py.meta"
     assert not (copy / "mutants" / "testloop-function-text.json").exists()
     assert not (copy / "mutants" / "testloop-test-files.json").exists()

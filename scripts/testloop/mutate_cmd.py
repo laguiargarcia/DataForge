@@ -13,7 +13,9 @@ affected.py packs the CI jobs from the same weights (`cost_weights`).
 a function whose text changed, comments included (every one when the pytest arguments or the list of
 test files change), and reuses the others' verdicts: a killed one always; a survived, timed-out or
 no-tests one only while every test file of the target has the bytes it had when the cache was written
-(df-n8ac.44), since a changed or added test may kill it. A reused verdict stays through any other change
+(df-n8ac.44), since a changed or added test may kill it. No verdict is reused when the [tool.mutmut]
+config the run writes (process_isolation, timeout_multiplier, pytest arguments, test list) is not the
+one the cache was written under (df-n8ac.48). A reused verdict stays through any other change
 outside its function: a weakened test (for a killed one), the module's constants or imports, a function
 it calls (in this module or another), a base class, the files in `copy`, conftest.py, `env` in
 testloop.toml. The full run of main, which starts from no cache, audits those (df-n8ac.35).
@@ -71,6 +73,10 @@ TEXTS_FILE = "testloop-function-text.json"
 # And the hash of each test file of the target (the list mutmut runs): while none changed, a survived,
 # timed-out or no-tests verdict of a function with the same text is reused too (df-n8ac.44).
 TESTS_FILE = "testloop-test-files.json"
+# And the [tool.mutmut] config the verdicts were found under (df-n8ac.48). mutmut keeps every verdict
+# through a new process_isolation, and through a new timeout_multiplier all but the timeouts: a cache
+# found under another config is not restored at all, so every mutant is tested again.
+CONFIG_FILE = "testloop-tool-config.json"
 
 # mutmut statuses we know how to classify.
 KILLED, SURVIVED = "killed", "survived"
@@ -116,24 +122,26 @@ def _recorded(mutants: Path, name: str, module: str):
         return None
 
 
-def restore_cache(cache_dir: Path, copy: Path, module: str) -> Cached | None:
+def restore_cache(cache_dir: Path, copy: Path, module: str, tool_config: str) -> Cached | None:
     """Put the cached state into the copy's mutants/ and return the module's function texts and test
-    files it was found on; None when the cache holds no state."""
-    if _copy_state(cache_dir / MUTANTS, copy / MUTANTS) == 0:
-        return None
+    files it was found on; None, with nothing restored, when the cache holds no state or its verdicts
+    were found under another tool config (or none recorded)."""
     mutants = cache_dir / MUTANTS
+    if _recorded(mutants, CONFIG_FILE, module) != tool_config or _copy_state(mutants, copy / MUTANTS) == 0:
+        return None
     return Cached(_recorded(mutants, TEXTS_FILE, module) or {}, _recorded(mutants, TESTS_FILE, module))
 
 
-def save_cache(copy: Path, cache_dir: Path, module: str, texts: dict[str, str], tests: dict[str, str]) -> None:
-    """Replace the cache with the copy's state, the module's function texts and its test files'
-    hashes: written beside it, then renamed into place, so a run cut short leaves the old cache whole."""
+def save_cache(copy: Path, cache_dir: Path, module: str, texts: dict[str, str], tests: dict[str, str],  # noqa: PLR0913 -- one argument per record the cache keeps
+               tool_config: str) -> None:
+    """Replace the cache with the copy's state, the module's function texts, its test files' hashes
+    and the tool config: written beside it, then renamed into place, so a run cut short leaves the old cache whole."""
     current, new, old = (cache_dir / name for name in (MUTANTS, MUTANTS + ".new", MUTANTS + ".old"))
     for leftover in (new, old):
         shutil.rmtree(leftover, ignore_errors=True)
     new.mkdir(parents=True)
     _copy_state(copy / MUTANTS, new)
-    for name, record in ((TEXTS_FILE, texts), (TESTS_FILE, tests)):
+    for name, record in ((TEXTS_FILE, texts), (TESTS_FILE, tests), (CONFIG_FILE, tool_config)):
         (new / name).write_text(json.dumps({module: record}, indent=2, sort_keys=True), encoding="utf-8")
     if current.exists():
         current.rename(old)
@@ -336,7 +344,8 @@ def _copy_files(config: Config, module: str, tests: list[str], dest: Path) -> No
         shutil.copy2(src, dest / rel)
 
 
-def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path) -> None:
+def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path) -> str:
+    """Write mutmut's config into the copy and return its text."""
     parts = Path(module).parts
     source = parts[0] if len(parts) > 1 else module
     lines = [
@@ -363,7 +372,9 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
             raise ToolError(f"{module}: timeout_multiplier in testloop.toml must be a number above 0, "
                             f"got {multiplier!r}")
         lines.append(f"timeout_multiplier = {float(multiplier)}")
-    (dest / "pyproject.toml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    text = "\n".join(lines) + "\n"
+    (dest / "pyproject.toml").write_text(text, encoding="utf-8")
+    return text
 
 
 def _parse_results(text: str) -> dict[str, str]:
@@ -501,12 +512,12 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
     job = _Mutation(config, module, tests, _python(config), copy, env, started, shard, keys)
     try:
         _copy_files(config, module, tests, copy)
-        _write_tool_config(config, module, tests, copy)
+        tool_config = _write_tool_config(config, module, tests, copy)
         if cache_dir is not None:
             cache_dir = Path(cache_dir).resolve()
             job.texts = _module_texts(config, module)
             tests_now = test_hashes(config.repo, tests)
-            cached = restore_cache(cache_dir, copy, module)
+            cached = restore_cache(cache_dir, copy, module, tool_config)
             if cached is not None:
                 job.restored, job.cached_texts, job.same_tests = True, cached.texts, cached.tests == tests_now
         try:
@@ -514,7 +525,7 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
         except BudgetExceeded:
             return _partial(job, budget_seconds)
         if cache_dir is not None and code == 0:   # only a complete run's verdicts go back
-            save_cache(copy, cache_dir, module, job.texts, tests_now)
+            save_cache(copy, cache_dir, module, job.texts, tests_now, tool_config)
         return out_path, code
     finally:
         shutil.rmtree(copy, ignore_errors=True)
