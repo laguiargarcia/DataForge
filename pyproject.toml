@@ -64,6 +64,11 @@ quality = [
 
 [tool.uv]
 required-version = ">=0.11.11"
+# No release reaches the lock in its first 3 days: one yanked or found malicious is gone by then
+# (df-is14). uv enforces it in every resolution, transitive dependencies and Renovate's lock file
+# maintenance included, where Renovate's own minimumReleaseAge does not apply. An urgent fix:
+# exclude-newer-package = { <name> = false }, removed once the release is old enough.
+exclude-newer = "3 days"
 # `uv sync` installs both groups; prod and the Windows smoke opt out (--no-default-groups).
 default-groups = ["dev", "quality"]
 

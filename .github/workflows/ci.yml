@@ -41,6 +41,10 @@ jobs:
         with: { fetch-depth: 0 }
       - uses: astral-sh/setup-uv@v10.3.3
         with: { enable-cache: true, cache-python: true }
+      - name: uv.lock is the resolution of pyproject.toml
+        # Every other step installs with --frozen, which never compares the two. A dependency PR
+        # whose lock was not regenerated (Renovate's "Artifact update problem") stops here (df-is14).
+        run: uv lock --check
       - name: Install the gate's tools (the quality group only)
         run: uv sync --frozen --only-group quality
       - name: Quality gate

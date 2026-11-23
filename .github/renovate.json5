@@ -8,7 +8,9 @@
   extends: ["config:recommended", "customManagers:githubActionsVersions"],
   timezone: "America/Sao_Paulo",
   schedule: ["before 6am on monday"],
-  // A release yanked or found malicious in its first days never reaches the lock.
+  // A release yanked or found malicious in its first days never reaches the lock. Renovate holds a
+  // direct dependency's PR until then; for everything uv resolves (transitive dependencies, lock
+  // file maintenance) the same 3 days are `exclude-newer` in pyproject.toml (df-is14).
   minimumReleaseAge: "3 days",
   automerge: true,
   platformAutomerge: true,
@@ -16,7 +18,15 @@
   // instead of one CI round each in a queue. Renovate rebases only a PR that conflicts.
   rebaseWhen: "conflicted",
   // The whole lock, transitive dependencies included, re-resolved within pyproject's ranges.
-  lockFileMaintenance: { enabled: true, automerge: true, schedule: ["before 6am on monday"] },
+  // Renovate cannot date what the package manager picks, so with an age set its
+  // renovate/stability-days status would stay pending for ever, and no required check reads it:
+  // PR #170 merged that way with releases hours old. The age here is uv's (df-is14).
+  lockFileMaintenance: {
+    enabled: true,
+    automerge: true,
+    schedule: ["before 6am on monday"],
+    minimumReleaseAge: null,
+  },
   // Security fixes skip the schedule and the release age (Renovate's default), from GitHub's
   // alerts and from OSV.
   osvVulnerabilityAlerts: true,
