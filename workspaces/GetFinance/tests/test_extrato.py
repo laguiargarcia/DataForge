@@ -346,8 +346,9 @@ def test_periodo_vai_do_saldo_anterior_ao_ultimo_lancamento():
 
 
 def test_periodo_de_extrato_sem_lancamento_nem_saldo_para():
+    vazio = ler(_lista())
     with pytest.raises(LayoutDesconhecido, match="sem lançamentos nem saldos"):
-        periodo(ler(_lista()))
+        periodo(vazio)
 
 
 @pytest.mark.parametrize(("nome", "esperado"), [

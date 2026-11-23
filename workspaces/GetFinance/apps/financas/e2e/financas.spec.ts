@@ -265,3 +265,17 @@ test.describe('edição', () => {
     await expect(aviso.getByRole('button', { name: 'Apagar' })).toBeVisible()
   })
 })
+
+// --- Extratos (df-7xk9.3): a tela fala com o backend de verdade. Um arquivo que não é PDF é recusado sem
+// gravar, então o teste não deixa nada em data/extratos do demo.
+test('Extratos lista os guardados e mostra a recusa de um arquivo que não é PDF', async ({ page }) => {
+  permitidos = [/422/]
+  await abrir(page)
+  await page.getByRole('button', { name: 'Extratos' }).click()
+  await expect(page.getByText('Nenhum extrato guardado.')).toBeVisible()
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'qualquer.pdf', mimeType: 'application/pdf', buffer: Buffer.from('isto não é um PDF'),
+  })
+  await expect(page.locator('output')).toContainText('o arquivo não é um PDF legível')
+  await expect(page.getByText('Nenhum extrato guardado.')).toBeVisible()
+})
