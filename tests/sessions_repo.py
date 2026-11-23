@@ -38,12 +38,20 @@ def write(path: Path, text: str) -> None:
     path.write_bytes(text.encode("utf-8"))
 
 
+# Git's background maintenance, off in each repository's own config, so every copy carries it. A
+# commit, a fetch or a received push starts it detached, and it creates and deletes .git/objects/maintenance.lock
+# while make_repo copies the tree: the copy then fails on a file that is gone (df-jsh4).
+NO_MAINTENANCE = {"maintenance.auto": "false", "receive.autogc": "false"}
+
+
 def _build_repo(root: Path) -> None:
     """origin.git (bare) and repo (its clone on `main`, one commit pushed and fetched) under root."""
     origin = root / "origin.git"
     git(root, "init", "-q", "--bare", "-b", "main", str(origin))
+    for key, value in NO_MAINTENANCE.items():
+        git(origin, "config", key, value)
     main = root / "repo"
-    git(root, "clone", "-q", str(origin), str(main))
+    git(root, "clone", "-q", *(f"--config={k}={v}" for k, v in NO_MAINTENANCE.items()), str(origin), str(main))
     git(main, "checkout", "-q", "-b", "main")
     write(main / ".gitignore", "ignored/\n.worktrees/\n.beads/\n.claude/\nAGENTS.md\nCLAUDE.md\n")
     write(main / "tracked.txt", "x\n")
