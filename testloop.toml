@@ -270,9 +270,9 @@ min_score = 0.8897
 [targets."dataforge/orphans.py"]
 tests = ["tests/test_orphans*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py", "tests/process_owners.py"]
-# 5 survivors. Equivalent: reconcile's `me` dropped or None (4; owner_is_gone then asks current_owner(),
-# the same value, cached per process). Declined: the wording of the failure log line.
-min_score = 0.9431
+# 3 survivors. Equivalent: `me` dropped or None in reconcile's call of reconcile_task_rows (2; it then
+# asks current_owner() itself, the same function). Declined: the wording of the failure log line.
+min_score = 0.9647
 
 [targets."dataforge/tasks/__init__.py"]
 tests = ["tests/test_tasks_registry*.py"]

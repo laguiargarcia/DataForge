@@ -5,6 +5,7 @@ scheduled run or one started in a terminal while the daemon starts), and publish
 A run whose process was killed must end `failed`, with the reason, and is not published as
 running. Nothing is ever re-run (df-413)."""
 import os
+from contextlib import closing
 import signal
 import sqlite3
 import subprocess
@@ -39,7 +40,8 @@ def _read(path: Path, sql: str) -> list[tuple]:
     if not path.exists():
         return []
     try:
-        with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as conn:
+        # closing(): sqlite3's own `with` ends a transaction and leaves the connection open.
+        with closing(sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)) as conn:
             return conn.execute(sql).fetchall()
     except sqlite3.OperationalError:
         return []

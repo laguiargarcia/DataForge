@@ -1,4 +1,6 @@
+import gc
 import sqlite3
+import warnings
 
 import pytest
 from sqlalchemy import text
@@ -121,3 +123,32 @@ def test_init_db_gives_up_when_the_race_never_settles(db_url, monkeypatch):
     with pytest.raises(OperationalError, match="already exists"):
         init_db(db_url)
     assert len(calls) == db._SCHEMA_ATTEMPTS
+
+
+def test_the_engine_of_a_database_file_leaves_no_connection_open(db_url):
+    """No caller disposes of the engine init_db returns: once the session ends nothing is left for
+    the garbage collector to close (df-n8ac.19)."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        engine = init_db(db_url)
+        with Session(engine) as session:
+            session.add(ExecucaoORM(job="j", task="t"))
+            session.commit()
+        del engine, session
+        gc.collect()
+    assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
+
+
+@pytest.mark.parametrize("url", ["sqlite://", "sqlite:///", "sqlite:///:memory:"])
+def test_an_in_memory_database_keeps_its_one_connection(url):
+    """The database is the connection: a second session still finds the schema and the first one's
+    row, under each of the three ways SQLite's URL names a database in memory."""
+    engine = init_db(url)
+    try:
+        with Session(engine) as session:
+            session.add(ExecucaoORM(job="j", task="t"))
+            session.commit()
+        with Session(engine) as session:
+            assert [row.job for row in session.query(ExecucaoORM)] == ["j"]
+    finally:
+        engine.dispose()

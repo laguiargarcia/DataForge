@@ -248,3 +248,23 @@ def test_task_rows_are_judged_from_the_process_given_as_me(tmp_path):
         status = {r.task: r.status for r in s.query(ExecucaoORM)}
     engine.dispose()
     assert status == {"old": "failed", "far": "running"}
+
+
+def test_reconcile_judges_runs_and_task_rows_from_the_one_owner_it_read(workspace_dir, dataforge_home,
+                                                                       monkeypatch):
+    """reconcile() reads who it is once and judges every row, run and task, against that reading:
+    here a process on another host, whose kernel restarted since the rows were written. Judged
+    from this test process instead (another host: unknown, so alive) both rows would stay."""
+    me = Owner("linux", "elsewhere", "pid:[1]", "boot-now", 10, "5")
+    rebooted = dataclasses.replace(me, boot="boot-before", pid=11).dumps()
+    monkeypatch.setattr("dataforge.orphans.current_owner", lambda: me)
+    _add(workspace_dir / "dataforge.db",
+         ExecucaoORM(job="j", task="t", status="running", inicio=T0, run_id="r", owner_process=rebooted))
+    _add(dataforge_home / "dataforge.db",
+         JobRunORM(id="r", workspace="test_ws", job="j", status="running", started_at=T0,
+                   owner_process=rebooted))
+
+    assert reconcile() == ["r"]
+
+    assert _runs(dataforge_home) == {"r": ("failed", T0, REASON)}
+    assert _tasks(workspace_dir / "dataforge.db")["t"][0] == "failed"

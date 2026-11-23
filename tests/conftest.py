@@ -22,6 +22,12 @@ def pytest_configure(config):
         "markers",
         "integration: slow end-to-end tests (deselect with -m 'not integration')",
     )
+    # A connection or file left open fails the test that left it (df-n8ac.19). Python warns of it
+    # from the object's finalizer, where nothing can be raised: pytest turns that into its own
+    # PytestUnraisableExceptionWarning, so both are errors. Hundreds of `unclosed database` lines
+    # per run went unread for weeks while every caller of init_db leaked a pooled connection.
+    config.addinivalue_line("filterwarnings", "error::ResourceWarning")
+    config.addinivalue_line("filterwarnings", "error::pytest.PytestUnraisableExceptionWarning")
 
 
 @pytest.fixture(autouse=True)

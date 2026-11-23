@@ -1,6 +1,8 @@
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, Boolean, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 from datetime import datetime, timezone
 import threading
 
@@ -102,8 +104,15 @@ def init_db(db_url: str):
 
     _SCHEMA_LOCK serializes the threads of this process; another process (the API server and a
     scheduled job, say) may still create the same table or column between create_all's check and
-    its CREATE. That race is retried: the next check finds the schema the other process made."""
-    engine = create_engine(db_url)
+    its CREATE. That race is retried: the next check finds the schema the other process made.
+
+    Every caller makes its own engine and none disposes of it, so the engine of a database file
+    keeps no connection: each one closes when its session or `with` block ends. A pooled one
+    stayed open until the garbage collector found the engine, holding the file (on Windows it
+    cannot be deleted or replaced meanwhile) and warning `unclosed database` (df-n8ac.19). An
+    in-memory database lives in its connection, so it keeps SQLAlchemy's default pool."""
+    in_memory = make_url(db_url).database in (None, "", ":memory:")
+    engine = create_engine(db_url, poolclass=None if in_memory else NullPool)
     with _SCHEMA_LOCK:
         for attempt in range(_SCHEMA_ATTEMPTS):
             try:

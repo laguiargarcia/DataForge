@@ -47,20 +47,16 @@ def _orphans(rows: list, me: Owner) -> list:
 def reconcile_task_rows(url: str, me: Owner | None = None) -> int:
     """Fail the orphaned in-progress task rows of one database; return how many."""
     me = me or current_owner()
-    engine = init_db(url)
-    try:
-        with Session(engine) as session:
-            dead = _orphans(session.query(ExecucaoORM)
-                            .filter(ExecucaoORM.status.in_(IN_PROGRESS)).all(), me)
-            for row in dead:
-                row.status = "failed"
-                row.fim = row.inicio
-                row.output = f"{row.output}\n{REASON}" if row.output else REASON
-            if dead:
-                session.commit()
-            return len(dead)
-    finally:
-        engine.dispose()
+    with Session(init_db(url)) as session:
+        dead = _orphans(session.query(ExecucaoORM)
+                        .filter(ExecucaoORM.status.in_(IN_PROGRESS)).all(), me)
+        for row in dead:
+            row.status = "failed"
+            row.fim = row.inicio
+            row.output = f"{row.output}\n{REASON}" if row.output else REASON
+        if dead:
+            session.commit()
+        return len(dead)
 
 
 def _last_seen(run: JobRunORM) -> datetime:
@@ -72,13 +68,9 @@ def _last_seen(run: JobRunORM) -> datetime:
     path = workspace_dir / _DB_FILE
     if not path.is_file():
         return run.started_at
-    engine = init_db(db_url(path))
-    try:
-        with Session(engine) as session:
-            tasks = session.query(ExecucaoORM).filter(ExecucaoORM.run_id == run.id).all()
-            moments = [t for row in tasks for t in (row.inicio, row.fim) if t is not None]
-    finally:
-        engine.dispose()
+    with Session(init_db(db_url(path))) as session:
+        tasks = session.query(ExecucaoORM).filter(ExecucaoORM.run_id == run.id).all()
+        moments = [t for row in tasks for t in (row.inicio, row.fim) if t is not None]
     return max([run.started_at, *moments])
 
 
@@ -97,22 +89,18 @@ def reconcile(workspace: str | None = None) -> list[str]:
         for path in _task_stores(workspace_dir):
             reconcile_task_rows(db_url(path), me)
 
-    engine = init_db(db_url(data_dir() / _DB_FILE))
-    try:
-        with Session(engine) as session:
-            query = session.query(JobRunORM).filter(JobRunORM.status.in_(IN_PROGRESS))
-            if workspace is not None:
-                query = query.filter(JobRunORM.workspace == workspace)
-            dead = _orphans(query.all(), me)
-            for run in dead:
-                run.status = "failed"
-                run.reason = REASON
-                run.finished_at = _last_seen(run)
-            if dead:
-                session.commit()
-            return [run.id for run in dead]
-    finally:
-        engine.dispose()
+    with Session(init_db(db_url(data_dir() / _DB_FILE))) as session:
+        query = session.query(JobRunORM).filter(JobRunORM.status.in_(IN_PROGRESS))
+        if workspace is not None:
+            query = query.filter(JobRunORM.workspace == workspace)
+        dead = _orphans(query.all(), me)
+        for run in dead:
+            run.status = "failed"
+            run.reason = REASON
+            run.finished_at = _last_seen(run)
+        if dead:
+            session.commit()
+        return [run.id for run in dead]
 
 
 def reconcile_or_log(workspace: str | None = None) -> list[str]:
