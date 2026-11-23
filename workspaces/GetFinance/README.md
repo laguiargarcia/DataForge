@@ -57,7 +57,16 @@ interval that does not close as an explained divergence, with a reason; the back
 `diferenca` from `curated.conferencia_saldo`, DataForge df-y26v), and `POST /aplicar` (asks DataForge for a `reclassificar` run, queued
 behind any job of the workspace) with `GET /aplicar/{id}` for its status. Saving writes straight to
 `data/edicao.db`; the validations live in `scripts/report/edicao.py`, the one module that writes there.
-Tests: `tests/test_backend_edicao.py`.
+`POST /extratos` takes a bank-statement PDF as the raw body (`Content-Type: application/pdf`, at most
+20 MB): it reads it with the task's reader, refuses it without saving when it is not a statement (422),
+its agency and account do not match exactly one BANK account (422), a statement of that account for the
+same period is already stored (409) or it is too big (413); otherwise it saves it in `data/extratos/` as
+`extrato_<from>_<to>.pdf` (`-2`, `-3`... when another account has that period; never the uploaded name),
+answers 201 with the period, the counts, the days whose balance differs from `curated.extrato_saldos`
+(accepted anyway) and the `execution_id` of the `extrato` job it asked for (follow it with
+`GET /aplicar/{id}`; 502 when DataForge did not answer, with the PDF already saved). `GET /extratos` lists
+the files of `curated.extrato_arquivos` with their period (DataForge df-7xk9.2).
+Tests: `tests/test_backend_edicao.py`, `tests/test_backend_extratos.py`.
 
 Node is needed only to change the front end, from the app folder after `npm ci`:
 
