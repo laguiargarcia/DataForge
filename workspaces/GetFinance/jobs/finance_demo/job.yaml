@@ -205,9 +205,11 @@ tasks:
   # Real data deps: cleansed.accounts and curated.dim_account (dim_accounts). The edge to
   # lancamentos_suspeitos only serializes it after the last curated writer, so it also runs when that task
   # failed or was skipped (the statement does not depend on the balance check). An empty or missing folder
-  # writes empty tables; PDFs without pypdf installed print a warning and write empty tables. A bad PDF is
-  # left out, the good ones are written, and then the task fails naming each bad file: one attempt, since a
-  # retry reads the same files. It only reads and records: no suspicious finding.
+  # writes empty tables; PDFs without pypdf installed print a warning and leave the tables as they were. A
+  # bad PDF (any error reading it) is left out, the good ones are written, and then the task fails naming each
+  # bad file by its position: one attempt, since a retry reads the same files. Two files with different
+  # balances for one day do not fail it: the day is marked divergente and the task warns. It only reads and
+  # records: no suspicious finding.
   - name: extrato
     script: cleansed2curated/cleansed2curated_extrato.py
     params:

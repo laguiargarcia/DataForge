@@ -15,11 +15,13 @@ Uma linha fora de lançamento que não é nada disso (um título) é ignorada e 
 A conta do extrato é casada em tempo de execução com cleansed.accounts pela agência e pelo número do
 cabeçalho, para que nenhum número de conta precise morar no código.
 
-Vários arquivos podem cobrir o mesmo dia. Para cada (conta, dia), os lançamentos vêm de um arquivo só: o que
-traz mais lançamentos daquele dia, depois o emitido mais tarde, depois o nome. Assim um dia não aparece duas
-vezes (nem perde um de dois lançamentos iguais), e um arquivo que só traz o saldo do dia (o saldo anterior
-do seu período) não apaga os lançamentos que outro traz. O saldo do dia vem de qualquer arquivo que o traga;
-dois arquivos com saldos diferentes para o mesmo dia são um erro (SaldosDivergentes) que nomeia os dois.
+Vários arquivos podem cobrir o mesmo dia. Para cada (conta, dia), os lançamentos vêm de um arquivo só: entre
+os que trazem lançamentos daquele dia, o emitido mais tarde, depois o nome. Assim um dia não aparece duas
+vezes (nem perde um de dois lançamentos iguais), um lançamento que o banco tirou depois não fica, e um
+arquivo que só traz o saldo do dia (o saldo anterior do seu período) não apaga os lançamentos que outro
+traz. O saldo do dia vem do arquivo dos lançamentos do dia quando ele o traz, senão do emitido mais tarde
+(depois o nome). Dois arquivos com saldos diferentes para o mesmo dia não param nada: fica esse saldo e o
+dia sai com divergente verdadeiro.
 
 A conferência por dia: o saldo do dia anterior que tem saldo, mais os lançamentos depois dele até o dia,
 menos o saldo do dia. Só mede: nada aqui mexe em lançamento do Pluggy (df-z4fh). Funções puras, sem I/O.
@@ -52,15 +54,11 @@ COLUNAS = {"arquivo": pl.String, "account_id": pl.String, "dia": pl.Date, "ordem
            "descricao": pl.String, "valor": pl.Float64, "saldo_do_dia": pl.Float64}
 COLUNAS_SALDOS = {"account_id": pl.String, "dia": pl.Date, "arquivo": pl.String, "saldo_do_dia": pl.Float64,
                   "saldo_anterior": pl.Float64, "soma_lancamentos": pl.Float64, "n_lancamentos": pl.Int64,
-                  "diferenca": pl.Float64, "fecha": pl.Boolean}
+                  "diferenca": pl.Float64, "fecha": pl.Boolean, "divergente": pl.Boolean}
 
 
 class LayoutDesconhecido(ValueError):
     """O texto não tem o layout que este módulo lê: melhor parar do que gravar um extrato errado."""
-
-
-class SaldosDivergentes(ValueError):
-    """Dois arquivos trazem saldos diferentes para o mesmo dia da mesma conta: não há como escolher um."""
 
 
 class Extrato(NamedTuple):
@@ -186,31 +184,27 @@ def contas_do_extrato(extrato: Extrato, contas: pl.DataFrame) -> list[str]:
 
 
 def _arquivo_dos_lancamentos(lancamentos: pl.DataFrame) -> pl.DataFrame:
-    # (account_id, dia) -> o arquivo de onde vêm os lançamentos do dia: o que traz mais, depois o emitido mais
+    # (account_id, dia) -> o arquivo de onde vêm os lançamentos do dia: dos que trazem algum, o emitido mais
     # tarde, depois o nome (para o empate dar sempre o mesmo).
     return (
-        lancamentos.group_by("account_id", "dia", "arquivo", "emitido_em").agg(pl.len().alias("n"))
-        .sort(["n", "emitido_em", "arquivo"], descending=True)
+        lancamentos.select("account_id", "dia", "arquivo", "emitido_em").unique()
+        .sort(["emitido_em", "arquivo"], descending=True)
         .unique(["account_id", "dia"], keep="first")
         .select("account_id", "dia", "arquivo")
     )
 
 
-def _saldo_do_dia(saldos: pl.DataFrame) -> pl.DataFrame:
-    # (account_id, dia) -> o saldo do dia e o arquivo (o emitido mais tarde) de onde vem. Saldos diferentes do
-    # mesmo dia em arquivos diferentes param tudo, nomeando o dia e os arquivos (nunca o valor).
-    divergentes = (
-        saldos.group_by("account_id", "dia")
-        .agg(pl.col("saldo").round(2).n_unique().alias("n"), pl.col("arquivo").unique().sort().alias("arquivos"))
-        .filter(pl.col("n") > 1).sort("dia")
-    )
-    if divergentes.height:
-        raise SaldosDivergentes("; ".join(f"{dia}: {', '.join(arquivos)}"
-                                          for dia, arquivos in divergentes.select("dia", "arquivos").rows()))
+def _saldo_do_dia(saldos: pl.DataFrame, arquivo_dos_lancamentos: pl.DataFrame) -> pl.DataFrame:
+    # (account_id, dia) -> o saldo do dia, o arquivo de onde vem e se os arquivos discordam dele. Vem do arquivo
+    # dos lançamentos do dia quando ele traz o saldo, senão do emitido mais tarde, depois o nome.
     return (
-        saldos.sort(["emitido_em", "arquivo"], descending=True)
+        saldos.join(arquivo_dos_lancamentos.with_columns(pl.lit(True).alias("dos_lancamentos")),
+                    on=["account_id", "dia", "arquivo"], how="left")
+        .with_columns(pl.col("dos_lancamentos").fill_null(False),
+                      (pl.col("saldo").round(2).n_unique().over("account_id", "dia") > 1).alias("divergente"))
+        .sort(["dos_lancamentos", "emitido_em", "arquivo"], descending=True)
         .unique(["account_id", "dia"], keep="first")
-        .select("account_id", "dia", "arquivo", pl.col("saldo").alias("saldo_do_dia"))
+        .select("account_id", "dia", "arquivo", pl.col("saldo").alias("saldo_do_dia"), "divergente")
     )
 
 
@@ -224,15 +218,16 @@ def juntar(lancamentos: pl.DataFrame, saldos: pl.DataFrame) -> tuple[pl.DataFram
     saldos do dia (COLUNAS_SALDOS): um por (conta, dia com saldo); saldo_anterior é o do dia com saldo
     anterior, soma_lancamentos e n_lancamentos são os do extrato depois daquele dia até este, diferenca é
     saldo_anterior + soma_lancamentos - saldo_do_dia, e fecha diz se |diferenca| <= TOLERANCIA. O primeiro
-    saldo de cada conta não tem anterior: fecha fica nulo. Levanta SaldosDivergentes quando dois arquivos
-    discordam do saldo de um dia.
+    saldo de cada conta não tem anterior: fecha fica nulo. divergente diz se dois arquivos discordam do
+    saldo do dia.
     """
     lancamentos = lancamentos.cast({**_ORIGEM, **LANCAMENTOS})
     saldos = saldos.cast({**_ORIGEM, **SALDOS})
-    saldos = _saldo_do_dia(saldos)
+    arquivo_dos_lancamentos = _arquivo_dos_lancamentos(lancamentos)
+    saldos = _saldo_do_dia(saldos, arquivo_dos_lancamentos)
     extrato = (
-        lancamentos.join(_arquivo_dos_lancamentos(lancamentos), on=["account_id", "dia", "arquivo"], how="semi")
-        .join(saldos.drop("arquivo"), on=["account_id", "dia"], how="left")
+        lancamentos.join(arquivo_dos_lancamentos, on=["account_id", "dia", "arquivo"], how="semi")
+        .join(saldos.select("account_id", "dia", "saldo_do_dia"), on=["account_id", "dia"], how="left")
         .select(list(COLUNAS)).cast(COLUNAS)
         .sort("account_id", "dia", "ordem")
     )

@@ -213,7 +213,8 @@ raw, since a statement has no rebuild). The task `extrato` reads every `.pdf` th
 extrato:        arquivo, account_uuid, dia, ordem (position within the day in the file), descricao,
                 valor (signed: a debit is negative), saldo_do_dia (null when the file has no balance that day)
 extrato_saldos: account_uuid, dia, arquivo, saldo_do_dia, saldo_anterior, soma_lancamentos, n_lancamentos,
-                diferenca (= saldo_anterior + soma_lancamentos - saldo_do_dia), fecha
+                diferenca (= saldo_anterior + soma_lancamentos - saldo_do_dia), fecha,
+                divergente (two files print different balances for the day)
 extrato_arquivos: arquivo, account_uuid, emitido_em, n_lancamentos, n_saldos, linhas_ignoradas (lines of the
                 list that are neither an entry nor a balance: printed and kept, never a finding)
 ```
@@ -225,21 +226,25 @@ extrato_arquivos: arquivo, account_uuid, emitido_em, n_lancamentos, n_saldos, li
 - The account is the BANK account of `cleansed.accounts` whose `transfer_number` (agency and account) or
   `number` matches the agency and account in the PDF header, matched at run time: no account number lives
   in the code.
-- A bad file (unreadable or encrypted, another layout, an impossible date, an account that matches no BANK
-  account or more than one) is left out; the good ones are written, then the task fails naming every bad
-  file and why. The task runs once (`retry: attempts: 1`): a retry would read the same files.
-- Files may overlap. Each (account, day) takes its entries from one file: the one with more entries that
-  day, then the newest by its "Emitido em", then the name. So a day is never counted twice and two equal
-  entries of one day stay two, and a file that only has that day's balance (its opening balance) does not
-  hide the entries another file has. The day's balance comes from any file that has it; two files with
-  different balances for one day fail the task before any write, naming the day and both files.
+- A bad file (any error reading it: unreadable or encrypted, another layout, an impossible date; or an
+  account that matches no BANK account or more than one) is left out; the good ones are written, then the
+  task fails naming every bad file and why. The task runs once (`retry: attempts: 1`): a retry would read
+  the same files. The log names a file by its position in the folder (by name order) and its period, never
+  by its name, which may carry the account number; the name stays in `extrato_arquivos`.
+- Files may overlap. Each (account, day) takes its entries from one file: of the files with entries that
+  day, the newest by its "Emitido em", then the name. So a day is never counted twice, two equal entries of
+  one day stay two, an entry the bank removed in a later export does not stay, and a file that only has
+  that day's balance (its opening balance) does not hide the entries another file has. The day's balance
+  comes from the file of the day's entries when it has one, otherwise from the newest file, then the name.
+  Two files with different balances for one day do not stop the task: that balance is kept, `divergente`
+  is true, and the task prints a warning with the dates (never an amount or a file name).
 - `extrato_saldos` checks each balance against the previous one: an entry counts toward the first balance
   on or after its day (the bank prints no balance on weekends and on some days), and `fecha` is
   `|diferenca| <= 0.005`. The first balance of an account has no previous one (`fecha` null). The task
   prints the count of days that do not close and their dates, never an amount; it has no suspicious rule,
   since an old statement would repeat the same finding every day.
 - An empty or missing folder writes empty tables. With PDFs in the folder and `pypdf` not installed, the
-  task prints a warning, writes empty tables and succeeds. It runs after `lancamentos_suspeitos` only to
+  task prints a warning, writes nothing (tables already there stay as they were) and succeeds. It runs after `lancamentos_suspeitos` only to
   keep one curated writer at a time (`when: [completed, skipped]`), so a failed balance check does not stop
   it. It only reads and records: nothing here changes a
   transaction, a fact or a report number (df-z4fh).

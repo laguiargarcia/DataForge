@@ -124,10 +124,15 @@ The bank only exports the checking-account statement as a PDF. Save each one, as
 it, in `data/extratos/` of the prod workspace (create the folder the first time; any file name ending in
 `.pdf`). The next `finance_daily` reads them all into `curated.extrato` (one row per entry) and
 `curated.extrato_saldos` (each daily balance and whether it closes with the entries), and the weekly
-backup keeps them. Overlapping periods are fine: a day is taken from one file only. A PDF the task cannot
-read, or whose agency and account match no BANK account, is left out (the others are still read) and the
-run fails naming it and why: move it out and tell a session. The reading needs `pypdf`, a DataForge
-dependency (`uv.lock`); without it the task only warns and the tables stay empty.
+backup keeps them. Overlapping periods are fine: each day's entries come from one file only, the newest
+(by its "Emitido em") of the files that have entries that day, so an entry the bank removed later does not
+stay. The day's balance comes from that same file when it has it, otherwise from the newest file. When two
+files print different balances for one day, the run does not stop: that balance is kept, the day gets
+`divergente` = true in `curated.extrato_saldos`, and the task prints a warning with the dates. A PDF the
+task cannot read, or whose agency and account match no BANK account, is left out (the others are still
+read) and the run fails naming it and why: move it out and tell a session. The log names a file by its
+position in the folder (by name order) and its period, never by its name. The reading needs `pypdf`, a
+DataForge dependency (`uv.lock`); without it the task only warns and leaves the tables as they were.
 Then every suspect transaction gets the statement's verdict (`curated.veredito_suspeitos`: in the
 statement, not in it, or not covered), the statement lines with no transaction go to
 `curated.extrato_sem_lancamento`, and `curated.acerto_por_motivo` counts how often each suspect reason is

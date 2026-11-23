@@ -896,8 +896,9 @@ LANCAMENTOS_SUSPEITOS_RULES = [
 ]
 
 # The bank statement PDFs (df-z4fh.5): one row per entry of the statement, and one per daily balance with
-# its check. They only read and record: a day that does not close is printed and kept in `fecha`, never a
-# suspicious finding (an old statement would repeat it every day).
+# its check. They only read and record: a day that does not close is printed and kept in `fecha`, and a day
+# two files disagree on is printed and kept in `divergente`, never a suspicious finding (an old statement would
+# repeat it every day).
 EXTRATO_COLUMNS = ["arquivo", "account_uuid", "dia", "ordem", "descricao", "valor", "saldo_do_dia"]
 EXTRATO_RULES = [
     expected_columns_rule(EXTRATO_COLUMNS),
@@ -908,12 +909,13 @@ EXTRATO_RULES = [
 ]
 EXTRATO_SALDOS_COLUMNS = [
     "account_uuid", "dia", "arquivo", "saldo_do_dia", "saldo_anterior", "soma_lancamentos", "n_lancamentos",
-    "diferenca", "fecha",
+    "diferenca", "fecha", "divergente",
 ]
 EXTRATO_SALDOS_RULES = [
     expected_columns_rule(EXTRATO_SALDOS_COLUMNS),
     null_rule("account_uuid"),
     null_rule("saldo_do_dia"),
+    null_rule("divergente"),
     ("more than one balance per account and day", IMPOSSIBLE, duplicated("account_uuid", "dia")),
 ]
 # One row per PDF read, with what it gave and how many lines of its list were neither an entry nor a balance.
