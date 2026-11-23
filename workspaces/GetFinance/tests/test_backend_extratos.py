@@ -5,7 +5,11 @@ Como tests/test_backend_edicao.py: o backend importado do arquivo, um workspace 
 do DataForge num httpx.MockTransport. Os PDFs são feitos aqui com o texto falso de tests/test_extrato.py.
 """
 import importlib.util
+import os
+import re
 import shutil
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from pathlib import Path
 
@@ -23,6 +27,10 @@ TOKEN = "segredo-de-teste"
 BANK, OUTRO = "p-bank-1", "p-bank-2"
 CONTA, CONTA_OUTRO = "banco-checking-3456", "banco-checking-9999"
 NOME_A = "extrato_2026-05-31_2026-06-05.pdf"
+# O único jeito de nome que o upload grava: só o período e um sufixo de posição.
+NOME_DE_APP = re.compile(r"extrato_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}(?:-\d+)?\.pdf")
+ILEGIVEL = "o arquivo não é um PDF legível"
+LAYOUT = "o PDF não é um extrato do banco no layout conhecido"
 
 _spec = importlib.util.spec_from_file_location("financas_backend_extratos",
                                                WS / "apps" / "financas" / "backend" / "main.py")
@@ -100,22 +108,35 @@ def test_pdf_aceito_e_guardado_pelo_periodo_e_pede_o_job_extrato(cliente, ws, ap
     assert [(p.method, p.url.raw_path) for p in api] == [("POST", b"/api/workspaces/Meu%20WS/jobs/extrato/run")]
 
 
-def test_o_nome_guardado_nao_traz_o_nome_enviado_nem_a_conta(cliente, ws):
-    resposta = _subir(cliente, _pdf(A), **{"Content-Disposition": 'attachment; filename="Extrato 1234567-8.pdf"'})
-    assert resposta.status_code == 201
-    nome = resposta.json()["arquivo"]
-    assert _guardados(ws) == [nome]
-    assert "Extrato " not in nome
-    assert not any(trecho in nome for trecho in ("1234567", "0001", "99999"))
+def test_o_nome_guardado_e_so_o_periodo_e_o_sufixo(cliente, ws):
+    nomes = [_subir(cliente, _pdf(paginas)).json()["arquivo"] for paginas in (A, A_OUTRO)]
+    assert nomes == [NOME_A, "extrato_2026-05-31_2026-06-05-2.pdf"]
+    assert set(_guardados(ws)) == set(nomes)
+    assert all(NOME_DE_APP.fullmatch(nome) for nome in nomes)
 
 
-@pytest.mark.parametrize("corpo", [b"", b"isto nao e um pdf", _pdf(["um PDF qualquer\nsem extrato"]),
+@pytest.mark.parametrize("corpo", [b"", b"isto nao e um pdf"], ids=["vazio", "texto"])
+def test_corpo_que_nao_e_pdf_e_recusado_sem_gravar(cliente, ws, api, corpo):
+    resposta = _subir(cliente, corpo)
+    assert (resposta.status_code, resposta.json()["detail"]) == (422, ILEGIVEL)
+    assert _guardados(ws) == []
+    assert api == []
+
+
+@pytest.mark.parametrize("corpo", [_pdf(["um PDF qualquer\nsem extrato"]),
                                    _pdf([_cabecalho() + "\n03/06/2026 COMPRA SEM FIM -1,00"]), _pdf(_lista())],
-                         ids=["vazio", "texto", "outro-pdf", "cortado", "sem-dias"])
-def test_corpo_que_nao_e_extrato_e_recusado_sem_gravar(cliente, ws, api, corpo):
+                         ids=["outro-pdf", "cortado", "sem-dias"])
+def test_pdf_que_nao_e_extrato_e_recusado_sem_gravar(cliente, ws, api, corpo):
     resposta = _subir(cliente, corpo)
     assert resposta.status_code == 422
-    assert "extrato" in resposta.json()["detail"] or "PDF" in resposta.json()["detail"]
+    assert resposta.json()["detail"].startswith(LAYOUT + ": ")
+    assert _guardados(ws) == []
+    assert api == []
+
+
+def test_emissao_impossivel_no_cabecalho_e_recusa_com_mensagem_fixa(cliente, ws, api):
+    resposta = _subir(cliente, _pdf([A[0].replace("05/06/2026 10:00:00", "31/02/2026 10:00:00")]))
+    assert (resposta.status_code, resposta.json()["detail"]) == (422, LAYOUT)
     assert _guardados(ws) == []
     assert api == []
 
@@ -152,6 +173,70 @@ def test_mesmo_periodo_e_conta_ja_guardado_e_recusado_sem_sobrescrever(cliente, 
     assert _guardados(ws) == [NOME_A]
     assert (_pasta(ws) / NOME_A).read_bytes() == antes
     assert api == []
+
+
+def test_os_mesmos_bytes_ja_guardados_com_outro_nome_sao_recusados(cliente, ws, api):
+    _pasta(ws).mkdir(parents=True)
+    corpo = _pdf(A)
+    (_pasta(ws) / "Extrato do banco.PDF").write_bytes(corpo)
+    resposta = _subir(cliente, corpo)
+    assert resposta.status_code == 409
+    assert "já está guardado" in resposta.json()["detail"]
+    assert _guardados(ws) == ["Extrato do banco.PDF"]
+    assert api == []
+
+
+def test_posto_a_mao_com_outros_bytes_nao_e_visto_como_o_mesmo(cliente, ws):
+    # O limite escrito no README: sem o nome do app, só os bytes iguais contam.
+    _pasta(ws).mkdir(parents=True)
+    (_pasta(ws) / "Extrato do banco.pdf").write_bytes(_pdf([A[0].replace("05/06/2026 10:00:00", "06/06/2026 08:00:00")]))
+    assert _subir(cliente, _pdf(A)).status_code == 201
+    assert _guardados(ws) == ["Extrato do banco.pdf", NOME_A]
+
+
+def test_nome_ocupado_por_fora_entre_a_escolha_e_a_gravacao_nao_e_sobrescrito(cliente, ws, monkeypatch):
+    # Outro processo grava o nome escolhido antes deste: o upload passa para o sufixo seguinte.
+    escolher = backend.extrato.nome_guardado
+
+    def escolher_e_ocupar(de, ate, ocupados):
+        nome = escolher(de, ate, ocupados)
+        if nome == NOME_A and not (_pasta(ws) / nome).exists():
+            (_pasta(ws) / nome).write_bytes(b"de outro processo")
+        return nome
+
+    monkeypatch.setattr(backend.extrato, "nome_guardado", escolher_e_ocupar)
+    resposta = _subir(cliente, _pdf(A))
+    assert resposta.status_code == 201
+    assert resposta.json()["arquivo"] == "extrato_2026-05-31_2026-06-05-2.pdf"
+    assert (_pasta(ws) / NOME_A).read_bytes() == b"de outro processo"
+
+
+def test_duas_subidas_ao_mesmo_tempo_nao_escolhem_o_mesmo_nome(cliente, ws):
+    # Com a trava, a segunda só confere a pasta depois que a primeira gravou: o mesmo PDF dá 201 e 409.
+    with ThreadPoolExecutor(2) as fila:
+        respostas = list(fila.map(lambda _: _subir(cliente, _pdf(A)).status_code, range(2)))
+    assert sorted(respostas) == [201, 409]
+    assert _guardados(ws) == [NOME_A]
+
+
+def test_temporario_velho_e_apagado_e_o_novo_fica(cliente, ws):
+    _pasta(ws).mkdir(parents=True)
+    velho, novo = _pasta(ws) / ".subindo-velho.parcial", _pasta(ws) / ".subindo-novo.parcial"
+    for arquivo in (velho, novo):
+        arquivo.write_bytes(b"metade")
+    duas_horas = time.time() - 2 * 3600
+    os.utime(velho, (duas_horas, duas_horas))
+    assert _subir(cliente, _pdf(A)).status_code == 201
+    assert _guardados(ws) == [".subindo-novo.parcial", NOME_A]
+
+
+def test_erro_ao_gravar_nao_deixa_temporario(cliente, ws, monkeypatch):
+    def falhar(*_):
+        raise OSError("disco cheio")
+    monkeypatch.setattr(backend.os, "link", falhar)
+    with pytest.raises(OSError, match="disco cheio"):
+        _subir(cliente, _pdf(A))
+    assert _guardados(ws) == []
 
 
 def test_outra_conta_no_mesmo_periodo_ganha_sufixo(cliente, ws):
@@ -199,6 +284,18 @@ def test_dataforge_fora_do_ar_deixa_o_pdf_guardado_e_diz_isso(cliente, ws, monke
     assert resposta.status_code == 502
     assert f"guardado como {NOME_A}" in resposta.json()["detail"]
     assert "DataForge não respondeu" in resposta.json()["detail"]
+    assert _guardados(ws) == [NOME_A]
+
+
+@pytest.mark.parametrize("resposta_df", [httpx.Response(202, text="aceito"), httpx.Response(202, json={}),
+                                         httpx.Response(202, json=["r1"])], ids=["sem-json", "sem-chave", "lista"])
+def test_dataforge_sem_execution_id_deixa_o_pdf_guardado_e_diz_isso(cliente, ws, monkeypatch, resposta_df):
+    monkeypatch.setattr(backend, "_api", lambda: httpx.Client(
+        base_url="http://df", transport=httpx.MockTransport(lambda _: resposta_df)))
+    resposta = _subir(cliente, _pdf(A))
+    assert resposta.status_code == 502
+    assert resposta.json()["detail"] == (f"o PDF foi guardado como {NOME_A}, mas o job extrato não foi pedido: "
+                                         "DataForge respondeu sem execution_id")
     assert _guardados(ws) == [NOME_A]
 
 

@@ -206,9 +206,10 @@ intervalo_de, intervalo_ate, intervalo_estado (the conferencia_saldo interval wi
   suspicious rule, so it never warns. The task prints the count per reason, never an id or an amount.
 
 ### curated — `extrato`, `extrato_saldos` and `extrato_arquivos` (built by `cleansed2curated_extrato.py`)
-The bank only exports the checking-account statement as a PDF. The owner drops each one in
-`data/extratos/` (connection `extratos`; `data/` is not versioned, and the `backup` job zips the folder with
-raw, since a statement has no rebuild). The task `extrato` reads every `.pdf` there with `pypdf` and writes:
+The bank only exports the checking-account statement as a PDF. The owner uploads each one through the
+Finanças app (its backend's `POST /extratos` checks it and saves it as `extrato_<from>_<to>.pdf`, df-7xk9.2)
+or drops it by hand in `data/extratos/` (connection `extratos`; `data/` is not versioned, and the `backup`
+job zips the folder with raw, since a statement has no rebuild). The task `extrato` reads every `.pdf` there with `pypdf` and writes:
 ```
 extrato:        arquivo, account_uuid, dia, ordem (position within the day in the file), descricao,
                 valor (signed: a debit is negative), saldo_do_dia (null when the file has no balance that day)

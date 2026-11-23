@@ -59,8 +59,8 @@ behind any job of the workspace) with `GET /aplicar/{id}` for its status. Saving
 `data/edicao.db`; the validations live in `scripts/report/edicao.py`, the one module that writes there.
 `POST /extratos` takes a bank-statement PDF as the raw body (`Content-Type: application/pdf`, at most
 20 MB): it reads it with the task's reader, refuses it without saving when it is not a statement (422),
-its agency and account do not match exactly one BANK account (422), a statement of that account for the
-same period is already stored (409) or it is too big (413); otherwise it saves it in `data/extratos/` as
+its agency and account do not match exactly one BANK account (422), the same file (by its bytes) or a
+statement of that account for the same period is already stored (409) or it is too big (413); otherwise it saves it in `data/extratos/` as
 `extrato_<from>_<to>.pdf` (`-2`, `-3`... when another account has that period; never the uploaded name),
 answers 201 with the period, the counts, the days whose balance differs from `curated.extrato_saldos`
 (accepted anyway) and the `execution_id` of the `extrato` job it asked for (follow it with
@@ -129,9 +129,15 @@ with `reprocess.py`.
 
 ## Bank statements (df-z4fh.5)
 
-The bank only exports the checking-account statement as a PDF. Save each one, as the bank's app exports
-it, in `data/extratos/` of the prod workspace (create the folder the first time; any file name ending in
-`.pdf`). The next `finance_daily` reads them all into `curated.extrato` (one row per entry) and
+The bank only exports the checking-account statement as a PDF. Upload it in the Finanças app
+(`POST /extratos` of its backend, above: it checks the file, saves it in `data/extratos/` as
+`extrato_<from>_<to>.pdf` and runs the job `extrato` at once), or save it by hand, as the bank's app
+exports it, in `data/extratos/` of the prod workspace (create the folder the first time; any file name
+ending in `.pdf`). The upload refuses a file whose bytes are already in the folder under any name, and a
+statement of the same account and period that an earlier upload saved; a file saved by hand under another
+name with different bytes (another export of the same period) is not seen as the same one, so it is
+accepted and both stay (no entry is counted twice: each day's entries come from one file). The next
+`finance_daily` reads them all into `curated.extrato` (one row per entry) and
 `curated.extrato_saldos` (each daily balance and whether it closes with the entries), and the weekly
 backup keeps them. Overlapping periods are fine: each day's entries come from one file only, the newest
 (by its "Emitido em") of the files that have entries that day, so an entry the bank removed later does not

@@ -15,6 +15,8 @@ import io
 import os
 import sys
 import tempfile
+import threading
+import time
 from pathlib import Path
 from urllib.parse import quote
 
@@ -38,6 +40,11 @@ from classificacao import efeito_da_regra
 JOB_APLICAR = "reclassificar"
 JOB_EXTRATO = "extrato"
 LIMITE_EXTRATO = 20 * 1024 * 1024   # bytes: o maior corpo que POST /extratos aceita
+PREFIXO_PARCIAL, SUFIXO_PARCIAL = ".subindo-", ".parcial"   # o temporário de um upload: a task não o lê
+VIDA_PARCIAL = 3600   # segundos: um temporário mais velho que isso é de um upload que morreu
+# Conferir a duplicata, escolher o nome e gravar são um passo só: duas subidas ao mesmo tempo (a rota roda em
+# threads) não passam ambas pela conferência nem escolhem o mesmo nome.
+_TRAVA_EXTRATOS = threading.Lock()
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
 # As recusas que cada rota pode dar, para o OpenAPI (o corpo é sempre {"detail": <mensagem>}).
@@ -292,11 +299,14 @@ def _ler_extrato(corpo: bytes) -> tuple[extrato.Extrato, tuple]:
         paginas = _paginas(io.BytesIO(corpo))
     except Exception as erro:   # pypdf raises many kinds of error on bytes that are not a readable PDF
         raise HTTPException(status_code=422, detail="o arquivo não é um PDF legível") from erro
+    layout = "o PDF não é um extrato do banco no layout conhecido"
     try:
         lido = extrato.ler(paginas)
         return lido, extrato.periodo(lido)
-    except extrato.LayoutDesconhecido as erro:
-        raise HTTPException(status_code=422, detail=f"o PDF não é um extrato do banco no layout conhecido: {erro}") from erro
+    except extrato.LayoutDesconhecido as erro:   # as mensagens do leitor só trazem datas e textos fixos
+        raise HTTPException(status_code=422, detail=f"{layout}: {erro}") from erro
+    except ValueError as erro:   # outro ValueError (uma data de emissão impossível): sem o texto do erro
+        raise HTTPException(status_code=422, detail=layout) from erro
 
 
 def _conta_guardada(arquivo: Path, contas: pl.DataFrame) -> list[str] | None:
@@ -315,42 +325,78 @@ def _dias_divergentes(lido: extrato.Extrato, account_id: str) -> list:
     return extrato.dias_divergentes(lido.saldos, saldos.filter(pl.col("account_uuid").is_in(uuids)))
 
 
-def _gravar_pdf(pasta: Path, nome: str, corpo: bytes) -> None:
-    """Grava num temporário da mesma pasta, sem a extensão .pdf, e renomeia: a task nunca lê um PDF pela metade."""
-    with tempfile.NamedTemporaryFile(dir=pasta, prefix=".subindo-", suffix=".parcial", delete=False) as temporario:
-        temporario.write(corpo)
-    caminho = Path(temporario.name)
+def _limpar_parciais(pasta: Path) -> None:
+    """Apaga os temporários de uploads que morreram antes de virar PDF (o backup zipa a pasta inteira)."""
+    limite = time.time() - VIDA_PARCIAL
+    for arquivo in pasta.glob(f"{PREFIXO_PARCIAL}*{SUFIXO_PARCIAL}"):
+        if arquivo.stat().st_mtime < limite:
+            arquivo.unlink(missing_ok=True)
+
+
+def _recusar_duplicata(pasta: Path, corpo: bytes, periodo: tuple, ids: list[str], contas: pl.DataFrame) -> None:
+    """409 se a pasta já tem um PDF com os mesmos bytes (qualquer nome) ou um do app do mesmo período e conta."""
+    for arquivo in pasta.iterdir():
+        if not arquivo.is_file() or arquivo.suffix.lower() != ".pdf":
+            continue
+        if arquivo.stat().st_size == len(corpo) and arquivo.read_bytes() == corpo:
+            raise HTTPException(status_code=409, detail="este arquivo já está guardado")
+        if extrato.periodo_do_nome(arquivo.name) == periodo and _conta_guardada(arquivo, contas) == ids:
+            de, ate = periodo
+            raise HTTPException(status_code=409, detail=f"já há um extrato desta conta guardado para {de} a {ate}")
+
+
+def _gravar_pdf(pasta: Path, periodo: tuple, corpo: bytes) -> str:
+    """Grava num temporário da mesma pasta, sem a extensão .pdf, e liga o nome escolhido a ele: a task nunca lê
+    um PDF pela metade, e um nome que já existe nunca é sobrescrito (em nenhum sistema): passa ao sufixo
+    seguinte. Devolve o nome gravado; o temporário não fica, nem quando a gravação falha."""
+    descritor, caminho = tempfile.mkstemp(dir=pasta, prefix=PREFIXO_PARCIAL, suffix=SUFIXO_PARCIAL)
+    temporario = Path(caminho)
     try:
-        caminho.rename(pasta / nome)
-    except OSError:
-        caminho.unlink(missing_ok=True)
-        raise
+        with os.fdopen(descritor, "wb") as saida:
+            saida.write(corpo)
+        ocupados = {arquivo.name for arquivo in pasta.iterdir()}
+        while True:
+            nome = extrato.nome_guardado(*periodo, ocupados)
+            try:
+                os.link(temporario, pasta / nome)
+                return nome
+            except FileExistsError:
+                ocupados.add(nome)
+    finally:
+        temporario.unlink(missing_ok=True)
+
+
+def _pedir_job_extrato(nome: str) -> str:
+    """O execution_id do job extrato pedido, ou 502 dizendo que o PDF já ficou guardado."""
+    try:
+        resposta = _pedir("POST", f"/jobs/{JOB_EXTRATO}/run").json()
+        return resposta["execution_id"]
+    except HTTPException as erro:
+        motivo = erro.detail
+    except (ValueError, KeyError, TypeError):   # 2xx sem JSON ou sem a chave
+        motivo = "DataForge respondeu sem execution_id"
+    raise HTTPException(status_code=502, detail=f"o PDF foi guardado como {nome}, mas o job extrato não foi "
+                                                f"pedido: {motivo}")
 
 
 def _guardar_extrato(corpo: bytes) -> dict:
-    lido, (de, ate) = _ler_extrato(corpo)
+    lido, periodo = _ler_extrato(corpo)
     contas = _tabela("cleansed", "accounts")
     ids = [] if contas is None else extrato.contas_do_extrato(lido, contas)
     if len(ids) != 1:
         raise HTTPException(status_code=422, detail=f"a agência e a conta do extrato casam com {len(ids)} contas "
                                                     "BANK dos dados (precisa ser 1)")
+    divergentes = _dias_divergentes(lido, ids[0])
     pasta = _conexao("extratos")
     pasta.mkdir(parents=True, exist_ok=True)
-    nomes = [f.name for f in pasta.iterdir()]
-    for nome in nomes:
-        if extrato.periodo_do_nome(nome) == (de, ate) and _conta_guardada(pasta / nome, contas) == ids:
-            raise HTTPException(status_code=409, detail=f"já há um extrato desta conta guardado para {de} a {ate}")
-    nome = extrato.nome_guardado(de, ate, nomes)
-    divergentes = _dias_divergentes(lido, ids[0])
-    _gravar_pdf(pasta, nome, corpo)
-    try:
-        execution_id = _pedir("POST", f"/jobs/{JOB_EXTRATO}/run").json()["execution_id"]
-    except HTTPException as erro:
-        raise HTTPException(status_code=502, detail=f"o PDF foi guardado como {nome}, mas o job extrato não foi "
-                                                    f"pedido: {erro.detail}") from erro
+    with _TRAVA_EXTRATOS:
+        _limpar_parciais(pasta)
+        _recusar_duplicata(pasta, corpo, periodo, ids, contas)
+        nome = _gravar_pdf(pasta, periodo, corpo)
+    de, ate = periodo
     return {"arquivo": nome, "periodo": {"de": de, "ate": ate}, "n_lancamentos": lido.lancamentos.height,
             "n_saldos": lido.saldos.height, "linhas_ignoradas": lido.ignoradas, "dias_divergentes": divergentes,
-            "execution_id": execution_id}
+            "execution_id": _pedir_job_extrato(nome)}
 
 
 @app.post("/extratos", status_code=201, responses=_RECUSA_EXTRATO, openapi_extra={"requestBody": {
