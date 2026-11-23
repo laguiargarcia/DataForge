@@ -53,7 +53,7 @@ for posicao, arquivo in enumerate(arquivos, start=1):
     nome = f"arquivo {posicao} de {len(arquivos)}"
     try:
         lido = ler([pagina.extract_text() for pagina in PdfReader(arquivo).pages])
-    except Exception as erro:   # noqa: BLE001 -- any error reading one PDF leaves only that file out, named
+    except Exception as erro:   # noqa: BLE001 -- any error reading one PDF leaves only that file out and names it
         motivo = f"{type(erro).__name__}: {erro}".replace(str(arquivo), "<arquivo>").replace(arquivo.name, "<arquivo>")
         ruins.append((nome, f"não deu para ler: {motivo}"))
         continue
