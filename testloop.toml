@@ -115,8 +115,9 @@ min_score = 0.9572
 tests = ["tests/test_apps*.py"]
 copy = ["dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 min_score = 0.8073
-# 182 mutants, 207 s of mutate in one CI job: two jobs (df-n8ac.41).
-shards = 2
+# 182 mutants, 207 s of mutate in one CI job (df-n8ac.41). With two jobs, one of them still took
+# 244 s on a main push run: three (df-7szn).
+shards = 3
 
 [targets."dataforge/cron.py"]
 tests = ["tests/test_cron*.py"]
@@ -314,7 +315,9 @@ tests = ["workspaces/GetFinance/tests/test_report_build.py", "workspaces/GetFina
 copy = ["dataforge/**/*.py", "workspaces/GetFinance/tests/__init__.py", "workspaces/GetFinance/tests/conftest.py", "workspaces/GetFinance/scripts/report/*.py"]
 bare_import = true
 process_isolation = "forkserver"
-# 1238 mutants, 1068 killed (137 s, no shards). 170 survivors, to strengthen in df-xkhx.10: mostly
+# 1238 mutants, 1068 killed. 170 survivors, to strengthen in df-xkhx.10: mostly
 # _comprometido_parcelas (63), _resgates_no_vencimento (25), investimentos_per_month (23) and
 # liquidity_per_month (20).
 min_score = 0.8626
+# 137 s on the laptop, but 251 s and 326 s in one CI job on main push runs: two jobs (df-7szn).
+shards = 2
