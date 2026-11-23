@@ -10,6 +10,8 @@ from datetime import date, datetime, timezone
 
 import polars as pl
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from tests import _delta_util
 
@@ -17,6 +19,7 @@ sys.path.insert(0, str(_delta_util.SCRIPTS / "report"))
 
 from conferencia_saldo import (EM_ABERTO, ESTADOS, EXPLICADO, FECHA, FECHA_COM_VIZINHO, NAO_FECHA, TOLERANCIA,
                                aplicar_explicacoes, conferencia_saldo)
+from conferencia_saldo import _estados as estados_da_conta
 from edicao import SCHEMA_EXPLICACOES, abrir, salvar_explicacao
 
 BANK, OUTRA, CARTAO = "p-bank-1", "p-bank-2", "p-card-1"
@@ -431,3 +434,79 @@ def test_task_le_as_explicacoes_do_banco_de_edicao(tmp_path):
     out = _delta_util.read(tmp_path, "curated", "conferencia_saldo").sort("ate")
     assert out.select("estado", "explicacao").rows() == [(EXPLICADO, MOTIVO), (FECHA, None), (FECHA, None)]
     assert _findings(tmp_path) == []
+
+
+# --- propriedades (df-xkhx.4) -------------------------------------------------------------------
+
+def _nao_fecha_sozinho(d):
+    return abs(d) > TOLERANCIA
+
+
+@settings(max_examples=300, deadline=None)
+@given(diferencas=st.lists(st.integers(-300, 300).map(lambda c: c / 100), max_size=10))
+def test_propriedade_estados_de_uma_conta(diferencas):
+    estados = estados_da_conta(diferencas)
+    assert len(estados) == len(diferencas)
+    # fecha é só o intervalo dentro da tolerância; em_aberto só o último; nao_fecha nunca o último.
+    assert [e == FECHA for e in estados] == [not _nao_fecha_sozinho(d) for d in diferencas]
+    assert EM_ABERTO not in estados[:-1]
+    assert estados[-1:] != [NAO_FECHA]
+    # Os pares: vizinhos imediatos, cada intervalo em um par só, e a soma do par na tolerância.
+    i = 0
+    while i < len(estados):
+        if estados[i] == FECHA_COM_VIZINHO:
+            assert estados[i + 1] == FECHA_COM_VIZINHO
+            assert abs(diferencas[i] + diferencas[i + 1]) <= TOLERANCIA
+            i += 2
+        else:
+            i += 1
+    # Nenhum par possível fica sem formar: dois vizinhos soltos não somam dentro da tolerância.
+    soltos = (NAO_FECHA, EM_ABERTO)
+    for i in range(len(estados) - 1):
+        if estados[i] in soltos and estados[i + 1] in soltos:
+            assert abs(diferencas[i] + diferencas[i + 1]) > TOLERANCIA
+
+
+# Lançamentos em centavos, todos acima da tolerância: a falta de qualquer um quebra o intervalo dele.
+_centavos = st.integers(round(TOLERANCIA * 100) + 1, 50_000).flatmap(lambda c: st.sampled_from([c, -c]))
+
+
+@settings(max_examples=60, deadline=None)
+@given(dias=st.lists(st.lists(_centavos, min_size=1, max_size=4), min_size=1, max_size=6), data=st.data())
+def test_propriedade_lancamento_que_falta_quebra_so_o_seu_intervalo(dias, data):
+    # O saldo de cada dia é o anterior mais os lançamentos do dia: tudo fecha com diferença zero.
+    saldos, lanc = [100_000], []
+    for d, valores in enumerate(dias, start=2):
+        saldos.append(saldos[-1] + sum(valores))
+        lanc += [_txn(f"t{d}-{n}", BANK, f"2026-06-{d:02d}", v / 100) for n, v in enumerate(valores)]
+    contas = _serie(*[s / 100 for s in saldos])
+    out = _conferir(contas, _transactions(*lanc))
+    assert out["estado"].to_list() == [FECHA] * len(dias)
+    assert out["diferenca"].to_list() == [0.0] * len(dias)
+    assert out["n_lancamentos"].to_list() == [len(v) for v in dias]
+
+    # Sem um deles: a diferença do intervalo é o valor que falta, e só ele (e a acumulada dali em diante) muda.
+    falta = data.draw(st.sampled_from(lanc))
+    k = falta["date"].day - 2
+    out = _conferir(contas, _transactions(*[t for t in lanc if t is not falta]))
+    assert out["diferenca"].to_list() == [falta["amount"] if i == k else 0.0 for i in range(len(dias))]
+    assert out["diferenca_acumulada"].to_list() == [falta["amount"] if i >= k else 0.0 for i in range(len(dias))]
+    assert out["estado"].to_list() == [
+        FECHA if i != k else EM_ABERTO if k == len(dias) - 1 else NAO_FECHA for i in range(len(dias))]
+
+
+@settings(max_examples=100, deadline=None)
+@given(saldos=st.lists(st.integers(0, 12).map(lambda n: n / 2), min_size=2, max_size=7), data=st.data())
+def test_propriedade_explicacao_so_vale_no_intervalo_solto_e_com_a_diferenca_marcada(saldos, data):
+    conf = _conferir(_serie(*saldos), _transactions())
+    # Para cada intervalo: sem marca, ou marca com a diferença dele mais um desvio (até 0,004 ainda vale).
+    desvios = data.draw(st.lists(st.sampled_from([None, 0.0, 0.004, -0.004, 0.01, 5.0]),
+                                 min_size=conf.height, max_size=conf.height))
+    marcas = [(BANK, r["ate"].isoformat(), r["diferenca"] + desvio, MOTIVO)
+              for r, desvio in zip(conf.iter_rows(named=True), desvios, strict=True) if desvio is not None]
+    out = _explicar(conf, *marcas)
+    assert out.drop("estado", "explicacao", "account_uuid").equals(conf.drop("estado"))
+    for antes, depois, desvio in zip(conf["estado"], out.iter_rows(named=True), desvios, strict=True):
+        vale = antes in (NAO_FECHA, EM_ABERTO) and desvio is not None and abs(desvio) < 0.005
+        assert depois["estado"] == (EXPLICADO if vale else antes)
+        assert depois["explicacao"] == (MOTIVO if vale else None)
