@@ -1,7 +1,7 @@
 # report_curated.py — task `report` (df-cns etapa 1): os números e listas do Resumo v3, gravados no
 # curated para o app ler. Flat, top-to-bottom. Cada tabela é derivada e regravada inteira.
 # Lê: fact_transaction, fact_transaction_classified (task classify), fact_fatura_mes,
-#     fact_balance_snapshot, fact_investment_position.
+#     fact_balance_snapshot, fact_investment_position, dim_investment.
 import argparse
 import sys
 from pathlib import Path
