@@ -626,5 +626,6 @@ def test_an_expression_evaluates_as_github_does(expr, expected):
      "always(", "success() success()", "env.GATE == 'true' &&", "hashFiles('x')"],
 )
 def test_an_expression_the_test_cannot_evaluate_fails_loudly(expr):
+    names = {"github.event_name": "pull_request", "env.GATE": "true"}
     with pytest.raises(ValueError):
-        _Expression(expr, {"github.event_name": "pull_request", "env.GATE": "true"}, RUNNING).value()
+        _condition(expr, names, RUNNING)
