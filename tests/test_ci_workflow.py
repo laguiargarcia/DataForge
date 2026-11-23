@@ -153,24 +153,146 @@ def test_a_pr_splits_by_the_costs_that_built_the_cache_it_reuses():
     assert keep["if"] == split["if"] == save["if"]
 
 
-# --- The steps that gate are run, not read (df-g2ot.1) ---------------------------------------------
+# --- The steps that gate are run, not read (df-g2ot.1, df-qn1u) ------------------------------------
 # A text search finds a line that was deleted, not a `|| exit 1` turned into `|| echo`, or a pipe to
 # tee that no longer fails because the shell lost pipefail. So each gating step's script runs here, in
-# bash, the way GitHub runs it, and must exit non-zero when what it gates failed.
+# bash, the way GitHub runs it, and must exit non-zero when what it gates failed. A step also stops
+# gating when it is skipped (its `if:` or its job's) or allowed to fail (continue-on-error): GitHub
+# counts both as passed, so the `if:`s are evaluated and continue-on-error is refused.
 
 needs_bash = pytest.mark.skipif(
     sys.platform == "win32" or shutil.which("bash") is None, reason="runs the steps' scripts with bash"
 )
 EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}")
 NEED_RESULT = re.compile(r"needs\.([\w-]+)\.result")
-# The tools a step pipes into tee; each is replaced by a stub that exits with $STUB_RC (jq lists a target).
-STUBBED = ("uv", "npm", "pytest", "python", "jq")
-STUB = '#!/bin/bash\n[ "${0##*/}" = jq ] && echo target\nexit "${STUB_RC:-0}"\n'
+EXIT = re.compile(r"\bexit\b")
+# The tools a gating step runs; each is replaced by a stub that fails when $STUB_RC is not 0: it exits
+# with it, except jq, which lists a target, and git, which reports a changed file (dist differs).
+STUBBED = ("uv", "npm", "pytest", "python", "jq", "git")
+STUB = """#!/bin/bash
+case "${0##*/}" in
+  jq) echo target ;;
+  git) [ "$STUB_RC" = 0 ] || echo " M dist/index.html" ;;
+  *) exit "$STUB_RC" ;;
+esac
+"""
 # defaults.run.shell of the GitHub Actions docs, with the script path in place of {0}.
 SHELLS = {
     "default": ["bash", "-e"],
     "bash": ["bash", "--noprofile", "--norc", "-eo", "pipefail"],
 }
+# The needs whose result may be `skipped`, per job; anywhere else skipped means nothing ran.
+SKIPPED_OK = {"mutation-ok": {"mutation"}}  # skipped when no target was picked; PICK gates the pick
+# The only continue-on-error a gating job may have, (job, artifact downloaded): why it is safe.
+CONTINUE_OK = {
+    ("coverage", "coverage-part-*"): "a part that died early leaves none; its own job fails tests",
+    ("coverage", "durations-linux-*"): "durations only order the next split",
+    ("tests-windows", "durations-windows-*"): "durations only order the next split",
+    ("sonar", "coverage"): "Sonar analyzes without coverage; tests gates the parts that write it",
+    ("mutation-ok", "testloop-results-*"): "the gate exits 2 on a missing shard",
+    ("mutation-ok", "mutmut-cache-*"): "only the cache for the next PRs",
+}
+# The `if:` a step reading needs.X.result may have: it must run whatever those needs did.
+NEEDS_STEP_IFS = (None, "always()")
+# The status functions of an `if:`: a step whose earlier steps passed, and a job whose need failed.
+RUNNING = {"always": True, "cancelled": False, "success": True, "failure": False}
+NEED_FAILED = {"always": True, "cancelled": False, "success": False, "failure": True}
+EVENTS = ("pull_request", "push")
+TOKEN = re.compile(r"\s*(?:'((?:[^']|'')*)'|(&&|\|\||==|!=|!|\(|\))|([A-Za-z_][\w.-]*))")
+STATUS = re.compile(r"\b(?:always|cancelled|success|failure)\(\)")
+
+
+def _tokens(expr: str) -> list[tuple[str, str]]:
+    tokens, at, expr = [], 0, expr.strip()
+    while at < len(expr):
+        match = TOKEN.match(expr, at)
+        assert match, f"cannot read {expr!r} at {at}"
+        string, op, name = match.groups()
+        tokens.append(("str", string.replace("''", "'")) if string is not None else ("op", op) if op else ("name", name))
+        at = match.end()
+    return tokens
+
+
+class _Expression:
+    """A GitHub Actions expression, in the subset ci.yml uses: strings, names looked up in `names`
+    (null when absent), ==, !=, !, &&, || (which return an operand, as GitHub's do), parentheses and
+    the status functions in `status`."""
+
+    def __init__(self, expr: str, names: dict, status: dict):
+        self.expr, self.tokens, self.names, self.status = expr, _tokens(expr), names, status
+
+    def value(self):
+        value = self.either()
+        assert self.tokens == [], f"{self.expr!r}: left {self.tokens}"
+        return value
+
+    def peek(self):
+        return self.tokens[0] if self.tokens else None
+
+    def either(self):
+        value = self.both()
+        while self.peek() == ("op", "||"):
+            self.tokens.pop(0)
+            value = value or self.both()
+        return value
+
+    def both(self):
+        value = self.compare()
+        while self.peek() == ("op", "&&"):
+            self.tokens.pop(0)
+            right = self.compare()
+            value = value and right
+        return value
+
+    def compare(self):
+        left = self.unary()
+        if self.peek() not in (("op", "=="), ("op", "!=")):
+            return left
+        negate = self.tokens.pop(0)[1] == "!="
+        right = self.unary()
+        if isinstance(left, str) and isinstance(right, str):
+            left, right = left.lower(), right.lower()
+        return (left == right) != negate
+
+    def unary(self):
+        if self.peek() == ("op", "!"):
+            self.tokens.pop(0)
+            return not self.unary()
+        return self.atom()
+
+    def atom(self):
+        kind, value = self.tokens.pop(0)
+        if kind == "str":
+            return value
+        if value == "(":
+            inner = self.either()
+            assert self.tokens.pop(0) == ("op", ")"), self.expr
+            return inner
+        if self.peek() == ("op", "("):
+            assert self.tokens[:2] == [("op", "("), ("op", ")")], self.expr
+            del self.tokens[:2]
+            return self.status[value]
+        assert kind == "name", self.expr
+        return {"true": True, "false": False, "null": None}.get(value, self.names.get(value))
+
+
+def _condition(expr, names: dict, status: dict) -> bool:
+    """Whether an `if:` runs: absent is success(), and one without a status function is ANDed with it."""
+    if isinstance(expr, bool):
+        return status["success"] and expr
+    expr = "success()" if expr is None else str(expr).strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2]
+    if not STATUS.search(expr):
+        expr = f"success() && ({expr})"
+    return bool(_Expression(expr, names, status).value())
+
+
+def _text(value) -> str:
+    """An expression's value as GitHub writes it into an env variable."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "" if value is None else str(value)
 
 
 def _shell(job: dict, step: dict) -> list[str] | None:
@@ -180,106 +302,242 @@ def _shell(job: dict, step: dict) -> list[str] | None:
     return SHELLS.get(shell)
 
 
-def _run_step(job: dict, step: dict, workdir: Path, needs: dict[str, str], stub_rc: int) -> int:
+def _blocking_steps(jobs: dict):
+    """(job name, job, step, kind) of each step of a gating job that fails the job when what it gates
+    failed: "needs" reads a need's result; "command" pipes a command into tee or exits on its own."""
+    for name in sorted(_gating_jobs(jobs)):
+        job = jobs[name]
+        for step in job.get("steps", []):
+            run = str(step.get("run", ""))
+            if NEED_RESULT.search(str(step.get("env", "")) + run):
+                yield name, job, step, "needs"
+            elif "| tee" in run or EXIT.search(run):
+                yield name, job, step, "command"
+
+
+def _label(name: str, step: dict) -> str:
+    return f"{name} / {step.get('name') or step.get('uses')}"
+
+
+def _run_step(job: dict, step: dict, needs: dict[str, str], stub_rc: int) -> int:
     """Run the step's script with each ${{ needs.X.result }} replaced from `needs` and any other
-    expression by "x"; the commands it pipes into tee are the stubs, exiting `stub_rc`."""
+    expression by "x"; the commands it runs are the stubs, failing when `stub_rc` is not 0."""
     def result(match):
         return needs.get(match[1].strip().removeprefix("needs.").removesuffix(".result"), "x")
 
     def fill(text):
         return EXPRESSION.sub(result, text)
 
-    workdir = Path(tempfile.mkdtemp(dir=workdir))
-    stubs = workdir / "stubs"
-    stubs.mkdir(exist_ok=True)
-    for tool in STUBBED:
-        (stubs / tool).write_text(STUB, encoding="utf-8")
-        (stubs / tool).chmod(stat.S_IRWXU)
-    script = workdir / "step.sh"
-    script.write_text(fill(step["run"]), encoding="utf-8")
-    env = {k: fill(str(v)) for k, v in step.get("env", {}).items()}
-    env |= {"PATH": f"{stubs}:/usr/bin:/bin", "HOME": str(workdir), "STUB_RC": str(stub_rc),
-            "GITHUB_STEP_SUMMARY": str(workdir / "summary"), "RUNNER_TEMP": str(workdir),
-            "GITHUB_WORKSPACE": str(workdir)}
-    shell = _shell(job, step)
-    assert shell is not None, f"{step.get('name')}: no bash shell"
-    return subprocess.run([*shell, str(script)], cwd=workdir, env=env, capture_output=True, check=False).returncode
+    with tempfile.TemporaryDirectory() as tmp:
+        workdir = Path(tmp)
+        stubs, venv = workdir / "stubs", workdir / ".venv" / "bin"
+        for path in [stubs / tool for tool in STUBBED] + [venv / "python"]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(STUB, encoding="utf-8")
+            path.chmod(stat.S_IRWXU)
+        script = workdir / "step.sh"
+        script.write_text(fill(step["run"]), encoding="utf-8")
+        env = {k: fill(str(v)) for k, v in step.get("env", {}).items()}
+        env |= {"PATH": f"{stubs}:/usr/bin:/bin", "HOME": tmp, "STUB_RC": str(stub_rc),
+                "GITHUB_STEP_SUMMARY": str(workdir / "summary"), "RUNNER_TEMP": tmp, "GITHUB_WORKSPACE": tmp}
+        shell = _shell(job, step)
+        assert shell is not None, f"{step.get('name')}: no bash shell"
+        return subprocess.run([*shell, str(script)], cwd=workdir, env=env, capture_output=True, check=False).returncode
 
 
-def _needs_checks(jobs: dict, tmp: Path) -> list[str]:
-    """Problems of the steps reading `needs.<n>.result`: all success must pass, and each need failed
-    or cancelled, one at a time, must fail."""
+def _needs_checks(jobs: dict) -> list[str]:
+    """Problems of the steps reading `needs.<n>.result`: all success must pass; each need failed,
+    cancelled or skipped, one at a time, must fail, except skipped where SKIPPED_OK accepts it."""
+    problems = []
+    for name, job, step, kind in _blocking_steps(jobs):
+        if kind != "needs":
+            continue
+        used = sorted(set(NEED_RESULT.findall(str(step.get("env", "")) + str(step.get("run", "")))))
+        ok = dict.fromkeys(used, "success")
+        if _run_step(job, step, ok, 0) != 0:
+            problems.append(f"{_label(name, step)} fails when every need succeeded")
+        for need in used:
+            for result in ("failure", "cancelled", "skipped"):
+                passes = _run_step(job, step, ok | {need: result}, 0) == 0
+                if passes != (result == "skipped" and need in SKIPPED_OK.get(name, set())):
+                    problems.append(f"{_label(name, step)} {'passes' if passes else 'fails'} when {need} is {result}")
+    return problems
+
+
+def _command_checks(jobs: dict) -> list[str]:
+    """Problems of the steps that pipe a command into tee or exit on their own: they pass when their
+    commands succeed and fail when they fail."""
+    problems = []
+    for name, job, step, kind in _blocking_steps(jobs):
+        if kind != "command":
+            continue
+        if _shell(job, step) is None:
+            problems.append(f"{_label(name, step)} runs without bash")
+        elif _run_step(job, step, {}, 0) != 0:
+            problems.append(f"{_label(name, step)} fails when its commands succeed")
+        elif _run_step(job, step, {}, 1) == 0:
+            problems.append(f"{_label(name, step)} passes when its commands fail")
+    return problems
+
+
+def _continue_checks(jobs: dict) -> list[str]:
+    """A gating job, or a step of one, that continues on error passes when it failed."""
+    problems = []
+    for name in sorted(_gating_jobs(jobs)):
+        if jobs[name].get("continue-on-error", False) is not False:
+            problems.append(f"{name} continues on error")
+        for step in jobs[name].get("steps", []):
+            downloaded = step.get("with", {}).get("pattern") or step.get("with", {}).get("name")
+            allowed = str(step.get("uses", "")).startswith("actions/download-artifact") and (name, downloaded) in CONTINUE_OK
+            if step.get("continue-on-error", False) is not False and not allowed:
+                problems.append(f"{_label(name, step)} continues on error")
+    return problems
+
+
+def _needs_if_checks(jobs: dict) -> list[str]:
+    """A step reading needs.X.result that a condition can skip lets those needs fail unread."""
+    return [f"{_label(name, step)} runs only if {step['if']!r}" for name, _, step, kind in _blocking_steps(jobs)
+            if kind == "needs" and step.get("if") not in NEEDS_STEP_IFS]
+
+
+def _job_env(job: dict, names: dict) -> dict[str, str]:
+    """The job's env as its steps' `if:` reads it (env.X), each expression evaluated from `names`."""
+    def fill(match):
+        return _text(_Expression(match[1], names, RUNNING).value())
+
+    return {f"env.{k}": EXPRESSION.sub(fill, str(v)) for k, v in job.get("env", {}).items()}
+
+
+def _work_checks(jobs: dict) -> list[str]:
+    """Each gating step runs when its needs succeeded with something to do (each output a target), on
+    a PR and on a push: its `if:` evaluated with its job's env (mutation-ok's GATE)."""
+    problems = []
+    for name, job, step, _ in _blocking_steps(jobs):
+        names = {f"needs.{n}.result": "success" for n in _needs(job)}
+        names |= {f"needs.{n}.outputs.{o}": '["target"]' for n in _needs(job) for o in jobs[n].get("outputs", {})}
+        for event in EVENTS:
+            context = names | {"github.event_name": event}
+            context |= _job_env(job, context)
+            if not _condition(step.get("if"), context, RUNNING):
+                problems.append(f"{_label(name, step)} is skipped on a {event} with work to gate")
+    return problems
+
+
+def _job_if_checks(jobs: dict) -> list[str]:
+    """A required job runs when everything passed and when any one need failed: GitHub counts a
+    skipped required job as a success (so one with needs keeps always() or !cancelled())."""
     problems = []
     for name in sorted(REQUIRED):
         job = jobs[name]
-        for step in job.get("steps", []):
-            used = sorted(set(NEED_RESULT.findall(str(step.get("env", "")) + str(step.get("run", "")))))
-            if not used:
-                continue
-            label = f"{name} / {step.get('name')}"
-            ok = dict.fromkeys(used, "success")
-            if _run_step(job, step, tmp, ok, 0) != 0:
-                problems.append(f"{label} fails when every need succeeded")
-            for need in used:
-                for result in ("failure", "cancelled"):
-                    if _run_step(job, step, tmp, ok | {need: result}, 0) == 0:
-                        problems.append(f"{label} passes when {need} is {result}")
+        for failed in [None, *_needs(job)]:
+            names = {f"needs.{n}.result": "failure" if n == failed else "success" for n in _needs(job)}
+            for event in EVENTS:
+                status = RUNNING if failed is None else NEED_FAILED
+                if not _condition(job.get("if"), names | {"github.event_name": event}, status):
+                    problems.append(f"{name} is skipped on a {event} when {failed or 'nothing'} failed")
     return problems
 
 
-def _tee_checks(jobs: dict, tmp: Path) -> list[str]:
-    """Problems of the steps that pipe a command into tee: a failing command must fail the step."""
-    problems = []
-    for name in sorted(_gating_jobs(jobs)):
-        job = jobs[name]
-        for step in job.get("steps", []):
-            if "| tee" not in str(step.get("run", "")):
-                continue
-            label = f"{name} / {step.get('name')}"
-            if _shell(job, step) is None:
-                problems.append(f"{label} pipes into tee without bash")
-            elif _run_step(job, step, tmp, {}, 0) != 0:
-                problems.append(f"{label} fails when its commands succeed")
-            elif _run_step(job, step, tmp, {}, 1) == 0:
-                problems.append(f"{label} passes when its commands fail")
-    return problems
+CHECKS = [
+    pytest.param(_needs_checks, marks=needs_bash, id="needs"),
+    pytest.param(_command_checks, marks=needs_bash, id="commands"),
+    pytest.param(_continue_checks, id="continue-on-error"),
+    pytest.param(_needs_if_checks, id="needs-step-if"),
+    pytest.param(_work_checks, id="step-if"),
+    pytest.param(_job_if_checks, id="job-if"),
+]
 
 
-def _broken(*swaps: tuple[str, str]) -> dict:
-    text = CI.read_text(encoding="utf-8")
-    for old, new in swaps:
-        assert old in text, old
-        text = text.replace(old, new)
-    return yamlio.load(text)["jobs"]
-
-
-@needs_bash
-def test_a_step_reading_a_need_fails_when_the_need_did_not_succeed(tmp_path):
-    assert _needs_checks(_jobs(), tmp_path) == []
-
-
-@needs_bash
-def test_a_step_piping_into_tee_fails_when_the_command_fails(tmp_path):
-    assert _tee_checks(_jobs(), tmp_path) == []
+@pytest.mark.parametrize("check", CHECKS)
+def test_every_gating_step_and_job_blocks_when_what_it_gates_failed(check):
+    assert check(_jobs()) == []
 
 
 def test_the_checks_cover_the_steps_that_matter():
     jobs = _jobs()
-    read = {n for r in REQUIRED for s in jobs[r].get("steps", []) for n in NEED_RESULT.findall(str(s.get("env", "")))}
-    assert {"mutation-targets", "mutation", "tests-shard", "windows-smoke"} <= read
-    piped = [s["name"] for n in _gating_jobs(jobs) for s in jobs[n].get("steps", []) if "| tee" in str(s.get("run", ""))]
-    assert "Gate each target on its shards" in piped
+    steps = {kind: {_label(n, s) for n, _, s, k in _blocking_steps(jobs) if k == kind} for kind in ("needs", "command")}
+    assert {"tests / Every part passed", "tests-windows / Every part passed", "mutation-ok / Check the mutation jobs"} <= steps["needs"]
+    assert {"mutation-ok / Gate each target on its shards", "mutation / Mutate",
+            "app-financas / Committed dist is the build", "tests-shard / Engine tests"} <= steps["command"]
+    downloads = {(n, s.get("with", {}).get("pattern") or s.get("with", {}).get("name"))
+                 for n in _gating_jobs(jobs) for s in jobs[n].get("steps", []) if "continue-on-error" in s}
+    assert downloads == set(CONTINUE_OK)
+    assert all(set(needs) <= set(_needs(jobs[name])) for name, needs in SKIPPED_OK.items())
 
 
-@needs_bash
+def _step(jobs: dict, job: str, name: str) -> dict:
+    return next(s for s in jobs[job]["steps"] if s.get("name") == name)
+
+
+def _set(job: str, step: str | None, fields: dict):
+    """A loophole: set `fields` on the job, or on its step named `step`; a None value drops the field."""
+    def inject(jobs):
+        target = jobs[job] if step is None else _step(jobs, job, step)
+        for key, value in fields.items():
+            if value is None:
+                del target[key]
+            else:
+                target[key] = value
+    return inject
+
+
+def _replace(job: str, step: str, old: str, new: str):
+    """A loophole: replace `old` by `new` in the run script of the job's step named `step`."""
+    def inject(jobs):
+        target = _step(jobs, job, step)
+        assert old in target["run"], old
+        target["run"] = target["run"].replace(old, new)
+    return inject
+
+
+GATE = "Gate each target on its shards"
+CHECK_MUTATION = "Check the mutation jobs"
+LOOPHOLES = [
+    # (1) continue-on-error on a step that gates, or on a gating job.
+    ("coe-check-mutation-jobs", _continue_checks, _set("mutation-ok", CHECK_MUTATION, {"continue-on-error": True})),
+    ("coe-gate", _continue_checks, _set("mutation-ok", GATE, {"continue-on-error": True})),
+    ("coe-engine-tests", _continue_checks, _set("tests-shard", "Engine tests", {"continue-on-error": True})),
+    ("coe-mutate", _continue_checks, _set("mutation", "Mutate", {"continue-on-error": True})),
+    ("coe-job-mutation-ok", _continue_checks, _set("mutation-ok", None, {"continue-on-error": True})),
+    ("coe-job-mutation", _continue_checks, _set("mutation", None, {"continue-on-error": True})),
+    ("coe-job-tests", _continue_checks, _set("tests", None, {"continue-on-error": True})),
+    # (2) a condition on a step that reads needs.X.result.
+    ("if-false-check-mutation-jobs", _needs_if_checks, _set("mutation-ok", CHECK_MUTATION, {"if": False})),
+    ("if-every-part-passed", _needs_if_checks,
+     _set("tests", "Every part passed", {"if": "needs.tests-shard.result == 'success'"})),
+    # (3) mutation-ok's GATE inverted, or its gate step's if swapped; any gating step skipped.
+    ("gate-env-inverted", _work_checks, _set("mutation-ok", None, {"env": {
+        "GATE": "${{ needs.mutation-targets.result == 'success' && needs.mutation-targets.outputs.targets == '[]' }}"}})),
+    ("gate-if-swapped", _work_checks, _set("mutation-ok", GATE, {"if": "env.GATE == 'false'"})),
+    ("engine-tests-if-false", _work_checks, _set("tests-shard", "Engine tests", {"if": False})),
+    ("check-mutation-if-false", _work_checks, _set("mutation-ok", CHECK_MUTATION, {"if": False})),
+    # (4) a required job with needs that loses always().
+    ("tests-without-always", _job_if_checks, _set("tests", None, {"if": None})),
+    ("mutation-ok-on-success", _job_if_checks, _set("mutation-ok", None, {"if": "success()"})),
+    ("sonar-only-after-coverage", _job_if_checks,
+     _set("sonar", None, {"if": "!cancelled() && needs.coverage.result == 'success'"})),
+    # (5) a non-required job's step that gates by a plain exit.
+    ("mutate-swallows-a-failure", _command_checks, _replace("mutation", "Mutate", "|| failed=1", "|| true")),
+    ("committed-dist-exits-0", _command_checks, _replace("app-financas", "Committed dist is the build", "exit 1", "exit 0")),
+    # skipped, accepted only where SKIPPED_OK says.
+    ("tests-accepts-skipped-shards", _needs_checks, _replace("tests", "Every part passed", '[ "$SHARDS" = "success" ]',
+                                                              '{ [ "$SHARDS" = "success" ] || [ "$SHARDS" = "skipped" ]; }')),
+    ("mutation-ok-refuses-skipped", _needs_checks, _replace("mutation-ok", CHECK_MUTATION, ' || [ "$MUTATION" = "skipped" ]', "")),
+    # The bugs df-g2ot injected.
+    ("pick-not-gated", _needs_checks,
+     _replace("mutation-ok", CHECK_MUTATION, '[ "$PICK" = "success" ] || exit 1', '[ "$PICK" = "success" ] || echo')),
+    ("mutation-not-gated", _needs_checks,
+     _replace("mutation-ok", CHECK_MUTATION, '[ "$MUTATION" = "skipped" ] || exit 1', '[ "$MUTATION" = "skipped" ] || echo')),
+    ("tee-without-pipefail", _command_checks, _set("mutation-ok", GATE, {"shell": None})),
+]
+
+
 @pytest.mark.parametrize(
-    ("check", "swaps"),
-    [
-        (_needs_checks, [('[ "$PICK" = "success" ] || exit 1', '[ "$PICK" = "success" ] || echo')]),
-        (_needs_checks, [('[ "$MUTATION" = "skipped" ] || exit 1', '[ "$MUTATION" = "skipped" ] || echo')]),
-        (_tee_checks, [("        shell: bash\n        env: { TARGETS", "        env: { TARGETS")]),
-    ],
-    ids=["pick-not-gated", "mutation-not-gated", "tee-without-pipefail"],
+    ("check", "inject"),
+    [pytest.param(check, inject, id=name, marks=[needs_bash] if check in (_needs_checks, _command_checks) else [])
+     for name, check, inject in LOOPHOLES],
 )
-def test_the_checks_catch_the_bugs_df_g2ot_injected(check, swaps, tmp_path):
-    assert check(_broken(*swaps), tmp_path) != []
+def test_the_checks_catch_each_loophole(check, inject):
+    jobs = _jobs()
+    inject(jobs)
+    assert check(jobs) != []
