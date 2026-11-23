@@ -25,9 +25,13 @@ dia sai com divergente verdadeiro.
 
 A conferência por dia: o saldo do dia anterior que tem saldo, mais os lançamentos depois dele até o dia,
 menos o saldo do dia. Só mede: nada aqui mexe em lançamento do Pluggy (df-z4fh). Funções puras, sem I/O.
+
+O upload pelo app Finanças (df-7xk9.2) usa as mesmas: o período do PDF, o nome com que ele fica guardado em
+data/extratos (só pelo período, nunca pelo nome do banco nem pela conta), os dias em que ele discorda do saldo
+guardado e a lista dos arquivos guardados.
 """
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import NamedTuple
 
 import polars as pl
@@ -45,6 +49,7 @@ _LANCAMENTO = re.compile(rf"({_DATA}) (.+)")
 _FECHA_COM_VALOR = re.compile(rf"(?:(.*?)\s+)?({_VALOR})")
 _CONTA = re.compile(r"agência:\s*(\d+)\s+conta:\s*([\d.-]+)")
 _EMITIDO = re.compile(rf"Emitido em:\s*({_DATA} \d{{2}}:\d{{2}}:\d{{2}})")
+_NOME_GUARDADO = re.compile(r"extrato_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})(?:-\d+)?\.pdf", re.IGNORECASE)
 
 LANCAMENTOS = {"dia": pl.Date, "ordem": pl.Int64, "descricao": pl.String, "valor": pl.Float64}
 SALDOS = {"dia": pl.Date, "saldo": pl.Float64}
@@ -251,3 +256,60 @@ def juntar(lancamentos: pl.DataFrame, saldos: pl.DataFrame) -> tuple[pl.DataFram
         .select(list(COLUNAS_SALDOS)).cast(COLUNAS_SALDOS)
     )
     return extrato, dias
+
+
+def periodo(extrato: Extrato) -> tuple[date, date]:
+    """O menor e o maior dia entre os lançamentos e os saldos do extrato."""
+    dias = pl.concat([extrato.lancamentos["dia"], extrato.saldos["dia"]])
+    if dias.is_empty():
+        raise LayoutDesconhecido("extrato sem lançamentos nem saldos")
+    return dias.min(), dias.max()
+
+
+def periodo_do_nome(nome: str) -> tuple[date, date] | None:
+    """O período de um nome dado por nome_guardado, ou None se o nome não é desse jeito."""
+    casou = _NOME_GUARDADO.fullmatch(nome)
+    if casou is None:
+        return None
+    try:
+        return date.fromisoformat(casou.group(1)), date.fromisoformat(casou.group(2))
+    except ValueError:
+        return None
+
+
+def nome_guardado(de: date, ate: date, ocupados) -> str:
+    """extrato_<de>_<ate>.pdf, ou com o sufixo -2, -3... o primeiro que nenhum de `ocupados` usa (sem olhar a
+    caixa, como no Windows)."""
+    ocupados = {nome.lower() for nome in ocupados}
+    base, numero = f"extrato_{de.isoformat()}_{ate.isoformat()}", 1
+    nome = f"{base}.pdf"
+    while nome in ocupados:
+        numero += 1
+        nome = f"{base}-{numero}.pdf"
+    return nome
+
+
+def dias_divergentes(saldos: pl.DataFrame, guardados_da_conta: pl.DataFrame) -> list[date]:
+    """Os dias em que um saldo do extrato novo (SALDOS) difere, arredondado a 2 casas, do saldo_do_dia guardado
+    (dia, saldo_do_dia: curated.extrato_saldos da mesma conta)."""
+    return (
+        saldos.join(guardados_da_conta.select("dia", "saldo_do_dia"), on="dia")
+        .filter(pl.col("saldo").round(2) != pl.col("saldo_do_dia").round(2))
+        ["dia"].unique().sort().to_list()
+    )
+
+
+def guardados(arquivos: pl.DataFrame, *com_dias: pl.DataFrame) -> list[dict]:
+    """Os arquivos de curated.extrato_arquivos, na ordem do nome, cada um com o período: o do nome quando ele foi
+    guardado pelo app, senão o menor e o maior dia que ele deixou nas tabelas `com_dias` (arquivo, dia:
+    curated.extrato e curated.extrato_saldos), ou nulo se não deixou nenhum."""
+    dias = pl.concat([frame.select("arquivo", "dia") for frame in com_dias]) if com_dias else \
+        pl.DataFrame(schema={"arquivo": pl.String, "dia": pl.Date})
+    faixa = dias.group_by("arquivo").agg(pl.col("dia").min().alias("de"), pl.col("dia").max().alias("ate"))
+    saida = []
+    for linha in arquivos.join(faixa, on="arquivo", how="left").sort("arquivo").iter_rows(named=True):
+        de, ate = periodo_do_nome(linha["arquivo"]) or (linha["de"], linha["ate"])
+        saida.append({"arquivo": linha["arquivo"], "periodo": {"de": de, "ate": ate},
+                      "emitido_em": linha["emitido_em"], "n_lancamentos": linha["n_lancamentos"],
+                      "n_saldos": linha["n_saldos"], "linhas_ignoradas": linha["linhas_ignoradas"]})
+    return saida

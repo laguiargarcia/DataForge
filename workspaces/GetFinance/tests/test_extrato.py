@@ -25,7 +25,8 @@ from tests import _delta_util
 sys.path.insert(0, str(_delta_util.SCRIPTS / "report"))
 
 from extrato import (CABECALHO_COLUNAS, COLUNAS, COLUNAS_SALDOS, LANCAMENTOS, SALDOS, LayoutDesconhecido,
-                     contas_do_extrato, juntar, ler)
+                     contas_do_extrato, dias_divergentes, guardados, juntar, ler, nome_guardado, periodo,
+                     periodo_do_nome)
 
 BANK = "p-bank-1"
 
@@ -335,6 +336,71 @@ def test_sem_arquivo_nenhum_as_tabelas_saem_vazias_e_tipadas():
     assert (extrato.height, dias.height) == (0, 0)
     assert extrato.schema == pl.Schema(COLUNAS)
     assert dias.schema == pl.Schema(COLUNAS_SALDOS)
+
+
+# --- o upload pelo app (df-7xk9.2) ----------------------------------------------------------------
+
+def test_periodo_vai_do_saldo_anterior_ao_ultimo_lancamento():
+    assert periodo(ler(A)) == (_d("2026-05-31"), _d("2026-06-05"))
+    assert periodo(ler(_lista("03/06/2026 100,00"))) == (_d("2026-06-03"), _d("2026-06-03"))
+
+
+def test_periodo_de_extrato_sem_lancamento_nem_saldo_para():
+    with pytest.raises(LayoutDesconhecido, match="sem lançamentos nem saldos"):
+        periodo(ler(_lista()))
+
+
+@pytest.mark.parametrize(("nome", "esperado"), [
+    ("extrato_2026-05-31_2026-06-05.pdf", (_d("2026-05-31"), _d("2026-06-05"))),
+    ("extrato_2026-05-31_2026-06-05-3.pdf", (_d("2026-05-31"), _d("2026-06-05"))),
+    ("EXTRATO_2026-05-31_2026-06-05.PDF", (_d("2026-05-31"), _d("2026-06-05"))),
+    ("extrato_2026-13-01_2026-06-05.pdf", None),
+    ("extrato_2026-05-31_2026-06-05.pdf.parcial", None),
+    ("Extrato conta corrente.pdf", None),
+])
+def test_periodo_do_nome(nome, esperado):
+    assert periodo_do_nome(nome) == esperado
+
+
+@pytest.mark.parametrize(("ocupados", "esperado"), [
+    (set(), "extrato_2026-05-31_2026-06-05.pdf"),
+    ({"a.pdf", "extrato_2026-05-31_2026-06-06.pdf"}, "extrato_2026-05-31_2026-06-05.pdf"),
+    ({"extrato_2026-05-31_2026-06-05.pdf"}, "extrato_2026-05-31_2026-06-05-2.pdf"),
+    ({"EXTRATO_2026-05-31_2026-06-05.PDF", "extrato_2026-05-31_2026-06-05-2.pdf"},
+     "extrato_2026-05-31_2026-06-05-3.pdf"),
+])
+def test_nome_guardado_pelo_periodo_com_sufixo_se_ocupado(ocupados, esperado):
+    nome = nome_guardado(_d("2026-05-31"), _d("2026-06-05"), ocupados)
+    assert nome == esperado
+    assert periodo_do_nome(nome) == (_d("2026-05-31"), _d("2026-06-05"))
+
+
+def test_dias_divergentes_compara_arredondado_a_dois_e_so_os_dias_guardados():
+    novos = pl.DataFrame({"dia": [_d("2026-06-02"), _d("2026-06-03"), _d("2026-06-04"), _d("2026-06-05")],
+                          "saldo": [1000.004, 990.0, 1240.0, 7.0]}, schema=SALDOS)
+    guardados = pl.DataFrame({"dia": [_d("2026-06-02"), _d("2026-06-03"), _d("2026-06-04")],
+                              "saldo_do_dia": [1000.0, 991.0, 1240.0]})
+    assert dias_divergentes(novos, guardados) == [_d("2026-06-03")]
+    assert dias_divergentes(novos, guardados.clear()) == []
+
+
+def test_guardados_traz_o_periodo_pelo_nome_ou_pelos_dias_guardados():
+    emitido = datetime(2026, 6, 5, 10, 0, 0)
+    arquivos = pl.DataFrame({"arquivo": ["extrato_2026-05-31_2026-06-05.pdf", "manual.pdf", "sem-dias.pdf"],
+                             "account_uuid": ["c1", "c1", "c1"], "emitido_em": [emitido] * 3,
+                             "n_lancamentos": [4, 2, 0], "n_saldos": [3, 1, 0], "linhas_ignoradas": [0, 1, 0]})
+    lancamentos = pl.DataFrame({"arquivo": ["extrato_2026-05-31_2026-06-05.pdf", "manual.pdf", "manual.pdf"],
+                                "dia": [_d("2026-06-04"), _d("2026-06-07"), _d("2026-06-08")]})
+    saldos = pl.DataFrame({"arquivo": ["manual.pdf"], "dia": [_d("2026-06-06")]})
+    assert guardados(arquivos, lancamentos, saldos) == [
+        {"arquivo": "extrato_2026-05-31_2026-06-05.pdf", "periodo": {"de": _d("2026-05-31"), "ate": _d("2026-06-05")},
+         "emitido_em": emitido, "n_lancamentos": 4, "n_saldos": 3, "linhas_ignoradas": 0},
+        {"arquivo": "manual.pdf", "periodo": {"de": _d("2026-06-06"), "ate": _d("2026-06-08")},
+         "emitido_em": emitido, "n_lancamentos": 2, "n_saldos": 1, "linhas_ignoradas": 1},
+        {"arquivo": "sem-dias.pdf", "periodo": {"de": None, "ate": None},
+         "emitido_em": emitido, "n_lancamentos": 0, "n_saldos": 0, "linhas_ignoradas": 0},
+    ]
+    assert guardados(arquivos.clear()) == []
 
 
 # --- a task ---------------------------------------------------------------------------------------

@@ -6,17 +6,27 @@ Roda como processo próprio, que o DataForge sobe e para o qual encaminha /apps/
 as validações são as do edicao.py. O curated é só lido: para conferir o id de uma correção e contar
 o efeito de uma regra. Aplicar só pede o job `reclassificar` à API do DataForge, que o põe na fila
 do workspace.
+
+Recebe também o extrato do banco em PDF (df-7xk9.2): confere com o mesmo leitor da task `extrato`
+(scripts/report/extrato.py), guarda em data/extratos com nome pelo período e pede o job `extrato`, que relê
+a pasta e refaz o veredito. Nenhuma recusa diz valor, conta ou o nome do arquivo enviado.
 """
+import io
 import os
 import sys
+import tempfile
+import threading
+import time
 from pathlib import Path
 from urllib.parse import quote
 
 import httpx
 import polars as pl
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
+from pypdf import PdfReader
 
 from dataforge import delta_pool
 from dataforge.app_guard import AppTokenMiddleware
@@ -24,15 +34,29 @@ from dataforge.app_guard import AppTokenMiddleware
 # O código do report mora no workspace: o mesmo que o ETL roda, sem cópia.
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "report"))
 import edicao
+import extrato
 from classificacao import efeito_da_regra
 
 JOB_APLICAR = "reclassificar"
+JOB_EXTRATO = "extrato"
+LIMITE_EXTRATO = 20 * 1024 * 1024   # bytes: o maior corpo que POST /extratos aceita
+PREFIXO_PARCIAL, SUFIXO_PARCIAL = ".subindo-", ".parcial"   # o temporário de um upload: a task não o lê
+VIDA_PARCIAL = 3600   # segundos: um temporário mais velho que isso é de um upload que morreu
+# Conferir a duplicata, escolher o nome e gravar são um passo só: duas subidas ao mesmo tempo (a rota roda em
+# threads) não passam ambas pela conferência nem escolhem o mesmo nome.
+_TRAVA_EXTRATOS = threading.Lock()
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
 # As recusas que cada rota pode dar, para o OpenAPI (o corpo é sempre {"detail": <mensagem>}).
 _RECUSA_ESCRITA = {422: {"description": "pedido inválido"}, 409: {"description": "choca com o que já está no banco"}}
 _AUSENTE = {404: {"description": "a linha não existe"}}
 _SEM_DATAFORGE = {502: {"description": "a API do DataForge falhou ou não respondeu"}}
+_RECUSA_EXTRATO = {
+    422: {"description": "não é um extrato legível, ou a conta não casa com exatamente uma conta BANK"},
+    409: {"description": "já há um extrato desta conta guardado para o mesmo período"},
+    413: {"description": "arquivo grande demais"},
+    502: {"description": "o PDF ficou guardado, mas a API do DataForge não pediu o job extrato"},
+}
 
 app = FastAPI(title="Finanças")
 app.add_middleware(AppTokenMiddleware)
@@ -68,9 +92,13 @@ def _conexao(nome: str) -> Path:
     return raiz / conexoes["connections"][nome]["path"]
 
 
-def _curated(tabela: str) -> pl.DataFrame | None:
-    caminho = _conexao("curated") / tabela
+def _tabela(conexao: str, tabela: str) -> pl.DataFrame | None:
+    caminho = _conexao(conexao) / tabela
     return delta_pool.read(caminho) if (caminho / "_delta_log").exists() else None
+
+
+def _curated(tabela: str) -> pl.DataFrame | None:
+    return _tabela("curated", tabela)
 
 
 def _abrir():
@@ -242,3 +270,147 @@ def andamento(execution_id: str) -> dict:
     if execucao is None:
         raise HTTPException(status_code=404, detail="execução não encontrada")
     return {"status": execucao["status"], "reason": execucao.get("reason")}
+
+
+# --- o extrato do banco em PDF (df-7xk9.2) ---------------------------------------------------------------
+
+async def _corpo_limitado(request: Request) -> bytes:
+    """O corpo cru do pedido, ou 413 assim que ele passa de LIMITE_EXTRATO (pelo Content-Length ou lendo)."""
+    recusa = HTTPException(status_code=413, detail=f"arquivo grande demais: o limite é {LIMITE_EXTRATO // 2**20} MB")
+    tamanho = request.headers.get("content-length", "")
+    if tamanho.isdigit() and int(tamanho) > LIMITE_EXTRATO:
+        raise recusa
+    partes, total = [], 0
+    async for parte in request.stream():
+        total += len(parte)
+        if total > LIMITE_EXTRATO:
+            raise recusa
+        partes.append(parte)
+    return b"".join(partes)
+
+
+def _paginas(pdf) -> list[str]:
+    return [pagina.extract_text() for pagina in PdfReader(pdf).pages]
+
+
+def _ler_extrato(corpo: bytes) -> tuple[extrato.Extrato, tuple]:
+    """O extrato lido do PDF e o seu período, ou 422 (sem o texto do erro, que pode trazer conteúdo do arquivo)."""
+    try:
+        paginas = _paginas(io.BytesIO(corpo))
+    except Exception as erro:   # pypdf raises many kinds of error on bytes that are not a readable PDF
+        raise HTTPException(status_code=422, detail="o arquivo não é um PDF legível") from erro
+    layout = "o PDF não é um extrato do banco no layout conhecido"
+    try:
+        lido = extrato.ler(paginas)
+        return lido, extrato.periodo(lido)
+    except extrato.LayoutDesconhecido as erro:   # as mensagens do leitor só trazem datas e textos fixos
+        raise HTTPException(status_code=422, detail=f"{layout}: {erro}") from erro
+    except ValueError as erro:   # outro ValueError (uma data de emissão impossível): sem o texto do erro
+        raise HTTPException(status_code=422, detail=layout) from erro
+
+
+def _conta_guardada(arquivo: Path, contas: pl.DataFrame) -> list[str] | None:
+    """As contas BANK de um PDF já guardado, ou None se ele não se lê."""
+    try:
+        return extrato.contas_do_extrato(extrato.ler(_paginas(arquivo)), contas)
+    except Exception:   # noqa: BLE001 -- a stored file that does not read is not the same account
+        return None
+
+
+def _dias_divergentes(lido: extrato.Extrato, account_id: str) -> list:
+    contas_uuid, saldos = _curated("dim_account"), _curated("extrato_saldos")
+    if contas_uuid is None or saldos is None:
+        return []
+    uuids = contas_uuid.filter(pl.col("pluggy_account_id") == account_id)["account_uuid"].to_list()
+    return extrato.dias_divergentes(lido.saldos, saldos.filter(pl.col("account_uuid").is_in(uuids)))
+
+
+def _limpar_parciais(pasta: Path) -> None:
+    """Apaga os temporários de uploads que morreram antes de virar PDF (o backup zipa a pasta inteira)."""
+    limite = time.time() - VIDA_PARCIAL
+    for arquivo in pasta.glob(f"{PREFIXO_PARCIAL}*{SUFIXO_PARCIAL}"):
+        if arquivo.stat().st_mtime < limite:
+            arquivo.unlink(missing_ok=True)
+
+
+def _recusar_duplicata(pasta: Path, corpo: bytes, periodo: tuple, ids: list[str], contas: pl.DataFrame) -> None:
+    """409 se a pasta já tem um PDF com os mesmos bytes (qualquer nome) ou um do app do mesmo período e conta."""
+    for arquivo in pasta.iterdir():
+        if not arquivo.is_file() or arquivo.suffix.lower() != ".pdf":
+            continue
+        if arquivo.stat().st_size == len(corpo) and arquivo.read_bytes() == corpo:
+            raise HTTPException(status_code=409, detail="este arquivo já está guardado")
+        if extrato.periodo_do_nome(arquivo.name) == periodo and _conta_guardada(arquivo, contas) == ids:
+            de, ate = periodo
+            raise HTTPException(status_code=409, detail=f"já há um extrato desta conta guardado para {de} a {ate}")
+
+
+def _gravar_pdf(pasta: Path, periodo: tuple, corpo: bytes) -> str:
+    """Grava num temporário da mesma pasta, sem a extensão .pdf, e liga o nome escolhido a ele: a task nunca lê
+    um PDF pela metade, e um nome que já existe nunca é sobrescrito (em nenhum sistema): passa ao sufixo
+    seguinte. Devolve o nome gravado; o temporário não fica, nem quando a gravação falha."""
+    descritor, caminho = tempfile.mkstemp(dir=pasta, prefix=PREFIXO_PARCIAL, suffix=SUFIXO_PARCIAL)
+    temporario = Path(caminho)
+    try:
+        with os.fdopen(descritor, "wb") as saida:
+            saida.write(corpo)
+        ocupados = {arquivo.name for arquivo in pasta.iterdir()}
+        while True:
+            nome = extrato.nome_guardado(*periodo, ocupados)
+            try:
+                os.link(temporario, pasta / nome)
+                return nome
+            except FileExistsError:
+                ocupados.add(nome)
+    finally:
+        temporario.unlink(missing_ok=True)
+
+
+def _pedir_job_extrato(nome: str) -> str:
+    """O execution_id do job extrato pedido, ou 502 dizendo que o PDF já ficou guardado."""
+    try:
+        resposta = _pedir("POST", f"/jobs/{JOB_EXTRATO}/run").json()
+        return resposta["execution_id"]
+    except HTTPException as erro:
+        motivo = erro.detail
+    except (ValueError, KeyError, TypeError):   # 2xx sem JSON ou sem a chave
+        motivo = "DataForge respondeu sem execution_id"
+    raise HTTPException(status_code=502, detail=f"o PDF foi guardado como {nome}, mas o job extrato não foi "
+                                                f"pedido: {motivo}")
+
+
+def _guardar_extrato(corpo: bytes) -> dict:
+    lido, periodo = _ler_extrato(corpo)
+    contas = _tabela("cleansed", "accounts")
+    ids = [] if contas is None else extrato.contas_do_extrato(lido, contas)
+    if len(ids) != 1:
+        raise HTTPException(status_code=422, detail=f"a agência e a conta do extrato casam com {len(ids)} contas "
+                                                    "BANK dos dados (precisa ser 1)")
+    divergentes = _dias_divergentes(lido, ids[0])
+    pasta = _conexao("extratos")
+    pasta.mkdir(parents=True, exist_ok=True)
+    with _TRAVA_EXTRATOS:
+        _limpar_parciais(pasta)
+        _recusar_duplicata(pasta, corpo, periodo, ids, contas)
+        nome = _gravar_pdf(pasta, periodo, corpo)
+    de, ate = periodo
+    return {"arquivo": nome, "periodo": {"de": de, "ate": ate}, "n_lancamentos": lido.lancamentos.height,
+            "n_saldos": lido.saldos.height, "linhas_ignoradas": lido.ignoradas, "dias_divergentes": divergentes,
+            "execution_id": _pedir_job_extrato(nome)}
+
+
+@app.post("/extratos", status_code=201, responses=_RECUSA_EXTRATO, openapi_extra={"requestBody": {
+    "required": True, "content": {"application/pdf": {"schema": {"type": "string", "format": "binary"}}}}})
+async def subir_extrato(request: Request) -> dict:
+    """O corpo é o PDF cru (Content-Type application/pdf, sem multipart)."""
+    corpo = await _corpo_limitado(request)
+    return await run_in_threadpool(_guardar_extrato, corpo)
+
+
+@app.get("/extratos")
+def listar_extratos() -> dict:
+    arquivos = _curated("extrato_arquivos")
+    if arquivos is None:
+        return {"arquivos": []}
+    com_dias = [t for t in (_curated("extrato"), _curated("extrato_saldos")) if t is not None]
+    return {"arquivos": extrato.guardados(arquivos, *com_dias)}

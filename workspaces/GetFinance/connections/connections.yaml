@@ -16,8 +16,9 @@ connections:
   validation:
     type: json_dir
     path: data/validation/
-  # The bank statement PDFs the owner drops here (df-z4fh.5): the bank only exports PDF. Read by the task
-  # `extrato` of finance_daily, never written by a script. No rebuild: the backup job zips it with raw.
+  # The bank statement PDFs (df-z4fh.5): the bank only exports PDF. The owner drops them here by hand or
+  # uploads them through the Finanças app (its backend's POST /extratos writes here, df-7xk9.2). Read by the
+  # task `extrato`; no pipeline script writes here. No rebuild: the backup job zips it with raw.
   extratos:
     type: pdf_dir
     path: data/extratos/
