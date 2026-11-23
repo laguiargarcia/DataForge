@@ -325,7 +325,7 @@ def test_merge_corrects_a_row_cleansed_holds_with_the_foreign_amount(tmp_path):
     after = _delta_util.read(tmp_path, "cleansed", "transactions").sort("id")
     assert after["amount"].to_list() == [35.9, 52.5]
     assert after.drop("amount").equals(before.drop("amount"))
-    assert DeltaTable(str(table)).history(1)[0]["operation"] == "MERGE"
+    assert next(iter(DeltaTable(str(table)).history(1)))["operation"] == "MERGE"
 
 
 # ── df-75ol, rule of df-7twv: what a transaction gone from the latest fetch means ─────────
