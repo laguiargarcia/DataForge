@@ -11,7 +11,10 @@ import os
 import shutil
 import subprocess
 import sys
+import types
+import zlib
 from datetime import date, datetime
+from typing import NamedTuple
 
 import polars as pl
 import pypdf
@@ -22,7 +25,7 @@ from tests import _delta_util
 sys.path.insert(0, str(_delta_util.SCRIPTS / "report"))
 
 from extrato import (CABECALHO_COLUNAS, COLUNAS, COLUNAS_SALDOS, LANCAMENTOS, SALDOS, LayoutDesconhecido,
-                     SaldosDivergentes, contas_do_extrato, juntar, ler)
+                     contas_do_extrato, juntar, ler)
 
 BANK = "p-bank-1"
 
@@ -239,14 +242,15 @@ def test_lancamento_de_fim_de_semana_conta_no_proximo_dia_com_saldo():
 def test_dois_arquivos_que_se_sobrepoem_nao_duplicam():
     extrato, dias = _juntar(("a.pdf", A), ("b.pdf", B))
     # 04/06 vem de A (B só traz o saldo dele, como saldo anterior); 05/06 (um lançamento em cada) vem de B, o
-    # emitido mais tarde. O saldo de 04/06, igual nos dois, vem do emitido mais tarde.
+    # emitido mais tarde. O saldo de 04/06, igual nos dois, vem de A, o arquivo dos lançamentos do dia.
     assert extrato.select("dia", "arquivo").rows() == [
         (_d("2026-06-02"), "a.pdf"), (_d("2026-06-04"), "a.pdf"), (_d("2026-06-04"), "a.pdf"),
         (_d("2026-06-05"), "b.pdf"), (_d("2026-06-06"), "b.pdf"), (_d("2026-06-08"), "b.pdf")]
     assert dias.select("dia", "arquivo").rows() == [
-        (_d("2026-05-31"), "a.pdf"), (_d("2026-06-02"), "a.pdf"), (_d("2026-06-04"), "b.pdf"),
+        (_d("2026-05-31"), "a.pdf"), (_d("2026-06-02"), "a.pdf"), (_d("2026-06-04"), "a.pdf"),
         (_d("2026-06-05"), "b.pdf"), (_d("2026-06-08"), "b.pdf")]
     assert dias["fecha"].to_list() == [None, True, True, True, True]
+    assert not dias["divergente"].any()
 
 
 def test_saldo_de_abertura_de_um_arquivo_nao_apaga_os_lancamentos_do_outro():
@@ -273,13 +277,31 @@ def test_dois_lancamentos_iguais_no_mesmo_dia_ficam_dois_na_sobreposicao():
     assert dias["fecha"].to_list() == [None, True]
 
 
-def test_dois_arquivos_com_saldos_diferentes_no_mesmo_dia_param_e_nomeiam_os_dois():
+def test_saldos_diferentes_no_mesmo_dia_ficam_com_o_do_arquivo_dos_lancamentos_e_o_dia_e_marcado():
+    # B, emitido depois, traz 04/06 só como saldo anterior, e diferente: fica o de A, que tem os lançamentos.
     outro = [B[0].replace("04/06/2026 1.240,00", "04/06/2026 1.239,00")]
-    lancamentos, saldos = _quadros(("a.pdf", A), ("b.pdf", outro))
-    with pytest.raises(SaldosDivergentes, match=r"2026-06-04: a\.pdf, b\.pdf") as erro:
-        juntar(lancamentos, saldos)
-    assert "1.239" not in str(erro.value)
-    assert "1239" not in str(erro.value)
+    _, dias = _juntar(("a.pdf", A), ("b.pdf", outro))
+    assert dias.select("dia", "arquivo", "saldo_do_dia", "divergente").rows() == [
+        (_d("2026-05-31"), "a.pdf", 1050.0, False), (_d("2026-06-02"), "a.pdf", 1000.0, False),
+        (_d("2026-06-04"), "a.pdf", 1240.0, True), (_d("2026-06-05"), "b.pdf", 1230.0, False),
+        (_d("2026-06-08"), "b.pdf", 1195.0, False)]
+    assert dias.filter(pl.col("dia") == _d("2026-06-04"))["fecha"].to_list() == [True]
+
+
+def test_saldos_diferentes_num_dia_sem_lancamentos_ficam_com_o_emitido_mais_tarde():
+    a = _lista("03/06/2026 1.000,00", emitido="05/06/2026 10:00:00")
+    b = _lista("03/06/2026 999,00", emitido="06/06/2026 10:00:00")
+    _, dias = _juntar(("z-velho.pdf", a), ("a-novo.pdf", b))
+    assert dias.select("arquivo", "saldo_do_dia", "divergente").rows() == [("a-novo.pdf", 999.0, True)]
+
+
+def test_arquivo_mais_novo_vence_o_mais_velho_com_mais_lancamentos_no_dia():
+    # O banco tirou um lançamento de 04/06 depois de emitir o velho: o novo traz um só, e é ele que fica.
+    novo = [A[0].replace("05/06/2026 10:00:00", "06/06/2026 10:00:00")
+            .replace("04/06/2026 COMPRA DÉBITO MERCADO FICTICIO -10,00\n", "")]
+    extrato, _ = _juntar(("velho.pdf", A), ("novo.pdf", novo))
+    assert extrato.filter(pl.col("dia") == _d("2026-06-04")).select("arquivo", "descricao").rows() == [
+        ("novo.pdf", "PIX RECEBIDO CICLANO FICTICIO")]
 
 
 def test_o_mesmo_arquivo_duas_vezes_com_nomes_diferentes_nao_duplica():
@@ -347,12 +369,6 @@ def _pdf(paginas):
 
 def _workspace(tmp_path, extratos=None, transfer_number="901/0001/0001234567-8"):
     ws = tmp_path / "ws"
-    for pasta in ("cleansed2curated", "functions", "report"):
-        (ws / "scripts" / pasta).mkdir(parents=True)
-    for arquivo in ("cleansed2curated/cleansed2curated_extrato.py", "functions/functions.py", "report/extrato.py"):
-        shutil.copy(_delta_util.SCRIPTS / arquivo, ws / "scripts" / arquivo)
-    (ws / "connections").mkdir()
-    shutil.copy(_delta_util.ROOT / "connections" / "connections.yaml", ws / "connections" / "connections.yaml")
     data = ws / "data"
     _delta_util.seed(data, "cleansed", "accounts", pl.DataFrame(
         {"id": [BANK, "p-card-1"], "type": ["BANK", "CREDIT"], "number": ["0001234567-8", "1234"],
@@ -366,16 +382,46 @@ def _workspace(tmp_path, extratos=None, transfer_number="901/0001/0001234567-8")
     return ws
 
 
-def _rodar(ws, env=None):
-    # The task's environment as the engine gives it in production (dataforge/tasks/python_handler.py):
-    # no PYTHONIOENCODING, so the script prints in the locale encoding (cp1252 on Windows) and
-    # text=True reads it back in that same encoding. CI sets PYTHONIOENCODING=utf-8 for its own
-    # report; inherited, the script would print UTF-8 that text=True then misreads.
+class _Saida(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+@pytest.fixture
+def rodar(capsys, monkeypatch):
+    """Roda a task no processo do teste (a cobertura vê o script), com `pypdf` no lugar do pacote: o real, um
+    de mentira ou None (o import falha). Devolve o código de saída e o que ela imprimiu, como um processo: um
+    SystemExit com texto sai 1 com o texto no stderr."""
+    def _rodar(ws, pypdf=pypdf):
+        monkeypatch.setattr(sys, "path", list(sys.path))   # o script põe a pasta report/ no sys.path
+        monkeypatch.setitem(sys.modules, "pypdf", pypdf)
+        ns = _delta_util.run_script("cleansed2curated", "cleansed2curated_extrato",
+                                    ["--source", "extratos", "--target", "curated"], ws / "data")
+        saida = capsys.readouterr()
+        codigo = getattr(ns.get("_system_exit"), "code", None)
+        if isinstance(codigo, str):
+            return _Saida(1, saida.out, saida.err + codigo + "\n")
+        return _Saida(codigo or 0, saida.out, saida.err)
+    return _rodar
+
+
+def _rodar_processo(ws):
+    # Só este roda a task como processo, porque o que ele confere não existe no processo do teste: o
+    # ambiente que o engine dá à task na prod (dataforge/tasks/python_handler.py), sem PYTHONIOENCODING, em que
+    # o script imprime na codificação do locale (cp1252 no Windows) e text=True a lê de volta na mesma. O CI
+    # põe PYTHONIOENCODING=utf-8 para o seu relatório; herdado, o script imprimiria UTF-8 que text=True leria
+    # errado.
+    for arquivo in ("cleansed2curated/cleansed2curated_extrato.py", "functions/functions.py", "report/extrato.py"):
+        (ws / "scripts" / arquivo).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(_delta_util.SCRIPTS / arquivo, ws / "scripts" / arquivo)
+    (ws / "connections").mkdir()
+    shutil.copy(_delta_util.ROOT / "connections" / "connections.yaml", ws / "connections" / "connections.yaml")
     base = {k: v for k, v in os.environ.items() if k != "PYTHONIOENCODING"}
     return subprocess.run(
         [sys.executable, str(ws / "scripts" / "cleansed2curated" / "cleansed2curated_extrato.py"),
          "--source", "extratos", "--target", "curated"],
-        capture_output=True, text=True, cwd=ws, check=False, env={**base, **(env or {})})
+        capture_output=True, text=True, cwd=ws, check=False, env=base)
 
 
 def _cifrado(paginas):
@@ -395,10 +441,17 @@ def test_o_pdf_feito_aqui_tem_o_texto_que_o_banco_poe():
     assert [linha.strip() for linha in paginas[1].splitlines()] == B[0].splitlines()
 
 
-def test_task_grava_extrato_saldos_e_arquivos_por_account_uuid(tmp_path):
+def test_task_no_processo_do_engine_imprime_na_codificacao_do_locale(tmp_path):
+    ws = _workspace(tmp_path, {"a.pdf": A})
+    result = _rodar_processo(ws)
+    assert result.returncode == 0, result.stderr
+    assert "extrato: 1 arquivo(s) lido(s), 4 lançamentos, 3 saldos do dia, 0 dia(s) que não fecham" in result.stdout
+
+
+def test_task_grava_extrato_saldos_e_arquivos_por_account_uuid(tmp_path, rodar):
     ws = _workspace(tmp_path, {"a.pdf": A, "b.PDF": B})
     (ws / "data" / "extratos" / "leia-me.txt").write_text("não é PDF", encoding="utf-8")
-    result = _rodar(ws)
+    result = rodar(ws)
     assert result.returncode == 0, result.stderr
     extrato, dias, arquivos = (_tabela(ws, t) for t in ("extrato", "extrato_saldos", "extrato_arquivos"))
     assert extrato.columns == ["arquivo", "account_uuid", "dia", "ordem", "descricao", "valor", "saldo_do_dia"]
@@ -411,18 +464,20 @@ def test_task_grava_extrato_saldos_e_arquivos_por_account_uuid(tmp_path):
         assert json.loads((ws / "data" / "validation" / f"{tabela}.json").read_text())["findings"] == []
 
 
-def test_task_imprime_e_grava_as_linhas_ignoradas_sem_achado(tmp_path):
+def test_task_imprime_e_grava_as_linhas_ignoradas_sem_achado(tmp_path, rodar):
     ws = _workspace(tmp_path, {"a.pdf": [A[0].replace("02/06/2026 1.000,00", "UM TITULO NO MEIO\n02/06/2026 1.000,00")]})
-    result = _rodar(ws)
+    result = rodar(ws)
     assert result.returncode == 0, result.stderr
-    assert "extrato: a.pdf: 4 lançamentos, 3 saldos, 1 linha(s) ignorada(s)" in result.stdout
+    assert ("extrato: arquivo 1 de 1 (2026-05-31 a 2026-06-05): 4 lançamentos, 3 saldos, 1 linha(s) ignorada(s)"
+            in result.stdout)
+    assert "a.pdf" not in result.stdout
     assert _tabela(ws, "extrato_arquivos")["linhas_ignoradas"].to_list() == [1]
     assert json.loads((ws / "data" / "validation" / "curated.extrato_arquivos.json").read_text())["findings"] == []
 
 
-def test_task_imprime_os_dias_que_nao_fecham_sem_valores(tmp_path):
+def test_task_imprime_os_dias_que_nao_fecham_sem_valores(tmp_path, rodar):
     ws = _workspace(tmp_path, {"a.pdf": [A[0].replace("04/06/2026 1.240,00", "04/06/2026 1.234,00")]})
-    result = _rodar(ws)
+    result = rodar(ws)
     assert result.returncode == 0, result.stderr
     assert "1 dia(s) que não fecham 2026-06-04" in result.stdout
     assert not any(v in result.stdout for v in ("1.234", "1234", "FICTICIA", "banco-checking", "12345"))
@@ -430,9 +485,9 @@ def test_task_imprime_os_dias_que_nao_fecham_sem_valores(tmp_path):
 
 @pytest.mark.parametrize("extratos", [None, {}], ids=["pasta-ausente", "pasta-vazia"])
 @pytest.mark.parametrize("sem_pypdf", [False, True], ids=["com-pypdf", "sem-pypdf"])
-def test_pasta_vazia_ou_ausente_grava_tabelas_vazias_e_nao_falha(tmp_path, extratos, sem_pypdf):
+def test_pasta_vazia_ou_ausente_grava_tabelas_vazias_e_nao_falha(tmp_path, rodar, extratos, sem_pypdf):
     ws = _workspace(tmp_path, extratos)
-    result = _rodar(ws, _sem_pypdf(tmp_path) if sem_pypdf else None)
+    result = rodar(ws, None if sem_pypdf else pypdf)
     assert result.returncode == 0, result.stderr
     for tabela in ("extrato", "extrato_saldos", "extrato_arquivos"):
         assert _tabela(ws, tabela).height == 0
@@ -441,47 +496,96 @@ def test_pasta_vazia_ou_ausente_grava_tabelas_vazias_e_nao_falha(tmp_path, extra
     assert (ws / "data" / "extratos").exists() == (extratos is not None)   # a task só lê a pasta
 
 
-def _sem_pypdf(tmp_path):
-    # Um pacote pypdf que não importa, na frente do instalado.
-    bloqueio = tmp_path / "sem-pypdf" / "pypdf"
-    bloqueio.mkdir(parents=True)
-    (bloqueio / "__init__.py").write_text('raise ImportError("pypdf bloqueado no teste")\n', encoding="utf-8")
-    return {"PYTHONPATH": str(bloqueio.parent)}
-
-
-def test_pdf_na_pasta_sem_pypdf_avisa_grava_vazio_e_nao_falha(tmp_path):
+def test_pdf_na_pasta_sem_pypdf_avisa_nao_mexe_nas_tabelas_e_nao_falha(tmp_path, rodar):
     ws = _workspace(tmp_path, {"a.pdf": A})
-    result = _rodar(ws, _sem_pypdf(tmp_path))
+    assert rodar(ws).returncode == 0
+    antes = {tabela: _tabela(ws, tabela) for tabela in ("extrato", "extrato_saldos", "extrato_arquivos")}
+    assert antes["extrato"].height == 4
+    result = rodar(ws, None)
     assert result.returncode == 0, result.stderr
     assert "AVISO: 1 PDF(s) na pasta, mas a biblioteca pypdf não está instalada" in result.stdout
-    for tabela in ("extrato", "extrato_saldos", "extrato_arquivos"):
-        assert _tabela(ws, tabela).height == 0
+    for tabela, quadro in antes.items():
+        assert _tabela(ws, tabela).equals(quadro), tabela
 
 
-def test_arquivos_ruins_ficam_de_fora_os_bons_sao_gravados_e_a_task_falha_nomeando_todos(tmp_path):
+def test_pdf_na_pasta_sem_pypdf_e_sem_tabelas_nao_grava_nada(tmp_path, rodar):
+    ws = _workspace(tmp_path, {"a.pdf": A})
+    result = rodar(ws, None)
+    assert result.returncode == 0, result.stderr
+    assert not (ws / "data" / "curated" / "extrato").exists()
+
+
+_ERROS = {"OSError": OSError, "KeyError": KeyError, "NotImplementedError": NotImplementedError,
+          "zlib.error": zlib.error, "RuntimeError": RuntimeError}
+
+
+class _PaginaDeMentira:
+    def __init__(self, texto):
+        self.texto = texto
+
+    def extract_text(self):
+        return self.texto
+
+
+class _LeitorDeMentira:
+    # Lê o arquivo como texto (as páginas separadas por \f); quando o texto é o nome de um erro, levanta esse
+    # erro com o caminho do arquivo na mensagem.
+    def __init__(self, caminho):
+        texto = caminho.read_text(encoding="utf-8")
+        if texto in _ERROS:
+            raise _ERROS[texto](f"falha de mentira em {caminho}")
+        self.pages = [_PaginaDeMentira(p) for p in texto.split("\f")]
+
+
+def _pypdf_de_mentira():
+    modulo = types.ModuleType("pypdf")
+    modulo.PdfReader = _LeitorDeMentira
+    return modulo
+
+
+@pytest.mark.parametrize("erro", ["OSError", "KeyError", "NotImplementedError", "zlib.error", "RuntimeError"])
+def test_qualquer_erro_lendo_um_pdf_isola_o_arquivo_e_o_nomeia(tmp_path, rodar, erro):
+    ws = _workspace(tmp_path, {})
+    (ws / "data" / "extratos" / "a.pdf").write_text("\f".join(A), encoding="utf-8")
+    (ws / "data" / "extratos" / "conta-ficticia-99.pdf").write_text(erro, encoding="utf-8")
+    result = rodar(ws, _pypdf_de_mentira())
+    assert result.returncode != 0
+    assert "extrato: 1 arquivo(s) ruim(ns) ficaram de fora: arquivo 2 de 2: não deu para ler: " in result.stderr
+    assert erro.split(".")[-1] in result.stderr
+    assert "conta-ficticia-99" not in result.stderr + result.stdout
+    assert _tabela(ws, "extrato_arquivos")["arquivo"].to_list() == ["a.pdf"]
+
+
+def test_arquivos_ruins_ficam_de_fora_os_bons_sao_gravados_e_a_task_falha_nomeando_todos(tmp_path, rodar):
     ws = _workspace(tmp_path, {"a.pdf": A, "cortado.pdf": [A[0].replace(RODAPE, "")],
                                "data-ruim.pdf": [A[0].replace("02/06/2026 1.000,00", "31/02/2026 1.000,00")],
                                "outra-conta.pdf": [A[0].replace("conta: 1234567-8", "conta: 9999999-0")]})
     (ws / "data" / "extratos" / "quebrado.pdf").write_bytes(b"isto nao e um pdf")
     (ws / "data" / "extratos" / "cifrado.pdf").write_bytes(_cifrado(A))
-    result = _rodar(ws)
+    result = rodar(ws)
     assert result.returncode != 0
     assert "extrato: 5 arquivo(s) ruim(ns) ficaram de fora" in result.stderr
-    for nome, motivo in (("cifrado.pdf", "não deu para ler"), ("cortado.pdf", "que fecha a lista"),
-                         ("data-ruim.pdf", "data impossível 31/02/2026"), ("quebrado.pdf", "não deu para ler"),
-                         ("outra-conta.pdf", "casam com 0 contas BANK")):
-        assert f"{nome}: " in result.stderr, nome
-        assert motivo in result.stderr, nome
-    assert "Traceback" not in result.stderr
+    # Pela ordem do nome: a, cifrado, cortado, data-ruim, outra-conta, quebrado.
+    motivos = dict(parte.split(": ", 1) for parte in result.stderr.split("ficaram de fora: ", 1)[1].strip().split("; "))
+    assert list(motivos) == [f"arquivo {posicao} de 6" for posicao in range(2, 7)]
+    for posicao, motivo in ((2, "não deu para ler"), (3, "que fecha a lista"), (4, "data impossível 31/02/2026"),
+                            (5, "casam com 0 contas BANK"), (6, "não deu para ler")):
+        assert motivo in motivos[f"arquivo {posicao} de 6"], posicao
+    for nome in ("cifrado.pdf", "cortado.pdf", "data-ruim.pdf", "outra-conta.pdf", "quebrado.pdf"):
+        assert nome not in result.stderr + result.stdout, nome
     assert set(_tabela(ws, "extrato")["arquivo"]) == {"a.pdf"}
     assert _tabela(ws, "extrato_arquivos")["arquivo"].to_list() == ["a.pdf"]
     assert "extrato: 1 arquivo(s) lido(s), 4 lançamentos" in result.stdout
 
 
-def test_saldos_diferentes_no_mesmo_dia_fazem_a_task_falhar_antes_de_gravar(tmp_path):
+def test_saldos_diferentes_no_mesmo_dia_nao_param_a_task_e_o_dia_sai_marcado(tmp_path, rodar):
     ws = _workspace(tmp_path, {"a.pdf": A, "b.pdf": [B[0].replace("04/06/2026 1.240,00", "04/06/2026 1.239,00")]})
-    result = _rodar(ws)
-    assert result.returncode != 0
-    assert "saldos diferentes para o mesmo dia" in result.stderr
-    assert "2026-06-04: a.pdf, b.pdf" in result.stderr
-    assert not (ws / "data" / "curated" / "extrato").exists()
+    result = rodar(ws)
+    assert result.returncode == 0, result.stderr
+    assert "AVISO: 1 dia(s) com saldos diferentes em arquivos diferentes" in result.stdout
+    assert result.stdout.rstrip().splitlines()[-2].endswith(": 2026-06-04")
+    assert not any(v in result.stdout for v in ("a.pdf", "b.pdf", "1.239", "1239"))
+    dias = _tabela(ws, "extrato_saldos")
+    assert dias.filter(pl.col("divergente"))["dia"].to_list() == [_d("2026-06-04")]
+    assert _tabela(ws, "extrato").height == 6
+    assert json.loads((ws / "data" / "validation" / "curated.extrato_saldos.json").read_text())["findings"] == []

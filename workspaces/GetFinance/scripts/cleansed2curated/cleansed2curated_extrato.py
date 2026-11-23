@@ -5,12 +5,15 @@
 # Lê os PDFs, cleansed.accounts e curated.dim_account; só grava essas três tabelas (inteiras): não mexe em
 # lançamento do Pluggy nem no relatório, e não emite achado suspicious. A leitura está em report/extrato.py.
 # - Pasta vazia ou ausente: grava as tabelas vazias.
-# - PDF na pasta e a biblioteca pypdf não instalada: avisa, grava as tabelas vazias e não falha (finance_daily
-#   segue).
-# - Um PDF ilegível (cifrado, quebrado), com outro layout ou data impossível, ou cuja agência e conta não casam
-#   com exatamente uma conta BANK de cleansed.accounts fica de fora; os bons são gravados, e no fim a task
-#   falha nomeando cada arquivo ruim e o motivo.
-# - Dois arquivos com saldos diferentes para o mesmo dia: a task falha antes de gravar, nomeando os dois.
+# - PDF na pasta e a biblioteca pypdf não instalada: avisa, não mexe nas tabelas (as que já existem ficam como
+#   estão) e não falha (finance_daily segue).
+# - Um PDF que não deu para ler (qualquer erro: cifrado, quebrado, outro layout, data impossível) ou cuja
+#   agência e conta não casam com exatamente uma conta BANK de cleansed.accounts fica de fora; os bons são
+#   gravados, e no fim a task falha nomeando cada arquivo ruim e o motivo.
+# - Dois arquivos com saldos diferentes para o mesmo dia: fica o saldo do arquivo dos lançamentos do dia, o dia
+#   sai com divergente verdadeiro em curated.extrato_saldos, a task avisa e não falha por isso.
+# - No log, um arquivo é nomeado pela posição na pasta (na ordem do nome) e pelo período, nunca pelo nome: um
+#   nome pode trazer o número da conta, e o log pode ser compartilhado. O nome fica em curated.extrato_arquivos.
 import argparse
 import sys
 from pathlib import Path
@@ -19,11 +22,10 @@ import polars as pl
 
 exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
 sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
-from extrato import LANCAMENTOS, SALDOS, SaldosDivergentes, contas_do_extrato, juntar, ler
+from extrato import LANCAMENTOS, SALDOS, contas_do_extrato, juntar, ler
 
 try:
     from pypdf import PdfReader
-    from pypdf.errors import DependencyError, PyPdfError
 except ImportError:
     PdfReader = None
 
@@ -36,37 +38,39 @@ pasta = _connection_root(args.source)
 arquivos = sorted(f for f in pasta.iterdir() if f.is_file() and f.suffix.lower() == ".pdf") if pasta.is_dir() else []
 if arquivos and PdfReader is None:
     print(f"extrato: AVISO: {len(arquivos)} PDF(s) na pasta, mas a biblioteca pypdf não está instalada neste "
-          "Python: nenhum foi lido e as tabelas ficam vazias (é dependência do DataForge: uv sync, ou o deploy na prod)")
-    arquivos = []
+          "Python: nenhum foi lido e nenhuma tabela foi mexida (é dependência do DataForge: uv sync, ou o deploy "
+          "na prod)")
+    sys.exit(0)
 contas = read_delta_table("cleansed", "accounts") if arquivos else None
 
 origem = {"arquivo": pl.String, "emitido_em": pl.Datetime("us"), "account_id": pl.String}
 lancamentos = [pl.DataFrame(schema={**origem, **LANCAMENTOS})]
 saldos = [pl.DataFrame(schema={**origem, **SALDOS})]
 lidos = []    # (arquivo, account_id, emitido_em, lançamentos, saldos, linhas ignoradas) de cada PDF bom
-ruins = []    # (arquivo, motivo)
-for arquivo in arquivos:
+log = []      # uma linha por PDF bom, sem o nome dele
+ruins = []    # (posição, motivo)
+for posicao, arquivo in enumerate(arquivos, start=1):
+    nome = f"arquivo {posicao} de {len(arquivos)}"
     try:
         lido = ler([pagina.extract_text() for pagina in PdfReader(arquivo).pages])
-    except (ValueError, PyPdfError, DependencyError) as erro:   # LayoutDesconhecido é um ValueError
-        ruins.append((arquivo.name, f"não deu para ler: {erro}"))
+    except Exception as erro:   # noqa: BLE001 -- any error reading one PDF leaves only that file out and names it
+        motivo = f"{type(erro).__name__}: {erro}".replace(str(arquivo), "<arquivo>").replace(arquivo.name, "<arquivo>")
+        ruins.append((nome, f"não deu para ler: {motivo}"))
         continue
     ids = contas_do_extrato(lido, contas)
     if len(ids) != 1:
-        ruins.append((arquivo.name, f"a agência e a conta do cabeçalho casam com {len(ids)} contas BANK de "
-                                    "cleansed.accounts (precisa ser 1)"))
+        ruins.append((nome, f"a agência e a conta do cabeçalho casam com {len(ids)} contas BANK de "
+                            "cleansed.accounts (precisa ser 1)"))
         continue
     marca = {"arquivo": pl.lit(arquivo.name), "emitido_em": pl.lit(lido.emitido_em), "account_id": pl.lit(ids[0])}
     lancamentos.append(lido.lancamentos.with_columns(**marca))
     saldos.append(lido.saldos.with_columns(**marca))
     lidos.append((arquivo.name, ids[0], lido.emitido_em, lido.lancamentos.height, lido.saldos.height, lido.ignoradas))
+    dias_do_arquivo = pl.concat([lido.lancamentos["dia"], lido.saldos["dia"]])
+    log.append(f"extrato: {nome} ({dias_do_arquivo.min()} a {dias_do_arquivo.max()}): {lido.lancamentos.height} "
+               f"lançamentos, {lido.saldos.height} saldos, {lido.ignoradas} linha(s) ignorada(s)")
 
-try:
-    extrato, dias = juntar(pl.concat(lancamentos, how="diagonal_relaxed"),
-                           pl.concat(saldos, how="diagonal_relaxed"))
-except SaldosDivergentes as erro:
-    raise SystemExit(f"extrato: saldos diferentes para o mesmo dia em arquivos diferentes, nada foi gravado: "
-                     f"{erro}") from erro
+extrato, dias = juntar(pl.concat(lancamentos, how="diagonal_relaxed"), pl.concat(saldos, how="diagonal_relaxed"))
 por_arquivo = pl.DataFrame(lidos, orient="row", schema={
     "arquivo": pl.String, "account_id": pl.String, "emitido_em": pl.Datetime("us"), "n_lancamentos": pl.Int64,
     "n_saldos": pl.Int64, "linhas_ignoradas": pl.Int64})
@@ -88,10 +92,16 @@ write_delta_overwrite(args.target, "extrato", extrato)
 write_delta_overwrite(args.target, "extrato_saldos", dias)
 write_delta_overwrite(args.target, "extrato_arquivos", por_arquivo)
 
-# Contagens, nomes de arquivo e dias só: nunca um valor, uma descrição ou uma conta, porque o log pode ser
-# compartilhado. O primeiro saldo de cada conta não tem anterior (fecha nulo) e não entra na conta.
-for nome, _, _, n_lancamentos, n_saldos, ignoradas in lidos:
-    print(f"extrato: {nome}: {n_lancamentos} lançamentos, {n_saldos} saldos, {ignoradas} linha(s) ignorada(s)")
+# Contagens, posições de arquivo e dias só: nunca um valor, uma descrição, uma conta ou o nome de um arquivo,
+# porque o log pode ser compartilhado. O primeiro saldo de cada conta não tem anterior (fecha nulo) e não entra
+# na conta.
+for linha in log:
+    print(linha)
+divergentes = dias.filter(pl.col("divergente"))["dia"].to_list()
+if divergentes:
+    print(f"extrato: AVISO: {len(divergentes)} dia(s) com saldos diferentes em arquivos diferentes (fica o saldo "
+          "do arquivo dos lançamentos do dia; divergente em curated.extrato_saldos):"
+          + "".join(f" {d}" for d in divergentes))
 nao_fecham = dias.filter(~pl.col("fecha"))["dia"].to_list()
 print(f"extrato: {len(lidos)} arquivo(s) lido(s), {extrato.height} lançamentos, {dias.height} saldos do dia, "
       f"{len(nao_fecham)} dia(s) que não fecham" + "".join(f" {d}" for d in nao_fecham))

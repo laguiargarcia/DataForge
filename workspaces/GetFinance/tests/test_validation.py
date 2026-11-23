@@ -298,7 +298,7 @@ EXTRATO = dict(arquivo=["a.pdf", "a.pdf"], account_uuid=["u1", "u1"], dia=[date(
                descricao=["COMPRA", "COMPRA"], valor=[-5.0, -5.0], saldo_do_dia=[90.0, 90.0])
 EXTRATO_SALDOS = dict(account_uuid=["u1", "u1"], dia=[date(2026, 1, 1), date(2026, 1, 2)], arquivo=["a.pdf"] * 2,
                       saldo_do_dia=[100.0, 90.0], saldo_anterior=[None, 100.0], soma_lancamentos=[0.0, -10.0],
-                      n_lancamentos=[0, 2], diferenca=[None, 0.0], fecha=[None, True])
+                      n_lancamentos=[0, 2], diferenca=[None, 0.0], fecha=[None, True], divergente=[False, True])
 EXTRATO_ARQUIVOS = dict(arquivo=["a.pdf", "b.pdf"], account_uuid=["u1", "u1"],
                         emitido_em=[date(2026, 1, 3), date(2026, 1, 4)], n_lancamentos=[2, 0], n_saldos=[2, 1],
                         linhas_ignoradas=[0, 1])
@@ -589,6 +589,8 @@ RULE_CASES = [
      _set(EXTRATO_SALDOS, account_uuid=["u1", None])),
     ("EXTRATO_SALDOS_RULES", "saldo_do_dia is null", _frame, EXTRATO_SALDOS,
      _set(EXTRATO_SALDOS, saldo_do_dia=[100.0, None])),
+    ("EXTRATO_SALDOS_RULES", "divergente is null", _frame, EXTRATO_SALDOS,
+     _set(EXTRATO_SALDOS, divergente=[False, None])),
     ("EXTRATO_SALDOS_RULES", "more than one balance per account and day", _frame, EXTRATO_SALDOS,
      _set(EXTRATO_SALDOS, dia=[date(2026, 1, 2)] * 2)),
     ("EXTRATO_ARQUIVOS_RULES", "expected columns are present", _frame, EXTRATO_ARQUIVOS,
