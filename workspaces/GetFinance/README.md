@@ -129,11 +129,15 @@ with `reprocess.py`.
 
 ## Bank statements (df-z4fh.5)
 
-The bank only exports the checking-account statement as a PDF. Upload it in the Finanças app
-(`POST /extratos` of its backend, above: it checks the file, saves it in `data/extratos/` as
-`extrato_<from>_<to>.pdf` and runs the job `extrato` at once), or save it by hand, as the bank's app
-exports it, in `data/extratos/` of the prod workspace (create the folder the first time; any file name
-ending in `.pdf`). The upload refuses a file whose bytes are already in the folder under any name, and a
+The bank only exports the checking-account statement as a PDF. Add it on the **Extratos** screen of the
+Finanças app: "Escolher PDF" sends it to `POST /extratos` of its backend (above), which checks the file,
+saves it in `data/extratos/` as `extrato_<from>_<to>.pdf` and runs the job `extrato` at once; the screen
+shows whether it was accepted (or why not), its period and counts, the days whose balance differs from a
+stored statement, and follows the job until the Conferência has the new verdict. If the file was saved
+but the job could not be asked for (502), the verdict comes with the next daily run: sending the same
+file again would be refused as already stored. The screen also lists the stored statements
+(`GET /extratos`). Saving the PDF by hand still works: as the bank's app exports it, in `data/extratos/`
+of the prod workspace (create the folder the first time; any file name ending in `.pdf`). The upload refuses a file whose bytes are already in the folder under any name, and a
 statement of the same account and period that an earlier upload saved; a file saved by hand under another
 name with different bytes (another export of the same period) is not seen as the same one, so it is
 accepted and both stay (no entry is counted twice: each day's entries come from one file). The next

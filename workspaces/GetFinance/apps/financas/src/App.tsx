@@ -10,16 +10,17 @@ import { CartaoDetalhe } from './components/CartaoDetalhe'
 import { ListaCategorias } from './components/ListaCategorias'
 import { FalhaCarga } from './components/FalhaCarga'
 import { TelaConferencia } from './components/TelaConferencia'
+import { TelaExtratos } from './components/TelaExtratos'
 import { TelaCategorias } from './components/TelaCategorias'
 import { TelaTransacoes } from './components/TelaTransacoes'
 import { FaixaPendencia } from './components/FaixaPendencia'
 import { lerEdicao, type Edicao } from './edicao'
 
 type Estado = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; dados: Dados }
-type Tela = 'resumo' | 'conferencia' | 'categorias' | 'transacoes'
+type Tela = 'resumo' | 'conferencia' | 'extratos' | 'categorias' | 'transacoes'
 type EstadoEdicao = { fase: 'carregando' } | { fase: 'erro' } | { fase: 'ok'; edicao: Edicao }
 
-const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência'], ['categorias', 'Categorias'], ['transacoes', 'Transações']]
+const TELAS: [Tela, string][] = [['resumo', 'Resumo'], ['conferencia', 'Conferência'], ['extratos', 'Extratos'], ['categorias', 'Categorias'], ['transacoes', 'Transações']]
 
 // Tudo vem pronto do ETL (tasks classify e report do finance_daily).
 async function carregar(): Promise<Dados> {
@@ -164,6 +165,8 @@ export function App() {
           </div>
         )}
         {tela === 'conferencia' && <TelaConferencia aplicada={edicao?.aplicada ?? null} onMudou={lerBanco} />}
+        {/* A Conferência relê as tabelas ao abrir; o job extrato também mexe nas do Resumo (abrir). */}
+        {tela === 'extratos' && <TelaExtratos onMudou={abrir} />}
         {tela === 'categorias' && edicao && <TelaCategorias edicao={edicao} onMudou={lerBanco} />}
         {tela === 'transacoes' && edicao && (
           <TelaTransacoes transacoes={dados?.transacoes ?? null} edicao={edicao} onMudou={lerBanco} />

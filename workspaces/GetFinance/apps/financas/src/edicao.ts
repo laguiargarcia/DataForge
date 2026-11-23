@@ -21,8 +21,15 @@ export type Efeito = { casa: number; vence: number; barradas: number }
 export type StatusExecucao = 'pending' | 'running' | 'success' | 'failed'
 export type Andamento = { status: StatusExecucao; reason: string | null }
 
-/** Recusa do backend, com a mensagem que a tela mostra na própria linha. */
-export class ErroEdicao extends Error {}
+/** Recusa do backend, com a mensagem que a tela mostra na própria linha e o status HTTP dela. */
+export class ErroEdicao extends Error {
+  readonly status: number
+
+  constructor(mensagem: string, status: number) {
+    super(mensagem)
+    this.status = status
+  }
+}
 
 // Relativo à página do app (/apps/<ws>/financas/, sempre com a barra final): o pedido fica no mesmo
 // app sem ler a URL. No `npm run dev`, o proxy do vite.config.ts leva essas rotas ao backend.
@@ -32,15 +39,18 @@ const endereco = (caminho: string) => `api/${caminho}`
 // "." e ".." não serem lidos como segmentos de ponto e levarem o pedido a outra rota.
 const seg = (valor: string) => encodeURIComponent(valor).replaceAll('.', '%2E')
 
-async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
-  const r = await fetch(endereco(caminho), {
-    method: metodo,
-    headers: corpo === undefined ? undefined : { 'content-type': 'application/json' },
-    body: corpo === undefined ? undefined : JSON.stringify(corpo),
-  })
+// Um Blob vai cru, com o Content-Type do próprio Blob (o PDF do extrato); outro corpo vai em JSON.
+function envelope(corpo: unknown): RequestInit {
+  if (corpo === undefined) return {}
+  if (corpo instanceof Blob) return { headers: { 'content-type': corpo.type }, body: corpo }
+  return { headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) }
+}
+
+export async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
+  const r = await fetch(endereco(caminho), { method: metodo, ...envelope(corpo) })
   if (!r.ok) {
     const detalhe = await r.json().then((c: { detail?: unknown }) => c.detail, () => undefined)
-    throw new ErroEdicao(typeof detalhe === 'string' ? detalhe : `Falha ao gravar: HTTP ${r.status}`)
+    throw new ErroEdicao(typeof detalhe === 'string' ? detalhe : `Falha ao gravar: HTTP ${r.status}`, r.status)
   }
   return (r.status === 204 ? undefined : await r.json()) as T
 }
