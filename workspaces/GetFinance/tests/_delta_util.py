@@ -80,8 +80,8 @@ def run_script(layer_dir, name, argv, tmp_path, overrides=None):
     old_argv, sys.argv = sys.argv, ["script"] + argv
     try:
         exec(code, ns)
-    except SystemExit:
-        pass
+    except SystemExit as fim:   # kept in the namespace for a test that checks how the script ended
+        ns["_system_exit"] = fim
     finally:
         sys.argv = old_argv
     return ns
