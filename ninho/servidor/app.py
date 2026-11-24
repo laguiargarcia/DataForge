@@ -4,6 +4,9 @@ Configuration comes from the environment, read on every request:
 - ``NINHO_WORKSPACE``: the GetFinance workspace folder, whose ``data/curated`` holds the published tables;
 - ``NINHO_SENHA``: the one password that lets anyone in, sent as the password of HTTP Basic (the user
   name is ignored). Provisional: real login is df-8x0m.23.6. Without it set, nobody gets in.
+
+The same server hands out the built screen (``ninho/telas/dist``) at ``/``, behind the same password:
+the browser asks for it once and sends it again with every call the page makes to the routes.
 """
 import logging
 import os
@@ -14,11 +17,13 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 from ninho.financas import aplicar, edicoes, leitura
 
+TELAS = Path(__file__).resolve().parents[1] / "telas" / "dist"
 MES = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
@@ -116,3 +121,16 @@ def andamento_aplicar(run_id: uuid.UUID, workspace: Annotated[Path, Depends(_wor
         raise HTTPException(status.HTTP_404_NOT_FOUND, "execução não encontrada") from erro
     except aplicar.SemMotor as erro:
         raise _sem_motor(erro) from erro
+
+
+@app.get("/{caminho:path}", dependencies=[Depends(_entrar)], include_in_schema=False)
+def tela(caminho: str) -> FileResponse:
+    """The built screen: its page at "/" and the files it asks for. Declared last, so every route
+    above answers first; nothing outside the built folder is ever handed out."""
+    pasta = TELAS.resolve()
+    arquivo = (pasta / (caminho or "index.html")).resolve()
+    if caminho.startswith("api/") or not arquivo.is_relative_to(pasta) or not arquivo.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
+    # The page names its files by the hash of their content; the page itself must be asked again.
+    cabecalhos = {"Cache-Control": "no-cache"} if arquivo.name == "index.html" else None
+    return FileResponse(arquivo, headers=cabecalhos)

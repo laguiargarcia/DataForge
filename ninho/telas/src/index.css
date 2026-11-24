@@ -1,0 +1,35 @@
+@layer theme, base, components, utilities;
+
+@import '@fontsource/figtree/latin-400.css';
+@import '@fontsource/figtree/latin-500.css';
+@import '@fontsource/figtree/latin-600.css';
+@import 'tailwindcss/theme.css' layer(theme);
+/* Só src/ gera classes: o dist/ commitado não é ignorado pelo git e entraria na varredura. */
+@import 'tailwindcss/utilities.css' layer(utilities) source('.');
+
+/* As cores e a fonte do app Finanças (workspaces/GetFinance/apps/financas/src/index.css). */
+@theme {
+  --color-fundo: #ECEEF6;
+  --color-cartao: #FFFFFF;
+  --color-texto: #1C1E2E;
+  --color-secundario: #565B72;
+  --color-acento: #3F3AB5;
+  --color-faixa: #F2F3FA;
+  --color-linha: #E6E8F2;
+  --color-ativa: #E6E8F7;
+  --color-alerta: #B3261E;
+  --color-alerta-fundo: #FCEBEA;
+  --color-entrada: #1E6B45;
+  --font-sans: Figtree, system-ui, sans-serif;
+}
+
+@layer base {
+  *, ::before, ::after { border: 0 solid; box-sizing: border-box; }
+  body { margin: 0; background: #ECEEF6; -webkit-text-size-adjust: 100%; }
+  button, select { font: inherit; color: inherit; }
+  button { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+  button:disabled { cursor: default; }
+  button:focus-visible, select:focus-visible { outline: 2px solid #3F3AB5; outline-offset: 2px; }
+  /* 16px ou mais: abaixo disso o Safari do iPhone dá zoom na página ao tocar no campo. */
+  select { font-size: 16px; }
+}

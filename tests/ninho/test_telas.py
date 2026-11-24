@@ -1,0 +1,63 @@
+"""The screen of the skeleton (df-8x0m.23.13.5): the server hands out the built page of ninho/telas
+and its files, behind the same password as the routes, so the browser asks once and reuses it."""
+import re
+
+import pytest
+from fastapi.testclient import TestClient
+
+from ninho.servidor import app as servidor
+from tests.ninho.conftest import AUTH, SENHA
+
+
+@pytest.fixture
+def telas(tmp_path, monkeypatch):
+    """The server with a small built screen of its own, and a file beside it that must stay out."""
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><p>tela</p>", encoding="utf-8")
+    (dist / "assets" / "tela.js").write_text("console.log('tela')", encoding="utf-8")
+    (tmp_path / "segredo.txt").write_text("fora da tela", encoding="utf-8")
+    monkeypatch.setattr(servidor, "TELAS", dist)
+    monkeypatch.setenv("NINHO_SENHA", SENHA)
+    return TestClient(servidor.app)
+
+
+@pytest.mark.parametrize("caminho", ["/", "/assets/tela.js"])
+def test_a_tela_pede_a_senha_e_o_navegador_sabe_pedir(telas, caminho):
+    r = telas.get(caminho)
+    assert r.status_code == 401
+    assert r.headers["www-authenticate"].startswith("Basic")
+
+
+def test_a_pagina_vem_na_raiz_sem_cache(telas):
+    r = telas.get("/", auth=AUTH)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert "<p>tela</p>" in r.text
+    assert r.headers["cache-control"] == "no-cache"   # a new build is seen at the next load
+
+
+def test_os_arquivos_da_tela_vem_com_o_tipo_certo(telas):
+    r = telas.get("/assets/tela.js", auth=AUTH)
+    assert r.status_code == 200
+    assert "javascript" in r.headers["content-type"]
+
+
+@pytest.mark.parametrize("caminho", ["/assets/nao-existe.js", "/assets", "/%2E%2E/segredo.txt",
+                                     "/assets/%2E%2E/%2E%2E/segredo.txt", "/api/financas/nao-existe"])
+def test_fora_dos_arquivos_da_tela_e_404(telas, caminho):
+    r = telas.get(caminho, auth=AUTH)
+    assert r.status_code == 404
+    assert "fora da tela" not in r.text
+
+
+def test_as_rotas_seguem_respondendo_antes_da_tela(telas, monkeypatch, tmp_path):
+    monkeypatch.setenv("NINHO_WORKSPACE", str(tmp_path / "nao-e-workspace"))
+    assert telas.get("/api/financas/edicoes", auth=AUTH).status_code == 503
+
+
+def test_a_tela_commitada_tem_a_pagina_e_os_arquivos_que_ela_pede():
+    pagina = (servidor.TELAS / "index.html").read_text(encoding="utf-8")
+    pedidos = re.findall(r'(?:src|href)="\./(assets/[^"]+)"', pagina)
+    assert pedidos
+    assert all((servidor.TELAS / pedido).is_file() for pedido in pedidos)
