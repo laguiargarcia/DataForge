@@ -3,6 +3,7 @@ import { andamento, lerEdicoes, lerTransacoes, pedirAplicar, type Edicoes, type 
 import { Aplicador, guardaLocal, mensagem, textoAndamento, textoFim, textoSemContato, type Fim } from './aplicar'
 import { deslocar, mesDe, mesValido, rotuloMes } from './formato'
 import { Linha } from './Linha'
+import { Logo } from '../Logo'
 
 // A tela do módulo finanças (df-8x0m.23.13.5), feita para a tela de um iPhone: as transações do mês,
 // corrigir a categoria de uma, o aviso de edições não aplicadas e o aplicar com o andamento.
@@ -19,7 +20,7 @@ const Seta = ({ d }: { d: string }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
 )
 const classeSeta = 'w-11 h-11 rounded-[999px] flex items-center justify-center text-secundario'
-const classeBotao = 'h-11 px-5 rounded-[999px] bg-acento text-white font-medium shrink-0 disabled:opacity-40'
+const classeBotao = 'h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold shrink-0 disabled:opacity-40'
 
 export function Financas() {
   const [mes, setMes] = useState(mesInicial)
@@ -85,7 +86,10 @@ export function Financas() {
     <div className="min-h-dvh bg-fundo font-sans text-[16px] text-texto">
       <header className="sticky top-0 z-10 bg-fundo pt-[max(12px,env(safe-area-inset-top))] pb-2 px-4">
         <div className="max-w-[480px] mx-auto">
-          <h1 className="m-0 text-[22px] font-semibold">Transações</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="m-0 font-titulo text-[30px] leading-tight font-bold text-acento">Transações</h1>
+            <Logo />
+          </div>
           <nav className="flex items-center justify-between mt-1" aria-label="Mês">
             <button type="button" className={classeSeta} aria-label="Mês anterior" onClick={() => setMes(deslocar(mes, -1))}>
               <Seta d="M15 18l-6-6 6-6" />
@@ -100,18 +104,18 @@ export function Financas() {
 
       <main className="max-w-[480px] mx-auto px-4 pb-[max(24px,env(safe-area-inset-bottom))] flex flex-col gap-3">
         {aplicando && (
-          <output className="block rounded-[14px] bg-ativa px-4 py-3">
+          <output className="block rounded-[20px] bg-ativa px-4 py-3">
             {semContato ?? (execucao ? textoAndamento(execucao) : 'Aplicando…')}
           </output>
         )}
         {!aplicando && falhaAplicar && (
-          <div role="alert" className="rounded-[14px] bg-alerta-fundo px-4 py-3 flex items-center gap-3">
+          <div role="alert" className="rounded-[20px] bg-alerta-fundo px-4 py-3 flex items-center gap-3">
             <p className="m-0 flex-1 text-alerta break-words min-w-0">{falhaAplicar}</p>
             <button type="button" className={classeBotao} onClick={iniciarAplicar}>Tentar de novo</button>
           </div>
         )}
         {!aplicando && !falhaAplicar && valorEdicoes?.pendente && (
-          <div className="rounded-[14px] bg-cartao px-4 py-3 flex items-center gap-3">
+          <div className="rounded-[20px] bg-cartao px-4 py-3 flex items-center gap-3">
             <p className="m-0 flex-1">Há edições não aplicadas</p>
             <button type="button" className={classeBotao} onClick={iniciarAplicar}>Aplicar</button>
           </div>
@@ -120,7 +124,7 @@ export function Financas() {
           <p role="alert" className="m-0 text-[14px] text-alerta">Não foi possível ler as edições: {edicoes.mensagem}</p>
         )}
 
-        <section className="rounded-[14px] bg-cartao overflow-hidden" aria-label="Transações do mês">
+        <section className="rounded-[20px] bg-cartao overflow-hidden" aria-label="Transações do mês">
           {transacoes.fase === 'carregando' && <p className="m-0 px-4 py-6 text-secundario">Carregando…</p>}
           {transacoes.fase === 'erro' && (
             <div className="px-4 py-6 flex flex-col gap-3 items-start">
