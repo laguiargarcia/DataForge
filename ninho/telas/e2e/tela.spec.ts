@@ -98,6 +98,7 @@ test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comp
   // Um segundo item, pelo botão, e apagado.
   await campo.fill('sabão em pó')
   await page.getByRole('button', { name: 'Adicionar' }).click()
+  await expect(campo).toBeFocused()   // pelo botão o foco também fica no campo (df-8x0m.23.20.7)
   await expect(aComprar.getByRole('checkbox')).toHaveCount(2)
   await page.getByRole('button', { name: 'Apagar sabão em pó' }).click()
   await expect(aComprar.getByRole('checkbox')).toHaveCount(1)
@@ -111,6 +112,75 @@ test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comp
   await expect(itens).toContainText('A lista está vazia.')
   await expect(page.getByRole('button', { name: 'Limpar comprados' })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+// Um "a página voltou a ficar visível" (o iPhone desbloqueado): a Lista relê.
+const voltarAVer = (page: Page) => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+
+test('na Lista, uma releitura que falha mantém os itens e um toque não volta atrás com uma leitura velha', async ({ page }) => {
+  await page.goto('?tela=lista')
+  const itens = page.getByRole('region', { name: 'Itens da lista' })
+  await expect(itens).toContainText('A lista está vazia.')
+  const campo = page.getByRole('textbox', { name: 'Novo item' })
+  await campo.fill('fermento')
+  await campo.press('Enter')
+  const aComprar = page.getByRole('list', { name: 'A comprar' })
+  const fermento = page.getByRole('checkbox', { name: 'fermento' })
+  await expect(aComprar.getByRole('checkbox', { name: 'fermento' })).toBeVisible()
+
+  // A rede ainda acordando: a releitura falha, a lista fica e um aviso aparece.
+  const leitura = '**/api/lista/itens'
+  await page.route(leitura, r => (r.request().method() === 'GET'
+    ? r.fulfill({ status: 503, contentType: 'application/json', body: '{"detail":"sem rede"}' })
+    : r.fallback()))
+  const falhou = page.waitForResponse(r => r.url().endsWith('/api/lista/itens') && r.status() === 503)
+  await voltarAVer(page)
+  await falhou
+  await expect(page.getByRole('alert')).toContainText('sem rede')
+  await expect(aComprar.getByRole('checkbox', { name: 'fermento' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tentar de novo' })).toHaveCount(0)
+
+  // A rede voltou: uma releitura boa tira o aviso.
+  await page.unroute(leitura)
+  await voltarAVer(page)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(fermento).not.toBeChecked()
+
+  // Uma leitura pedida antes do toque e respondida depois dele (com a lista de antes) não desfaz a
+  // marca. A marca fica presa no caminho até a conferência, para a leitura velha chegar antes dela.
+  let soltarVelha!: () => void
+  let soltarMarca!: () => void
+  const velhaSolta = new Promise<void>(ok => { soltarVelha = ok })
+  const marcaSolta = new Promise<void>(ok => { soltarMarca = ok })
+  let leituras = 0
+  await page.route(leitura, async r => {
+    if (r.request().method() !== 'GET' || ++leituras > 1) return r.fallback()
+    const resposta = await r.fetch()
+    await velhaSolta
+    await r.fulfill({ response: resposta })
+  })
+  await page.route('**/api/lista/itens/*', async r => {
+    if (r.request().method() === 'PATCH') await marcaSolta
+    await r.fallback()
+  })
+  await voltarAVer(page)
+  await expect.poll(() => leituras).toBe(1)
+  await fermento.click()
+  await expect(fermento).toBeChecked()
+  const velha = page.waitForResponse(r => r.url().endsWith('/api/lista/itens') && r.request().method() === 'GET')
+  soltarVelha()
+  await velha
+  await page.waitForTimeout(300)   // a resposta velha já foi lida e descartada
+  await expect(fermento).toBeChecked({ timeout: 0 })
+  soltarMarca()
+  await expect(page.getByRole('list', { name: 'Comprados' }).getByRole('checkbox', { name: 'fermento' })).toBeChecked()
+  await page.unrouteAll()
+
+  await page.getByRole('button', { name: 'Limpar comprados' }).click()
+  await expect(itens).toContainText('A lista está vazia.')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  // O 503 de propósito aparece no console do navegador; só ele é esperado.
+  problemas = problemas.filter(p => !p.startsWith('console: Failed to load resource: the server responded with a status of 503'))
 })
 
 test('corrige a categoria de uma transação, aplica e vê a categoria nova', async ({ page }) => {

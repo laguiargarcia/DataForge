@@ -45,14 +45,29 @@ export function Lista({ aberta }: Props) {
   const [texto, setTexto] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [falha, setFalha] = useState<string | null>(null)
-  // Só a leitura mais recente vale: uma resposta atrasada não apaga outra mais nova.
+  const campo = useRef<HTMLInputElement>(null)
+  // Só a leitura mais recente vale: uma resposta atrasada não apaga outra mais nova nem uma mudança
+  // feita depois que ela foi pedida (alterar também conta).
   const ultima = useRef(0)
+  const carregou = useRef(false)
 
-  const reler = useCallback(() => {
+  // Com a lista já na tela, uma releitura que falha (o iPhone desbloqueado com a rede ainda voltando)
+  // mantém a lista e mostra o aviso; o estado de erro com "Tentar de novo" é só para a primeira carga.
+  // Uma releitura boa tira o aviso, salvo quando ela fecha uma mudança que falhou (`manterFalha`).
+  const reler = useCallback((manterFalha = false) => {
     const esta = ++ultima.current
     return lerItens().then(
-      valor => { if (ultima.current === esta) setCarga({ fase: 'ok', valor }) },
-      e => { if (ultima.current === esta) setCarga({ fase: 'erro', mensagem: mensagem(e) }) },
+      valor => {
+        if (ultima.current !== esta) return
+        carregou.current = true
+        setCarga({ fase: 'ok', valor })
+        if (!manterFalha) setFalha(null)
+      },
+      e => {
+        if (ultima.current !== esta) return
+        if (!carregou.current) setCarga({ fase: 'erro', mensagem: mensagem(e) })
+        else if (!manterFalha) setFalha(`Não foi possível reler a lista: ${mensagem(e)}`)
+      },
     )
   }, [])
 
@@ -72,10 +87,10 @@ export function Lista({ aberta }: Props) {
   const alterar = useCallback<Alterar>((acao, antes) => {
     setOcupado(true)
     setFalha(null)
+    ++ultima.current   // uma leitura pedida antes do toque e respondida depois não desfaz a mudança
     if (antes) setCarga(c => (c.fase === 'ok' ? { fase: 'ok', valor: antes(c.valor) } : c))
     acao()
-      .catch((e: unknown) => setFalha(mensagem(e)))
-      .then(reler)
+      .then(() => reler(), (e: unknown) => { setFalha(mensagem(e)); return reler(true) })
       .finally(() => setOcupado(false))
   }, [reler])
 
@@ -83,7 +98,9 @@ export function Lista({ aberta }: Props) {
     evento.preventDefault()
     const novo = texto.trim()
     if (!novo) return
-    // O campo limpa na hora (o foco fica nele) para o próximo item; se o servidor recusar, o texto volta.
+    // O campo limpa na hora e fica com o foco (também pelo botão, que se desabilita com o campo vazio)
+    // para o próximo item; se o servidor recusar, o texto volta.
+    campo.current?.focus()
     setTexto('')
     alterar(() => adicionar(novo).catch((e: unknown) => {
       setTexto(atual => atual || novo)
@@ -99,7 +116,7 @@ export function Lista({ aberta }: Props) {
         <div className="max-w-[480px] mx-auto flex flex-col gap-2">
           <h1 className="m-0 text-[22px] font-semibold">Lista</h1>
           <form className="flex gap-2" onSubmit={enviar}>
-            <input type="text" aria-label="Novo item" placeholder="Novo item" value={texto} maxLength={LIMITE}
+            <input ref={campo} type="text" aria-label="Novo item" placeholder="Novo item" value={texto} maxLength={LIMITE}
               enterKeyHint="done" autoComplete="off" onChange={e => setTexto(e.target.value)}
               className="flex-1 min-w-0 h-11 px-4 rounded-[999px] bg-cartao font-sans text-[16px] text-texto" />
             <button type="submit" className={classeBotao} disabled={!texto.trim()}>Adicionar</button>
