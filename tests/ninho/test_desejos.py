@@ -2,7 +2,9 @@
 and their notes in the app database named by NINHO_BANCO; and GET /api/pessoas, the people of the
 house a wish can be of. Wishes and people are invented; the addresses are of the reserved .invalid
 domain."""
+import itertools
 import sqlite3
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +13,7 @@ from ninho.desejos import desejos
 from ninho.servidor import banco as banco_do_app
 from ninho.servidor import pessoas
 from ninho.servidor.app import app
-from tests.ninho.conftest import ANA, BETO
+from tests.ninho.conftest import ANA, BETO, MODULOS
 
 LINK = "https://exemplo.invalid/bicicleta"
 # Every route, as (method, path, body, the route's own success code); {desejo} and {anotacao} are
@@ -21,8 +23,11 @@ ROTAS = [("GET", "/api/desejos", None, 200),
          ("PATCH", "/api/desejos/{desejo}", {"titulo": "bicicleta nova"}, 200),
          ("DELETE", "/api/desejos/{desejo}", None, 204),
          ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": LINK}, 201),
-         ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None, 204)]
+         ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None, 204),
+         ("PUT", "/api/desejos/{desejo}/presente", None, 200),
+         ("DELETE", "/api/desejos/{desejo}/presente", None, 204)]
 IDS = [f"{metodo} {caminho}" for metodo, caminho, *_ in ROTAS]
+CASA = {"a": "ana", "b": "beto", "c": "caio"}   # for the rules called without the routes: ids are fixed
 
 
 @pytest.fixture
@@ -52,10 +57,14 @@ def _todos(servidor):
 
 
 def _pedir(servidor, banco, rota, auth):
+    """<rota> asked by <auth>, on a wish of the other person (so the gift routes answer their success)."""
     metodo, caminho, corpo, _ = rota
     if "{" in caminho:
         with banco_do_app.aberto(banco) as conn:
-            desejo = desejos.adicionar(conn, {"titulo": "livro", "de_quem": None, "anotacoes": ["capa dura"]}, "ana", set())
+            casa = {pessoa["id"]: pessoa["nome"] for pessoa in pessoas.listar(conn)}
+            dono = next(id_ for id_, nome in casa.items() if nome == ("ana" if auth == BETO else "beto"))
+            desejo = desejos.adicionar(conn, {"titulo": "livro", "de_quem": dono, "anotacoes": ["capa dura"]},
+                                       dono, casa)
         caminho = caminho.format(desejo=desejo["id"], anotacao=desejo["anotacoes"][0]["id"])
     return servidor.request(metodo, caminho, json=corpo, auth=auth)
 
@@ -102,7 +111,8 @@ def test_criar_de_cada_pessoa_e_dos_dois(servidor, ids):
     assert (da_ana["de_quem"], do_beto["de_quem"], dos_dois["de_quem"]) == (ids["ana"], ids["beto"], None)
     assert (da_ana["adicionado_por"], do_beto["adicionado_por"]) == ("ana", "beto")
     assert dos_dois == {"id": dos_dois["id"], "titulo": "viagem", "de_quem": None, "adicionado_por": "ana",
-                        "realizado": False, "realizado_em": None, "criado_em": dos_dois["criado_em"], "anotacoes": []}
+                        "realizado": False, "realizado_em": None, "criado_em": dos_dois["criado_em"], "anotacoes": [],
+                        "presente": None}
     assert dos_dois["criado_em"].endswith("+00:00")
     assert len(dos_dois["id"]) == 32
 
@@ -244,7 +254,8 @@ def test_apagar_uma_anotacao(servidor):
 @pytest.mark.parametrize(("metodo", "caminho", "corpo"), [
     ("PATCH", "/api/desejos/nao-existe", {"realizado": True}), ("DELETE", "/api/desejos/nao-existe", None),
     ("POST", "/api/desejos/nao-existe/anotacoes", {"texto": "x"}),
-    ("DELETE", "/api/desejos/nao-existe/anotacoes/nem-esta", None)])
+    ("DELETE", "/api/desejos/nao-existe/anotacoes/nem-esta", None),
+    ("PUT", "/api/desejos/nao-existe/presente", None), ("DELETE", "/api/desejos/nao-existe/presente", None)])
 def test_desejo_desconhecido_e_404(servidor, metodo, caminho, corpo):
     assert servidor.request(metodo, caminho, json=corpo, auth=ANA).status_code == 404
 
@@ -253,11 +264,12 @@ def test_o_desejo_sobrevive_a_reabrir_o_banco(servidor, banco, ids):
     desejo = _criar(servidor, "violão", ids["beto"], anotacoes=[LINK, "cordas de nylon"], auth=BETO)
     conn = sqlite3.connect(banco)
     try:
-        assert desejos.listar(conn) == [desejo]
+        assert desejos.listar(conn, ids["beto"], {ids["beto"]: "beto"}) == [desejo]
         nomes = {linha[0] for linha in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     finally:
         conn.close()
-    assert {nome for nome in nomes if nome not in ("pessoas", "lista_itens")} == {"desejos_desejos", "desejos_anotacoes"}
+    assert {nome for nome in nomes if nome not in ("pessoas", "lista_itens")} == {
+        "desejos_desejos", "desejos_anotacoes", "desejos_presentes"}
     assert _todos(TestClient(app)) == [desejo]
 
 
@@ -331,8 +343,166 @@ def test_as_regras_recusam_campo_desconhecido_e_anotacoes_que_nao_sao_lista(banc
     """The rules are called without the routes too (by the tests, a future command): they check on their own."""
     with banco_do_app.aberto(banco) as conn:
         with pytest.raises(desejos.Invalido, match="anotacoes"):
-            desejos.adicionar(conn, {"titulo": "t", "de_quem": None, "anotacoes": "um texto só"}, "ana", set())
-        desejo = desejos.adicionar(conn, {"titulo": "t", "de_quem": None}, "ana", set())
+            desejos.adicionar(conn, {"titulo": "t", "de_quem": None, "anotacoes": "um texto só"}, "a", CASA)
+        desejo = desejos.adicionar(conn, {"titulo": "t", "de_quem": None}, "a", CASA)
         with pytest.raises(desejos.Invalido, match="campo desconhecido: realizdo"):
-            desejos.editar(conn, desejo["id"], {"realizdo": True}, set())
-        assert desejos.listar(conn) == [desejo]
+            desejos.editar(conn, desejo["id"], {"realizdo": True}, "a", CASA)
+        assert desejos.listar(conn, "a", CASA) == [desejo]
+
+
+# The surprise gift (df-8x0m.23.23.1): beto marks "vou dar" on a wish of ana, and ana never finds out.
+
+def _presente(servidor, desejo_id, auth):
+    """The ``presente`` of a wish in the list, as <auth> sees it."""
+    r = servidor.get("/api/desejos", auth=auth)
+    assert r.status_code == 200, r.text
+    return next(d for d in r.json()["desejos"] if d["id"] == desejo_id)["presente"]
+
+
+def _marcas(banco):
+    with banco_do_app.aberto(banco) as conn:
+        return conn.execute("SELECT desejo_id, quem FROM desejos_presentes").fetchall()
+
+
+def test_beto_marca_vou_dar_num_desejo_da_ana_e_ve_a_marca(servidor, banco, ids):
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    r = servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO)
+    assert r.status_code == 200, r.text
+    assert r.json() == desejo | {"presente": {"de": "beto", "meu": True}}
+    assert _presente(servidor, desejo["id"], BETO) == {"de": "beto", "meu": True}
+    assert _presente(servidor, desejo["id"], ANA) is None
+    assert _marcas(banco) == [(desejo["id"], ids["beto"])]
+    # marking again changes nothing
+    assert servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO).json() == r.json()
+    assert len(_marcas(banco)) == 1
+
+
+def test_beto_desmarca_a_propria_marca(servidor, banco, ids):
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO)
+    for _ in range(2):   # unmarking a wish with no mark is no change
+        assert servidor.delete(f"/api/desejos/{desejo['id']}/presente", auth=BETO).status_code == 204
+        assert _presente(servidor, desejo["id"], BETO) is None
+    assert _marcas(banco) == []
+
+
+@pytest.mark.parametrize("metodo", ["PUT", "DELETE"])
+def test_o_dono_nao_marca_nem_desmarca_e_a_marca_fica(servidor, banco, ids, metodo):
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO)
+    r = servidor.request(metodo, f"/api/desejos/{desejo['id']}/presente", auth=ANA)
+    assert r.status_code == 422
+    assert r.json() == {"detail": "o desejo é seu: o presente-surpresa é de quem vai dar"}
+    assert _presente(servidor, desejo["id"], BETO) == {"de": "beto", "meu": True}
+
+
+@pytest.mark.parametrize("auth", [ANA, BETO], ids=["ana", "beto"])
+@pytest.mark.parametrize("metodo", ["PUT", "DELETE"])
+def test_desejo_dos_dois_nao_tem_presente(servidor, banco, auth, metodo):
+    desejo = _criar(servidor, "viagem", None)
+    r = servidor.request(metodo, f"/api/desejos/{desejo['id']}/presente", auth=auth)
+    assert r.status_code == 422
+    assert r.json() == {"detail": "um desejo dos dois não tem presente-surpresa"}
+    assert _marcas(banco) == []
+
+
+@pytest.mark.parametrize("para", [None, "beto"], ids=["dos dois", "do beto"])
+def test_mover_de_parte_apaga_a_marca(servidor, banco, ids, para):
+    """The one who would give it may become the owner: the secret does not cross the move."""
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO)
+    r = servidor.patch(f"/api/desejos/{desejo['id']}", json={"de_quem": para and ids[para]}, auth=ANA)
+    assert r.status_code == 200
+    assert _marcas(banco) == []
+    servidor.patch(f"/api/desejos/{desejo['id']}", json={"de_quem": ids["ana"]}, auth=ANA)
+    assert _presente(servidor, desejo["id"], BETO) is None
+
+
+def test_editar_sem_mudar_de_dono_nem_realizar_mexe_na_marca(servidor, banco, ids):
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO)
+    for corpo in ({"de_quem": ids["ana"]}, {"titulo": "tênis novo"}, {"realizado": True}, {"realizado": False}):
+        assert servidor.patch(f"/api/desejos/{desejo['id']}", json=corpo, auth=ANA).status_code == 200
+        assert _marcas(banco) == [(desejo["id"], ids["beto"])]
+
+
+def test_apagar_o_desejo_apaga_a_marca(servidor, banco, ids):
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    outro = _criar(servidor, "livro", ids["ana"])
+    for d in (desejo, outro):
+        servidor.put(f"/api/desejos/{d['id']}/presente", auth=BETO)
+    assert servidor.delete(f"/api/desejos/{desejo['id']}", auth=ANA).status_code == 204
+    assert _marcas(banco) == [(outro["id"], ids["beto"])]
+
+
+def test_so_quem_marcou_desmarca_e_um_presente_por_desejo(banco):
+    """With a third person of the house (only in the rules: the routes have two): caio sees beto's
+    mark as not his, cannot take it over and cannot undo it."""
+    with banco_do_app.aberto(banco) as conn:
+        desejo = desejos.adicionar(conn, {"titulo": "tênis", "de_quem": "a"}, "a", CASA)
+        assert desejos.marcar(conn, desejo["id"], "b", CASA)["presente"] == {"de": "beto", "meu": True}
+        assert desejos.listar(conn, "c", CASA)[0]["presente"] == {"de": "beto", "meu": False}
+        with pytest.raises(desejos.DeOutraPessoa, match="outra pessoa já vai dar"):
+            desejos.marcar(conn, desejo["id"], "c", CASA)
+        with pytest.raises(desejos.DeOutraPessoa, match="só quem marcou desmarca"):
+            desejos.desmarcar(conn, desejo["id"], "c")
+        assert desejos.listar(conn, "b", CASA)[0]["presente"] == {"de": "beto", "meu": True}
+        assert desejos.listar(conn, "a", CASA)[0]["presente"] is None
+        desejos.desmarcar(conn, desejo["id"], "b")
+        assert desejos.marcar(conn, desejo["id"], "c", CASA)["presente"] == {"de": "caio", "meu": True}
+
+
+HORA = "2026-01-02T03:04:05+00:00"
+# What ana, the owner, can ask about her own wish: (method, path, body). {desejo}, {anotacao}, {ana}
+# and {beto} are filled in.
+DO_DONO = [("GET", "/api/desejos", None),
+           ("POST", "/api/desejos", {"titulo": "violão", "de_quem": "{ana}"}),
+           ("PATCH", "/api/desejos/{desejo}", {"titulo": "tênis novo"}),
+           ("PATCH", "/api/desejos/{desejo}", {"realizado": True}),
+           ("PATCH", "/api/desejos/{desejo}", {"de_quem": "{ana}"}),
+           ("PATCH", "/api/desejos/{desejo}", {"de_quem": "{beto}"}),
+           ("PATCH", "/api/desejos/{desejo}", {"de_quem": None}),
+           ("PATCH", "/api/desejos/{desejo}", {"titulo": ""}),
+           ("DELETE", "/api/desejos/{desejo}", None),
+           ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": LINK}),
+           ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None),
+           ("PUT", "/api/desejos/{desejo}/presente", None),
+           ("DELETE", "/api/desejos/{desejo}/presente", None)]
+IDS_DO_DONO = [f"{metodo} {caminho} {corpo}" for metodo, caminho, corpo in DO_DONO]
+
+
+def _o_que_a_ana_recebe(tmp_path, monkeypatch, pedido, marcado):
+    """ana's answer to <pedido> about her wish, and then her list, on a house of its own built the
+    same way every time (fixed ids and times), with beto's "vou dar" on that wish or without it."""
+    contador = itertools.count(1)
+    monkeypatch.setattr(uuid, "uuid4", lambda: uuid.UUID(int=next(contador)))
+    monkeypatch.setattr(desejos, "_agora", lambda: HORA)
+    arquivo = tmp_path / ("marcado" if marcado else "sem-marca") / "ninho.db"
+    arquivo.parent.mkdir()
+    with banco_do_app.aberto(arquivo) as conn:
+        for nome, senha in (ANA, BETO):
+            pessoas.criar(conn, nome, senha, MODULOS[nome])
+        ids = {pessoa["nome"]: pessoa["id"] for pessoa in pessoas.listar(conn)}
+    monkeypatch.setenv("NINHO_BANCO", str(arquivo))
+    servidor = TestClient(app)
+    desejo = _criar(servidor, "tênis", ids["ana"], anotacoes=["capa dura"])
+    _criar(servidor, "livro", ids["ana"])   # an unmarked wish beside it, so the order is compared too
+    if marcado:
+        assert servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO).status_code == 200
+        assert _presente(servidor, desejo["id"], BETO) == {"de": "beto", "meu": True}   # the mark is there
+    metodo, caminho, corpo = pedido
+    if corpo is not None:
+        corpo = {k: v.format(**ids) if isinstance(v, str) else v for k, v in corpo.items()}
+    r = servidor.request(metodo, caminho.format(desejo=desejo["id"], anotacao=desejo["anotacoes"][0]["id"]),
+                         json=corpo, auth=ANA)
+    lista = servidor.get("/api/desejos", auth=ANA)
+    return (r.status_code, r.headers.get("content-type"), r.content), (lista.status_code, lista.content)
+
+
+@pytest.mark.parametrize("pedido", DO_DONO, ids=IDS_DO_DONO)
+def test_o_dono_recebe_o_mesmo_com_a_marca_e_sem_ela(tmp_path, monkeypatch, pedido):
+    """The secret, as a comparison: every answer ana gets about her own wish, status and bytes, and
+    her list after it, are the same whether beto marked it or not."""
+    sem = _o_que_a_ana_recebe(tmp_path, monkeypatch, pedido, marcado=False)
+    com = _o_que_a_ana_recebe(tmp_path, monkeypatch, pedido, marcado=True)
+    assert com == sem
