@@ -54,19 +54,21 @@ def _chamar(workspace: Path, argumentos: list[str], espera: float = 0) -> tuple[
 
 def pedir(workspace: Path) -> dict:
     """Ask for the apply job; the engine's answer, with the run id to follow."""
-    saida, resposta = _chamar(workspace, ["run", workspace.name, JOB, "--detach"])
+    saida, resposta = _chamar(workspace, ["run", "--detach", "--", workspace.name, JOB])
     if saida == _SAIDA_PEDIDO_INVALIDO or "run_id" not in resposta:
         raise SemMotor(str(resposta.get("error", resposta)))
+    if resposta.get("started_at") and resposta.get("state") == "failed" and resposta.get("failed_task") is None:
+        # Ended as failed with no task behind it: the run's process never started.
+        raise SemMotor(str(resposta.get("reason")))
     return resposta
 
 
 def andamento(workspace: Path, run_id: str, esperar: float = 0) -> dict:
     """The state of a run. With ``esperar`` > 0 the engine answers when the run has ended, or after
     that many seconds with the state so far."""
-    argumentos = ["run-state", run_id]
-    if esperar > 0:
-        argumentos += ["--wait", "--timeout", str(esperar)]
-    saida, resposta = _chamar(workspace, argumentos, esperar)
+    opcoes = ["--wait", "--timeout", str(esperar)] if esperar > 0 else []
+    # "--" ends the options: the id comes from a URL and must never be read as one.
+    saida, resposta = _chamar(workspace, ["run-state", *opcoes, "--", run_id], esperar)
     if saida == _SAIDA_PEDIDO_INVALIDO:
         raise Desconhecida(run_id)
     if saida not in (0, _SAIDA_AINDA_RODANDO) or "state" not in resposta:

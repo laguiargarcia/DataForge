@@ -5,8 +5,10 @@ Configuration comes from the environment, read on every request:
 - ``NINHO_SENHA``: the one password that lets anyone in, sent as the password of HTTP Basic (the user
   name is ignored). Provisional: real login is df-8x0m.23.6. Without it set, nobody gets in.
 """
+import logging
 import os
 import secrets
+import uuid
 from datetime import date
 from pathlib import Path
 from typing import Annotated
@@ -22,6 +24,7 @@ MES = r"^\d{4}-(0[1-9]|1[0-2])$"
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
 app = FastAPI(title="ninho")
+_log = logging.getLogger("ninho")
 _basic = HTTPBasic(auto_error=False)
 
 
@@ -39,7 +42,7 @@ def _workspace() -> Path:
     if not (Path(pasta) / "workspace.yaml").is_file():
         # A wrong folder must not be answered as "no data", nor get an app database created in it.
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "NINHO_WORKSPACE não é um workspace")
-    return Path(pasta)
+    return Path(pasta).resolve()
 
 
 @app.get("/api/financas/transacoes", dependencies=[Depends(_entrar)])
@@ -89,7 +92,9 @@ def desfazer_correcao(transacao_id: str, workspace: Annotated[Path, Depends(_wor
 
 
 def _sem_motor(erro: aplicar.SemMotor) -> HTTPException:
-    return HTTPException(status.HTTP_502_BAD_GATEWAY, f"o DataForge não respondeu: {erro}")
+    """The reason goes to the server's log, not to the screen: it can carry paths of this machine."""
+    _log.error("o DataForge não respondeu: %s", erro)
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, "o DataForge não respondeu; o motivo está no log do servidor")
 
 
 @app.post("/api/financas/aplicar", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(_entrar)])
@@ -102,11 +107,11 @@ def pedir_aplicar(workspace: Annotated[Path, Depends(_workspace)]) -> dict:
 
 
 @app.get("/api/financas/aplicar/{run_id}", dependencies=[Depends(_entrar)])
-def andamento_aplicar(run_id: str, workspace: Annotated[Path, Depends(_workspace)],
+def andamento_aplicar(run_id: uuid.UUID, workspace: Annotated[Path, Depends(_workspace)],
                       esperar: Annotated[float, Query(ge=0, le=60)] = 0) -> dict:
     """The state of an apply run; ``esperar`` (seconds, up to 60) holds the answer until it ends."""
     try:
-        return aplicar.andamento(workspace, run_id, esperar)
+        return aplicar.andamento(workspace, str(run_id), esperar)
     except aplicar.Desconhecida as erro:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "execução não encontrada") from erro
     except aplicar.SemMotor as erro:
