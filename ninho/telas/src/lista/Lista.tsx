@@ -45,6 +45,7 @@ export function Lista({ aberta }: Props) {
   const [texto, setTexto] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [falha, setFalha] = useState<string | null>(null)
+  const [confirmando, setConfirmando] = useState(false)
   const campo = useRef<HTMLInputElement>(null)
   // Só a leitura mais recente vale: uma resposta atrasada não apaga outra mais nova nem uma mudança
   // feita depois que ela foi pedida (alterar também conta).
@@ -109,6 +110,9 @@ export function Lista({ aberta }: Props) {
   }
 
   const { faltam, comprados } = separar(carga.fase === 'ok' ? carga.valor : [])
+  // Sem comprados não há o que confirmar: a pergunta não volta sozinha quando um item for marcado depois.
+  const semComprados = comprados.length === 0
+  useEffect(() => { if (semComprados) setConfirmando(false) }, [semComprados])
 
   return (
     <div className="min-h-dvh bg-fundo font-sans text-[16px] text-texto">
@@ -149,11 +153,29 @@ export function Lista({ aberta }: Props) {
             <>
               <div className="flex items-center justify-between gap-3 pt-2">
                 <h2 className="m-0 text-[16px] font-semibold text-secundario">Comprados</h2>
-                <button type="button" disabled={ocupado} onClick={() => alterar(limparComprados)}
-                  className="h-11 px-4 rounded-[999px] text-acento font-medium disabled:opacity-40">
-                  Limpar comprados
-                </button>
+                {!confirmando && (
+                  <button type="button" disabled={ocupado} onClick={() => setConfirmando(true)}
+                    className="h-11 px-4 rounded-[999px] text-acento font-medium disabled:opacity-40">
+                    Limpar comprados
+                  </button>
+                )}
               </div>
+              {/* Limpar apaga de vez, e também o que a outra pessoa marcou: só depois de confirmar. */}
+              {confirmando && (
+                <div role="group" aria-label="Confirmar limpeza" className="rounded-[14px] bg-cartao px-4 py-3 flex items-center gap-2">
+                  <p className="m-0 flex-1 min-w-0">
+                    {comprados.length === 1 ? 'Apagar 1 item comprado?' : `Apagar ${comprados.length} itens comprados?`}
+                  </p>
+                  <button type="button" onClick={() => setConfirmando(false)}
+                    className="h-11 px-4 rounded-[999px] text-secundario font-medium shrink-0">
+                    Cancelar
+                  </button>
+                  <button type="button" disabled={ocupado} className={classeBotao}
+                    onClick={() => { setConfirmando(false); alterar(limparComprados) }}>
+                    Apagar
+                  </button>
+                </div>
+              )}
               <ul aria-label="Comprados" className="m-0 p-0 list-none rounded-[14px] bg-cartao overflow-hidden">
                 {comprados.map(i => <Linha key={i.id} item={i} ocupado={ocupado} alterar={alterar} />)}
               </ul>
