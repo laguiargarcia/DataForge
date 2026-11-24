@@ -4,7 +4,6 @@ is logged in, and a password that checked is not checked by scrypt again until i
 Two invented people: here ana has finances only and beto the list only. The finance calls are
 stubbed: what is under test is who gets in, not what the route does."""
 import sqlite3
-import uuid
 
 import pytest
 from fastapi.routing import APIRoute
@@ -18,7 +17,7 @@ from ninho.servidor import dependencias, pessoas
 from ninho.servidor.app import app
 from tests.ninho.conftest import ANA, BETO
 
-RUN = str(uuid.uuid4())
+RUN = "00000000-0000-4000-8000-000000000000"   # fixed: a random one would give each pytest-xdist worker other test ids
 # Every route of each module, as (method, path, body, the route's own success code).
 FINANCAS = [("GET", "/api/financas/transacoes?mes=2026-01", None, 200),
             ("GET", "/api/financas/edicoes", None, 200),

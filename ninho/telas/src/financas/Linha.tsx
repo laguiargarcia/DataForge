@@ -73,7 +73,7 @@ export function Linha({ transacao: t, correcao, categorias, aberta, alternar, gr
           <div className="flex gap-3">
             <button type="button" disabled={gravando || !escolhida || escolhida === atual}
               onClick={() => gravar(corrigir(t.id, escolhida))}
-              className="h-11 px-5 rounded-[999px] bg-acento text-white font-medium disabled:opacity-40">
+              className="h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold disabled:opacity-40">
               Salvar
             </button>
             {correcao && (

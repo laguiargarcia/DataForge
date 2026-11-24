@@ -7,5 +7,6 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
-  server: { proxy: { '/api': 'http://127.0.0.1:8100' } },
+  // O logo vem de ninho/identidade, fora desta pasta: o `npm run dev` precisa poder lê-lo.
+  server: { proxy: { '/api': 'http://127.0.0.1:8100' }, fs: { allow: ['.', '../identidade'] } },
 })

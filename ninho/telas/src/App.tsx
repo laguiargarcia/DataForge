@@ -25,7 +25,7 @@ function Aviso({ texto, tentar }: Readonly<{ texto: string; tentar?: () => void 
       <div className="max-w-[480px] mx-auto rounded-[14px] bg-cartao px-4 py-6 flex flex-col gap-3 items-start">
         <p className="m-0 break-words">{texto}</p>
         {tentar && (
-          <button type="button" onClick={tentar} className="h-11 px-5 rounded-[999px] bg-acento text-white font-medium">
+          <button type="button" onClick={tentar} className="h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold">
             Tentar de novo
           </button>
         )}
@@ -79,8 +79,9 @@ export function App() {
           {modulos.map(({ id, rotulo }) => (
             <li key={id} className="flex-1">
               <button type="button" aria-current={id === tela ? 'page' : undefined} onClick={() => setEscolhida(id)}
-                className={`w-full h-14 text-center font-medium ${id === tela ? 'text-acento' : 'text-secundario'}`}>
-                {rotulo}
+                className={`w-full h-14 flex items-center justify-center font-semibold ${id === tela ? 'text-texto' : 'text-secundario'}`}>
+                {/* O item ativo ganha o azul da marca de fundo, numa pílula: o texto fica no tom escuro. */}
+                <span className={`px-4 py-1.5 rounded-[999px] ${id === tela ? 'bg-marca' : ''}`}>{rotulo}</span>
               </button>
             </li>
           ))}

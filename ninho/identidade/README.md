@@ -7,6 +7,7 @@ identity sheet, so nobody has to open the image to know a colour or a font.
 | File | What it is |
 | --- | --- |
 | `logo-ninho.png` | The logo: the illustration with the word "ninho" under it. 342 × 300 px, transparent background. |
+| `desenho-ninho.png` | The drawing without the word, from Lucas (2026-11-24): 644 × 554 px, transparent background. It came as 2000 × 1200 on opaque black; the black was turned into transparency (brightness as opacity, so the soft edges of the branches stay) and the image cropped to the drawing. The source of the square icons. |
 | `identidade-visual-original.png` | The identity sheet as received (1920 × 1080): the logo, the two fonts and the three colours. The source of this file; do not edit it. |
 
 ## Logo
@@ -19,27 +20,41 @@ line, soft shapes, no hard corners.
 - Use it on the cream background or on white. The background of the file is transparent.
 - Do not recolour it, stretch it, crop the branches or separate the word from the drawing. When only
   a square mark fits (an app icon), use the drawing without the word, on cream.
-- It is a raster file, 342 × 300: fine up to about that size on screen. A larger use (splash screen,
-  a store icon) needs a vector or a larger export from Lucas.
+- The screens' icons (`ninho/telas/public/icone-64.png`, the tab icon, and `icone-180.png`, the
+  iPhone home-screen icon) are `desenho-ninho.png` centred on cream at 86 % of the side.
+- `logo-ninho.png` is 342 × 300: fine up to about that size on screen. A larger use of the logo with
+  the word (a splash screen) needs a vector or a larger export from Lucas.
 
 ## Colours
 
 | Name | Hex | Where it comes from | Use |
 | --- | --- | --- | --- |
-| Blue (azul) | `#99b2d9` (see the note) | the logo's line and the word "ninho" | the brand colour: the logo, large titles, fills, the active item |
+| Blue (azul) | `#99b2d9` | the logo's line and the word "ninho" | the brand colour: the logo, fills, the active item (titles use the dark blue below) |
 | Cream (creme) | `#f8f0de` | the sheet | the background of the app |
 | Green (verde) | `#addcaa` | the branches of the logo | the second colour: positive marks, small accents |
 
-**Note on the blue.** The sheet writes it as `#99b29`, five digits, so one is missing. Measured in
-`logo-ninho.png`, the blue of the line is about `#9ab1d5` (most pixels between `#98b0d0` and
-`#9cb4d8`), which agrees with `99 b2` and a last pair near `d6`. `#99b2d9` is the reading used
-until Lucas gives the exact value.
+**Note on the blue.** The sheet writes it as `#99b29`, five digits, one missing; Lucas confirmed
+`#99b2d9` (2026-11-24, df-8x0m.23.26).
 
 **Text needs a darker colour.** The three colours are all light: the blue on cream has a contrast of
-about 2 to 1, far below what running text needs (4.5 to 1). So the brand blue is for the logo, large
-titles and filled shapes, never for body text or small labels. The sheet gives no dark colour; the
-ink for text, and the colours for error and warning, are chosen when the identity is applied to the
-screens, as darker tones that sit well with these three, and are then written in this table.
+about 1.9 to 1, far below what running text needs (4.5 to 1). So the brand blue is for the logo and
+filled shapes (buttons, the active item), never for text. The dark colour is
+`#041e42`, a deep navy given by Lucas (2026-11-24) apart from the sheet; the other tones were derived
+when the identity was applied to the screens (df-8x0m.23.25), each a darker shade of the sheet's
+hues, with its contrast measured against the cream:
+
+| Name | Hex | Contrast on cream | Use |
+| --- | --- | --- | --- |
+| Ink (texto) | `#041e42` | 14.6 : 1 | the identity's dark colour: running text; also the text on a brand-blue button (7.7 : 1 on `#99b2d9`) |
+| Secondary (secundário) | `#5b6275` | 5.4 : 1 | dates, labels, empty states |
+| Dark blue (acento) | `#3d5a8f` | 6.0 : 1 | the screen titles and text links: the brand blue, darkened |
+| Dark green (entrada) | `#2f6b3a` | 5.6 : 1 | positive amounts and the tick of a bought item: the brand green, darkened |
+| Error (alerta) | `#a33b2c` | 5.8 : 1 | error text, on cream or on its own light fill `#f8e0d8` (5.2 : 1) |
+| Card (cartão) | `#fffbf2` | | the light surface of lists and cards, on cream |
+
+The screen titles use the dark blue rather than the brand blue: the brand blue on cream does not
+reach even the 3 : 1 that large text needs. The values live in `ninho/telas/src/index.css`, which
+names them as Tailwind colours (`texto`, `acento`, `marca`, `verde`...).
 
 ## Fonts
 
@@ -57,7 +72,6 @@ A screen should look like it belongs next to the drawing.
 
 ## Still open
 
-- The exact blue (the sheet's value has a digit missing).
-- Whether Lucas has a licence and the files of Migra for use on the web, or which serif stands in.
-- A vector version of the logo, and the drawing without the word for the app icon.
-- The dark colour for text and the error colour.
+- Whether Lucas has a licence and the files of Migra for use on the web. Until then the titles use
+  the system serif (`ui-serif`, Georgia).
+- A vector version of the logo with the word, or a larger export of it, for uses larger than 342 × 300.

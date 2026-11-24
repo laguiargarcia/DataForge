@@ -1,35 +1,46 @@
 @layer theme, base, components, utilities;
 
-@import '@fontsource/figtree/latin-400.css';
-@import '@fontsource/figtree/latin-500.css';
-@import '@fontsource/figtree/latin-600.css';
+@import '@fontsource/quicksand/latin-500.css';
+@import '@fontsource/quicksand/latin-600.css';
+@import '@fontsource/quicksand/latin-700.css';
 @import 'tailwindcss/theme.css' layer(theme);
 /* Só src/ gera classes: o dist/ commitado não é ignorado pelo git e entraria na varredura. */
 @import 'tailwindcss/utilities.css' layer(utilities) source('.');
 
-/* As cores e a fonte do app Finanças (workspaces/GetFinance/apps/financas/src/index.css). */
+/* A identidade visual do ninho (ninho/identidade/README.md): creme de fundo, o azul da marca nos
+   preenchimentos, o verde nas marcas positivas. As três cores da folha são claras; o texto, o azul
+   escuro e o erro são tons derivados delas, com contraste de pelo menos 4,5:1 sobre o creme. */
 @theme {
-  --color-fundo: #ECEEF6;
-  --color-cartao: #FFFFFF;
-  --color-texto: #1C1E2E;
-  --color-secundario: #565B72;
-  --color-acento: #3F3AB5;
-  --color-faixa: #F2F3FA;
-  --color-linha: #E6E8F2;
-  --color-ativa: #E6E8F7;
-  --color-alerta: #B3261E;
-  --color-alerta-fundo: #FCEBEA;
-  --color-entrada: #1E6B45;
-  --font-sans: Figtree, system-ui, sans-serif;
+  --color-fundo: #f8f0de;        /* creme da folha */
+  --color-cartao: #fffbf2;
+  --color-texto: #041e42;        /* a cor escura da identidade: 14,6:1 sobre o creme */
+  --color-secundario: #5b6275;   /* 5,4:1 sobre o creme */
+  --color-marca: #99b2d9;        /* o azul da marca: preenchimentos e item ativo, nunca texto */
+  --color-acento: #3d5a8f;       /* o azul da marca escurecido, para títulos e texto: 6,0:1 */
+  --color-verde: #addcaa;        /* o verde da marca, para preenchimentos; como texto ou marca fina, o entrada */
+  --color-entrada: #2f6b3a;      /* o verde escurecido: valores positivos e o comprado marcado, 5,6:1 */
+  --color-faixa: #f4ecda;
+  --color-linha: #ece2cc;
+  --color-ativa: #e4ebf6;
+  --color-alerta: #a33b2c;       /* 5,8:1 sobre o creme */
+  --color-alerta-fundo: #f8e0d8;
+  --font-sans: Quicksand, system-ui, sans-serif;
+  /* A Migra, dos títulos, ainda sem licença para a web: uma serifada do sistema no lugar. */
+  --font-titulo: Migra, ui-serif, Georgia, 'Times New Roman', serif;
 }
 
 @layer base {
   *, ::before, ::after { border: 0 solid; box-sizing: border-box; }
-  body { margin: 0; background: #ECEEF6; -webkit-text-size-adjust: 100%; }
+  /* A Quicksand é fina: o texto corrido usa o peso 500, e o 400 nem é carregado. A fonte e a cor
+     ficam no body para a barra de módulos, fora das telas, também as ter. */
+  body {
+    margin: 0; background: var(--color-fundo); color: var(--color-texto);
+    font-family: var(--font-sans); font-weight: 500; -webkit-text-size-adjust: 100%;
+  }
   button, select { font: inherit; color: inherit; }
   button { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
   button:disabled { cursor: default; }
-  button:focus-visible, select:focus-visible { outline: 2px solid #3F3AB5; outline-offset: 2px; }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--color-acento); outline-offset: 2px; }
   /* 16px ou mais: abaixo disso o Safari do iPhone dá zoom na página ao tocar no campo. */
   select { font-size: 16px; }
 }
