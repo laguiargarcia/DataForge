@@ -706,6 +706,11 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/prod/update-prod.ps1 `
             -VenvPath "$work/venv" -DataForgeHome $work -Wheel (Get-Item "$work/dataforge-*.whl").FullName `
             -Constraints "$work/constraints.txt" -Python $python
+          # The installed package carries the ninho screen (df-8x0m.23.13.11): run from another
+          # folder, so `ninho` is the install and not the checkout.
+          Push-Location $work
+          & "$work/venv/Scripts/python.exe" -c "from ninho.servidor.app import TELAS; assert (TELAS / 'index.html').is_file() and any((TELAS / 'assets').iterdir()), TELAS"
+          Pop-Location
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
