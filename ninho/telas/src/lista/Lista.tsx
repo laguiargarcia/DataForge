@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { adicionar, apagar, lerItens, LIMITE, limparComprados, marcar, separar, type Item } from './api'
+import { useDados } from '../dados'
 import { Logo } from '../Logo'
 
 // A tela do módulo lista (df-8x0m.23.20.3), para a tela de um iPhone: adicionar um item, marcar e
 // desmarcar comprado, apagar um e limpar os comprados. A lista é dos dois: ela é lida ao abrir a tela
-// e de novo cada vez que a tela ou a página volta a aparecer, porque a outra pessoa pode ter mexido.
-// Precisa de rede: sem guarda local nem fila (df-8x0m.23.8).
+// e de novo cada vez que a tela ou a página volta a aparecer (src/dados.ts).
 
-type Carga = { fase: 'carregando' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; valor: Item[] }
 type Props = Readonly<{ aberta: boolean }>
 
-const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const classeBotao = 'h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold shrink-0 disabled:opacity-40'
 
 const Xis = () => (
@@ -42,59 +40,10 @@ function Linha({ item, ocupado, alterar }: Readonly<{ item: Item; ocupado: boole
 }
 
 export function Lista({ aberta }: Props) {
-  const [carga, setCarga] = useState<Carga>({ fase: 'carregando' })
+  const { carga, ocupado, falha, alterar, tentar } = useDados(aberta, lerItens, 'a lista')
   const [texto, setTexto] = useState('')
-  const [ocupado, setOcupado] = useState(false)
-  const [falha, setFalha] = useState<string | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const campo = useRef<HTMLInputElement>(null)
-  // Só a leitura mais recente vale: uma resposta atrasada não apaga outra mais nova nem uma mudança
-  // feita depois que ela foi pedida (alterar também conta).
-  const ultima = useRef(0)
-  const carregou = useRef(false)
-
-  // Com a lista já na tela, uma releitura que falha (o iPhone desbloqueado com a rede ainda voltando)
-  // mantém a lista e mostra o aviso; o estado de erro com "Tentar de novo" é só para a primeira carga.
-  // Uma releitura boa tira o aviso, salvo quando ela fecha uma mudança que falhou (`manterFalha`).
-  const reler = useCallback((manterFalha = false) => {
-    const esta = ++ultima.current
-    return lerItens().then(
-      valor => {
-        if (ultima.current !== esta) return
-        carregou.current = true
-        setCarga({ fase: 'ok', valor })
-        if (!manterFalha) setFalha(null)
-      },
-      e => {
-        if (ultima.current !== esta) return
-        if (!carregou.current) setCarga({ fase: 'erro', mensagem: mensagem(e) })
-        else if (!manterFalha) setFalha(`Não foi possível reler a lista: ${mensagem(e)}`)
-      },
-    )
-  }, [])
-
-  // A casca mantém a tela montada e escondida: ler só quando ela está aberta, e reler quando a
-  // página volta a ficar visível (outra aba, o iPhone desbloqueado).
-  useEffect(() => {
-    if (!aberta) return
-    reler()
-    const aoVoltar = () => { if (document.visibilityState === 'visible') reler() }
-    document.addEventListener('visibilitychange', aoVoltar)
-    return () => document.removeEventListener('visibilitychange', aoVoltar)
-  }, [aberta, reler])
-
-  // Cada mudança vai ao servidor e depois relê a lista inteira, com a ordem do servidor e o que a
-  // outra pessoa tenha mudado; se falhar, relê também (o item pode ter sido apagado do outro lado).
-  // Marcar e apagar já aparecem no toque (`antes`); a releitura confirma ou desfaz.
-  const alterar = useCallback<Alterar>((acao, antes) => {
-    setOcupado(true)
-    setFalha(null)
-    ++ultima.current   // uma leitura pedida antes do toque e respondida depois não desfaz a mudança
-    if (antes) setCarga(c => (c.fase === 'ok' ? { fase: 'ok', valor: antes(c.valor) } : c))
-    acao()
-      .then(() => reler(), (e: unknown) => { setFalha(mensagem(e)); return reler(true) })
-      .finally(() => setOcupado(false))
-  }, [reler])
 
   const enviar = (evento: FormEvent) => {
     evento.preventDefault()
@@ -140,7 +89,7 @@ export function Lista({ aberta }: Props) {
           {carga.fase === 'erro' && (
             <div className="rounded-[20px] bg-cartao px-4 py-6 flex flex-col gap-3 items-start">
               <p className="m-0 break-words">Não foi possível carregar a lista: {carga.mensagem}</p>
-              <button type="button" className={classeBotao} onClick={() => { setCarga({ fase: 'carregando' }); reler() }}>
+              <button type="button" className={classeBotao} onClick={tentar}>
                 Tentar de novo
               </button>
             </div>
