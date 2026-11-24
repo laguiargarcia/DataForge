@@ -35,6 +35,14 @@ test('abre no mês do endereço, cabe na largura do iPhone e troca de mês', asy
 })
 
 test('corrige a categoria de uma transação, aplica e vê a categoria nova', async ({ page }) => {
+  // Um aplicar em curso nunca vira dois (df-8x0m.23.13.10): toque duplo e recarregar não pedem outro.
+  const pedidosAplicar: string[] = []
+  const acompanhados: string[] = []
+  page.on('request', r => {
+    const caminho = new URL(r.url()).pathname
+    if (r.method() === 'POST' && caminho.endsWith('/api/financas/aplicar')) pedidosAplicar.push(caminho)
+    if (r.method() === 'GET' && caminho.includes('/api/financas/aplicar/')) acompanhados.push(caminho)
+  })
   await page.goto(`?mes=${MES}`)
   const linha = linhas(page).first()
   const categoria = linha.locator('[data-campo="categoria"]')
@@ -52,9 +60,17 @@ test('corrige a categoria de uma transação, aplica e vê a categoria nova', as
   await expect(linha).toContainText(`→ ${nova} (falta aplicar)`)
   await expect(categoria).toHaveText(antes)   // a tabela publicada só muda no aplicar
 
-  await page.getByRole('button', { name: 'Aplicar', exact: true }).click()
+  await page.getByRole('button', { name: 'Aplicar', exact: true }).dblclick()
   await expect(page.getByRole('status')).toContainText('Aplicando')
+  await expect.poll(() => acompanhados.length).toBeGreaterThan(0)
+  const antesDeRecarregar = acompanhados.length
+  await page.reload()
+  // A página recarregada volta a seguir a execução guardada, sem oferecer "Aplicar".
+  await expect.poll(() => acompanhados.length).toBeGreaterThan(antesDeRecarregar)
+  await expect(page.getByRole('button', { name: 'Aplicar', exact: true })).toHaveCount(0)
   await expect(page.getByRole('status')).toHaveCount(0, { timeout: 150_000 })
+  expect(pedidosAplicar).toHaveLength(1)
+  expect(new Set(acompanhados).size).toBe(1)
   await expect(page.getByRole('alert')).toHaveCount(0)
   await expect(pendencia(page)).toHaveCount(0)
   await expect(categoria).toHaveText(nova)
