@@ -1,4 +1,6 @@
 import base64
+import contextlib
+import json
 import os
 import platform
 import shlex
@@ -832,12 +834,60 @@ def _report_results(results: dict, status: str) -> None:
         raise typer.Exit(1)
 
 
+def _print_json(payload: dict) -> None:
+    """One JSON object on stdout, for a program (no rich markup, no wrapping)."""
+    typer.echo(json.dumps(payload, ensure_ascii=False))
+
+
+def _request_run(workspace: str, job: str) -> None:
+    """`run --detach`: record the run, start it detached, answer its id at once (df-8x0m.23.13.1)."""
+    from dataforge import run_request  # noqa: PLC0415 -- lazy: keeps CLI startup fast
+
+    try:
+        with contextlib.redirect_stdout(sys.stderr):  # stdout carries the JSON object and nothing else
+            answer = run_request.request_run(workspace, job, _dataforge_command())
+    except run_request.InvalidRequest as e:
+        _print_json({"error": str(e)})
+        raise typer.Exit(run_request.EXIT_INVALID_REQUEST) from e
+    _print_json(answer)
+    if answer["state"] == "failed":  # the run process never started
+        raise typer.Exit(1)
+
+
+@app.command("run-requested", hidden=True)
+def run_requested(workspace: str, job: str, run_id: str) -> None:
+    """The detached process of `run --detach`: runs what the request recorded."""
+    from dataforge import run_request  # noqa: PLC0415 -- lazy: keeps CLI startup fast
+
+    run_request.execute_requested(workspace, job, run_id)
+
+
+@app.command("run-state")
+def run_state_cmd(run_id: str = typer.Argument(..., help="Run id answered by `run --detach`")) -> None:
+    """Print a run's state as one JSON object; exit 2 when the id is unknown."""
+    from dataforge import run_request  # noqa: PLC0415 -- lazy: keeps CLI startup fast
+
+    with contextlib.redirect_stdout(sys.stderr):
+        state = run_request.run_state(run_id)
+    if state is None:
+        _print_json({"error": f"Run '{run_id}' not found."})
+        raise typer.Exit(run_request.EXIT_INVALID_REQUEST)
+    _print_json(state)
+
+
 @app.command()
 def run(
     workspace: str = typer.Argument(..., help="Workspace name"),
     job: str = typer.Argument(..., help="Job name"),
+    # Annotated, so a plain call `run(workspace, job)` gets False and not typer's option object.
+    detach: Annotated[bool, typer.Option(
+        "--detach",
+        help="Answer the run id as JSON at once and let the run go on by itself; follow it with `run-state`.")] = False,
 ):
     """Run a job directly without the HTTP server. Used by OS-level schedulers."""
+    if detach:
+        _request_run(workspace, job)
+        return
     from dataforge.parser import load_job
     from dataforge.engine import run_job, run_status
     from dataforge.db import init_db, JobRunORM, ScheduleORM, utcnow
