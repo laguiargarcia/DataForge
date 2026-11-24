@@ -6,6 +6,7 @@ o segredo que o DataForge mandaria. A API do DataForge é um httpx.MockTransport
 import importlib.util
 import shutil
 import sqlite3
+from contextlib import closing
 from datetime import date
 from pathlib import Path
 
@@ -84,7 +85,8 @@ def cliente(ws):
 
 
 def _versao(ws):
-    return sqlite3.connect(ws / "data" / "edicao.db").execute("SELECT numero FROM versao").fetchone()
+    with closing(sqlite3.connect(ws / "data" / "edicao.db")) as conn:
+        return conn.execute("SELECT numero FROM versao").fetchone()
 
 
 def _categoria(sub="Lazer", categoria="Lazer", tipo="Não Essencial"):

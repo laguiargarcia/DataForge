@@ -3,7 +3,7 @@ import sys
 import polars as pl
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
 from classificacao import TAG_APLICACAO_AUTOMATICA, eh_aplicacao_automatica
 

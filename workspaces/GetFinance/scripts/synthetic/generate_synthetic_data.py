@@ -21,7 +21,7 @@ from pathlib import Path
 
 # Reuse the workspace's IO + partition helpers (same mechanism landing2raw.py uses: exec the
 # functions module in this namespace).
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 
 SEED = 20260621
 ANCHOR = date(2026, 6, 21)        # fixed; do NOT use datetime.now() (determinism)

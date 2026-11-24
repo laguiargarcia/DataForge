@@ -4,6 +4,7 @@ O curated de entrada é uma cópia do curated real do workspace (skip se não ex
 edição é semeado das fixtures. Nada é gravado no workspace.
 """
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import polars as pl
@@ -58,7 +59,8 @@ def _preparar(tmp_path, so_banco=False, carregar=True):
     for t, df in tabelas.items():
         seed(tmp_path, "curated", t, df)
     if carregar:
-        carga_inicial(abrir(tmp_path / "edicao"), *_dic_rules())
+        with closing(abrir(tmp_path / "edicao")) as conn:
+            carga_inicial(conn, *_dic_rules())
     return tabelas
 
 

@@ -21,14 +21,19 @@ def exec_functions(ns, path=FUNCTIONS):
     return ns
 
 
+def _loads_functions(line: str) -> bool:
+    """The line every pipeline script starts with: it runs scripts/functions/functions.py in the script's namespace."""
+    return line.strip().startswith("exec(") and '"functions.py"' in line
+
+
 def compile_script(path, until=None):
-    """A pipeline script's code, without its `exec(open(...functions.py))` line (the test loads the
+    """A pipeline script's code, without its `exec((... / "functions.py").read_text(...))` line (the test loads the
     functions itself), compiled under the script's own file name with its line numbers kept: coverage
     then counts the lines the tests run (DataForge df-bsb2.2.5). `until`: only the text before it."""
     text = path.read_text(encoding="utf-8")
     if until is not None:
         text = text.split(until)[0]
-    lines = ["" if line.strip().startswith("exec(open(") else line for line in text.splitlines()]
+    lines = ["" if _loads_functions(line) else line for line in text.splitlines()]
     return compile("\n".join(lines), str(path), "exec")
 
 

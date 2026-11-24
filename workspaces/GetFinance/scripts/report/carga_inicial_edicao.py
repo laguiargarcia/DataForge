@@ -5,11 +5,12 @@
 #   dicionario: colunas subcategoria,categoria,Tipo · mapeamento: colunas padrao,subcategoria
 import argparse
 import sys
+from contextlib import closing
 from pathlib import Path
 
 import polars as pl
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 sys.path.insert(0, str(Path(__file__).parent))
 from edicao import abrir, carga_inicial
 
@@ -29,9 +30,8 @@ def _caminho(arquivo: str) -> Path:
 dicionario = pl.read_csv(_caminho(args.dicionario), encoding="utf8", infer_schema_length=0)
 mapeamento = pl.read_csv(_caminho(args.mapeamento), encoding="utf8", infer_schema_length=0)
 
-conn = abrir(_connection_root("edicao"))
-n_dic, n_map = carga_inicial(conn, dicionario, mapeamento)
-conn.close()
+with closing(abrir(_connection_root("edicao"))) as conn:   # fecha também quando a carga falha
+    n_dic, n_map = carga_inicial(conn, dicionario, mapeamento)
 
 
 def _msg(n):
