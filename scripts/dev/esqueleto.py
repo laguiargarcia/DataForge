@@ -5,7 +5,9 @@ The app database (NINHO_BANCO: the people, the shopping list) is a file in the s
 <home>/ninho.db, and gets one person with every module, whose name and password come from
 NINHO_ESQUELETO_NOME and NINHO_ESQUELETO_SENHA: the login the browser asks for. They are read only
 here and taken out of the environment, so neither finance_demo nor the server sees them. Run again
-on the same --home, the person gets that password and every module.
+on the same --home, the person gets that password and every module. A second person, with the
+shopping list only, is created when NINHO_ESQUELETO_NOME_LISTA and NINHO_ESQUELETO_SENHA_LISTA are
+set (the screen's browser test uses it to see the bar of someone without finances).
 
 Used by hand, by the end-to-end test (tests/ninho/test_esqueleto.py) and by the screen's browser test
 (ninho/telas/playwright.config.ts).
@@ -47,14 +49,15 @@ def preparar(home: Path) -> Path:
     return copia
 
 
-def criar_pessoa(arquivo: Path, nome: str, senha: str) -> None:
-    """The skeleton's person in the app database at <arquivo>, with every module and <senha>."""
+def criar_pessoa(arquivo: Path, nome: str, senha: str, modulos: tuple[str, ...] = pessoas.MODULOS) -> None:
+    """A person of the skeleton in the app database at <arquivo>, with <senha> and <modulos> (every
+    module unless told)."""
     with banco.aberto(arquivo) as conn:
         if pessoas.existe(conn, nome):
             pessoas.trocar_senha(conn, nome, senha)
-            pessoas.definir_modulos(conn, nome, list(pessoas.MODULOS))
+            pessoas.definir_modulos(conn, nome, list(modulos))
         else:
-            pessoas.criar(conn, nome, senha, list(pessoas.MODULOS))
+            pessoas.criar(conn, nome, senha, list(modulos))
 
 
 def _parar(*_) -> None:
@@ -72,11 +75,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     # Taken out of the environment: neither finance_demo nor the server and the jobs it starts get them.
     login = os.environ.pop("NINHO_ESQUELETO_NOME", ""), os.environ.pop("NINHO_ESQUELETO_SENHA", "")
+    so_lista = os.environ.pop("NINHO_ESQUELETO_NOME_LISTA", ""), os.environ.pop("NINHO_ESQUELETO_SENHA_LISTA", "")
     if not all(login):
         parser.error("defina NINHO_ESQUELETO_NOME e NINHO_ESQUELETO_SENHA: o login que o servidor pede")
+    if any(so_lista) and not all(so_lista):
+        parser.error("NINHO_ESQUELETO_NOME_LISTA e NINHO_ESQUELETO_SENHA_LISTA vão juntas")
     try:   # before the copy and finance_demo, which take a while
-        pessoas.validar_nome(login[0])
-        pessoas.validar_senha(login[1])
+        for nome, senha in filter(all, (login, so_lista)):
+            pessoas.validar_nome(nome)
+            pessoas.validar_senha(senha)
     except pessoas.Invalido as erro:
         parser.error(str(erro))
     for nome in _FORA:
@@ -88,8 +95,11 @@ def main(argv: list[str] | None = None) -> int:
         args.home.mkdir(parents=True, exist_ok=True)
     with nullcontext(args.home) if args.home else tempfile.TemporaryDirectory(prefix="ninho-esqueleto-", ignore_cleanup_errors=True) as home:
         os.environ["NINHO_WORKSPACE"] = str(preparar(Path(home)))
-        os.environ["NINHO_BANCO"] = str(Path(home) / "ninho.db")
-        criar_pessoa(Path(home) / "ninho.db", *login)
+        banco_do_app = Path(home) / "ninho.db"
+        os.environ["NINHO_BANCO"] = str(banco_do_app)
+        criar_pessoa(banco_do_app, *login)
+        if all(so_lista):
+            criar_pessoa(banco_do_app, *so_lista, modulos=("lista",))
         uvicorn.run(app, host=args.endereco, port=args.porta)
     return 0
 
