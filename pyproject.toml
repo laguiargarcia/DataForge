@@ -164,8 +164,15 @@ PySide6 = "PySide6"
 DEP002 = ["deltalake", "tzdata"]
 
 [tool.importlinter]
-root_package = "dataforge"
+root_packages = ["dataforge", "ninho"]
 include_external_packages = true
+
+# The wall of ADR 0006: the product talks to the engine only through its command line, and the
+# engine never knows the product.
+[[tool.importlinter.contracts]]
+name = "ninho does not import dataforge, and dataforge does not import ninho"
+type = "independence"
+modules = ["dataforge", "ninho"]
 
 [[tool.importlinter.contracts]]
 name = "Core does not import the surfaces (CLI, API, GUI)"
@@ -224,7 +231,7 @@ relative_files = true
 exclude_also = ['^exec\(\(Path\(__file__\).*"functions\.py"\)\.read_text']
 
 [tool.setuptools.packages.find]
-include = ["dataforge*"]
+include = ["dataforge*", "ninho*"]
 
 [project.scripts]
 dataforge = "dataforge.cli:app"
