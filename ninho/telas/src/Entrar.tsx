@@ -53,7 +53,7 @@ export function Entrar({ aoEntrar }: Props) {
           </label>
           {falha && <p role="alert" className="m-0 px-4 py-3 rounded-[12px] bg-alerta-fundo text-alerta">{falha}</p>}
           <button type="submit" disabled={enviando}
-            className="h-12 rounded-[999px] bg-marca text-texto font-semibold disabled:opacity-40">
+            className="h-12 rounded-[999px] bg-marca text-texto font-semibold text-center disabled:opacity-40">
             {enviando ? 'Entrando…' : 'Entrar'}
           </button>
         </form>

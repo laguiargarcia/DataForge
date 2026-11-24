@@ -69,7 +69,7 @@ export function Lista({ aberta }: Props) {
       <header className="sticky top-0 z-10 bg-fundo pt-[max(12px,env(safe-area-inset-top))] pb-3 px-4">
         <div className="max-w-[480px] mx-auto flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <h1 className="m-0 font-titulo text-[30px] leading-tight font-bold text-acento">Lista</h1>
+            <h1 className="m-0 font-titulo text-[30px] leading-tight font-bold text-acento">Compras</h1>
             <Logo />
           </div>
           <form className="flex gap-2" onSubmit={enviar}>

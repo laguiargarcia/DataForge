@@ -49,22 +49,22 @@ test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async 
   const botao = (rotulo: string) => barra.getByRole('button', { name: rotulo, exact: true })
   await page.goto(`?mes=${MES}`)
   await expect(botao('Finanças')).toHaveAttribute('aria-current', 'page')
-  await expect(botao('Lista')).not.toHaveAttribute('aria-current')
+  await expect(botao('Compras')).not.toHaveAttribute('aria-current')
   await expect(linhas(page).first()).toBeVisible()
   await page.getByRole('button', { name: 'Mês anterior' }).click()
   await expect(page.getByText('maio de 2026')).toBeVisible()
 
-  await botao('Lista').click()
-  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  await botao('Compras').click()
+  await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Itens da lista' })).toContainText('A lista está vazia.')
   await expect(page.getByRole('heading', { name: 'Transações' })).toBeHidden()
-  await expect(botao('Lista')).toHaveAttribute('aria-current', 'page')
+  await expect(botao('Compras')).toHaveAttribute('aria-current', 'page')
   await expect(page).toHaveURL(/\?mes=2026-05&tela=lista$/)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
   // Recarregar fica na mesma tela.
   await page.reload()
-  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toBeVisible()
 
   await botao('Finanças').click()
   await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()
@@ -86,10 +86,11 @@ test('quem só tem a lista vê a barra sem Finanças nem Desejos, abre direto na
 
   // O endereço pede as finanças, que ela não tem: cai na primeira tela dela.
   await page.goto(`?tela=financas&mes=${MES}`)
-  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toBeVisible()
   const barra = page.getByRole('navigation', { name: 'Módulos' })
-  await expect(barra.getByRole('button')).toHaveCount(1)
-  await expect(barra.getByRole('button', { name: 'Lista', exact: true })).toHaveAttribute('aria-current', 'page')
+  // Só o módulo dela e o Sair, que é da casca.
+  await expect(barra.getByRole('button')).toHaveText(['Compras', 'Sair'])
+  await expect(barra.getByRole('button', { name: 'Compras', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(barra.getByRole('button', { name: 'Desejos', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Desejos', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Transações' })).toHaveCount(0)
@@ -107,7 +108,7 @@ test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comp
   await page.goto(`?mes=${MES}`)
   await expect(linhas(page).first()).toBeVisible()
   expect(pedidosLista).toEqual([])
-  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Lista', exact: true }).click()
+  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Compras', exact: true }).click()
 
   const itens = page.getByRole('region', { name: 'Itens da lista' })
   await expect(itens).toContainText('A lista está vazia.')

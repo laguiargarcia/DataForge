@@ -47,6 +47,9 @@ test('sem sessão a página mostra o formulário, que as Senhas do iCloud sabem 
   for (const campo of [nome, senha]) {
     expect(await campo.evaluate(e => Number.parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16)
   }
+  // O texto do botão fica no meio dele.
+  const botao = page.getByRole('button', { name: 'Entrar', exact: true })
+  expect(await botao.evaluate(e => getComputedStyle(e).textAlign)).toBe('center')
   // Cabe na largura do iPhone, e nada dos módulos foi pedido antes do login.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   expect(pedidos.filter(p => p.startsWith('/api/') && p !== '/api/eu')).toEqual([])
@@ -127,7 +130,7 @@ test('depois de sair, outra pessoa entra no mesmo navegador e vê só o que é d
 
   await preencher(page, soLista.nome, soLista.senha)
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toBeVisible()
   await expect(barra(page).getByRole('button', { name: 'Finanças', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Transações' })).toHaveCount(0)
 })
@@ -136,12 +139,12 @@ test('uma sessão encerrada no servidor leva a tela aberta de volta ao formulár
   await page.goto('?tela=lista')
   await preencher(page, login.nome, login.senha)
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toBeVisible()
 
   // Como uma troca de senha ou um 'pessoas sair' faria: a sessão acaba sem a tela saber.
   expect((await context.request.post('api/sair')).status()).toBe(204)
   await page.getByLabel('Novo item').fill('pão')
   await page.getByRole('button', { name: 'Adicionar' }).click()
   await expect(formulario(page)).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toHaveCount(0)
 })
