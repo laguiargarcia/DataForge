@@ -139,7 +139,7 @@ def test_df004_a_workspace_script_nobody_calls(tmp_path, monkeypatch):
     files = tree(tmp_path, monkeypatch, {
         "workspaces/ws/jobs/diario/job.yaml": "tasks:\n  - name: a\n    script: etapa/run.py\n"
                                               "  - name: b\n    script: 'etapa/outro.py'  # comentario\n",
-        s + "etapa/run.py": "exec(open(base / 'functions' / 'functions.py').read())\nfrom lib import f\n",
+        s + "etapa/run.py": "exec((base / 'functions' / 'functions.py').read_text())\nfrom lib import f\n",
         s + "etapa/outro.py": "print('roda: reprocess.py --entity all')\n",
         s + "lib.py": "def f(): ...\n",
         s + "functions/functions.py": "x = 1\n",

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import polars as pl
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
 from conferencia_saldo import EM_ABERTO, ESTADOS, NAO_FECHA, TOLERANCIA, aplicar_explicacoes, conferencia_saldo
 from edicao import abrir, ler_explicacoes

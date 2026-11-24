@@ -17,24 +17,38 @@ DIC = pl.DataFrame({"subcategoria": ["Groceries", "Salario"],
 RULES = pl.DataFrame({"padrao": ["viacao ficticia"], "subcategoria": ["Onibus"]})
 
 
-def test_abrir_cria_esquema(tmp_path):
-    abrir(tmp_path / "e.db").close()
-    conn = abrir(tmp_path / "e.db")
+@pytest.fixture
+def aberto(tmp_path):
+    """abrir() no e.db do teste; cada conexão que o teste abriu é fechada quando ele termina."""
+    conexoes = []
+
+    def _abrir():
+        conexoes.append(abrir(tmp_path / "e.db"))
+        return conexoes[-1]
+
+    yield _abrir
+    for conexao in conexoes:
+        conexao.close()
+
+
+def test_abrir_cria_esquema(aberto):
+    aberto().close()
+    conn = aberto()
     dic = ler_dicionario(conn)
     assert dic.height == 0
     assert dic.columns == ["subcategoria", "categoria", "Tipo"]
 
 
-def test_carga_inicial_insere(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_carga_inicial_insere(aberto):
+    conn = aberto()
     assert carga_inicial(conn, DIC, RULES) == (2, 1)
     dic, rules = ler_tabelas(conn)
     assert dic.sort("subcategoria").equals(DIC.sort("subcategoria"))
     assert rules.equals(RULES)
 
 
-def test_carga_inicial_nao_sobrescreve(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_carga_inicial_nao_sobrescreve(aberto):
+    conn = aberto()
     carga_inicial(conn, DIC, RULES)
     with conn:
         conn.execute("UPDATE categorias SET categoria = 'Editada' WHERE subcategoria = 'Groceries'")
@@ -43,22 +57,22 @@ def test_carga_inicial_nao_sobrescreve(tmp_path):
     assert dic.filter(pl.col("subcategoria") == "Groceries")["categoria"].item() == "Editada"
 
 
-def test_ler_tabelas_falha_sem_carga(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_ler_tabelas_falha_sem_carga(aberto):
+    conn = aberto()
     with pytest.raises(RuntimeError, match="carga_inicial_edicao"):
         ler_tabelas(conn)
 
 
-def test_subcategoria_duplicada_rejeitada(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_subcategoria_duplicada_rejeitada(aberto):
+    conn = aberto()
     dup = pl.concat([DIC, DIC.head(1)])
     with pytest.raises(sqlite3.IntegrityError):
         carga_inicial(conn, dup, RULES)
     assert ler_dicionario(conn).height == 0
 
 
-def test_chaves_nao_aceitam_nulo(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_chaves_nao_aceitam_nulo(aberto):
+    conn = aberto()
     sem_sub = pl.DataFrame({"subcategoria": [None], "categoria": ["X"], "Tipo": ["Essencial"]},
                            schema={"subcategoria": pl.String, "categoria": pl.String, "Tipo": pl.String})
     with pytest.raises(sqlite3.IntegrityError):
@@ -69,28 +83,28 @@ def test_chaves_nao_aceitam_nulo(tmp_path):
         carga_inicial(conn, DIC, sem_padrao)
 
 
-def test_correcoes_e_versao_vazias_num_banco_novo(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_correcoes_e_versao_vazias_num_banco_novo(aberto):
+    conn = aberto()
     assert ler_correcoes(conn).columns == ["transacao_id", "subcategoria"]
     assert ler_correcoes(conn).height == 0
     assert ler_versao(conn) == 0
 
 
-def test_abrir_banco_antigo_cria_as_tabelas_novas(tmp_path):
+def test_abrir_banco_antigo_cria_as_tabelas_novas(tmp_path, aberto):
     antigo = sqlite3.connect(tmp_path / "e.db")
     antigo.executescript("CREATE TABLE categorias (subcategoria TEXT PRIMARY KEY NOT NULL, categoria TEXT, tipo TEXT);"
                          "CREATE TABLE mapeamento (padrao TEXT PRIMARY KEY NOT NULL, subcategoria TEXT NOT NULL);"
                          "INSERT INTO categorias VALUES ('Groceries', 'Alimentação', 'Essencial');")
     antigo.commit()
     antigo.close()
-    conn = abrir(tmp_path / "e.db")
+    conn = aberto()
     assert ler_dicionario(conn).height == 1
     assert ler_correcoes(conn).height == 0
     assert ler_versao(conn) == 0
 
 
-def test_ler_correcoes_e_versao(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_ler_correcoes_e_versao(aberto):
+    conn = aberto()
     with conn:
         conn.execute("INSERT INTO correcoes VALUES ('tx1', 'Groceries')")
         conn.execute("INSERT INTO versao (id, numero, editado_em) VALUES (1, 7, '2026-11-20T12:00:00Z')")
@@ -98,17 +112,17 @@ def test_ler_correcoes_e_versao(tmp_path):
     assert ler_versao(conn) == 7
 
 
-def test_versao_tem_uma_linha_so(tmp_path):
-    conn = abrir(tmp_path / "e.db")
+def test_versao_tem_uma_linha_so(aberto):
+    conn = aberto()
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO versao (id, numero) VALUES (2, 1)")
 
 
 # --- divergências explicadas da conferência pelo saldo (df-y26v) ----------------------------------
 
-def test_explicacao_grava_troca_e_desfaz_subindo_a_versao(tmp_path):
+def test_explicacao_grava_troca_e_desfaz_subindo_a_versao(aberto):
     from edicao import Recusa, excluir_explicacao, ler_explicacoes, salvar_explicacao
-    conn = abrir(tmp_path / "e.db")
+    conn = aberto()
     assert ler_explicacoes(conn).is_empty()
     salvar_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00", 9.93, "  seguro antes da coleta ")
     salvar_explicacao(conn, "conta-ficticia", "2026-05-28T19:00:00+00:00", 9.93, "seguro do cartão")

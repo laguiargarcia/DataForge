@@ -57,7 +57,7 @@ SQLITE_URL_HOMES = {"dataforge/compat.py", Path(__file__).resolve().relative_to(
 APP_BACKEND = re.compile(r"workspaces/[^/]+/apps/[^/]+/backend/.+\.py")
 DIRECT_DELTA_READS = {"read_delta", "scan_delta"}
 # A workspace script (workspaces/<ws>/scripts/**) is alive when a job.yaml runs it or another file of the
-# workspace outside its tests names it: imports it, or spells "<name>.py" in a string (exec(open(...)), a
+# workspace outside its tests names it: imports it, or spells "<name>.py" in a string (the exec(...) loader, a
 # "run reprocess.py" message). A script kept to be run by hand says so on a line of its own (df-aq85).
 WORKSPACE_SCRIPT = re.compile(r"workspaces/(?P<ws>[^/]+)/scripts/(?P<rel>.+\.py)")
 JOB_SCRIPT = re.compile(r"^\s*script:\s*['\"]?(?P<rel>[^'\"\s#]+\.py)", re.MULTILINE)

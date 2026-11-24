@@ -5,7 +5,7 @@
 # last lines printed here. A suspicious finding never stops the data: the writes already happened.
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 
 findings = read_findings()
 for table, finding in findings:

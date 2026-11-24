@@ -3,8 +3,9 @@
 Both suites load it with `pytest_plugins = ["dataforge.testing"]` in their conftest.py. They cannot
 share one conftest: each has its own `tests` package, and two packages of that name do not fit in one
 pytest process (CI runs them as separate jobs). What both need lives here once: the Hypothesis
-profiles and the fixtures that run a job through the real engine on a temp DATAFORGE_HOME. Test code
-only: nothing in the package imports it, and prod (which has no pytest) never loads it.
+profiles, the rule that a leaked connection or file is an error, and the fixtures that run a job
+through the real engine on a temp DATAFORGE_HOME. Test code only: nothing in the package imports it,
+and prod (which has no pytest) never loads it.
 """
 import pytest
 from hypothesis import settings
@@ -27,6 +28,18 @@ settings.register_profile("no-deadline", settings.default, deadline=None)
 # same seed. No example database (a CI runner keeps nothing), and the failing example's blob printed.
 settings.register_profile("explore", derandomize=False, database=None, deadline=None, print_blob=True)
 settings.load_profile("no-deadline")
+
+
+def pytest_configure(config):
+    """A connection or file left open fails the test that left it, in every suite that loads this
+    plugin (df-n8ac.19, df-g4z7).
+
+    Python warns of it from the object's finalizer, where nothing can be raised: pytest turns that
+    into its own PytestUnraisableExceptionWarning, so both are errors. Hundreds of `unclosed
+    database` lines per run went unread for weeks while every caller of init_db leaked a pooled
+    connection."""
+    config.addinivalue_line("filterwarnings", "error::ResourceWarning")
+    config.addinivalue_line("filterwarnings", "error::pytest.PytestUnraisableExceptionWarning")
 
 
 @pytest.fixture

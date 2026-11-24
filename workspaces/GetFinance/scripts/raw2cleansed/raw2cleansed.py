@@ -9,7 +9,7 @@ import polars as pl
 from datetime import date
 from pathlib import Path
 
-exec(open(Path(__file__).parent.parent / "functions" / "functions.py", encoding="utf-8").read())
+exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
 from conferencia_fatura import copias_pela_fatura
 

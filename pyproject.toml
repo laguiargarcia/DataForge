@@ -127,9 +127,9 @@ max-complexity = 10
 # The banned-api rule is for the package only: scripts and tests read their own environment.
 "scripts/**" = ["TID251"]
 "tests/**" = ["TID251", "PLR2004", "ARG", "PLC0415", "S108", "DTZ"]
-# Workspace scripts load functions.py with exec(open(...).read()) (docs/scripts-conventions.md):
-# its names are invisible to pyflakes, and the open() is the sanctioned loader.
-"workspaces/**" = ["TID251", "F821", "SIM115"]
+# Workspace scripts load functions.py with exec(<path>.read_text(...)) (docs/scripts-conventions.md):
+# its names are invisible to pyflakes.
+"workspaces/**" = ["TID251", "F821"]
 # A private workspace's own tests (df-rt6w) get the same allowances as tests/ (ruff unions the matches).
 "workspaces/*/tests/**" = ["TID251", "PLR2004", "ARG", "PLC0415", "S108", "DTZ"]
 
