@@ -1,6 +1,8 @@
 // Cliente das rotas da lista de compras (ninho/lista/rotas.py). Como em finanças, a página vem do
 // mesmo servidor atrás do login da pessoa (HTTP Basic), que o navegador manda em cada pedido daqui.
 
+import { pedir as pedirAoServidor, segmento } from '../pedido'
+
 /** Um item da lista, como ninho/lista/itens.py o devolve (horas em ISO, UTC). */
 export type Item = {
   id: string
@@ -14,18 +16,8 @@ export type Item = {
 /** O tamanho máximo do texto de um item (LIMITE em ninho/lista/itens.py). */
 export const LIMITE = 200
 
-// Relativo à página, que o servidor entrega em "/". O id vai num segmento só: "/" e "." viram %XX.
-const endereco = (caminho: string) => `api/lista/${caminho}`
-const segmento = (valor: string) => encodeURIComponent(valor).replaceAll('.', '%2E')
-
-async function pedir<T>(metodo: string, caminho: string, corpo?: unknown): Promise<T> {
-  const r = await fetch(endereco(caminho), corpo === undefined
-    ? { method: metodo }
-    : { method: metodo, headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) })
-  if (r.ok) return (r.status === 204 ? undefined : await r.json()) as T
-  const detalhe = await r.json().then((c: { detail?: unknown }) => c.detail, () => undefined)
-  throw new Error(typeof detalhe === 'string' ? detalhe : `Falha no pedido: HTTP ${r.status}`)
-}
+const pedir = <T>(metodo: string, caminho: string, corpo?: unknown) =>
+  pedirAoServidor<T>(metodo, `api/lista/${caminho}`, corpo)
 
 /** Todos os itens: os que faltam primeiro (mais novos em cima), depois os comprados. */
 export const lerItens = () => pedir<{ itens: Item[] }>('GET', 'itens').then(c => c.itens)

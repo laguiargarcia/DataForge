@@ -35,7 +35,7 @@ describe('lerEu', () => {
     const fetchFalso = vi.fn(async () => new Response(JSON.stringify({ nome: 'ana', modulos: ['lista'] })))
     vi.stubGlobal('fetch', fetchFalso)
     expect(await lerEu()).toEqual({ nome: 'ana', modulos: ['lista'] })
-    expect(fetchFalso).toHaveBeenCalledWith('api/eu')
+    expect(fetchFalso).toHaveBeenCalledWith('api/eu', { method: 'GET' })
   })
   it('falha com o status quando o servidor recusa', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })))

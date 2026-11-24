@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { andamento, corrigir, desfazer, ErroPedido, lerTransacoes, segmento } from './api'
+import { ErroPedido } from '../pedido'
+import { andamento, corrigir, desfazer, lerTransacoes } from './api'
 
 const resposta = (status: number, corpo?: unknown) =>
   new Response(corpo === undefined ? null : JSON.stringify(corpo), { status })
@@ -48,9 +49,5 @@ describe('api', () => {
     const f = falso(resposta(200, { run_id: 'r1', state: 'running' }))
     await andamento('r1', 20)
     expect(f.mock.calls[0][0]).toBe('api/financas/aplicar/r1?esperar=20')
-  })
-
-  it('segmento troca "/" e "."', () => {
-    expect(segmento('../x')).toBe('%2E%2E%2Fx')
   })
 })
