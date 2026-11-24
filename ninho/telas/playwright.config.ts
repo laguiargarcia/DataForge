@@ -7,7 +7,8 @@ import { resolve } from 'node:path'
 const raiz = resolve(import.meta.dirname, '../..')
 const python = process.env.NINHO_PYTHON ?? resolve(raiz, '.venv/bin/python')
 const navegador = (process.env.NAVEGADOR ?? 'chromium') as 'chromium' | 'webkit'
-const porta = 8766
+// A porta pode vir de fora: duas sessões rodando o e2e ao mesmo tempo não cabem na mesma.
+const porta = Number(process.env.NINHO_E2E_PORTA ?? 8766)
 // A pessoa que o esqueleto cria no banco do app da cópia: só do servidor de teste, sobre o dado sintético.
 const login = { username: 'ana', password: 'senha-falsa-do-teste-da-tela' }
 // Uma segunda pessoa, só com a lista: o teste da barra entra como ela (e2e/tela.spec.ts).

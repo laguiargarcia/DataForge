@@ -16,7 +16,7 @@ type Carga = { fase: 'carregando' } | { fase: 'erro'; mensagem: string } | { fas
 
 const MODULOS: Modulo[] = [
   { id: 'financas', rotulo: 'Finanças', Tela: Financas },
-  { id: 'lista', rotulo: 'Lista', Tela: Lista },
+  { id: 'lista', rotulo: 'Compras', Tela: Lista },
   { id: 'desejos', rotulo: 'Desejos', Tela: Desejos },
 ]
 
