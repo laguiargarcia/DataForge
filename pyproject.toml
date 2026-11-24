@@ -240,7 +240,8 @@ exclude_also = ['^exec\(\(Path\(__file__\).*"functions\.py"\)\.read_text']
 include = ["dataforge*", "ninho*"]
 # ninho/telas is the screen's Node project, not Python: without this, its e2e/ (and a local
 # node_modules/) would be picked up as namespace packages (df-8x0m.23.13.11).
-exclude = ["ninho.telas*"]
+# ninho/identidade holds the logo and the written visual identity, no Python.
+exclude = ["ninho.telas*", "ninho.identidade*"]
 
 # The built screen the ninho server hands out; prod installs the wheel and has no checkout.
 [tool.setuptools.package-data]
