@@ -205,10 +205,36 @@ def conferir(conn: sqlite3.Connection, nome: str, senha: str) -> dict | None:
     keep a new one with ``trocar_senha``."""
     _tabela(conn)
     linha = _achar(conn, nome)
-    certa = _confere(senha, linha[4] if linha else _hash_falso())
-    if not (linha and certa):
+    if not confere(senha, linha[4] if linha else None):
         return None
     return _pessoa(linha[:4]) | {"precisa_refazer": precisa_refazer(linha[4])}
+
+
+def confere(senha: str, guardado: str | None) -> bool:
+    """Whether <senha> derives to the stored hash <guardado>. None stands for an unknown name: it
+    still costs one scrypt, the same time as a wrong password, and is False."""
+    certa = _confere(senha, guardado if guardado is not None else _hash_falso())
+    return certa and guardado is not None
+
+
+def refazer_hash(conn: sqlite3.Connection, id_: str, senha: str, conferido: str) -> str | None:
+    """Keep <senha> again at today's cost, but only while the stored hash of <id_> is still
+    <conferido>, the one <senha> was checked against: a password changed meanwhile (the command,
+    another process) is never written over. The new hash, or None when nothing was written."""
+    novo = gerar_hash(validar_senha(senha))
+    with conn:
+        _tabela(conn)
+        escritas = conn.execute("UPDATE pessoas SET senha_hash = ? WHERE id = ? AND senha_hash = ?",
+                                (novo, id_, conferido)).rowcount
+    return novo if escritas else None
+
+
+def achar(conn: sqlite3.Connection, nome: str) -> tuple[dict, str] | None:
+    """The person of <nome> and the stored hash, without checking any password; None when nobody
+    has that name. For the server's memory of checks that passed: the hash says when one is stale."""
+    _tabela(conn)
+    linha = _achar(conn, nome)
+    return (_pessoa(linha[:4]), linha[4]) if linha else None
 
 
 def listar(conn: sqlite3.Connection) -> list[dict]:

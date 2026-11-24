@@ -8,7 +8,8 @@ const raiz = resolve(import.meta.dirname, '../..')
 const python = process.env.NINHO_PYTHON ?? resolve(raiz, '.venv/bin/python')
 const navegador = (process.env.NAVEGADOR ?? 'chromium') as 'chromium' | 'webkit'
 const porta = 8766
-const senha = 'senha-do-teste-da-tela'   // só do servidor de teste, sobre o dado sintético
+// A pessoa que o esqueleto cria no banco do app da cópia: só do servidor de teste, sobre o dado sintético.
+const login = { username: 'ana', password: 'senha-falsa-do-teste-da-tela' }
 
 export default defineConfig({
   testDir: './e2e',
@@ -21,7 +22,7 @@ export default defineConfig({
     ...devices['iPhone 15'],
     browserName: navegador,
     baseURL: `http://127.0.0.1:${porta}/`,
-    httpCredentials: { username: 'lucas', password: senha },
+    httpCredentials: login,
     timezoneId: 'America/Sao_Paulo',
     locale: 'pt-BR',
   },
@@ -30,7 +31,7 @@ export default defineConfig({
     // O comando único do esqueleto: copia o workspace, roda o finance_demo na cópia e sobe o
     // servidor do ninho sobre ela; a cópia some quando o teste encerra o servidor.
     command: `"${python}" "${resolve(raiz, 'scripts/dev/esqueleto.py')}" --porta ${porta}`,
-    env: { NINHO_SENHA: senha },
+    env: { NINHO_ESQUELETO_NOME: login.username, NINHO_ESQUELETO_SENHA: login.password },
     url: `http://127.0.0.1:${porta}/`,
     reuseExistingServer: false,
     timeout: 180_000,

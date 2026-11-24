@@ -1,18 +1,24 @@
-"""Shared by the ninho tests: the GetFinance workspace after the synthetic run."""
+"""Shared by the ninho tests: the GetFinance workspace after the synthetic run, and an app database
+with two invented people: ana, with every module, and beto, with the list only."""
 import os
 import shutil
 import subprocess
 import sys
+from collections import OrderedDict
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+from ninho.servidor import banco as banco_do_app
+from ninho.servidor import dependencias, pessoas
 from ninho.servidor.app import app
 
 WORKSPACE = Path(__file__).resolve().parents[2] / "workspaces" / "GetFinance"
-SENHA = "senha-de-teste"
-AUTH = ("", SENHA)
+ANA = ("ana", "senha-falsa-da-ana")
+BETO = ("beto", "senha-falsa-do-beto")
+AUTH = ANA
+MODULOS = {"ana": ["financas", "lista"], "beto": ["lista"]}
 
 
 def rodar_job(home: Path, job: str) -> None:
@@ -45,11 +51,34 @@ def workspace(workspace_demo, tmp_path):
     return home / "workspaces" / "GetFinance"
 
 
+@pytest.fixture(autouse=True)
+def custo_baixo(monkeypatch):
+    """A cheap scrypt, so a login costs nothing; test_pessoas puts the real one back where it needs it."""
+    monkeypatch.setattr(pessoas, "_N", 2**4)
+    monkeypatch.setattr(pessoas, "_P", 1)
+
+
+@pytest.fixture(autouse=True)
+def memoria_vazia(monkeypatch):
+    """The server's memory of logins that passed starts empty in each test."""
+    monkeypatch.setattr(dependencias, "_conferidas", OrderedDict())
+
+
 @pytest.fixture
-def cliente(workspace, monkeypatch):
-    """The server on the test's own workspace copy, with the password set."""
+def banco(tmp_path, monkeypatch):
+    """The app database of the test (NINHO_BANCO), with ana and beto in it."""
+    arquivo = tmp_path / "ninho.db"
+    with banco_do_app.aberto(arquivo) as conn:
+        for nome, senha in (ANA, BETO):
+            pessoas.criar(conn, nome, senha, MODULOS[nome])
+    monkeypatch.setenv("NINHO_BANCO", str(arquivo))
+    return arquivo
+
+
+@pytest.fixture
+def cliente(workspace, banco, monkeypatch):
+    """The server on the test's own workspace copy, with ana and beto able to log in."""
     monkeypatch.setenv("NINHO_WORKSPACE", str(workspace))
-    monkeypatch.setenv("NINHO_SENHA", SENHA)
     for nome in ("GETFINANCE_DATA", "MERCHANT_NORM_CONFIG"):   # never reach a job the server starts
         monkeypatch.delenv(nome, raising=False)
     return TestClient(app)

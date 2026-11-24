@@ -14,15 +14,9 @@ CUSTO_REAL = (pessoas._N, pessoas._R, pessoas._P)
 S1, S2 = "segredo-um", "segredo-dois"
 
 
-@pytest.fixture(autouse=True)
-def custo_baixo(monkeypatch):
-    """A cheap scrypt, so the file stays fast; ``custo_real`` puts the real one back."""
-    monkeypatch.setattr(pessoas, "_N", 2**4)
-    monkeypatch.setattr(pessoas, "_P", 1)
-
-
 @pytest.fixture
 def custo_real(monkeypatch):
+    """The real scrypt cost, over the cheap one of conftest's ``custo_baixo``."""
     for nome, valor in zip(("_N", "_R", "_P"), CUSTO_REAL, strict=True):
         monkeypatch.setattr(pessoas, nome, valor)
 

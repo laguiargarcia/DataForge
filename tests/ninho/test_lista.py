@@ -1,5 +1,5 @@
-"""The shopping list (df-8x0m.23.20.1): its routes under /api/lista, behind the password, saving in
-the app database named by NINHO_BANCO. Items are invented."""
+"""The shopping list (df-8x0m.23.20.1): its routes under /api/lista, behind the login, saving in
+the app database named by NINHO_BANCO. Items and people are invented."""
 import base64
 import sqlite3
 
@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 
 from ninho.lista import itens
 from ninho.servidor.app import app
-from tests.ninho.conftest import AUTH, SENHA
+from ninho.servidor import banco as banco_do_app
+from ninho.servidor import pessoas
+from tests.ninho.conftest import AUTH, BETO
 
 ROTAS = [("get", "/api/lista/itens", None), ("post", "/api/lista/itens", {"texto": "pão"}),
          ("patch", "/api/lista/itens/x", {"comprado": True}), ("delete", "/api/lista/itens/x", None),
@@ -16,15 +18,8 @@ ROTAS = [("get", "/api/lista/itens", None), ("post", "/api/lista/itens", {"texto
 
 
 @pytest.fixture
-def banco(tmp_path):
-    return tmp_path / "ninho.db"
-
-
-@pytest.fixture
-def lista(banco, monkeypatch):
-    """The server with the password set and an app database of its own."""
-    monkeypatch.setenv("NINHO_SENHA", SENHA)
-    monkeypatch.setenv("NINHO_BANCO", str(banco))
+def lista(banco):
+    """The server on an app database of its own, with ana and beto in it."""
     return TestClient(app)
 
 
@@ -58,27 +53,26 @@ def test_sem_a_pasta_do_banco_e_503_e_nada_e_criado(lista, monkeypatch, tmp_path
     assert not (tmp_path / "nao-existe").exists()
 
 
-def test_sem_ninho_banco_financas_segue_respondendo(cliente, monkeypatch):
-    monkeypatch.delenv("NINHO_BANCO", raising=False)
-    assert cliente.get("/api/financas/edicoes", auth=AUTH).status_code == 200
-
-
-def test_lista_vazia_cria_o_banco(lista, banco):
+def test_lista_vazia(lista):
     r = lista.get("/api/lista/itens", auth=AUTH)
     assert r.status_code == 200
     assert r.json() == {"itens": []}
-    assert banco.is_file()
 
 
 def test_adicionar_guarda_quem_adicionou_e_tira_os_espacos(lista):
-    item = _adicionar(lista, "  leite  ", auth=("ana", SENHA))
+    item = _adicionar(lista, "  leite  ")
     assert item["texto"] == "leite"
     assert item["comprado"] is False
     assert item["adicionado_por"] == "ana"
     assert item["comprado_em"] is None
     assert item["criado_em"].endswith("+00:00")
     assert len(item["id"]) == 32
-    assert _adicionar(lista, "ovos")["adicionado_por"] == ""
+    assert _adicionar(lista, "ovos", auth=BETO)["adicionado_por"] == "beto"
+
+
+def test_adicionado_por_e_o_nome_guardado_nao_o_digitado(lista):
+    """The name is matched without telling case apart; the item keeps the person's name as stored."""
+    assert _adicionar(lista, "mel", auth=("  BETO ", BETO[1]))["adicionado_por"] == "beto"
 
 
 @pytest.mark.parametrize("texto", ["", "   ", "x" * (itens.LIMITE + 1)])
@@ -146,21 +140,24 @@ def test_limpar_comprados_apaga_so_os_comprados(lista):
 
 
 def test_o_item_sobrevive_a_reabrir_o_banco(lista, banco):
-    item = _adicionar(lista, "azeite", auth=("bia", SENHA))
+    item = _adicionar(lista, "azeite", auth=BETO)
     conn = sqlite3.connect(banco)
     try:
         assert itens.listar(conn) == [item]
         nomes = {linha[0] for linha in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     finally:
         conn.close()
-    assert nomes == {"lista_itens"}      # the module's tables carry its prefix
+    assert nomes - {"pessoas"} == {"lista_itens"}   # the module's tables carry its prefix; pessoas is the server's
     assert _textos(TestClient(app)) == [("azeite", False)]
 
 
 @pytest.mark.parametrize("codificacao", ["utf-8", "latin-1"])
-def test_nome_com_acento_entra_e_fica_no_item(lista, codificacao):
+def test_nome_com_acento_entra_e_fica_no_item(lista, banco, codificacao):
     """FastAPI's own HTTP Basic reads the header as ASCII and answered 401 (df-8x0m.23.20.5)."""
-    cabecalho = {"Authorization": "Basic " + base64.b64encode(f"José:{SENHA}".encode(codificacao)).decode()}
+    senha = "senha-falsa-do-jose"
+    with banco_do_app.aberto(banco) as conn:
+        pessoas.criar(conn, "José", senha, ["lista"])
+    cabecalho = {"Authorization": "Basic " + base64.b64encode(f"José:{senha}".encode(codificacao)).decode()}
     r = lista.post("/api/lista/itens", json={"texto": "pão"}, headers=cabecalho)
     assert r.status_code == 201, r.text
     assert r.json()["adicionado_por"] == "José"

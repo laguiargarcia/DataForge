@@ -1,16 +1,17 @@
 """The screen of the skeleton (df-8x0m.23.13.5): the server hands out the built page of ninho/telas
-and its files, behind the same password as the routes, so the browser asks once and reuses it."""
+and its files, behind the same login as the routes, so the browser asks once and reuses it. Anyone
+logged in gets the screen, whatever their modules."""
 import re
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ninho.servidor import app as servidor
-from tests.ninho.conftest import AUTH, SENHA
+from tests.ninho.conftest import AUTH, BETO
 
 
 @pytest.fixture
-def telas(tmp_path, monkeypatch):
+def telas(tmp_path, banco, monkeypatch):
     """The server with a small built screen of its own, and a file beside it that must stay out."""
     dist = tmp_path / "dist"
     (dist / "assets").mkdir(parents=True)
@@ -18,7 +19,6 @@ def telas(tmp_path, monkeypatch):
     (dist / "assets" / "tela.js").write_text("console.log('tela')", encoding="utf-8")
     (tmp_path / "segredo.txt").write_text("fora da tela", encoding="utf-8")
     monkeypatch.setattr(servidor, "TELAS", dist)
-    monkeypatch.setenv("NINHO_SENHA", SENHA)
     return TestClient(servidor.app)
 
 
@@ -27,6 +27,11 @@ def test_a_tela_pede_a_senha_e_o_navegador_sabe_pedir(telas, caminho):
     r = telas.get(caminho)
     assert r.status_code == 401
     assert r.headers["www-authenticate"].startswith("Basic")
+
+
+@pytest.mark.parametrize("caminho", ["/", "/assets/tela.js"])
+def test_a_tela_abre_para_quem_nao_tem_financas(telas, caminho):
+    assert telas.get(caminho, auth=BETO).status_code == 200
 
 
 def test_a_pagina_vem_na_raiz_sem_cache(telas):

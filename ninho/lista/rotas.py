@@ -1,5 +1,5 @@
-"""The routes of the list under ``/api/lista``. The server mounts this router behind the password;
-here the calls of ``itens`` are only translated to HTTP."""
+"""The routes of the list under ``/api/lista``. The server mounts this router behind the login, for
+people who have the module ``lista``; here the calls of ``itens`` are only translated to HTTP."""
 import sqlite3
 from typing import Annotated
 
@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ninho.lista import itens
-from ninho.servidor.dependencias import conexao, usuario
+from ninho.servidor.dependencias import Pessoa, conexao
 
 rotas = APIRouter(prefix="/api/lista")
 
@@ -33,9 +33,10 @@ def listar(conn: Conexao) -> dict:
 
 
 @rotas.post("/itens", status_code=status.HTTP_201_CREATED)
-def adicionar(corpo: NovoItem, conn: Conexao, quem: Annotated[str, Depends(usuario)]) -> dict:
+def adicionar(corpo: NovoItem, conn: Conexao, quem: Pessoa) -> dict:
+    """The new item, with the name of the person logged in as who added it."""
     try:
-        return itens.adicionar(conn, corpo.texto, quem)
+        return itens.adicionar(conn, corpo.texto, quem["nome"])
     except itens.Invalido as erro:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(erro)) from erro
 

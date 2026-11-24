@@ -2,17 +2,17 @@
 
 Configuration comes from the environment, read on every request:
 - ``NINHO_WORKSPACE``: the GetFinance workspace folder, whose ``data/curated`` holds the published tables;
-- ``NINHO_SENHA``: the one password that lets anyone in, sent as the password of HTTP Basic (the user
-  name is only a label, "who added it"). Provisional: real login is df-8x0m.23.6. Without it set,
-  nobody gets in (``ninho.servidor.dependencias``);
 - ``NINHO_BANCO``: the app database, a SQLite file whose folder must exist (``ninho.servidor.banco``).
-  Without it the list answers 503; finances does not use it.
+  Its table ``pessoas`` holds who may log in (``ninho.servidor.pessoas``), so without it every route
+  answers 503. Finances keeps its edits in the workspace, not here.
 
-Each module other than finances is a router mounted here, behind the password: the list at
-``/api/lista`` (``ninho.lista.rotas``).
+Login is per person, by HTTP Basic (``ninho.servidor.dependencias``): 401 without a valid name and
+password. Each module answers only to a person who has it, 403 to anyone else: the finance routes
+below need ``financas``, the list's router (``/api/lista``, ``ninho.lista.rotas``) needs ``lista``.
+``GET /api/eu`` says who is logged in and which modules they have.
 
-The same server hands out the built screen (``ninho/telas/dist``) at ``/``, behind the same password:
-the browser asks for it once and sends it again with every call the page makes to the routes.
+The same server hands out the built screen (``ninho/telas/dist``) at ``/`` to anyone logged in: the
+browser asks for the login once and sends it again with every call the page makes to the routes.
 """
 import logging
 import os
@@ -27,16 +27,19 @@ from pydantic import BaseModel
 
 from ninho.financas import aplicar, edicoes, leitura
 from ninho.lista.rotas import rotas as rotas_lista
-from ninho.servidor.dependencias import entrar
+from ninho.servidor.dependencias import Pessoa, entrar, exigir
 
 TELAS = Path(__file__).resolve().parents[1] / "telas" / "dist"
 MES = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
-# No /docs, /redoc or /openapi.json: they would answer without the password and map every route.
+# No /docs, /redoc or /openapi.json: they would answer without a login and map every route.
 app = FastAPI(title="ninho", docs_url=None, redoc_url=None, openapi_url=None)
 _log = logging.getLogger("ninho")
+_FINANCAS = [Depends(exigir("financas"))]
+
+
 def _workspace() -> Path:
     pasta = os.environ.get("NINHO_WORKSPACE")  # noqa: TID251 -- ninho reads its own environment; dataforge.compat is the engine's
     if not pasta:
@@ -47,7 +50,7 @@ def _workspace() -> Path:
     return Path(pasta).resolve()
 
 
-@app.get("/api/financas/transacoes", dependencies=[Depends(entrar)])
+@app.get("/api/financas/transacoes", dependencies=_FINANCAS)
 def transacoes(mes: Annotated[str, Query(pattern=MES)], workspace: Annotated[Path, Depends(_workspace)]) -> dict:
     """The classified transactions of one month (``mes=AAAA-MM``), newest first."""
     ano, numero = map(int, mes.split("-"))
@@ -66,13 +69,13 @@ def _recusada(recusa: edicoes.Recusa) -> HTTPException:
     return HTTPException(_STATUS[recusa.motivo], str(recusa))
 
 
-@app.get("/api/financas/edicoes", dependencies=[Depends(entrar)])
+@app.get("/api/financas/edicoes", dependencies=_FINANCAS)
 def ler_edicoes(workspace: Annotated[Path, Depends(_workspace)]) -> dict:
     """The corrections, the categories to choose from and whether there are edits not applied yet."""
     return edicoes.ler(workspace)
 
 
-@app.put("/api/financas/correcoes/{transacao_id:path}", dependencies=[Depends(entrar)])
+@app.put("/api/financas/correcoes/{transacao_id:path}", dependencies=_FINANCAS)
 def corrigir(transacao_id: str, corpo: Correcao, workspace: Annotated[Path, Depends(_workspace)]) -> dict:
     """Set the category of one transaction; the published tables change at the next "apply"."""
     try:
@@ -85,7 +88,7 @@ def corrigir(transacao_id: str, corpo: Correcao, workspace: Annotated[Path, Depe
 
 
 @app.delete("/api/financas/correcoes/{transacao_id:path}", status_code=status.HTTP_204_NO_CONTENT,
-            dependencies=[Depends(entrar)])
+            dependencies=_FINANCAS)
 def desfazer_correcao(transacao_id: str, workspace: Annotated[Path, Depends(_workspace)]) -> None:
     try:
         edicoes.desfazer(workspace, transacao_id)
@@ -99,7 +102,7 @@ def _sem_motor(erro: aplicar.SemMotor) -> HTTPException:
     return HTTPException(status.HTTP_502_BAD_GATEWAY, "o DataForge não respondeu; o motivo está no log do servidor")
 
 
-@app.post("/api/financas/aplicar", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(entrar)])
+@app.post("/api/financas/aplicar", status_code=status.HTTP_202_ACCEPTED, dependencies=_FINANCAS)
 def pedir_aplicar(workspace: Annotated[Path, Depends(_workspace)]) -> dict:
     """Ask the engine to redo the categories and the numbers; answers the run to follow."""
     try:
@@ -108,7 +111,7 @@ def pedir_aplicar(workspace: Annotated[Path, Depends(_workspace)]) -> dict:
         raise _sem_motor(erro) from erro
 
 
-@app.get("/api/financas/aplicar/{run_id}", dependencies=[Depends(entrar)])
+@app.get("/api/financas/aplicar/{run_id}", dependencies=_FINANCAS)
 def andamento_aplicar(run_id: uuid.UUID, workspace: Annotated[Path, Depends(_workspace)],
                       esperar: Annotated[float, Query(ge=0, le=60)] = 0) -> dict:
     """The state of an apply run; ``esperar`` (seconds, up to 60) holds the answer until it ends."""
@@ -120,7 +123,13 @@ def andamento_aplicar(run_id: uuid.UUID, workspace: Annotated[Path, Depends(_wor
         raise _sem_motor(erro) from erro
 
 
-app.include_router(rotas_lista, dependencies=[Depends(entrar)])
+app.include_router(rotas_lista, dependencies=[Depends(exigir("lista"))])
+
+
+@app.get("/api/eu")
+def eu(pessoa: Pessoa) -> dict:
+    """Who is logged in and the modules they may open (the screen's bottom bar shows only those)."""
+    return {"nome": pessoa["nome"], "modulos": pessoa["modulos"]}
 
 
 @app.get("/{caminho:path}", dependencies=[Depends(entrar)], include_in_schema=False)
