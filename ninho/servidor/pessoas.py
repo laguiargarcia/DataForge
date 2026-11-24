@@ -30,6 +30,9 @@ _TAMANHO = 32
 # key no password derives to: building it costs nothing.
 _SAL_FALSO, _CHAVE_FALSA = secrets.token_hex(16), secrets.token_hex(_TAMANHO)
 
+# Opens a write transaction at once, so what it reads cannot change before it writes.
+_ESCRITA = "BEGIN IMMEDIATE"
+
 _TABELA = """
 CREATE TABLE IF NOT EXISTS pessoas (
     id TEXT PRIMARY KEY,
@@ -172,7 +175,7 @@ def criar(conn: sqlite3.Connection, nome: str, senha: str, modulos: list[str]) -
     _tabela(conn)
     try:
         with conn:
-            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(_ESCRITA)
             if _achar(conn, nome) is not None:
                 raise Repetido(f"já existe alguém com o nome {nome}")
             conn.execute("INSERT INTO pessoas (id, nome, senha_hash, modulos, criada_em) VALUES (?, ?, ?, ?, ?)",
@@ -189,7 +192,7 @@ def trocar_senha(conn: sqlite3.Connection, nome: str, senha: str) -> None:
     _tabela(conn)
     sessoes.tabela(conn)
     with conn:
-        conn.execute("BEGIN IMMEDIATE")   # one write with ``abrir_sessao``: no session of the old password slips in
+        conn.execute(_ESCRITA)   # one write with ``abrir_sessao``: no session of the old password slips in
         id_ = _existente(conn, nome)[0]
         conn.execute("UPDATE pessoas SET senha_hash = ? WHERE id = ?", (senha_hash, id_))
         sessoes.encerrar_as_de(conn, id_)
@@ -211,7 +214,7 @@ def abrir_sessao(conn: sqlite3.Connection, id_: str, conferido: str) -> str | No
     _tabela(conn)
     sessoes.tabela(conn)
     with conn:
-        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(_ESCRITA)
         if conn.execute("SELECT 1 FROM pessoas WHERE id = ? AND senha_hash = ?", (id_, conferido)).fetchone() is None:
             return None
         return sessoes.abrir(conn, id_)
