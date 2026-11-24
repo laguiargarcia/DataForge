@@ -95,10 +95,11 @@ def main(argv: list[str] | None = None) -> int:
         args.home.mkdir(parents=True, exist_ok=True)
     with nullcontext(args.home) if args.home else tempfile.TemporaryDirectory(prefix="ninho-esqueleto-", ignore_cleanup_errors=True) as home:
         os.environ["NINHO_WORKSPACE"] = str(preparar(Path(home)))
-        os.environ["NINHO_BANCO"] = str(Path(home) / "ninho.db")
-        criar_pessoa(Path(home) / "ninho.db", *login)
+        banco_do_app = Path(home) / "ninho.db"
+        os.environ["NINHO_BANCO"] = str(banco_do_app)
+        criar_pessoa(banco_do_app, *login)
         if all(so_lista):
-            criar_pessoa(Path(home) / "ninho.db", *so_lista, modulos=("lista",))
+            criar_pessoa(banco_do_app, *so_lista, modulos=("lista",))
         uvicorn.run(app, host=args.endereco, port=args.porta)
     return 0
 
