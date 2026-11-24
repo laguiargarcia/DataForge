@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 
 MODULOS = ("financas", "lista")
 LIMITE_NOME = 50
-SENHA_MINIMA = 8   # characters; proposed by Claude, not yet confirmed by Lucas (df-8x0m.23.6.5)
+SENHA_MINIMA = 8   # characters (Lucas, 2026-11-24; df-8x0m.23.6.5)
 
 # OWASP's scrypt minimum, the variant with less memory: n=2^15, r=8, p=3 costs as much CPU as
 # n=2^17 with p=1 but needs 32 MiB instead of 128 MiB per check, and runs on prod's Windows Python.
