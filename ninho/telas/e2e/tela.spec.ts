@@ -63,6 +63,56 @@ test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async 
   await expect(page).toHaveURL(/\?mes=2026-05$/)
 })
 
+test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comprados', async ({ page }) => {
+  // A Lista fica montada e escondida atrás de Finanças: ela só pede /api/lista quando é aberta.
+  const pedidosLista: string[] = []
+  page.on('request', r => { if (new URL(r.url()).pathname.includes('/api/lista/')) pedidosLista.push(r.url()) })
+  await page.goto(`?mes=${MES}`)
+  await expect(linhas(page).first()).toBeVisible()
+  expect(pedidosLista).toEqual([])
+  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Lista', exact: true }).click()
+
+  const itens = page.getByRole('region', { name: 'Itens da lista' })
+  await expect(itens).toContainText('A lista está vazia.')
+  const campo = page.getByRole('textbox', { name: 'Novo item' })
+  await campo.fill('biscoito de polvilho')
+  await campo.press('Enter')   // Enter também adiciona; o campo limpa e fica com o foco
+  await expect(campo).toHaveValue('')
+  await expect(campo).toBeFocused()
+  const aComprar = page.getByRole('list', { name: 'A comprar' })
+  await expect(aComprar.getByRole('checkbox', { name: 'biscoito de polvilho' })).toBeVisible()
+  await expect(aComprar).toContainText('lucas')   // quem adicionou: o nome digitado no login
+  await expect(page.getByRole('button', { name: 'Limpar comprados' })).toHaveCount(0)
+
+  // Os alvos de toque têm pelo menos 44 px e a tela cabe na largura do iPhone.
+  for (const alvo of [aComprar.locator('label').first(), page.getByRole('button', { name: 'Apagar biscoito de polvilho' }),
+    page.getByRole('button', { name: 'Adicionar' })]) {
+    const caixa = (await alvo.boundingBox())!
+    expect(Math.min(caixa.width, caixa.height)).toBeGreaterThanOrEqual(44)
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.reload()
+  await expect(aComprar.getByRole('checkbox', { name: 'biscoito de polvilho' })).toBeVisible()
+
+  // Um segundo item, pelo botão, e apagado.
+  await campo.fill('sabão em pó')
+  await page.getByRole('button', { name: 'Adicionar' }).click()
+  await expect(aComprar.getByRole('checkbox')).toHaveCount(2)
+  await page.getByRole('button', { name: 'Apagar sabão em pó' }).click()
+  await expect(aComprar.getByRole('checkbox')).toHaveCount(1)
+
+  await aComprar.getByRole('checkbox', { name: 'biscoito de polvilho' }).click()
+  const comprados = page.getByRole('list', { name: 'Comprados' })
+  await expect(comprados.getByRole('checkbox', { name: 'biscoito de polvilho' })).toBeChecked()
+  await expect(aComprar).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Limpar comprados' }).click()
+  await expect(itens).toContainText('A lista está vazia.')
+  await expect(page.getByRole('button', { name: 'Limpar comprados' })).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
 test('corrige a categoria de uma transação, aplica e vê a categoria nova', async ({ page }) => {
   // Um aplicar em curso nunca vira dois (df-8x0m.23.13.10): toque duplo e recarregar não pedem outro.
   const pedidosAplicar: string[] = []
