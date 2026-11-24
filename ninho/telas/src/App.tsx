@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type ComponentType } from 'react'
-import { lerEu, permitidos, telaAberta, type Eu } from './eu'
+import { Entrar } from './Entrar'
+import { lerEuOuNinguem, permitidos, sair, telaAberta, type Eu } from './eu'
+import { aoFicarSemSessao } from './pedido'
 import { Financas } from './financas/Financas'
 import { Lista } from './lista/Lista'
 
@@ -7,10 +9,12 @@ import { Lista } from './lista/Lista'
 // em src/<modulo>/. Um módulo novo entra acrescentando um item em MODULOS; o primeiro é a tela inicial.
 // Cada tela recebe `aberta`: montada o tempo todo, ela sabe quando aparece (a Lista relê ao abrir).
 // A casca pergunta quem entrou antes de montar qualquer tela: só os módulos da pessoa aparecem na
-// barra e só as telas deles são montadas (df-8x0m.23.6.3).
+// barra e só as telas deles são montadas (df-8x0m.23.6.3). Sem sessão (ninguém entrou, ela venceu ou
+// foi encerrada, o que qualquer pedido descobre por um 401), a casca tira as telas e mostra o
+// formulário de login; o "Sair" da barra encerra a sessão deste aparelho (df-8x0m.23.31.5).
 
 type Modulo = { id: string; rotulo: string; Tela: ComponentType<{ aberta: boolean }> }
-type Carga = { fase: 'carregando' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; eu: Eu }
+type Carga = { fase: 'carregando' } | { fase: 'fora' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; eu: Eu }
 
 const MODULOS: Modulo[] = [
   { id: 'financas', rotulo: 'Finanças', Tela: Financas },
@@ -19,14 +23,14 @@ const MODULOS: Modulo[] = [
 
 const telaPedida = () => new URLSearchParams(location.search).get('tela')
 
-function Aviso({ texto, tentar }: Readonly<{ texto: string; tentar?: () => void }>) {
+function Aviso({ texto, botao }: Readonly<{ texto: string; botao?: { rotulo: string; aoTocar: () => void } }>) {
   return (
     <main className="min-h-dvh bg-fundo font-sans text-[16px] text-texto px-4 pt-[max(24px,env(safe-area-inset-top))]">
       <div className="max-w-[480px] mx-auto rounded-[14px] bg-cartao px-4 py-6 flex flex-col gap-3 items-start">
         <p className="m-0 break-words">{texto}</p>
-        {tentar && (
-          <button type="button" onClick={tentar} className="h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold">
-            Tentar de novo
+        {botao && (
+          <button type="button" onClick={botao.aoTocar} className="h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold">
+            {botao.rotulo}
           </button>
         )}
       </div>
@@ -40,10 +44,25 @@ export function App() {
 
   const entrar = useCallback(() => {
     setCarga({ fase: 'carregando' })
-    lerEu().then(eu => setCarga({ fase: 'ok', eu }),
+    lerEuOuNinguem().then(eu => setCarga(eu ? { fase: 'ok', eu } : { fase: 'fora' }),
       (e: unknown) => setCarga({ fase: 'erro', mensagem: e instanceof Error ? e.message : String(e) }))
   }, [])
   useEffect(entrar, [entrar])
+  useEffect(() => aoFicarSemSessao(() => setCarga({ fase: 'fora' })), [])
+
+  // O primeiro toque pede a confirmação no próprio botão, que volta ao normal sozinho; o segundo sai.
+  const [saindo, setSaindo] = useState(false)
+  useEffect(() => {
+    if (!saindo) return
+    const prazo = setTimeout(() => setSaindo(false), 4000)
+    return () => clearTimeout(prazo)
+  }, [saindo])
+  // Com ou sem resposta do servidor a tela sai: sem rede, a sessão fica lá até vencer ou ser encerrada.
+  const encerrar = () => { sair().catch(() => undefined).finally(() => setCarga({ fase: 'fora' })) }
+  const tocarSair = () => {
+    setSaindo(!saindo)
+    if (saindo) encerrar()
+  }
 
   const modulos = carga.fase === 'ok' ? permitidos(MODULOS, carga.eu) : []
   // Um ?tela= de um módulo que a pessoa não tem cai no primeiro que ela tem.
@@ -61,8 +80,12 @@ export function App() {
   }, [tela, inicial])
 
   if (carga.fase === 'carregando') return <Aviso texto="Carregando…" />
-  if (carga.fase === 'erro') return <Aviso texto={`Não foi possível saber quem entrou: ${carga.mensagem}`} tentar={entrar} />
-  if (tela === null) return <Aviso texto={`${carga.eu.nome}, você ainda não tem acesso a nenhuma parte do ninho.`} />
+  if (carga.fase === 'fora') return <Entrar aoEntrar={entrar} />
+  if (carga.fase === 'erro') return <Aviso texto={`Não foi possível saber quem entrou: ${carga.mensagem}`} botao={{ rotulo: 'Tentar de novo', aoTocar: entrar }} />
+  if (tela === null) {
+    return <Aviso texto={`${carga.eu.nome}, você ainda não tem acesso a nenhuma parte do ninho.`}
+      botao={{ rotulo: 'Sair', aoTocar: encerrar }} />
+  }
 
   return (
     <>
@@ -85,6 +108,12 @@ export function App() {
               </button>
             </li>
           ))}
+          <li>
+            <button type="button" onClick={tocarSair}
+              className={`h-14 px-4 flex items-center justify-center text-[14px] font-semibold ${saindo ? 'text-alerta' : 'text-secundario'}`}>
+              {saindo ? 'Sair?' : 'Sair'}
+            </button>
+          </li>
         </ul>
       </nav>
     </>
