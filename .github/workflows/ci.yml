@@ -90,7 +90,7 @@ jobs:
           uv run --frozen --no-sync python -m pytest tests -m 'not integration' --ignore-glob='tests/test_gui_*' -p no:cacheprovider \
             -n auto --randomly-seed=${{ github.run_id }} \
             --splits 2 --group "$SHARD" --store-durations --clean-durations \
-            --cov=dataforge --cov-branch --cov-report= 2>&1 | tee "report/tests-engine-$SHARD.txt"
+            --cov=dataforge --cov=ninho --cov-branch --cov-report= 2>&1 | tee "report/tests-engine-$SHARD.txt"
       - name: Name the coverage data after the shard
         if: always()
         run: if [ -f .coverage ]; then mv .coverage ".coverage.linux-${{ matrix.shard }}"; fi
