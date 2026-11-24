@@ -863,16 +863,23 @@ def run_requested(workspace: str, job: str, run_id: str) -> None:
 
 
 @app.command("run-state")
-def run_state_cmd(run_id: str = typer.Argument(..., help="Run id answered by `run --detach`")) -> None:
+def run_state_cmd(
+    run_id: Annotated[str, typer.Argument(help="Run id answered by `run --detach`")],
+    wait: Annotated[bool, typer.Option("--wait", help="Answer only when the run has ended.")] = False,
+    timeout: Annotated[Optional[float], typer.Option(
+        "--timeout", help="With --wait: give up after this many seconds, answer the state so far and exit 4.")] = None,
+) -> None:
     """Print a run's state as one JSON object; exit 2 when the id is unknown."""
     from dataforge import run_request  # noqa: PLC0415 -- lazy: keeps CLI startup fast
 
     with contextlib.redirect_stdout(sys.stderr):
-        state = run_request.run_state(run_id)
+        state = run_request.wait_for_end(run_id, timeout) if wait else run_request.run_state(run_id)
     if state is None:
         _print_json({"error": f"Run '{run_id}' not found."})
         raise typer.Exit(run_request.EXIT_INVALID_REQUEST)
     _print_json(state)
+    if wait and state["finished_at"] is None:
+        raise typer.Exit(run_request.EXIT_STILL_RUNNING)
 
 
 @app.command()
