@@ -119,7 +119,7 @@ function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: C
         <div className="px-4 pb-4 pt-1 flex flex-col gap-3">
           <form className="flex gap-2" onSubmit={enviarNota}>
             <input ref={campoNota} type="text" aria-label="Nova anotação" value={nota} maxLength={LIMITE_ANOTACAO}
-              placeholder={cheio ? `No máximo ${LIMITE_ANOTACOES} anotações` : 'Anotação ou endereço'} disabled={cheio}
+              placeholder={cheio ? `No máximo ${LIMITE_ANOTACOES} anotações` : 'Anotação'} disabled={cheio}
               enterKeyHint="done" autoComplete="off" onChange={e => setNota(e.target.value)} className={`${classeCampo} bg-fundo`} />
             <button type="submit" className={classeBotao} disabled={cheio || !nota.trim()}>Anotar</button>
           </form>
