@@ -82,7 +82,7 @@ export function App() {
 
       <main className="max-w-[480px] mx-auto px-4 pb-[max(24px,env(safe-area-inset-bottom))] flex flex-col gap-3">
         {execucao && (
-          <p role="status" className="m-0 rounded-[14px] bg-ativa px-4 py-3">{textoAndamento(execucao)}</p>
+          <output className="block rounded-[14px] bg-ativa px-4 py-3">{textoAndamento(execucao)}</output>
         )}
         {!execucao && falhaAplicar && (
           <div role="alert" className="rounded-[14px] bg-alerta-fundo px-4 py-3 flex items-center gap-3">

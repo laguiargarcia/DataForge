@@ -2,14 +2,14 @@ import { useState } from 'react'
 import { corrigir, desfazer, type Categoria, type Correcao, type Transacao } from './api'
 import { brl, diaMes, tipoConta } from './formato'
 
-type Props = {
+type Props = Readonly<{
   transacao: Transacao
   correcao: Correcao | undefined
   categorias: Categoria[]
   aberta: boolean
   alternar: () => void
   gravado: () => void
-}
+}>
 
 /** O que muda no próximo aplicar, ou null quando a linha já mostra o que está gravado. */
 export function falta(t: Transacao, correcao: Correcao | undefined): string | null {
@@ -58,7 +58,7 @@ export function Linha({ transacao: t, correcao, categorias, aberta, alternar, gr
       {aberta && (
         <div className="px-4 pb-4 flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-[14px] text-secundario">
-            Categoria
+            <span>Categoria</span>
             <select value={escolhida} onChange={e => setEscolhida(e.target.value)} disabled={gravando}
               className="w-full h-11 rounded-[10px] bg-faixa px-3 text-texto">
               {!categorias.some(c => c.subcategoria === escolhida) && <option value={escolhida} disabled>Escolha</option>}

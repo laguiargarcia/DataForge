@@ -28,7 +28,8 @@ export function textoAndamento(e: Execucao): string {
   if (e.state === 'success') return 'Aplicado.'
   if (e.state === 'failed') {
     const onde = e.failed_task ? ` na tarefa ${e.failed_task}` : ''
-    return `O aplicar falhou${onde}${e.reason ? `: ${e.reason}` : '.'}`
+    const motivo = e.reason ? `: ${e.reason}` : '.'
+    return `O aplicar falhou${onde}${motivo}`
   }
   if (e.state === 'running') return 'Aplicando: recalculando as categorias…'
   return 'Aplicando: na fila…'
