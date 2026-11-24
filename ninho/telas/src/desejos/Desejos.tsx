@@ -5,6 +5,7 @@ import {
   type Anotacao, type Desejo, type Parte, type Pessoa,
 } from './api'
 import type { Eu } from '../eu'
+import { useDados } from '../dados'
 import { Logo } from '../Logo'
 
 // A tela do módulo desejos (df-8x0m.23.22.3), para a tela de um iPhone, no molde da Lista: três
@@ -12,14 +13,15 @@ import { Logo } from '../Logo'
 // servidor diz ser um endereço vira link, aberto em outra aba), e os realizados recolhidos no fim.
 // Tocar num desejo abre-o para anotar, apagar uma anotação, mudar o título, mover de parte, marcar
 // realizado e apagar. Todos veem e mexem em tudo: a lista é lida ao abrir a tela e de novo cada vez
-// que a tela ou a página volta a aparecer. Precisa de rede: sem guarda local nem fila.
+// que a tela ou a página volta a aparecer (src/dados.ts).
 
 type Dados = { desejos: Desejo[]; pessoas: Pessoa[] }
-type Carga = { fase: 'carregando' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; valor: Dados }
+// Uma função do módulo, estável: a releitura da tela depende dela.
+const lerDados = (): Promise<Dados> =>
+  Promise.all([lerDesejos(), lerPessoas()]).then(([desejos, pessoas]) => ({ desejos, pessoas }))
 type Props = Readonly<{ aberta: boolean; eu: Eu }>
 type Alterar = (acao: () => Promise<unknown>, antes?: (desejos: Desejo[]) => Desejo[]) => void
 
-const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const classeBotao = 'h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold shrink-0 disabled:opacity-40'
 const classeCampo = 'flex-1 min-w-0 h-11 px-4 rounded-[999px] font-sans text-[16px] text-texto placeholder:text-secundario'
 const classeDiscreto = 'h-11 px-4 rounded-[999px] font-medium shrink-0 disabled:opacity-40'
@@ -168,51 +170,14 @@ function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: C
 }
 
 export function Desejos({ aberta, eu }: Props) {
-  const [carga, setCarga] = useState<Carga>({ fase: 'carregando' })
+  const { carga, ocupado, falha, alterar: alterarDados, tentar } = useDados(aberta, lerDados, 'os desejos')
   const [escolhida, setEscolhida] = useState(lerParteGuardada)
   const [aberto, setAberto] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
-  const [ocupado, setOcupado] = useState(false)
-  const [falha, setFalha] = useState<string | null>(null)
   const campo = useRef<HTMLInputElement>(null)
-  // Como na Lista: só a leitura mais recente vale, e uma mudança também conta como mais recente.
-  const ultima = useRef(0)
-  const carregou = useRef(false)
-
-  const reler = useCallback((manterFalha = false) => {
-    const esta = ++ultima.current
-    return Promise.all([lerDesejos(), lerPessoas()]).then(
-      ([desejos, pessoas]) => {
-        if (ultima.current !== esta) return
-        carregou.current = true
-        setCarga({ fase: 'ok', valor: { desejos, pessoas } })
-        if (!manterFalha) setFalha(null)
-      },
-      e => {
-        if (ultima.current !== esta) return
-        if (!carregou.current) setCarga({ fase: 'erro', mensagem: mensagem(e) })
-        else if (!manterFalha) setFalha(`Não foi possível reler os desejos: ${mensagem(e)}`)
-      },
-    )
-  }, [])
-
-  useEffect(() => {
-    if (!aberta) return
-    reler()
-    const aoVoltar = () => { if (document.visibilityState === 'visible') reler() }
-    document.addEventListener('visibilitychange', aoVoltar)
-    return () => document.removeEventListener('visibilitychange', aoVoltar)
-  }, [aberta, reler])
-
-  const alterar = useCallback<Alterar>((acao, antes) => {
-    setOcupado(true)
-    setFalha(null)
-    ++ultima.current
-    if (antes) setCarga(c => (c.fase === 'ok' ? { fase: 'ok', valor: { ...c.valor, desejos: antes(c.valor.desejos) } } : c))
-    acao()
-      .then(() => reler(), (e: unknown) => { setFalha(mensagem(e)); return reler(true) })
-      .finally(() => setOcupado(false))
-  }, [reler])
+  // As mudanças otimistas dos cartões mexem só nos desejos.
+  const alterar = useCallback<Alterar>((acao, antes) =>
+    alterarDados(acao, antes && (v => ({ ...v, desejos: antes(v.desejos) }))), [alterarDados])
 
   const dados = carga.fase === 'ok' ? carga.valor : null
   const todas = partes(dados?.pessoas ?? [])
@@ -279,7 +244,7 @@ export function Desejos({ aberta, eu }: Props) {
           {carga.fase === 'erro' && (
             <div className="rounded-[20px] bg-cartao px-4 py-6 flex flex-col gap-3 items-start">
               <p className="m-0 break-words">Não foi possível carregar os desejos: {carga.mensagem}</p>
-              <button type="button" className={classeBotao} onClick={() => { setCarga({ fase: 'carregando' }); reler() }}>
+              <button type="button" className={classeBotao} onClick={tentar}>
                 Tentar de novo
               </button>
             </div>
