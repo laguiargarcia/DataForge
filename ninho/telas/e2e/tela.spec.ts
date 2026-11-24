@@ -81,7 +81,7 @@ test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comp
   await expect(campo).toBeFocused()
   const aComprar = page.getByRole('list', { name: 'A comprar' })
   await expect(aComprar.getByRole('checkbox', { name: 'biscoito de polvilho' })).toBeVisible()
-  await expect(aComprar).toContainText('lucas')   // quem adicionou: o nome digitado no login
+  await expect(aComprar).toContainText('ana')   // quem adicionou: a pessoa que entrou
   await expect(page.getByRole('button', { name: 'Limpar comprados' })).toHaveCount(0)
 
   // Os alvos de toque têm pelo menos 44 px e a tela cabe na largura do iPhone.

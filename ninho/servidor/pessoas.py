@@ -211,6 +211,14 @@ def conferir(conn: sqlite3.Connection, nome: str, senha: str) -> dict | None:
     return _pessoa(linha[:4]) | {"precisa_refazer": precisa_refazer(linha[4])}
 
 
+def achar(conn: sqlite3.Connection, nome: str) -> tuple[dict, str] | None:
+    """The person of <nome> and the stored hash, without checking any password; None when nobody
+    has that name. For the server's memory of checks that passed: the hash says when one is stale."""
+    _tabela(conn)
+    linha = _achar(conn, nome)
+    return (_pessoa(linha[:4]), linha[4]) if linha else None
+
+
 def listar(conn: sqlite3.Connection) -> list[dict]:
     """Everyone, in the order they were created, without the hash."""
     _tabela(conn)

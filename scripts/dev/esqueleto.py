@@ -1,13 +1,16 @@
 """Bring the ninho walking skeleton up with one command (df-8x0m.23.13.6): copy the GetFinance
 workspace to a scratch home, run the synthetic job (finance_demo) there with DataForge, and serve the
 ninho server (routes and screen) over that copy. Never the checkout's own workspace, never real data.
-The app database (NINHO_BANCO, the shopping list) is a file in the same folder, <home>/ninho.db.
+The app database (NINHO_BANCO: the people, the shopping list) is a file in the same folder,
+<home>/ninho.db, and gets one person with every module, whose name and password come from
+NINHO_ESQUELETO_NOME and NINHO_ESQUELETO_SENHA (read only here, never by the server): the login the
+browser asks for. Run again on the same --home, the person gets that password and every module.
 
 Used by hand, by the end-to-end test (tests/ninho/test_esqueleto.py) and by the screen's browser test
-(ninho/telas/playwright.config.ts). The password comes from NINHO_SENHA, as the server reads it.
+(ninho/telas/playwright.config.ts).
 
-Usage: NINHO_SENHA=<a password> python scripts/dev/esqueleto.py [--endereco 127.0.0.1] [--porta 8100]
-       [--home <folder>]
+Usage: NINHO_ESQUELETO_NOME=<a name> NINHO_ESQUELETO_SENHA=<a password> python scripts/dev/esqueleto.py
+       [--endereco 127.0.0.1] [--porta 8100] [--home <folder>]
 
 Without --home the copy lives in a temporary folder, removed when the server stops (Ctrl+C, SIGTERM,
 or Ctrl+Break on Windows). With --home it goes there and stays.
@@ -24,6 +27,7 @@ from pathlib import Path
 
 import uvicorn
 
+from ninho.servidor import banco, pessoas
 from ninho.servidor.app import app
 
 RAIZ = Path(__file__).resolve().parents[2]
@@ -42,6 +46,16 @@ def preparar(home: Path) -> Path:
     return copia
 
 
+def criar_pessoa(arquivo: Path, nome: str, senha: str) -> None:
+    """The skeleton's person in the app database at <arquivo>, with every module and <senha>."""
+    with banco.aberto(arquivo) as conn:
+        if pessoas.existe(conn, nome):
+            pessoas.trocar_senha(conn, nome, senha)
+            pessoas.definir_modulos(conn, nome, list(pessoas.MODULOS))
+        else:
+            pessoas.criar(conn, nome, senha, list(pessoas.MODULOS))
+
+
 def _parar(*_) -> None:
     """Stop by unwinding, with exit code 0, so the temporary copy is removed: uvicorn re-raises the
     signal it caught after shutting down, and the default handlers would end the process on the spot
@@ -55,8 +69,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--porta", type=int, default=8100, help="port (default 8100)")
     parser.add_argument("--home", type=Path, help="folder for the copy (default: a temporary one, removed at the end)")
     args = parser.parse_args(argv)
-    if not os.environ.get("NINHO_SENHA"):
-        parser.error("defina NINHO_SENHA: a senha que o servidor pede")
+    login = os.environ.get("NINHO_ESQUELETO_NOME", ""), os.environ.get("NINHO_ESQUELETO_SENHA", "")
+    if not all(login):
+        parser.error("defina NINHO_ESQUELETO_NOME e NINHO_ESQUELETO_SENHA: o login que o servidor pede")
+    try:   # before the copy and finance_demo, which take a while
+        pessoas.validar_nome(login[0])
+        pessoas.validar_senha(login[1])
+    except pessoas.Invalido as erro:
+        parser.error(str(erro))
     for nome in _FORA:
         os.environ.pop(nome, None)
     for nome in ("SIGINT", "SIGTERM", "SIGBREAK"):   # SIGBREAK: Ctrl+Break, Windows only
@@ -67,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     with nullcontext(args.home) if args.home else tempfile.TemporaryDirectory(prefix="ninho-esqueleto-", ignore_cleanup_errors=True) as home:
         os.environ["NINHO_WORKSPACE"] = str(preparar(Path(home)))
         os.environ["NINHO_BANCO"] = str(Path(home) / "ninho.db")
+        criar_pessoa(Path(home) / "ninho.db", *login)
         uvicorn.run(app, host=args.endereco, port=args.porta)
     return 0
 

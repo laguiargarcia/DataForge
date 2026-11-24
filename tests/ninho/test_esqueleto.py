@@ -1,6 +1,7 @@
 """The walking skeleton end to end (df-8x0m.23.13.6): the one command that brings it up
 (scripts/dev/esqueleto.py) runs finance_demo on a scratch copy and serves ninho as a process of its
-own; the test talks to it only over HTTP, with the password: it reads the month, corrects a
+own, with a person it creates in its app database from NINHO_ESQUELETO_NOME and
+NINHO_ESQUELETO_SENHA; the test talks to it only over HTTP, logged in as that person: it reads the month, corrects a
 category (app database), applies (the engine, by its command line), follows the run and reads the
 corrected category back; and it adds a shopping-list item, marks it bought and reads it back
 (NINHO_BANCO, a file in the skeleton's own folder). No TestClient and no DataForge server: the four
@@ -18,7 +19,7 @@ import polars as pl
 import pytest
 
 from ninho.financas import leitura
-from tests.ninho.conftest import AUTH, SENHA
+from tests.ninho.conftest import ANA
 
 ESQUELETO = Path(__file__).resolve().parents[2] / "scripts" / "dev" / "esqueleto.py"
 _SUBIDA = 600       # seconds for the copy, finance_demo and the server to come up (Windows is slower)
@@ -52,7 +53,8 @@ def esqueleto(tmp_path):
     with log.open("w", encoding="utf-8") as saida:
         processo = subprocess.Popen(
             [sys.executable, str(ESQUELETO), "--porta", str(porta), "--home", str(home)],
-            env={**ambiente, "NINHO_SENHA": SENHA, "PYTHONIOENCODING": "utf-8"}, stdout=saida, stderr=saida,
+            env={**ambiente, "NINHO_ESQUELETO_NOME": ANA[0], "NINHO_ESQUELETO_SENHA": ANA[1],
+                 "PYTHONIOENCODING": "utf-8"}, stdout=saida, stderr=saida,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0)
     base = f"http://127.0.0.1:{porta}"
     try:
@@ -73,8 +75,10 @@ def esqueleto(tmp_path):
 def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):
     base, home, processo, log = esqueleto
     workspace = home / "workspaces" / "GetFinance"
-    with httpx.Client(base_url=base, auth=AUTH, timeout=120) as http:
-        assert httpx.get(f"{base}/api/financas/edicoes").status_code == 401   # nobody in without the password
+    with httpx.Client(base_url=base, auth=ANA, timeout=120) as http:
+        assert httpx.get(f"{base}/api/financas/edicoes").status_code == 401   # nobody in without a login
+        assert httpx.get(f"{base}/api/eu", auth=(ANA[0], "senha-errada")).status_code == 401
+        assert http.get("/api/eu").json() == {"nome": ANA[0], "modulos": ["financas", "lista"]}
         pagina = http.get("/")
         assert pagina.status_code == 200   # the screen comes from the same server
         assert "<html" in pagina.text.lower()
@@ -116,7 +120,8 @@ def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):
         assert criado.status_code == 201, criado.text
         marcado = http.patch(f"/api/lista/itens/{criado.json()['id']}", json={"comprado": True})
         assert marcado.status_code == 200, marcado.text
-        assert [(i["texto"], i["comprado"]) for i in http.get("/api/lista/itens").json()["itens"]] == [("biscoito", True)]
+        assert [(i["texto"], i["comprado"], i["adicionado_por"]) for i in http.get("/api/lista/itens").json()["itens"]] == [
+            ("biscoito", True, ANA[0])]
         assert (home / "ninho.db").is_file()
 
     assert _parar(processo) == 0, log.read_text(encoding="utf-8")[-4000:]   # stops cleanly, nothing left up
