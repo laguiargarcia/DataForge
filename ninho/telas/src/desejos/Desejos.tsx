@@ -1,0 +1,310 @@
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import {
+  adicionar, anotar, apagar, daParte, desanotar, DOS_DOIS, editar, guardarParte, lerDesejos, lerParteGuardada,
+  lerPessoas, LIMITE_ANOTACAO, LIMITE_ANOTACOES, LIMITE_TITULO, parteDe, parteInicial, partes,
+  type Anotacao, type Desejo, type Parte, type Pessoa,
+} from './api'
+import type { Eu } from '../eu'
+import { Logo } from '../Logo'
+
+// A tela do módulo desejos (df-8x0m.23.22.3), para a tela de um iPhone, no molde da Lista: três
+// partes no alto (a de cada pessoa e a dos dois), os desejos da parte com as suas anotações (a que o
+// servidor diz ser um endereço vira link, aberto em outra aba), e os realizados recolhidos no fim.
+// Tocar num desejo abre-o para anotar, apagar uma anotação, mudar o título, mover de parte, marcar
+// realizado e apagar. Todos veem e mexem em tudo: a lista é lida ao abrir a tela e de novo cada vez
+// que a tela ou a página volta a aparecer. Precisa de rede: sem guarda local nem fila.
+
+type Dados = { desejos: Desejo[]; pessoas: Pessoa[] }
+type Carga = { fase: 'carregando' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; valor: Dados }
+type Props = Readonly<{ aberta: boolean; eu: Eu }>
+type Alterar = (acao: () => Promise<unknown>, antes?: (desejos: Desejo[]) => Desejo[]) => void
+
+const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const classeBotao = 'h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold shrink-0 disabled:opacity-40'
+const classeCampo = 'flex-1 min-w-0 h-11 px-4 rounded-[999px] font-sans text-[16px] text-texto placeholder:text-secundario'
+const classeDiscreto = 'h-11 px-4 rounded-[999px] font-medium shrink-0 disabled:opacity-40'
+
+const Xis = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+)
+const Seta = ({ aberto }: Readonly<{ aberto: boolean }>) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"
+    className={`shrink-0 text-secundario transition-transform ${aberto ? 'rotate-180' : ''}`}><path d="M6 9l6 6 6-6" /></svg>
+)
+
+// O texto vai como texto: o link usa o próprio texto no href, nunca HTML montado a partir dele. O
+// servidor só diz link para http e https.
+function TextoDaAnotacao({ anotacao }: Readonly<{ anotacao: Anotacao }>) {
+  return anotacao.link
+    ? <a href={anotacao.texto} target="_blank" rel="noopener noreferrer"
+      className="block py-2.5 min-h-11 break-all text-acento underline">{anotacao.texto}</a>
+    : <span className="block py-2.5 break-words">{anotacao.texto}</span>
+}
+
+const semAnotacao = (desejo: Desejo, anotacao: string) =>
+  (d: Desejo): Desejo => (d.id === desejo.id ? { ...d, anotacoes: d.anotacoes.filter(a => a.id !== anotacao) } : d)
+const mudado = (desejo: Desejo, mudancas: Partial<Desejo>) =>
+  (desejos: Desejo[]) => desejos.map(d => (d.id === desejo.id ? { ...d, ...mudancas } : d))
+
+type CartaoProps = Readonly<{
+  desejo: Desejo; aberto: boolean; alternar: () => void; fechar: () => void
+  todas: readonly Parte[]; ocupado: boolean; alterar: Alterar
+}>
+
+function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: CartaoProps) {
+  const [nota, setNota] = useState('')
+  const [titulo, setTitulo] = useState(desejo.titulo)
+  const [confirmando, setConfirmando] = useState(false)
+  const campoNota = useRef<HTMLInputElement>(null)
+  // Aberto de novo, o campo do título volta ao título de agora (a outra pessoa pode tê-lo mudado).
+  useEffect(() => { if (aberto) setTitulo(desejo.titulo) }, [aberto, desejo.titulo])
+  useEffect(() => { if (!aberto) setConfirmando(false) }, [aberto])
+
+  const enviarNota = (evento: FormEvent) => {
+    evento.preventDefault()
+    const texto = nota.trim()
+    if (!texto) return
+    campoNota.current?.focus()
+    setNota('')
+    alterar(() => anotar(desejo.id, texto).catch((e: unknown) => {
+      setNota(atual => atual || texto)
+      throw e
+    }))
+  }
+  const novoTitulo = titulo.trim()
+  const salvarTitulo = (evento: FormEvent) => {
+    evento.preventDefault()
+    if (!novoTitulo || novoTitulo === desejo.titulo) return
+    alterar(() => editar(desejo.id, { titulo: novoTitulo }), mudado(desejo, { titulo: novoTitulo }))
+  }
+  const mover = (chave: string) => {
+    const de_quem = chave === DOS_DOIS ? null : chave
+    fechar()
+    alterar(() => editar(desejo.id, { de_quem }), mudado(desejo, { de_quem }))
+  }
+  const realizar = () => {
+    fechar()
+    alterar(() => editar(desejo.id, { realizado: !desejo.realizado }), mudado(desejo, { realizado: !desejo.realizado }))
+  }
+  const cheio = desejo.anotacoes.length >= LIMITE_ANOTACOES
+
+  return (
+    <li className="border-b border-linha last:border-b-0">
+      <button type="button" aria-expanded={aberto} onClick={alternar}
+        className="w-full min-h-14 px-4 py-2 flex items-center gap-3">
+        <span className={`flex-1 min-w-0 break-words font-semibold ${desejo.realizado ? 'line-through text-secundario' : ''}`}>
+          {desejo.titulo}
+        </span>
+        <Seta aberto={aberto} />
+      </button>
+      {desejo.anotacoes.length > 0 && (
+        <ul aria-label={`Anotações de ${desejo.titulo}`} className="m-0 px-4 pb-2 list-none flex flex-col">
+          {desejo.anotacoes.map(a => (
+            <li key={a.id} className="flex items-center gap-1 min-w-0">
+              <div className="flex-1 min-w-0"><TextoDaAnotacao anotacao={a} /></div>
+              {aberto && (
+                <button type="button" aria-label={`Apagar a anotação ${a.texto}`} disabled={ocupado}
+                  onClick={() => alterar(() => desanotar(desejo.id, a.id), ds => ds.map(semAnotacao(desejo, a.id)))}
+                  className="w-11 h-11 shrink-0 rounded-[999px] flex items-center justify-center text-secundario disabled:opacity-40">
+                  <Xis />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {aberto && (
+        <div className="px-4 pb-4 pt-1 flex flex-col gap-3">
+          <form className="flex gap-2" onSubmit={enviarNota}>
+            <input ref={campoNota} type="text" aria-label="Nova anotação" value={nota} maxLength={LIMITE_ANOTACAO}
+              placeholder={cheio ? `No máximo ${LIMITE_ANOTACOES} anotações` : 'Anotação ou endereço'} disabled={cheio}
+              enterKeyHint="done" autoComplete="off" onChange={e => setNota(e.target.value)} className={`${classeCampo} bg-fundo`} />
+            <button type="submit" className={classeBotao} disabled={cheio || !nota.trim()}>Anotar</button>
+          </form>
+          <form className="flex gap-2" onSubmit={salvarTitulo}>
+            <input type="text" aria-label="Título" value={titulo} maxLength={LIMITE_TITULO} enterKeyHint="done"
+              autoComplete="off" onChange={e => setTitulo(e.target.value)} className={`${classeCampo} bg-fundo`} />
+            <button type="submit" className={classeBotao} disabled={ocupado || !novoTitulo || novoTitulo === desejo.titulo}>
+              Salvar
+            </button>
+          </form>
+          <label className="flex items-center gap-3">
+            <span className="shrink-0 text-secundario">Mover para</span>
+            <select value={parteDe(desejo)} disabled={ocupado} onChange={e => mover(e.target.value)}
+              className="flex-1 min-w-0 h-11 px-4 rounded-[999px] bg-fundo text-texto disabled:opacity-40">
+              {todas.map(p => <option key={p.chave} value={p.chave}>{p.rotulo}</option>)}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={ocupado} onClick={realizar} className={classeBotao}>
+              {desejo.realizado ? 'Desmarcar realizado' : 'Realizado'}
+            </button>
+            {!confirmando && (
+              <button type="button" disabled={ocupado} onClick={() => setConfirmando(true)}
+                className={`${classeDiscreto} text-alerta`}>
+                Apagar desejo
+              </button>
+            )}
+          </div>
+          {/* Apagar leva o desejo e as anotações de vez, também os da outra pessoa: só depois de confirmar. */}
+          {confirmando && (
+            <fieldset aria-label="Confirmar apagar" className="m-0 p-0 border-0 min-w-0">
+              <div className="rounded-[20px] bg-fundo px-4 py-3 flex flex-wrap items-center gap-2">
+                <p className="m-0 flex-1 min-w-0 break-words">Apagar “{desejo.titulo}”?</p>
+                <button type="button" onClick={() => setConfirmando(false)} className={`${classeDiscreto} text-secundario`}>
+                  Cancelar
+                </button>
+                <button type="button" disabled={ocupado} className={classeBotao}
+                  onClick={() => { fechar(); alterar(() => apagar(desejo.id), ds => ds.filter(d => d.id !== desejo.id)) }}>
+                  Apagar
+                </button>
+              </div>
+            </fieldset>
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+export function Desejos({ aberta, eu }: Props) {
+  const [carga, setCarga] = useState<Carga>({ fase: 'carregando' })
+  const [escolhida, setEscolhida] = useState(lerParteGuardada)
+  const [aberto, setAberto] = useState<string | null>(null)
+  const [texto, setTexto] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+  const [falha, setFalha] = useState<string | null>(null)
+  const campo = useRef<HTMLInputElement>(null)
+  // Como na Lista: só a leitura mais recente vale, e uma mudança também conta como mais recente.
+  const ultima = useRef(0)
+  const carregou = useRef(false)
+
+  const reler = useCallback((manterFalha = false) => {
+    const esta = ++ultima.current
+    return Promise.all([lerDesejos(), lerPessoas()]).then(
+      ([desejos, pessoas]) => {
+        if (ultima.current !== esta) return
+        carregou.current = true
+        setCarga({ fase: 'ok', valor: { desejos, pessoas } })
+        if (!manterFalha) setFalha(null)
+      },
+      e => {
+        if (ultima.current !== esta) return
+        if (!carregou.current) setCarga({ fase: 'erro', mensagem: mensagem(e) })
+        else if (!manterFalha) setFalha(`Não foi possível reler os desejos: ${mensagem(e)}`)
+      },
+    )
+  }, [])
+
+  useEffect(() => {
+    if (!aberta) return
+    reler()
+    const aoVoltar = () => { if (document.visibilityState === 'visible') reler() }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => document.removeEventListener('visibilitychange', aoVoltar)
+  }, [aberta, reler])
+
+  const alterar = useCallback<Alterar>((acao, antes) => {
+    setOcupado(true)
+    setFalha(null)
+    ++ultima.current
+    if (antes) setCarga(c => (c.fase === 'ok' ? { fase: 'ok', valor: { ...c.valor, desejos: antes(c.valor.desejos) } } : c))
+    acao()
+      .then(() => reler(), (e: unknown) => { setFalha(mensagem(e)); return reler(true) })
+      .finally(() => setOcupado(false))
+  }, [reler])
+
+  const dados = carga.fase === 'ok' ? carga.valor : null
+  const todas = partes(dados?.pessoas ?? [])
+  const parte = parteInicial(escolhida, todas, eu.id)
+  const { abertos, realizados } = daParte(dados?.desejos ?? [], parte)
+
+  const escolher = (chave: string) => {
+    setEscolhida(chave)
+    guardarParte(chave)
+    setAberto(null)
+  }
+
+  const enviar = (evento: FormEvent) => {
+    evento.preventDefault()
+    const novo = texto.trim()
+    if (!novo || !dados) return
+    campo.current?.focus()
+    setTexto('')
+    alterar(() => adicionar(novo, parte === DOS_DOIS ? null : parte).catch((e: unknown) => {
+      setTexto(atual => atual || novo)
+      throw e
+    }))
+  }
+
+  const cartao = (d: Desejo) => (
+    <Cartao key={d.id} desejo={d} aberto={aberto === d.id} todas={todas} ocupado={ocupado} alterar={alterar}
+      alternar={() => setAberto(a => (a === d.id ? null : d.id))} fechar={() => setAberto(null)} />
+  )
+
+  return (
+    <div className="min-h-dvh bg-fundo font-sans text-[16px] text-texto">
+      <header className="sticky top-0 z-10 bg-fundo pt-[max(12px,env(safe-area-inset-top))] pb-3 px-4">
+        <div className="max-w-[480px] mx-auto flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="m-0 font-titulo text-[30px] leading-tight font-bold text-acento">Desejos</h1>
+            <Logo />
+          </div>
+          {dados && (
+            <fieldset aria-label="De quem" className="m-0 p-0 border-0 min-w-0">
+              <div className="flex flex-wrap gap-2">
+                {todas.map(p => (
+                  <button key={p.chave} type="button" aria-pressed={p.chave === parte} onClick={() => escolher(p.chave)}
+                    className={`h-11 px-4 rounded-[999px] font-semibold max-w-full truncate ${p.chave === parte ? 'bg-marca text-texto' : 'bg-cartao text-secundario'}`}>
+                    {p.rotulo}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          <form className="flex gap-2" onSubmit={enviar}>
+            <input ref={campo} type="text" aria-label="Novo desejo" placeholder="Novo desejo" value={texto} maxLength={LIMITE_TITULO}
+              enterKeyHint="done" autoComplete="off" onChange={e => setTexto(e.target.value)}
+              className={`${classeCampo} bg-cartao`} />
+            <button type="submit" className={classeBotao} disabled={!dados || !texto.trim()}>Adicionar</button>
+          </form>
+        </div>
+      </header>
+
+      <main className="max-w-[480px] mx-auto px-4 pb-[max(24px,env(safe-area-inset-bottom))] flex flex-col gap-3">
+        {falha && <p role="alert" className="m-0 rounded-[20px] bg-alerta-fundo px-4 py-3 text-alerta break-words">{falha}</p>}
+
+        <section className="flex flex-col gap-3" aria-label="Desejos da parte">
+          {carga.fase === 'carregando' && <p className="m-0 rounded-[20px] bg-cartao px-4 py-6 text-secundario">Carregando…</p>}
+          {carga.fase === 'erro' && (
+            <div className="rounded-[20px] bg-cartao px-4 py-6 flex flex-col gap-3 items-start">
+              <p className="m-0 break-words">Não foi possível carregar os desejos: {carga.mensagem}</p>
+              <button type="button" className={classeBotao} onClick={() => { setCarga({ fase: 'carregando' }); reler() }}>
+                Tentar de novo
+              </button>
+            </div>
+          )}
+          {dados && abertos.length === 0 && (
+            <p className="m-0 rounded-[20px] bg-cartao px-4 py-6 text-secundario">
+              {realizados.length === 0 ? 'Nenhum desejo aqui ainda.' : 'Nenhum desejo em aberto.'}
+            </p>
+          )}
+          {abertos.length > 0 && (
+            <ul aria-label="Desejos" className="m-0 p-0 list-none rounded-[20px] bg-cartao overflow-hidden">
+              {abertos.map(cartao)}
+            </ul>
+          )}
+          {/* Os realizados ficam em arquivo, recolhidos no fim da parte: dá para desmarcar ou apagar. */}
+          {realizados.length > 0 && (
+            <details className="flex flex-col gap-3">
+              <summary className="cursor-pointer py-3 font-semibold text-secundario">Realizados ({realizados.length})</summary>
+              <ul aria-label="Realizados" className="m-0 p-0 list-none rounded-[20px] bg-cartao overflow-hidden">
+                {realizados.map(cartao)}
+              </ul>
+            </details>
+          )}
+        </section>
+      </main>
+    </div>
+  )
+}

@@ -7,12 +7,12 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('permitidos', () => {
   it('fica só com os módulos da pessoa, na ordem da casca', () => {
-    expect(permitidos(CASCA, { nome: 'ana', modulos: ['lista', 'financas'] })).toEqual(CASCA)
-    expect(permitidos(CASCA, { nome: 'beto', modulos: ['lista'] })).toEqual([{ id: 'lista' }])
+    expect(permitidos(CASCA, { id: 'id-ana', nome: 'ana', modulos: ['lista', 'financas'] })).toEqual(CASCA)
+    expect(permitidos(CASCA, { id: 'id-beto', nome: 'beto', modulos: ['lista'] })).toEqual([{ id: 'lista' }])
   })
   it('ignora um módulo que a casca não conhece e aceita pessoa sem módulo', () => {
-    expect(permitidos(CASCA, { nome: 'ana', modulos: ['agenda'] })).toEqual([])
-    expect(permitidos(CASCA, { nome: 'ana', modulos: [] })).toEqual([])
+    expect(permitidos(CASCA, { id: 'id-ana', nome: 'ana', modulos: ['agenda'] })).toEqual([])
+    expect(permitidos(CASCA, { id: 'id-ana', nome: 'ana', modulos: [] })).toEqual([])
   })
 })
 
@@ -31,10 +31,10 @@ describe('telaAberta', () => {
 })
 
 describe('lerEu', () => {
-  it('pede api/eu e devolve nome e módulos', async () => {
-    const fetchFalso = vi.fn(async () => new Response(JSON.stringify({ nome: 'ana', modulos: ['lista'] })))
+  it('pede api/eu e devolve id, nome e módulos', async () => {
+    const fetchFalso = vi.fn(async () => new Response(JSON.stringify({ id: 'id-ana', nome: 'ana', modulos: ['lista'] })))
     vi.stubGlobal('fetch', fetchFalso)
-    expect(await lerEu()).toEqual({ nome: 'ana', modulos: ['lista'] })
+    expect(await lerEu()).toEqual({ id: 'id-ana', nome: 'ana', modulos: ['lista'] })
     expect(fetchFalso).toHaveBeenCalledWith('api/eu', { method: 'GET' })
   })
   it('falha com o status quando o servidor recusa', async () => {

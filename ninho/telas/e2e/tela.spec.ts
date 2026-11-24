@@ -64,7 +64,7 @@ test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async 
   await expect(page).toHaveURL(/\?mes=2026-05$/)
 })
 
-test('quem só tem a lista vê a barra sem Finanças, abre direto na Lista e não pede nada às finanças', async ({ browser, baseURL }) => {
+test('quem só tem a lista vê a barra sem Finanças nem Desejos, abre direto na Lista e não pede nada às finanças', async ({ browser, baseURL }) => {
   // Outra pessoa, outro login: um contexto próprio com as credenciais dela (df-8x0m.23.6.3).
   const contexto = await browser.newContext({ baseURL, httpCredentials: soLista })
   const page = await contexto.newPage()
@@ -80,10 +80,12 @@ test('quem só tem a lista vê a barra sem Finanças, abre direto na Lista e nã
   const barra = page.getByRole('navigation', { name: 'Módulos' })
   await expect(barra.getByRole('button')).toHaveCount(1)
   await expect(barra.getByRole('button', { name: 'Lista', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(barra.getByRole('button', { name: 'Desejos', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Desejos', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Transações' })).toHaveCount(0)
   await expect(page.getByRole('region', { name: 'Itens da lista' })).toContainText('A lista está vazia.')
   expect(pedidos).toContain('/api/eu')
-  expect(pedidos.filter(p => p.startsWith('/api/financas'))).toEqual([])
+  expect(pedidos.filter(p => p.startsWith('/api/financas') || p.startsWith('/api/desejos'))).toEqual([])
   expect(erros).toEqual([])
   await contexto.close()
 })
@@ -145,6 +147,104 @@ test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comp
   await confirmar.getByRole('button', { name: 'Apagar', exact: true }).click()
   await expect(itens).toContainText('A lista está vazia.')
   await expect(page.getByRole('button', { name: 'Limpar comprados' })).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('nos Desejos, cria um desejo dos dois com um texto e um link, move, marca realizado e apaga', async ({ page }) => {
+  const LINK = 'https://exemplo.invalid/bicicleta'
+  // Montada e escondida, a tela dos desejos não pede nada antes de ser aberta.
+  const pedidosDesejos: string[] = []
+  page.on('request', r => { if (new URL(r.url()).pathname.startsWith('/api/desejos')) pedidosDesejos.push(r.url()) })
+  await page.goto(`?mes=${MES}`)
+  await expect(linhas(page).first()).toBeVisible()
+  expect(pedidosDesejos).toEqual([])
+  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Desejos', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Desejos', exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/tela=desejos/)
+
+  // A primeira vez abre na parte de quem entrou.
+  const partes = page.getByRole('group', { name: 'De quem' })
+  const parte = (rotulo: string) => partes.getByRole('button', { name: rotulo, exact: true })
+  await expect(parte('ana')).toHaveAttribute('aria-pressed', 'true')
+  await expect(parte('beto')).toHaveAttribute('aria-pressed', 'false')
+  const regiao = page.getByRole('region', { name: 'Desejos da parte' })
+  await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
+
+  await parte('Nós dois').click()
+  await expect(parte('Nós dois')).toHaveAttribute('aria-pressed', 'true')
+  const campo = page.getByRole('textbox', { name: 'Novo desejo' })
+  await campo.fill('bicicleta')
+  await campo.press('Enter')
+  await expect(campo).toHaveValue('')
+  const abertos = page.getByRole('list', { name: 'Desejos', exact: true })
+  const titulo = abertos.getByRole('button', { name: 'bicicleta', exact: true })
+  await expect(titulo).toBeVisible()
+
+  // Tocar abre o desejo: duas anotações, um texto e um endereço.
+  await titulo.click()
+  await expect(titulo).toHaveAttribute('aria-expanded', 'true')
+  const nota = page.getByRole('textbox', { name: 'Nova anotação' })
+  await nota.fill('a azul, aro 29')
+  await nota.press('Enter')
+  const anotacoes = page.getByRole('list', { name: 'Anotações de bicicleta' })
+  await expect(anotacoes.getByRole('listitem')).toHaveCount(1)
+  await nota.fill(LINK)
+  await page.getByRole('button', { name: 'Anotar' }).click()
+  await expect(anotacoes.getByRole('listitem')).toHaveCount(2)
+  await expect(anotacoes.getByRole('listitem').first()).toHaveText('a azul, aro 29')
+  await expect(anotacoes.getByRole('link')).toHaveCount(1)
+
+  // O endereço é um link que abre em outra aba; não é seguido (o domínio .invalid não existe).
+  const link = anotacoes.getByRole('link', { name: LINK })
+  await expect(link).toHaveAttribute('href', LINK)
+  await expect(link).toHaveAttribute('target', '_blank')
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+
+  // Alvos de toque de pelo menos 44 px, e a tela cabe na largura do iPhone.
+  for (const alvo of [parte('Nós dois'), titulo, link, page.getByRole('button', { name: `Apagar a anotação ${LINK}` }),
+    page.getByRole('button', { name: 'Anotar' }), page.getByRole('combobox'), page.getByRole('button', { name: 'Realizado' }),
+    page.getByRole('button', { name: 'Apagar desejo' })]) {
+    const caixa = (await alvo.boundingBox())!
+    expect(Math.min(caixa.width, caixa.height)).toBeGreaterThanOrEqual(44)
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  // Recarregar volta na mesma parte (guardada no aparelho), com o link.
+  await page.reload()
+  await expect(parte('Nós dois')).toHaveAttribute('aria-pressed', 'true')
+  await expect(anotacoes.getByRole('link', { name: LINK })).toHaveAttribute('target', '_blank')
+
+  // Mover para a parte da ana: some daqui e aparece lá.
+  await titulo.click()
+  await page.getByRole('combobox').selectOption({ label: 'ana' })
+  await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
+  await parte('ana').click()
+  await expect(titulo).toBeVisible()
+  await expect(anotacoes.getByRole('listitem')).toHaveCount(2)
+
+  // Realizado: sai dos abertos e fica no arquivo recolhido, de onde é apagado.
+  await titulo.click()
+  await page.getByRole('button', { name: 'Realizado' }).click()
+  await expect(regiao).toContainText('Nenhum desejo em aberto.')
+  const realizados = page.getByRole('list', { name: 'Realizados' })
+  await expect(realizados).toBeHidden()
+  await page.getByText('Realizados (1)').click()
+  const realizado = realizados.getByRole('button', { name: 'bicicleta', exact: true })
+  await expect(realizado).toBeVisible()
+  await realizado.click()
+  await expect(page.getByRole('button', { name: 'Desmarcar realizado' })).toBeVisible()
+  await page.getByRole('button', { name: 'Apagar desejo' }).click()
+  const confirmar = page.getByRole('group', { name: 'Confirmar apagar' })
+  await expect(confirmar).toContainText('Apagar “bicicleta”?')
+  await confirmar.getByRole('button', { name: 'Cancelar' }).click()
+  await expect(confirmar).toHaveCount(0)
+  await expect(realizado).toBeVisible()
+  await page.getByRole('button', { name: 'Apagar desejo' }).click()
+  await confirmar.getByRole('button', { name: 'Apagar', exact: true }).click()
+  await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
+  await expect(page.getByText('Realizados (1)')).toHaveCount(0)
+  await parte('Nós dois').click()
+  await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
