@@ -29,14 +29,12 @@ line, soft shapes, no hard corners.
 
 | Name | Hex | Where it comes from | Use |
 | --- | --- | --- | --- |
-| Blue (azul) | `#99b2d9` (see the note) | the logo's line and the word "ninho" | the brand colour: the logo, large titles, fills, the active item |
+| Blue (azul) | `#99b2d9` | the logo's line and the word "ninho" | the brand colour: the logo, fills, the active item (titles use the dark blue below) |
 | Cream (creme) | `#f8f0de` | the sheet | the background of the app |
 | Green (verde) | `#addcaa` | the branches of the logo | the second colour: positive marks, small accents |
 
-**Note on the blue.** The sheet writes it as `#99b29`, five digits, so one is missing. Measured in
-`logo-ninho.png`, the blue of the line is about `#9ab1d5` (most pixels between `#98b0d0` and
-`#9cb4d8`), which agrees with `99 b2` and a last pair near `d6`. `#99b2d9` is the reading used
-until Lucas gives the exact value.
+**Note on the blue.** The sheet writes it as `#99b29`, five digits, one missing; Lucas confirmed
+`#99b2d9` (2026-11-24, df-8x0m.23.26).
 
 **Text needs a darker colour.** The three colours are all light: the blue on cream has a contrast of
 about 1.9 to 1, far below what running text needs (4.5 to 1). So the brand blue is for the logo and
@@ -73,7 +71,6 @@ A screen should look like it belongs next to the drawing.
 
 ## Still open
 
-- The exact blue (the sheet's value has a digit missing).
 - Whether Lucas has a licence and the files of Migra for use on the web. Until then the titles use
   the system serif (`ui-serif`, Georgia).
 - A vector version of the logo (or a larger export from Lucas); the icons are cut from the PNG until then.
