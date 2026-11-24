@@ -1,18 +1,22 @@
 import { test, expect, type Page } from '@playwright/test'
-import { soLista } from '../playwright.config'
+import { soDesejos, soLista } from '../playwright.config'
 
 // Guarda: requisição fora da origem, erro de console ou erro de página reprova o teste.
 let problemas: string[] = []
 
-test.beforeEach(async ({ page, baseURL }) => {
-  problemas = []
-  const origem = new URL(baseURL!).origin
+function vigiar(page: Page, baseURL: string) {
+  const origem = new URL(baseURL).origin
   page.on('request', r => {
     const u = r.url()
     if (!u.startsWith(origem) && !u.startsWith('data:')) problemas.push(`requisição externa: ${u}`)
   })
   page.on('console', m => { if (m.type() === 'error') problemas.push(`console: ${m.text()}`) })
   page.on('pageerror', e => problemas.push(`pageerror: ${e.message}`))
+}
+
+test.beforeEach(async ({ page, baseURL }) => {
+  problemas = []
+  vigiar(page, baseURL!)
 })
 
 test.afterEach(() => {
@@ -245,6 +249,99 @@ test('nos Desejos, cria um desejo dos dois com um texto e um link, move, marca r
   await expect(page.getByText('Realizados (1)')).toHaveCount(0)
   await parte('Nós dois').click()
   await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+type DesejoVisto = { titulo: string; de_quem: string | null; presente: unknown }
+
+test('o presente-surpresa: caio marca "Vou dar este" num desejo da ana, e a página da ana nunca recebe a marca', async ({ page, browser, baseURL }) => {
+  // Tudo o que /api/desejos responde à página da ana, para conferir no fim que nenhum desejo dela traz a marca.
+  const respostasDaAna: Promise<{ desejos?: DesejoVisto[] } & Partial<DesejoVisto>>[] = []
+  page.on('response', r => {
+    if (new URL(r.url()).pathname.startsWith('/api/desejos') && r.status() !== 204) respostasDaAna.push(r.json())
+  })
+  const idDaAna = (await (await page.request.get('api/eu')).json()).id as string
+  const partesDe = (p: Page) => p.getByRole('group', { name: 'De quem' })
+  const regiaoDe = (p: Page) => p.getByRole('region', { name: 'Desejos da parte' })
+  const desejoEm = (p: Page, titulo: string) => p.getByRole('list', { name: 'Desejos', exact: true }).getByRole('button', { name: titulo, exact: true })
+  const botoesDoPresente = (p: Page) => p.getByRole('button', { name: /^(Vou dar este|Não vou mais dar)$/ })
+  const criar = async (p: Page, parte: string, titulo: string) => {
+    await partesDe(p).getByRole('button', { name: parte, exact: true }).click()
+    await p.getByRole('textbox', { name: 'Novo desejo' }).fill(titulo)
+    await p.getByRole('textbox', { name: 'Novo desejo' }).press('Enter')
+    await expect(desejoEm(p, titulo)).toBeVisible()
+  }
+
+  // A ana cria um desejo dela, um dos dois e um do beto. No dela e no dos dois não há botão; no do beto, ela marca.
+  await page.goto('?tela=desejos')
+  await criar(page, 'ana', 'bicicleta')
+  await desejoEm(page, 'bicicleta').click()
+  await expect(page.getByRole('button', { name: 'Realizado' })).toBeVisible()
+  await expect(botoesDoPresente(page)).toHaveCount(0)
+  await criar(page, 'Nós dois', 'viagem')
+  await desejoEm(page, 'viagem').click()
+  await expect(page.getByRole('button', { name: 'Realizado' })).toBeVisible()
+  await expect(botoesDoPresente(page)).toHaveCount(0)
+  await criar(page, 'beto', 'livro')
+  await desejoEm(page, 'livro').click()
+  await page.getByRole('button', { name: 'Vou dar este' }).click()
+  await expect(regiaoDe(page).getByText('Você vai dar')).toBeVisible()
+
+  // O caio, no contexto dele, marca o desejo da ana.
+  const contexto = await browser.newContext({ baseURL, httpCredentials: soDesejos })
+  const caio = await contexto.newPage()
+  vigiar(caio, baseURL!)
+  await caio.goto('?tela=desejos')
+  await expect(partesDe(caio).getByRole('button', { name: 'caio', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await partesDe(caio).getByRole('button', { name: 'ana', exact: true }).click()
+  await desejoEm(caio, 'bicicleta').click()
+  await expect(regiaoDe(caio).getByText(/vai dar/)).toHaveCount(0)
+  const vouDar = caio.getByRole('button', { name: 'Vou dar este' })
+  const caixa = (await vouDar.boundingBox())!
+  expect(Math.min(caixa.width, caixa.height)).toBeGreaterThanOrEqual(44)
+  await vouDar.click()
+  await expect(regiaoDe(caio).getByText('Você vai dar')).toBeVisible()
+  await expect(caio.getByRole('button', { name: 'Não vou mais dar' })).toBeVisible()
+  await expect(vouDar).toHaveCount(0)
+  await caio.reload()
+  await expect(desejoEm(caio, 'bicicleta')).toBeVisible()
+  await expect(regiaoDe(caio).getByText('Você vai dar')).toBeVisible()
+
+  // A marca da ana no desejo do beto: o caio vê quem vai dar e não tem como desmarcar nem marcar.
+  await partesDe(caio).getByRole('button', { name: 'beto', exact: true }).click()
+  await desejoEm(caio, 'livro').click()
+  await expect(regiaoDe(caio).getByText('ana vai dar')).toBeVisible()
+  await expect(caio.getByRole('button', { name: 'Realizado' })).toBeVisible()
+  await expect(botoesDoPresente(caio)).toHaveCount(0)
+  // Num desejo dos dois, também nenhum botão.
+  await partesDe(caio).getByRole('button', { name: 'Nós dois', exact: true }).click()
+  await desejoEm(caio, 'viagem').click()
+  await expect(caio.getByRole('button', { name: 'Realizado' })).toBeVisible()
+  await expect(botoesDoPresente(caio)).toHaveCount(0)
+
+  // A ana recarrega: o desejo dela está lá, sem marca e sem botão.
+  await page.reload()
+  await partesDe(page).getByRole('button', { name: 'ana', exact: true }).click()
+  await desejoEm(page, 'bicicleta').click()
+  await expect(page.getByRole('button', { name: 'Realizado' })).toBeVisible()
+  await expect(regiaoDe(page).getByText(/vai dar/)).toHaveCount(0)
+  await expect(botoesDoPresente(page)).toHaveCount(0)
+
+  // O caio desmarca: a marca some e o botão volta.
+  await partesDe(caio).getByRole('button', { name: 'ana', exact: true }).click()
+  await desejoEm(caio, 'bicicleta').click()
+  await caio.getByRole('button', { name: 'Não vou mais dar' }).click()
+  await expect(vouDar).toBeVisible()
+  await expect(regiaoDe(caio).getByText(/vai dar/)).toHaveCount(0)
+  await expect(caio.getByRole('alert')).toHaveCount(0)
+  await contexto.close()
+
+  // Nenhuma resposta que a página da ana recebeu traz a marca num desejo dela (nem num dos dois).
+  const vistos = (await Promise.all(respostasDaAna)).flatMap(c => c.desejos ?? [c as DesejoVisto])
+  const dela = vistos.filter(d => d.de_quem === idDaAna || d.de_quem === null)
+  expect(dela.map(d => d.titulo)).toContain('bicicleta')
+  expect(dela.filter(d => d.presente !== null)).toEqual([])
+  expect(vistos.some(d => d.titulo === 'livro' && d.presente !== null)).toBe(true)
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 

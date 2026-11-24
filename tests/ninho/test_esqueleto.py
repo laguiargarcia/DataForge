@@ -20,7 +20,7 @@ import polars as pl
 import pytest
 
 from ninho.financas import leitura
-from tests.ninho.conftest import ANA
+from tests.ninho.conftest import ANA, BETO
 
 ESQUELETO = Path(__file__).resolve().parents[2] / "scripts" / "dev" / "esqueleto.py"
 _SUBIDA = 600       # seconds for the copy, finance_demo and the server to come up (Windows is slower)
@@ -167,3 +167,44 @@ def test_a_segunda_pessoa_do_esqueleto_so_tem_a_lista(tmp_path):
         assert {p["nome"]: p["modulos"] for p in modulo.pessoas.listar(conn)} == {
             "ana": list(modulo.pessoas.MODULOS), "beto": ["lista"]}
 
+
+
+def _main_sem_subir(tmp_path, monkeypatch, nome: str):
+    """esqueleto.main with the copy, the server and the signals stubbed out; (the module, the people it created)."""
+    especificacao = importlib.util.spec_from_file_location(nome, ESQUELETO)
+    modulo = importlib.util.module_from_spec(especificacao)
+    especificacao.loader.exec_module(modulo)
+    criadas = []
+    monkeypatch.setattr(modulo, "preparar", lambda home: home)
+    monkeypatch.setattr(modulo, "criar_pessoa",
+                        lambda _arquivo, nome, senha, modulos=modulo.pessoas.MODULOS: criadas.append((nome, senha, modulos)))
+    monkeypatch.setattr(modulo.uvicorn, "run", lambda *_, **__: None)
+    monkeypatch.setattr(signal, "signal", lambda *_: None)
+    monkeypatch.setenv("NINHO_ESQUELETO_NOME", ANA[0])
+    monkeypatch.setenv("NINHO_ESQUELETO_SENHA", ANA[1])
+    for variavel in ("NINHO_WORKSPACE", "NINHO_BANCO"):
+        monkeypatch.setenv(variavel, "")   # main sets them; monkeypatch puts them back afterwards
+    return modulo, criadas
+
+
+def test_as_outras_pessoas_do_esqueleto_tem_um_modulo_cada(tmp_path, monkeypatch):
+    """beto only has the list and caio only the wishlist: the browser test's surprise gift needs a
+    second person with ``desejos`` (df-8x0m.23.23.2)."""
+    modulo, criadas = _main_sem_subir(tmp_path, monkeypatch, "esqueleto_das_outras_pessoas")
+    for variavel, valor in (("NINHO_ESQUELETO_NOME_LISTA", BETO[0]), ("NINHO_ESQUELETO_SENHA_LISTA", BETO[1]),
+                            ("NINHO_ESQUELETO_NOME_DESEJOS", "caio"), ("NINHO_ESQUELETO_SENHA_DESEJOS", "senha-falsa-do-caio")):
+        monkeypatch.setenv(variavel, valor)
+    assert modulo.main(["--home", str(tmp_path)]) == 0
+    assert criadas == [(*ANA, modulo.pessoas.MODULOS), (*BETO, ("lista",)),
+                       ("caio", "senha-falsa-do-caio", ("desejos",))]
+    assert not any(v.startswith("NINHO_ESQUELETO_") for v in os.environ)
+
+
+@pytest.mark.parametrize("sufixo", ["_LISTA", "_DESEJOS"])
+def test_o_nome_e_a_senha_de_outra_pessoa_vao_juntos(tmp_path, monkeypatch, capsys, sufixo):
+    modulo, criadas = _main_sem_subir(tmp_path, monkeypatch, f"esqueleto_sem_senha{sufixo}")
+    monkeypatch.setenv(f"NINHO_ESQUELETO_NOME{sufixo}", "caio")
+    with pytest.raises(SystemExit):
+        modulo.main(["--home", str(tmp_path)])
+    assert f"NINHO_ESQUELETO_NOME{sufixo} e NINHO_ESQUELETO_SENHA{sufixo} vão juntas" in capsys.readouterr().err
+    assert criadas == []

@@ -13,6 +13,8 @@ const porta = Number(process.env.NINHO_E2E_PORTA ?? 8766)
 const login = { username: 'ana', password: 'senha-falsa-do-teste-da-tela' }
 // Uma segunda pessoa, só com a lista: o teste da barra entra como ela (e2e/tela.spec.ts).
 export const soLista = { username: 'beto', password: 'outra-senha-falsa-da-tela' }
+// Uma terceira, só com os desejos: quem marca o presente-surpresa num desejo da ana (e2e/tela.spec.ts).
+export const soDesejos = { username: 'caio', password: 'mais-uma-senha-falsa-da-tela' }
 
 export default defineConfig({
   testDir: './e2e',
@@ -37,6 +39,7 @@ export default defineConfig({
     env: {
       NINHO_ESQUELETO_NOME: login.username, NINHO_ESQUELETO_SENHA: login.password,
       NINHO_ESQUELETO_NOME_LISTA: soLista.username, NINHO_ESQUELETO_SENHA_LISTA: soLista.password,
+      NINHO_ESQUELETO_NOME_DESEJOS: soDesejos.username, NINHO_ESQUELETO_SENHA_DESEJOS: soDesejos.password,
     },
     url: `http://127.0.0.1:${porta}/`,
     reuseExistingServer: false,
