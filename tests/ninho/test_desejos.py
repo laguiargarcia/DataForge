@@ -287,3 +287,52 @@ def test_pessoas_sem_login_e_401(servidor, auth):
 
 def test_eu_diz_o_id(servidor, ids):
     assert servidor.get("/api/eu", auth=BETO).json() == {"id": ids["beto"], "nome": "beto", "modulos": ["lista", "desejos"]}
+
+
+FAMILIA = "família \U0001F468‍\U0001F469‍\U0001F467 e hífen­mole"   # ZWJ emoji and a soft hyphen
+
+
+def test_emoji_com_zwj_e_hifen_mole_entram_e_voltam_iguais(servidor):
+    desejo = _criar(servidor, FAMILIA, anotacoes=[FAMILIA])
+    assert desejo["titulo"] == FAMILIA
+    r = servidor.post(f"/api/desejos/{desejo['id']}/anotacoes", json={"texto": FAMILIA}, auth=ANA)
+    assert r.status_code == 201
+    assert [a["texto"] for a in r.json()["anotacoes"]] == [FAMILIA, FAMILIA]
+    assert _todos(servidor)[0]["titulo"] == FAMILIA
+
+
+@pytest.mark.parametrize("controle", ["\n", "\t", "\u0000", " "])
+def test_controle_e_separador_de_linha_seguem_recusados(servidor, controle):
+    assert servidor.post("/api/desejos", json={"titulo": f"a{controle}b", "de_quem": None}, auth=ANA).status_code == 422
+    desejo = _criar(servidor)
+    assert servidor.post(f"/api/desejos/{desejo['id']}/anotacoes", json={"texto": f"a{controle}b"},
+                         auth=ANA).status_code == 422
+
+
+@pytest.mark.parametrize(("metodo", "caminho", "corpo"), [
+    ("PATCH", "/api/desejos/{desejo}", {"realizdo": True}),
+    ("POST", "/api/desejos", {"titulo": "t", "de_quem": None, "anotacao": ["x"]}),
+    ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": "x", "link": True})])
+def test_campo_desconhecido_no_corpo_e_422(servidor, metodo, caminho, corpo):
+    desejo = _criar(servidor)
+    r = servidor.request(metodo, caminho.format(desejo=desejo["id"]), json=corpo, auth=ANA)
+    assert r.status_code == 422
+    assert _todos(servidor) == [desejo]
+
+
+@pytest.mark.parametrize("valor", ["true", "yes", 1, 0])
+def test_realizado_so_aceita_true_ou_false(servidor, valor):
+    desejo = _criar(servidor)
+    assert servidor.patch(f"/api/desejos/{desejo['id']}", json={"realizado": valor}, auth=ANA).status_code == 422
+    assert _todos(servidor) == [desejo]
+
+
+def test_as_regras_recusam_campo_desconhecido_e_anotacoes_que_nao_sao_lista(banco):
+    """The rules are called without the routes too (by the tests, a future command): they check on their own."""
+    with banco_do_app.aberto(banco) as conn:
+        with pytest.raises(desejos.Invalido, match="anotacoes"):
+            desejos.adicionar(conn, {"titulo": "t", "de_quem": None, "anotacoes": "um texto só"}, "ana", set())
+        desejo = desejos.adicionar(conn, {"titulo": "t", "de_quem": None}, "ana", set())
+        with pytest.raises(desejos.Invalido, match="campo desconhecido: realizdo"):
+            desejos.editar(conn, desejo["id"], {"realizdo": True}, set())
+        assert desejos.listar(conn) == [desejo]

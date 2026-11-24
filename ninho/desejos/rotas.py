@@ -5,7 +5,7 @@ import sqlite3
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool
 
 from ninho.desejos import desejos
 from ninho.servidor.dependencias import Casa, Pessoa, conexao
@@ -15,19 +15,19 @@ rotas = APIRouter(prefix="/api/desejos")
 Conexao = Annotated[sqlite3.Connection, Depends(conexao)]
 
 
-class NovoDesejo(BaseModel):
+class NovoDesejo(BaseModel, extra="forbid"):   # a misspelt field is 422, not silently ignored
     titulo: str
     de_quem: str | None
     anotacoes: list[str] = []
 
 
-class Edicao(BaseModel):
+class Edicao(BaseModel, extra="forbid"):
     titulo: str | None = None
     de_quem: str | None = None
-    realizado: bool | None = None
+    realizado: StrictBool | None = None   # only JSON true or false
 
 
-class NovaAnotacao(BaseModel):
+class NovaAnotacao(BaseModel, extra="forbid"):
     texto: str
 
 

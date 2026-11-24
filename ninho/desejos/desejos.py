@@ -52,8 +52,10 @@ def _tabelas(conn: sqlite3.Connection) -> None:
 
 
 def _proibido(caractere: str) -> bool:
-    """Control, format, private or unassigned characters and line or paragraph separators."""
-    return unicodedata.category(caractere)[0] == "C" or unicodedata.category(caractere) in ("Zl", "Zp")
+    """Control characters (tab, line break, NUL...) and line or paragraph separators. Format,
+    private and unassigned characters pass: an emoji joined by U+200D, a soft hyphen or an emoji
+    newer than Python's table are what a phone keyboard types."""
+    return unicodedata.category(caractere) in ("Cc", "Zl", "Zp")
 
 
 def _texto(texto: object, limite: int, o_que: str) -> str:
