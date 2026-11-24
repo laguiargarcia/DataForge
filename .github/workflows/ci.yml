@@ -293,7 +293,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
-        with: { enable-cache: true, cache-python: true }
+        with: { enable-cache: true }   # no cache-python: uv uses the runner's Python here, nothing to cache (df-jm78)
       - name: Install
         run: uv sync --frozen
       - name: Durations of the last run
@@ -326,7 +326,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
-        with: { enable-cache: true, cache-python: true }
+        with: { enable-cache: true }   # no cache-python: uv uses the runner's Python here, nothing to cache (df-jm78)
       - name: Install
         run: uv sync --frozen
       - name: GetFinance tests
@@ -675,7 +675,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.3
-        with: { enable-cache: true, cache-python: true }
+        with: { enable-cache: true }   # no cache-python: uv uses the runner's Python here, nothing to cache (df-jm78)
       - name: Install runtime dependencies (prod's, from uv.lock, minus PySide6, which deploy never imports)
         run: >
           uv sync --frozen --no-default-groups
