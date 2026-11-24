@@ -1,6 +1,6 @@
 // Cliente das rotas de finanças do servidor do ninho (ninho/servidor/app.py). A página vem do mesmo
-// servidor, atrás da mesma senha (HTTP Basic): o navegador pede a senha ao abrir a página e a manda
-// de novo em cada pedido daqui, então nenhum pedido trata de senha.
+// servidor, atrás do mesmo login (HTTP Basic, o nome e a senha da pessoa): o navegador pede ao abrir a
+// página e manda de novo em cada pedido daqui, então nenhum pedido trata de senha.
 
 /** Uma linha de fact_transaction_classified, com as colunas de ninho/financas/leitura.py (COLUNAS).
  * O dinheiro vem em reais, número JSON (Float64 da tabela): exato no centavo bem além de qualquer

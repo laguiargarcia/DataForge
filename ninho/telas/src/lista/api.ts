@@ -1,5 +1,5 @@
 // Cliente das rotas da lista de compras (ninho/lista/rotas.py). Como em finanças, a página vem do
-// mesmo servidor atrás da senha (HTTP Basic), que o navegador manda em cada pedido daqui.
+// mesmo servidor atrás do login da pessoa (HTTP Basic), que o navegador manda em cada pedido daqui.
 
 /** Um item da lista, como ninho/lista/itens.py o devolve (horas em ISO, UTC). */
 export type Item = {

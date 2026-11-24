@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { soLista } from '../playwright.config'
 
 // Guarda: requisição fora da origem, erro de console ou erro de página reprova o teste.
 let problemas: string[] = []
@@ -61,6 +62,30 @@ test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async 
   await expect(page.getByText('maio de 2026')).toBeVisible()
   await expect(linhas(page).first()).toBeVisible()
   await expect(page).toHaveURL(/\?mes=2026-05$/)
+})
+
+test('quem só tem a lista vê a barra sem Finanças, abre direto na Lista e não pede nada às finanças', async ({ browser, baseURL }) => {
+  // Outra pessoa, outro login: um contexto próprio com as credenciais dela (df-8x0m.23.6.3).
+  const contexto = await browser.newContext({ baseURL, httpCredentials: soLista })
+  const page = await contexto.newPage()
+  const pedidos: string[] = []
+  const erros: string[] = []
+  page.on('request', r => pedidos.push(new URL(r.url()).pathname))
+  page.on('console', m => { if (m.type() === 'error') erros.push(m.text()) })
+  page.on('pageerror', e => erros.push(e.message))
+
+  // O endereço pede as finanças, que ela não tem: cai na primeira tela dela.
+  await page.goto(`?tela=financas&mes=${MES}`)
+  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  const barra = page.getByRole('navigation', { name: 'Módulos' })
+  await expect(barra.getByRole('button')).toHaveCount(1)
+  await expect(barra.getByRole('button', { name: 'Lista', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('heading', { name: 'Transações' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Itens da lista' })).toContainText('A lista está vazia.')
+  expect(pedidos).toContain('/api/eu')
+  expect(pedidos.filter(p => p.startsWith('/api/financas'))).toEqual([])
+  expect(erros).toEqual([])
+  await contexto.close()
 })
 
 test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comprados', async ({ page }) => {
