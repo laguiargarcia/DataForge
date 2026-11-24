@@ -51,6 +51,17 @@ def test_fora_dos_arquivos_da_tela_e_404(telas, caminho):
     assert "fora da tela" not in r.text
 
 
+def test_caminho_com_byte_nulo_e_404(telas):
+    assert telas.get("/a%00b", auth=AUTH).status_code == 404
+
+
+@pytest.mark.parametrize("caminho", ["/docs", "/redoc", "/openapi.json"])
+def test_o_mapa_das_rotas_nao_e_servido(telas, caminho):
+    """FastAPI's own pages answer without the password and list every route (df-d7s5)."""
+    assert telas.get(caminho).status_code == 401
+    assert telas.get(caminho, auth=AUTH).status_code == 404
+
+
 def test_as_rotas_seguem_respondendo_antes_da_tela(telas, monkeypatch, tmp_path):
     monkeypatch.setenv("NINHO_WORKSPACE", str(tmp_path / "nao-e-workspace"))
     assert telas.get("/api/financas/edicoes", auth=AUTH).status_code == 503
