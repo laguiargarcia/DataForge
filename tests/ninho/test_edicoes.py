@@ -1,35 +1,15 @@
 """The app database and the finance edits (df-8x0m.23.13.3, docs/architecture-v2/edits.md): only the
 server writes; a correction is saved at once and adds 1 to the version; the pipeline reads the same
 database, read-only, and its next "apply" (the reclassificar job) publishes the corrected category."""
-import shutil
 import sqlite3
 
 import polars as pl
 import pytest
-from fastapi.testclient import TestClient
 
 from ninho import banco
 from ninho.financas import leitura, regras
-from ninho.servidor.app import app
-from tests.ninho.conftest import WORKSPACE, rodar_job
+from tests.ninho.conftest import AUTH, WORKSPACE, rodar_job
 
-SENHA = "senha-de-teste"
-AUTH = ("", SENHA)
-
-
-@pytest.fixture
-def workspace(workspace_demo, tmp_path):
-    """Each test's own copy of the synthetic run: these tests write edits and run a job, in any order."""
-    home = tmp_path / "home"
-    shutil.copytree(workspace_demo.parents[1], home, dirs_exist_ok=True)
-    return home / "workspaces" / "GetFinance"
-
-
-@pytest.fixture
-def cliente(workspace, monkeypatch):
-    monkeypatch.setenv("NINHO_WORKSPACE", str(workspace))
-    monkeypatch.setenv("NINHO_SENHA", SENHA)
-    return TestClient(app)
 
 
 def _classificada(workspace) -> pl.DataFrame:
