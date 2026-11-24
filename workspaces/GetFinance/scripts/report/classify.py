@@ -14,14 +14,14 @@ import polars as pl
 exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 sys.path.insert(0, str(Path(__file__).parent))
 from classificacao import SUB_SEM_CATEGORIA, classificar
-from edicao import abrir, ler_correcoes, ler_tabelas, ler_versao
+from edicao import abrir_leitura, ler_correcoes, ler_tabelas, ler_versao
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", required=True)   # curated
 parser.add_argument("--target", required=True)   # curated
 args = parser.parse_args()
 
-with closing(abrir(_connection_root("edicao"))) as conn:   # fecha também quando a leitura falha
+with closing(abrir_leitura(_connection_root("edicao"))) as conn:   # fecha também quando a leitura falha
     dicionario, mapeamento = ler_tabelas(conn)
     correcoes = ler_correcoes(conn)
     versao = ler_versao(conn)

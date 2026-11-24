@@ -44,3 +44,24 @@ def transacoes_do_mes(workspace: Path, mes: date) -> list[dict]:
         )
 
     return _POOL.submit(ler).result().to_dicts()
+
+
+def _ler(caminho: Path, consulta) -> pl.DataFrame:
+    if not (caminho / "_delta_log").is_dir():
+        raise TabelaAusente(str(caminho))
+    return _POOL.submit(lambda: consulta(pl.scan_delta(str(caminho))).collect()).result()  # noqa: TID251 -- ninho cannot import dataforge.delta_pool; this pool is its own
+
+
+def existe(workspace: Path, transacao_id: str) -> bool:
+    """Whether the pipeline published a transaction with this id."""
+    tabela = workspace / "data" / "curated" / TABELA
+    return _ler(tabela, lambda t: t.filter(pl.col("id") == transacao_id).select("id")).height > 0
+
+
+def versao_aplicada(workspace: Path) -> int | None:
+    """The version of the edits the pipeline last classified with; None before its first run."""
+    try:
+        linhas = _ler(workspace / "data" / "curated" / "edicao_aplicada", lambda t: t.select("versao"))
+    except TabelaAusente:
+        return None
+    return linhas["versao"][0] if linhas.height else None

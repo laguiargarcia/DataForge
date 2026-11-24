@@ -2,11 +2,6 @@
 (df-8x0m.23.13.2): `dataforge run GetFinance finance_demo` on a scratch copy writes the lake, and the
 route of the month's transactions answers from it, read-only, only to whoever gives the password.
 """
-import os
-import shutil
-import subprocess
-import sys
-from pathlib import Path
 
 import polars as pl
 import pytest
@@ -15,25 +10,8 @@ from fastapi.testclient import TestClient
 from ninho.financas import leitura
 from ninho.servidor.app import app
 
-WORKSPACE = Path(__file__).resolve().parents[2] / "workspaces" / "GetFinance"
 ROTA = "/api/financas/transacoes"
 SENHA = "senha-de-teste"
-
-
-@pytest.fixture(scope="module")
-def workspace_demo(tmp_path_factory):
-    """A copy of the GetFinance workspace after the synthetic run, under a scratch DATAFORGE_HOME."""
-    home = tmp_path_factory.mktemp("home")
-    copia = home / "workspaces" / "GetFinance"
-    shutil.copytree(WORKSPACE, copia,
-                    ignore=shutil.ignore_patterns("data", "tests", "apps", ".pytest_cache", "__pycache__"))
-    env = {k: v for k, v in os.environ.items() if k not in ("GETFINANCE_DATA", "MERCHANT_NORM_CONFIG")}
-    env["DATAFORGE_HOME"] = str(home)
-    result = subprocess.run([sys.executable, "-m", "dataforge", "run", "GetFinance", "finance_demo"],
-                            cwd=home, env=env, capture_output=True, text=True, encoding="utf-8",
-                            timeout=600, check=False)
-    assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-2000:]
-    return copia
 
 
 @pytest.fixture
