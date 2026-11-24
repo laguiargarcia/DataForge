@@ -201,8 +201,7 @@ def wait_for_end(run_id: str, timeout: float | None = None, poll_seconds: float 
     deadline = None if timeout is None else time.monotonic() + timeout
     while True:
         state = run_state(run_id)
-        if state is None or state["finished_at"] is not None:
-            return state
-        if deadline is not None and time.monotonic() >= deadline:
+        ended = state is None or state["finished_at"] is not None
+        if ended or (deadline is not None and time.monotonic() >= deadline):
             return state
         time.sleep(poll_seconds)
