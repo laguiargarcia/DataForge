@@ -6,8 +6,9 @@ identity sheet, so nobody has to open the image to know a colour or a font.
 
 | File | What it is |
 | --- | --- |
-| `logo-ninho.png` | The logo: the illustration with the word "ninho" under it. 342 × 300 px, transparent background. |
-| `desenho-ninho.png` | The drawing without the word, from Lucas (2026-11-24): 644 × 554 px, transparent background. It came as 2000 × 1200 on opaque black; the black was turned into transparency (brightness as opacity, so the soft edges of the branches stay) and the image cropped to the drawing. The source of the square icons. |
+| `logo-ninho.svg` | The logo: the drawing with the word "ninho" under it, sharp at any size (how it was made: below). |
+| `desenho-ninho.svg` | The drawing without the word, the same way: the source of the square icons. |
+| `desenho-ninho.png` | The drawing without the word, from Lucas (2026-11-24): 644 × 554 px, transparent background. It came as 2000 × 1200 on opaque black; the black was turned into transparency (brightness as opacity, so the soft edges of the branches stay) and the image cropped to the drawing. The source of both SVGs. |
 | `identidade-visual-original.png` | The identity sheet as received (1920 × 1080): the logo, the two fonts and the three colours. The source of this file; do not edit it. |
 
 ## Logo
@@ -21,9 +22,16 @@ line, soft shapes, no hard corners.
 - Do not recolour it, stretch it, crop the branches or separate the word from the drawing. When only
   a square mark fits (an app icon), use the drawing without the word, on cream.
 - The screens' icons (`ninho/telas/public/icone-64.png`, the tab icon, and `icone-180.png`, the
-  iPhone home-screen icon) are `desenho-ninho.png` centred on cream at 86 % of the side.
-- `logo-ninho.png` is 342 × 300: fine up to about that size on screen. A larger use of the logo with
-  the word (a splash screen) needs a vector or a larger export from Lucas.
+  iPhone home-screen icon) are `desenho-ninho.svg` centred on cream at 86 % of the side.
+- **How the SVGs were made** (df-8x0m.23.28; the person who drew the logo has no vector). They are
+  hybrid. The blue lines of `desenho-ninho.png` and the word "ninho", taken from
+  `identidade-visual-original.png` where it is largest, were traced into vector shapes (vtracer,
+  each colour on its own, enlarged 4 × and smoothed before tracing), so they stay sharp at any size.
+  The green branches are the PNG itself (their measured green is `#a3d8a0`, a touch darker than the
+  sheet's `#addcaa`), embedded in the SVG under the lines: their sprayed, grainy
+  texture is what a trace loses, and SVG noise filters tried to imitate it did not come close
+  (and would render differently in Safari). The branches are 611 px wide, so at a very large size
+  (a poster) they get softer than the lines; on any screen they are fine.
 
 ## Colours
 
@@ -74,4 +82,3 @@ A screen should look like it belongs next to the drawing.
 
 - Whether Lucas has a licence and the files of Migra for use on the web. Until then the titles use
   the system serif (`ui-serif`, Georgia).
-- A vector version of the logo with the word, or a larger export of it, for uses larger than 342 × 300.
