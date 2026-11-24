@@ -1,6 +1,7 @@
 """The app database of ninho (docs/architecture-v2/server-modules.md): one SQLite file named by
 ``NINHO_BANCO``, read on every request. Every module but finances keeps its tables here, each module
-creating its own on first use; only the server process writes to it.
+creating its own on first use. The server process writes to it, and so does the command
+``python -m ninho pessoas`` (the table ``pessoas``), run on the same machine.
 
 The folder of the file must exist: the server creates the file, never a folder, so a mistyped path is
 an error and not a new database somewhere unexpected.
