@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS sessoes (
 )"""
 
 
-def _tabela(conn: sqlite3.Connection) -> None:
+def tabela(conn: sqlite3.Connection) -> None:
+    """Create the table when it is missing. Called before a transaction opens, never inside one."""
     conn.execute(_TABELA)
 
 
@@ -39,21 +40,20 @@ def _agora() -> datetime:
 
 
 def abrir(conn: sqlite3.Connection, pessoa_id: str) -> str:
-    """A new session of the person; the token to hand to the browser, kept nowhere else."""
+    """A new session of the person, inside the caller's transaction (``pessoas.abrir_sessao``, which
+    checks the password is still the one typed); the token to hand to the browser, kept nowhere else."""
     token = secrets.token_urlsafe(32)
     agora = _agora()
-    with conn:
-        _tabela(conn)
-        conn.execute("DELETE FROM sessoes WHERE expira_em <= ?", (agora.isoformat(),))
-        conn.execute("INSERT INTO sessoes (token_hash, pessoa_id, criada_em, usada_em, expira_em) VALUES (?, ?, ?, ?, ?)",
-                     (_hash(token), pessoa_id, agora.isoformat(), agora.isoformat(), (agora + VIDA).isoformat()))
+    conn.execute("DELETE FROM sessoes WHERE expira_em <= ?", (agora.isoformat(),))
+    conn.execute("INSERT INTO sessoes (token_hash, pessoa_id, criada_em, usada_em, expira_em) VALUES (?, ?, ?, ?, ?)",
+                 (_hash(token), pessoa_id, agora.isoformat(), agora.isoformat(), (agora + VIDA).isoformat()))
     return token
 
 
 def usar(conn: sqlite3.Connection, token: str) -> tuple[str, bool] | None:
     """The id of the person whose live session <token> is, and whether this use pushed its expiry
     forward (the cookie must then be sent again); None for an unknown or expired one."""
-    _tabela(conn)
+    tabela(conn)
     chave, agora = _hash(token), _agora()
     linha = conn.execute("SELECT pessoa_id, usada_em, expira_em FROM sessoes WHERE token_hash = ?", (chave,)).fetchone()
     if linha is None:
@@ -74,11 +74,10 @@ def usar(conn: sqlite3.Connection, token: str) -> tuple[str, bool] | None:
 def encerrar(conn: sqlite3.Connection, token: str) -> None:
     """End the session of <token>; nothing happens when there is none."""
     with conn:
-        _tabela(conn)
+        tabela(conn)
         conn.execute("DELETE FROM sessoes WHERE token_hash = ?", (_hash(token),))
 
 
 def encerrar_as_de(conn: sqlite3.Connection, pessoa_id: str) -> int:
     """End every session of the person, inside the caller's transaction; how many there were."""
-    _tabela(conn)
     return conn.execute("DELETE FROM sessoes WHERE pessoa_id = ?", (pessoa_id,)).rowcount

@@ -112,9 +112,19 @@ def test_o_nome_entra_em_qualquer_grafia(servidor, nome):
 
 
 @pytest.mark.parametrize("corpo", [{"nome": "a" * 201, "senha": ANA[1]}, {"nome": "ana", "senha": "s" * 1001},
+                                   {"nome": "ana", "senha": ANA[1] + "s" * 1000},
                                    {"nome": 1, "senha": ANA[1]}, ["ana", ANA[1]]])
-def test_entrar_com_corpo_fora_da_forma_e_422(servidor, corpo):
-    assert servidor.post("/api/entrar", json=corpo).status_code == 422
+def test_entrar_com_corpo_fora_da_forma_e_422_e_nao_devolve_o_que_veio(servidor, corpo):
+    """FastAPI's own 422 quotes the body back, password included."""
+    r = servidor.post("/api/entrar", json=corpo)
+    assert (r.status_code, r.json()) == (422, {"detail": "nome e senha fora da forma esperada"})
+    assert ANA[1] not in r.text
+
+
+def test_o_422_das_outras_rotas_segue_dizendo_o_campo(servidor):
+    r = servidor.post("/api/lista/itens", json={"texto": 5}, auth=BETO)
+    assert r.status_code == 422
+    assert r.json()["detail"][0]["loc"] == ["body", "texto"]
 
 
 def test_entrar_sem_ninho_banco_e_503(servidor, monkeypatch):
@@ -184,6 +194,7 @@ def test_sair_encerra_a_sessao_e_limpa_o_cookie(servidor, banco):
     assert (r.status_code, r.content) == (204, b"")
     limpo = _biscoito(r)
     assert (limpo["valor"], limpo["max-age"], limpo["path"]) == ("", "0", "/")
+    assert (limpo["httponly"], limpo["secure"], limpo["samesite"]) == (True, True, "strict")
     assert _eu(servidor, token).status_code == 401
     assert _eu(servidor, outra).status_code == 200   # the other phone stays in
     assert len(_linhas(banco)) == 1
@@ -249,14 +260,60 @@ def test_uma_sessao_parada_noventa_dias_vence_e_a_linha_some(servidor, banco, re
     assert _eu(servidor, token).status_code == 401
 
 
+def test_a_sessao_vale_ate_o_instante_antes_dos_noventa_dias_e_nao_no_proprio(servidor, relogio):
+    antes, no_instante = (_biscoito(_entrar(servidor, *ANA))["valor"] for _ in range(2))
+    relogio(days=90, microseconds=-1)
+    assert _eu(servidor, antes).status_code == 200
+    relogio(microseconds=1)
+    assert _eu(servidor, no_instante).status_code == 401
+
+
 def test_entrar_varre_as_sessoes_vencidas_de_todos(servidor, banco, relogio):
     _entrar(servidor, *ANA)
     relogio(days=30)
     viva = _biscoito(_entrar(servidor, *BETO))["valor"]
-    relogio(days=61)
-    _entrar(servidor, *ANA)
+    relogio(days=60)
+    _entrar(servidor, *ANA)   # the first one expires at this very instant, and goes
     assert len(_linhas(banco)) == 2
     assert _eu(servidor, viva).status_code == 200
+
+
+def test_entrar_de_novo_no_mesmo_navegador_encerra_a_sessao_que_ele_tinha(servidor, banco):
+    primeira = _biscoito(_entrar(servidor, *ANA))["valor"]
+    do_beto = _biscoito(_entrar(servidor, *BETO))["valor"]
+    r = servidor.post("/api/entrar", json={"nome": ANA[0], "senha": ANA[1]}, headers={"Cookie": f"{sessoes.COOKIE}={primeira}"})
+    segunda = _biscoito(r)["valor"]
+    assert (_eu(servidor, primeira).status_code, _eu(servidor, segunda).status_code) == (401, 200)
+    assert _eu(servidor, do_beto).status_code == 200
+    assert len(_linhas(banco)) == 2
+
+
+def test_entrar_errado_nao_encerra_a_sessao_que_o_navegador_tinha(servidor):
+    token = _biscoito(_entrar(servidor, *ANA))["valor"]
+    r = servidor.post("/api/entrar", json={"nome": "ana", "senha": "senha-errada"}, headers={"Cookie": f"{sessoes.COOKIE}={token}"})
+    assert r.status_code == 401
+    assert _eu(servidor, token).status_code == 200
+
+
+@pytest.mark.parametrize("pedido", [
+    ("DELETE", "/api/lista/itens/nao-existe", None, 404), ("POST", "/api/lista/itens", {"texto": 5}, 422),
+    ("GET", "/api/financas/edicoes", None, 403)], ids=["404", "422", "403"])
+def test_a_renovacao_manda_o_cookie_mesmo_quando_a_rota_responde_erro(servidor, relogio, pedido):
+    """The session is pushed in the database before the route runs: the cookie must follow it."""
+    token = _biscoito(_entrar(servidor, *BETO))["valor"]
+    metodo, caminho, corpo, esperado = pedido
+    relogio(days=2)
+    r = servidor.request(metodo, caminho, json=corpo, headers={"Cookie": f"{sessoes.COOKIE}={token}"})
+    assert r.status_code == esperado
+    biscoito = _biscoito(r)
+    assert (biscoito["valor"], biscoito["max-age"]) == (token, str(NOVENTA_DIAS))
+
+
+def test_um_pedido_sem_sessao_nunca_recebe_cookie(servidor, relogio):
+    _entrar(servidor, *ANA)
+    relogio(days=2)
+    for r in (servidor.get("/api/eu"), servidor.get("/"), _eu(servidor, "nao-e-um-token")):
+        assert "set-cookie" not in r.headers
 
 
 def test_a_troca_de_senha_encerra_as_sessoes_da_pessoa_e_so_as_dela(servidor, banco):
@@ -310,8 +367,10 @@ def test_hash_abaixo_do_custo_de_hoje_e_refeito_ao_entrar(servidor, banco, monke
     assert _entrar(servidor, *ANA).status_code == 204
 
 
-def test_refazer_o_hash_nao_desfaz_uma_troca_de_senha_feita_no_meio(servidor, banco, monkeypatch):
-    """A password change by another process that lands right after the login's scrypt check."""
+@pytest.mark.parametrize("refazer", [False, True])
+def test_uma_troca_de_senha_no_meio_da_entrada_nao_deixa_sessao_da_velha(servidor, banco, monkeypatch, refazer):
+    """A password change by another process that lands right after the login's scrypt check: the
+    old password opens no session, and a hash being redone does not write over the new password."""
     original = pessoas.confere
     armada = ["senha-falsa-nova-da-ana"]
 
@@ -323,8 +382,12 @@ def test_refazer_o_hash_nao_desfaz_uma_troca_de_senha_feita_no_meio(servidor, ba
         return certa
 
     monkeypatch.setattr(pessoas, "confere", confere_e_troca)
-    monkeypatch.setattr(pessoas, "_N", 2**5)
-    assert _entrar(servidor, *ANA).status_code == 204   # it was right when it was checked
+    if refazer:
+        monkeypatch.setattr(pessoas, "_N", 2**5)   # ana's hash (2**4) is to be redone at this login
+    r = _entrar(servidor, *ANA)   # right when it was checked, changed before the session opened
+    assert r.status_code == 401
+    assert "set-cookie" not in r.headers
+    assert _linhas(banco) == []
     assert _entrar(servidor, "ana", "senha-falsa-nova-da-ana").status_code == 204
     assert _entrar(servidor, *ANA).status_code == 401
 

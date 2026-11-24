@@ -21,12 +21,15 @@ import logging
 import os
 import sqlite3
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import date
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
-from fastapi.responses import FileResponse
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from ninho.desejos.rotas import rotas as rotas_desejos
@@ -44,6 +47,26 @@ _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 app = FastAPI(title="ninho", docs_url=None, redoc_url=None, openapi_url=None)
 _log = logging.getLogger("ninho")
 _FINANCAS = [Depends(exigir("financas"))]
+ENTRAR = "/api/entrar"
+
+
+@app.middleware("http")
+async def renovar_cookie(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+    """Send the session's cookie again when this request pushed the session forward, on any answer:
+    an error of the route must not leave the browser's cookie behind the session it stands for."""
+    response = await call_next(request)
+    token = getattr(request.state, "sessao_renovada", None)
+    if token:
+        dependencias.por_cookie(response, token)
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def corpo_invalido(request: Request, erro: RequestValidationError) -> Response:
+    """FastAPI's 422 says back what was sent: at the login that would be the password."""
+    if request.url.path == ENTRAR:
+        return JSONResponse({"detail": "nome e senha fora da forma esperada"}, status.HTTP_422_UNPROCESSABLE_CONTENT)
+    return await request_validation_exception_handler(request, erro)
 
 
 def _workspace() -> Path:
@@ -151,14 +174,17 @@ class Credenciais(BaseModel):
     senha: str = Field(default="", max_length=1000)
 
 
-@app.post("/api/entrar", status_code=status.HTTP_204_NO_CONTENT)
-def abrir_sessao(corpo: Credenciais, response: Response, conn: Annotated[sqlite3.Connection, Depends(conexao)]) -> None:
+@app.post(ENTRAR, status_code=status.HTTP_204_NO_CONTENT)
+def abrir_sessao(corpo: Credenciais, request: Request, response: Response, conn: Annotated[sqlite3.Connection, Depends(conexao)]) -> None:
     """Log in: a right name and password open a session and answer its cookie. A wrong password, an
-    unknown name and an empty field all answer the same 401."""
-    pessoa = dependencias.conferir(conn, corpo.nome, corpo.senha)
-    if pessoa is None:
+    unknown name and an empty field all answer the same 401; a body out of shape, a fixed 422."""
+    token = dependencias.abrir_sessao(conn, corpo.nome, corpo.senha)
+    if token is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "nome ou senha errados")
-    dependencias.por_cookie(response, sessoes.abrir(conn, pessoa["id"]))
+    anterior = request.cookies.get(sessoes.COOKIE, "")
+    if anterior:
+        sessoes.encerrar(conn, anterior)   # the session this browser had: its cookie is replaced now
+    dependencias.por_cookie(response, token)
 
 
 @app.post("/api/sair", status_code=status.HTTP_204_NO_CONTENT)
