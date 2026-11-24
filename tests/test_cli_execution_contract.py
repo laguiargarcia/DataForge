@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from typer.testing import CliRunner
 
 from dataforge import orphans, run_request
-from dataforge.cli import app
+from dataforge.cli import app, run
 from dataforge.compat import global_db_url
 from dataforge.db import JobRunORM, init_db
 from dataforge.liveness import parse_owner
@@ -205,3 +205,65 @@ def test_run_sem_a_opcao_nao_muda(tmp_path, monkeypatch):
     assert "t: OK" in result.stdout
     assert "run_id" not in result.stdout
     assert [status for _, status in _rows()] == ["success"]
+
+
+def test_run_chamado_como_funcao_sem_a_opcao_roda_e_espera(tmp_path, monkeypatch):
+    """Tests and the crash sweep call `run(workspace, job)` as a plain function."""
+    _workspace(tmp_path, monkeypatch)
+    run("ws", "j")
+    assert [status for _, status in _rows()] == ["success"]
+
+
+def _requested(monkeypatch):
+    """A recorded run that no process has taken over: the test plays the detached process itself,
+    in this process and in sequence, so coverage sees that code."""
+    monkeypatch.setattr(run_request.instance, "spawn_detached", lambda cmd, log: None)
+    monkeypatch.setattr(run_request, "_never_started", lambda run_id, requester: None)
+    return run_request.request_run("ws", "j", ["dataforge"], start_seconds=0.05)["run_id"]
+
+
+def test_o_comando_do_processo_solto_roda_a_execucao_pedida(tmp_path, monkeypatch):
+    _workspace(tmp_path, monkeypatch)
+    run_id = _requested(monkeypatch)
+    assert _state(run_id)["state"] == "pending"
+    assert runner.invoke(app, ["run-requested", "ws", "j", run_id]).exit_code == 0
+    end = _state(run_id)
+    assert (end["state"], end["failed_task"], end["reason"]) == ("success", None, None)
+
+
+def test_falha_diz_tarefa_e_motivo(tmp_path, monkeypatch):
+    _workspace(tmp_path, monkeypatch, "import sys\nprint('saldo nao fecha')\nsys.exit(1)\n")
+    run_id = _requested(monkeypatch)
+    run_request.execute_requested("ws", "j", run_id)
+    end = _state(run_id)
+    assert (end["state"], end["failed_task"]) == ("failed", "t")
+    assert "saldo nao fecha" in end["reason"]
+
+
+def test_pedido_cujo_processo_nao_sobe_sai_com_1(tmp_path, monkeypatch):
+    _workspace(tmp_path, monkeypatch)
+    monkeypatch.setattr(run_request.instance, "spawn_detached", lambda cmd, log: None)
+    monkeypatch.setattr(run_request, "START_SECONDS", 0.2)
+    result = runner.invoke(app, ["run", "ws", "j", "--detach"])
+    assert result.exit_code == 1
+    assert _json(result)["state"] == "failed"
+
+
+def test_job_que_some_depois_do_pedido_termina_como_falha_com_motivo(tmp_path, monkeypatch):
+    ws = _workspace(tmp_path, monkeypatch)
+    run_id = _requested(monkeypatch)
+    (ws / "jobs" / "j" / "job.yaml").unlink()
+    with pytest.raises(run_request.InvalidRequest):
+        run_request.execute_requested("ws", "j", run_id)
+    end = _state(run_id)
+    assert end["state"] == "failed"
+    assert "InvalidRequest" in end["reason"]
+
+
+def test_estado_de_execucao_cujo_workspace_sumiu_ainda_responde(tmp_path, monkeypatch):
+    ws = _workspace(tmp_path, monkeypatch, "import sys\nsys.exit(1)\n")
+    run_id = _requested(monkeypatch)
+    run_request.execute_requested("ws", "j", run_id)
+    (ws / "workspace.yaml").unlink()
+    end = _state(run_id)
+    assert (end["state"], end["failed_task"]) == ("failed", None)

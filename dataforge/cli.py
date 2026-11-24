@@ -879,9 +879,10 @@ def run_state_cmd(run_id: str = typer.Argument(..., help="Run id answered by `ru
 def run(
     workspace: str = typer.Argument(..., help="Workspace name"),
     job: str = typer.Argument(..., help="Job name"),
-    detach: bool = typer.Option(
-        False, "--detach",
-        help="Answer the run id as JSON at once and let the run go on by itself; follow it with `run-state`."),
+    # Annotated, so a plain call `run(workspace, job)` gets False and not typer's option object.
+    detach: Annotated[bool, typer.Option(
+        "--detach",
+        help="Answer the run id as JSON at once and let the run go on by itself; follow it with `run-state`.")] = False,
 ):
     """Run a job directly without the HTTP server. Used by OS-level schedulers."""
     if detach:

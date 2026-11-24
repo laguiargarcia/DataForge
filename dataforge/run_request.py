@@ -58,7 +58,7 @@ def _log_path() -> Path:
     return logs_dir() / "run-requests.log"
 
 
-def request_run(workspace: str, job: str, dataforge_command: list[str], start_seconds: float = START_SECONDS) -> dict:
+def request_run(workspace: str, job: str, dataforge_command: list[str], start_seconds: float | None = None) -> dict:
     """Record a run of `job`, start it in a detached process and answer its state.
 
     `dataforge_command` is the token list that starts this installation's CLI. Raises
@@ -81,7 +81,7 @@ def request_run(workspace: str, job: str, dataforge_command: list[str], start_se
             schedule.last_run_at = utcnow()
         session.commit()
     instance.spawn_detached([*dataforge_command, "run-requested", workspace, job, run_id], _log_path())
-    deadline = time.monotonic() + start_seconds
+    deadline = time.monotonic() + (START_SECONDS if start_seconds is None else start_seconds)
     while not _taken_over(run_id, mine):
         if time.monotonic() >= deadline:
             _never_started(run_id, mine)
