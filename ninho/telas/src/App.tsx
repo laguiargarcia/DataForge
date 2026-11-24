@@ -61,11 +61,13 @@ export function App() {
     execucaoInteira
       // A faixa de andamento fica até as duas leituras voltarem, para o aviso não piscar.
       .then(fim => Promise.all([carregarTransacoes(mesAtual.current), carregarEdicoes()]).then(() => fim))
-      .then(fim => {
+      .then(textoFim, (e: unknown) => `Erro na tela ao acompanhar o aplicar: ${mensagem(e)}`)
+      // Com fim ou com erro, a tela sai do "Aplicando" e mostra o aviso, se houver.
+      .then(aviso => {
         setAplicando(false)
         setExecucao(null)
         setSemContato(null)
-        setFalhaAplicar(textoFim(fim))
+        setFalhaAplicar(aviso)
       })
   }, [carregarTransacoes, carregarEdicoes])
   const iniciarAplicar = () => acompanhar(aplicador.iniciar())
