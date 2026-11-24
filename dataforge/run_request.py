@@ -25,6 +25,7 @@ DB_FILE = "dataforge.db"
 
 # Exit codes of the commands a program calls. 1 stays "the job ran and failed" (`dataforge run`).
 EXIT_INVALID_REQUEST = 2
+EXIT_STILL_RUNNING = 4  # `run-state --wait --timeout`: the time ran out before the run ended
 EXIT_BUSY = 3  # reserved: today every request waits in the workspace queue (df-8x0m.23.15)
 
 # How long the request waits for the detached process to take the run over (a Windows interpreter
@@ -191,3 +192,17 @@ def run_state(run_id: str) -> dict | None:
             "failed_task": failed_task,
             "reason": reason or output,
         }
+
+
+def wait_for_end(run_id: str, timeout: float | None = None, poll_seconds: float = 0.5) -> dict | None:
+    """run_state(), answered only when the run has ended, or when `timeout` seconds have passed
+    (then the answer is the state in progress). One process follows the whole run, instead of one
+    per question: starting the CLI costs about a second on Windows (df-8x0m.23.17)."""
+    deadline = None if timeout is None else time.monotonic() + timeout
+    while True:
+        state = run_state(run_id)
+        if state is None or state["finished_at"] is not None:
+            return state
+        if deadline is not None and time.monotonic() >= deadline:
+            return state
+        time.sleep(poll_seconds)

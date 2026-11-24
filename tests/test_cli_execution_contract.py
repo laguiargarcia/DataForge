@@ -116,7 +116,7 @@ def test_estado_de_um_id_desconhecido_sai_com_2(tmp_path, monkeypatch):
 
 def test_os_codigos_de_saida_estao_fixados():
     """0 answered, 1 the job failed, 2 invalid request, 3 busy (reserved, df-8x0m.23.15)."""
-    assert (run_request.EXIT_INVALID_REQUEST, run_request.EXIT_BUSY) == (2, 3)
+    assert (run_request.EXIT_INVALID_REQUEST, run_request.EXIT_BUSY, run_request.EXIT_STILL_RUNNING) == (2, 3, 4)
 
 
 def _slow(tmp_path, monkeypatch, seconds):
@@ -267,3 +267,27 @@ def test_estado_de_execucao_cujo_workspace_sumiu_ainda_responde(tmp_path, monkey
     (ws / "workspace.yaml").unlink()
     end = _state(run_id)
     assert (end["state"], end["failed_task"]) == ("failed", None)
+
+
+def test_wait_so_responde_depois_do_fim_com_o_estado_final(tmp_path, monkeypatch):
+    run_id = _slow(tmp_path, monkeypatch, 2)
+    result = runner.invoke(app, ["run-state", run_id, "--wait"])
+    assert result.exit_code == 0
+    end = _json(result)
+    assert set(end) == FIELDS
+    assert end["state"] == "success"
+    assert end["finished_at"] is not None
+
+
+def test_wait_com_timeout_curto_responde_o_estado_em_andamento_e_sai_com_4(tmp_path, monkeypatch):
+    run_id = _slow(tmp_path, monkeypatch, 5)
+    result = runner.invoke(app, ["run-state", run_id, "--wait", "--timeout", "0.3"])
+    assert result.exit_code == 4
+    assert _json(result)["finished_at"] is None
+    assert _wait_end(run_id)["state"] == "success"
+
+
+def test_wait_de_um_id_desconhecido_sai_com_2_sem_esperar(tmp_path, monkeypatch):
+    _workspace(tmp_path, monkeypatch)
+    result = runner.invoke(app, ["run-state", "nao-existe", "--wait"])
+    assert result.exit_code == 2
