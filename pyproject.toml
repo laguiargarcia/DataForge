@@ -178,7 +178,7 @@ modules = ["dataforge", "ninho"]
 [[tool.importlinter.contracts]]
 name = "ninho modules do not import one another"
 type = "independence"
-modules = ["ninho.financas", "ninho.lista"]
+modules = ["ninho.financas", "ninho.lista", "ninho.desejos"]
 
 [[tool.importlinter.contracts]]
 name = "Core does not import the surfaces (CLI, API, GUI)"

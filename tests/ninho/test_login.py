@@ -1,14 +1,17 @@
 """Login per person (df-8x0m.23.6.2; docs/architecture-v2/people-and-visibility.md): each module
 answers only to a person who has it (403 otherwise), 401 without a valid login, GET /api/eu says who
 is logged in, and a password that checked is not checked by scrypt again until its hash changes.
-Two invented people: here ana has finances only and beto the list only. The finance calls are
+Two invented people: here ana has finances only and beto the list and the wishlist. The finance calls are
 stubbed: what is under test is who gets in, not what the route does."""
+import re
 import sqlite3
 
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from ninho.desejos import desejos
+from ninho.desejos.rotas import rotas as rotas_desejos
 from ninho.financas import aplicar, edicoes, leitura
 from ninho.lista import itens
 from ninho.lista.rotas import rotas as rotas_lista
@@ -30,17 +33,25 @@ LISTA = [("GET", "/api/lista/itens", None, 200),
          ("PATCH", "/api/lista/itens/{id}", {"comprado": True}, 200),
          ("DELETE", "/api/lista/itens/{id}", None, 204),
          ("POST", "/api/lista/limpar-comprados", None, 200)]
-ROTAS = [("financas", *r) for r in FINANCAS] + [("lista", *r) for r in LISTA]
+DESEJOS = [("GET", "/api/desejos", None, 200),
+           ("POST", "/api/desejos", {"titulo": "bicicleta", "de_quem": None}, 201),
+           ("PATCH", "/api/desejos/{desejo}", {"realizado": True}, 200),
+           ("DELETE", "/api/desejos/{desejo}", None, 204),
+           ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": "https://exemplo.invalid/bici"}, 201),
+           ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None, 204)]
+ROTAS = ([("financas", *r) for r in FINANCAS] + [("lista", *r) for r in LISTA]
+         + [("desejos", *r) for r in DESEJOS])
 IDS = [f"{metodo} {caminho}" for _, metodo, caminho, *_ in ROTAS]
 PESSOAS = {"ana": ANA, "beto": BETO}
 
 
 @pytest.fixture
 def servidor(banco, tmp_path, monkeypatch):
-    """The server with ana on finances only and beto on the list only, and the finance calls stubbed."""
+    """The server with ana on finances only and beto on the list and the wishlist, and the finance
+    calls stubbed."""
     with banco_do_app.aberto(banco) as conn:
         pessoas.definir_modulos(conn, "ana", ["financas"])
-        pessoas.definir_modulos(conn, "beto", ["lista"])
+        pessoas.definir_modulos(conn, "beto", ["lista", "desejos"])
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "workspace.yaml").write_text("name: GetFinance\n", encoding="utf-8")
@@ -56,19 +67,21 @@ def servidor(banco, tmp_path, monkeypatch):
 
 def _pedir(servidor, banco, rota, auth):
     _, metodo, caminho, corpo, _ = rota
-    if "{id}" in caminho:   # an item that exists, so the route answers its own success
+    if "{" in caminho:   # an item, a wish and a note that exist, so the route answers its own success
         with banco_do_app.aberto(banco) as conn:
-            caminho = caminho.format(id=itens.adicionar(conn, "leite", "ana")["id"])
+            desejo = desejos.adicionar(conn, {"titulo": "livro", "de_quem": None, "anotacoes": ["capa dura"]}, "ana", set())
+            caminho = caminho.format(id=itens.adicionar(conn, "leite", "ana")["id"], desejo=desejo["id"],
+                                     anotacao=desejo["anotacoes"][0]["id"])
     return servidor.request(metodo, caminho, json=corpo, auth=auth)
 
 
 def test_a_lista_de_rotas_do_teste_e_a_do_servidor():
     """A new route of a module must join ROTAS, or it would escape the checks below."""
-    modulos = [rota for rota in [*app.routes, *rotas_lista.routes] if isinstance(rota, APIRoute)
-               and rota.path.startswith(("/api/financas/", "/api/lista/"))]
+    modulos = [rota for rota in [*app.routes, *rotas_lista.routes, *rotas_desejos.routes] if isinstance(rota, APIRoute)
+               and rota.path.startswith(("/api/financas/", "/api/lista/", "/api/desejos"))]
     do_servidor = sorted((rota.path, metodo) for rota in modulos for metodo in rota.methods)
     cobertas = sorted({(rota.path, metodo) for rota in modulos for _, metodo, caminho, *_ in ROTAS if metodo in rota.methods
-                       and rota.path_regex.match(caminho.split("?")[0].replace("{id}", "x"))})
+                       and rota.path_regex.match(re.sub(r"\{\w+\}", "x", caminho.split("?")[0]))})
     assert cobertas == do_servidor
     assert len(ROTAS) == len(do_servidor)
 
@@ -101,13 +114,13 @@ def test_senha_errada_nome_desconhecido_e_sem_cabecalho_dao_o_mesmo_401(servidor
         (401, "Basic", respostas[0].text)}
 
 
-@pytest.mark.parametrize(("quem", "modulos"), [("ana", ["financas"]), ("beto", ["lista"])])
-def test_eu_diz_o_nome_e_os_modulos_e_nunca_o_hash(servidor, banco, quem, modulos):
+@pytest.mark.parametrize(("quem", "modulos"), [("ana", ["financas"]), ("beto", ["lista", "desejos"])])
+def test_eu_diz_o_id_o_nome_e_os_modulos_e_nunca_o_hash(servidor, banco, quem, modulos):
     r = servidor.get("/api/eu", auth=PESSOAS[quem])
     assert r.status_code == 200
-    assert r.json() == {"nome": quem, "modulos": modulos}
     with banco_do_app.aberto(banco) as conn:
-        guardado = pessoas.achar(conn, quem)[1]
+        pessoa, guardado = pessoas.achar(conn, quem)
+    assert r.json() == {"id": pessoa["id"], "nome": quem, "modulos": modulos}
     assert guardado not in r.text
     assert "scrypt" not in r.text
 
