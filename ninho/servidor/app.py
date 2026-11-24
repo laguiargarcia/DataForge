@@ -13,7 +13,6 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-
 from pydantic import BaseModel
 
 from ninho.financas import edicoes, leitura
@@ -37,6 +36,9 @@ def _workspace() -> Path:
     pasta = os.environ.get("NINHO_WORKSPACE")  # noqa: TID251 -- ninho reads its own environment; dataforge.compat is the engine's
     if not pasta:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "NINHO_WORKSPACE não definida")
+    if not (Path(pasta) / "workspace.yaml").is_file():
+        # A wrong folder must not be answered as "no data", nor get an app database created in it.
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "NINHO_WORKSPACE não é um workspace")
     return Path(pasta)
 
 

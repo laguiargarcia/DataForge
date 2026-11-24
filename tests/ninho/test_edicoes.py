@@ -11,16 +11,16 @@ from fastapi.testclient import TestClient
 from ninho import banco
 from ninho.financas import leitura, regras
 from ninho.servidor.app import app
-from tests.ninho.conftest import rodar_job
+from tests.ninho.conftest import WORKSPACE, rodar_job
 
 SENHA = "senha-de-teste"
 AUTH = ("", SENHA)
 
 
-@pytest.fixture(scope="module")
-def workspace(workspace_demo, tmp_path_factory):
-    """This module's own copy of the synthetic run: its tests write edits and run a job."""
-    home = tmp_path_factory.mktemp("home_edicoes")
+@pytest.fixture
+def workspace(workspace_demo, tmp_path):
+    """Each test's own copy of the synthetic run: these tests write edits and run a job, in any order."""
+    home = tmp_path / "home"
     shutil.copytree(workspace_demo.parents[1], home, dirs_exist_ok=True)
     return home / "workspaces" / "GetFinance"
 
@@ -87,7 +87,7 @@ def test_correcoes_recusadas_nao_mudam_a_versao(cliente, workspace):
     versao = cliente.get("/api/financas/edicoes", auth=AUTH).json()["versao"]
     assert cliente.put("/api/financas/correcoes/nao-existe", json={"subcategoria": nova}, auth=AUTH).status_code == 404
     assert cliente.put(f"/api/financas/correcoes/{transacao}", json={"subcategoria": "categoria que nao existe"},
-                       auth=AUTH).status_code in (404, 409, 422)
+                       auth=AUTH).status_code == 422
     assert cliente.put(f"/api/financas/correcoes/{transacao}", json={"subcategoria": "  "}, auth=AUTH).status_code == 422
     assert cliente.get("/api/financas/edicoes", auth=AUTH).json()["versao"] == versao
 
@@ -115,3 +115,25 @@ def test_a_abertura_do_pipeline_sem_arquivo_le_vazio_e_nao_cria_nada(workspace, 
         conn.close()
     assert not ausente.exists()
     assert not ausente.parent.exists()
+
+
+@pytest.mark.parametrize("script", ["report/classify.py", "cleansed2curated/cleansed2curated_conferencia_saldo.py"])
+def test_os_scripts_do_pipeline_abrem_o_banco_de_edicoes_so_para_leitura(script):
+    """Until a gate rule says it (docs/architecture-v2/edits.md): no pipeline script that reads the
+    edits goes back to the open that creates and can write."""
+    fonte = (WORKSPACE / "scripts" / script).read_text(encoding="utf-8")
+    assert "abrir_leitura(" in fonte
+    assert " abrir(" not in fonte
+    assert "import abrir," not in fonte
+
+
+def test_pasta_que_nao_e_um_workspace_nao_ganha_banco(cliente, tmp_path, monkeypatch):
+    vazia = tmp_path / "vazia"
+    vazia.mkdir()
+    monkeypatch.setenv("NINHO_WORKSPACE", str(vazia))
+    assert cliente.get("/api/financas/edicoes", auth=AUTH).status_code == 503
+    assert list(vazia.iterdir()) == []
+
+
+def test_o_banco_do_app_e_o_arquivo_da_conexao_edicao_do_workspace(workspace):
+    assert banco.caminho(workspace) == workspace / "data" / "edicao.db"

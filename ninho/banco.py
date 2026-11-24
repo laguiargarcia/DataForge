@@ -10,11 +10,17 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+import yaml
+
 from ninho.financas import regras
 
 
 def caminho(workspace: Path) -> Path:
-    return workspace / "data" / "edicao.db"
+    """The file of the workspace's ``edicao`` connection: the same entry the pipeline reads, so the
+    server and the pipeline can never name two different files."""
+    texto = (workspace / "connections" / "connections.yaml").read_text(encoding="utf-8")
+    conexoes = yaml.safe_load(texto)  # noqa: TID251 -- ninho cannot import dataforge.yamlio; a small file, read once per request
+    return workspace / conexoes["connections"]["edicao"]["path"]
 
 
 @contextmanager

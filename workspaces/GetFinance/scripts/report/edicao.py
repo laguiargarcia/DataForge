@@ -86,7 +86,9 @@ def abrir_leitura(caminho: Path) -> sqlite3.Connection:
         conn.executescript(_ESQUEMA)
         conn.execute("PRAGMA query_only = ON")
         return conn
-    return sqlite3.connect(f"{caminho.resolve().as_uri()}?mode=ro", uri=True)
+    # absolute(), não resolve(): resolve() troca uma unidade mapeada pelo caminho de rede, e o SQLite
+    # recusa um URI com servidor.
+    return sqlite3.connect(f"{caminho.absolute().as_uri()}?mode=ro", uri=True)
 
 
 def _ler(conn: sqlite3.Connection, tabela: str, colunas: dict[str, str]) -> pl.DataFrame:

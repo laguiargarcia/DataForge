@@ -7,21 +7,24 @@ this is the only place of ninho that knows where they are.
 """
 import importlib
 import sys
+import threading
 from pathlib import Path
 from types import ModuleType
 
 _carregados: dict[Path, ModuleType] = {}
+_carregando = threading.Lock()   # the server answers on several threads; the load swaps sys.modules
 
 
 def edicao(workspace: Path) -> ModuleType:
     """The workspace's ``edicao`` module (the edits tables, their validation and their version)."""
     pasta = (workspace / "scripts" / "report").resolve()
-    if pasta not in _carregados:
-        sys.path.insert(0, str(pasta))
-        try:
-            for nome in ("classificacao", "edicao"):
-                sys.modules.pop(nome, None)
-            _carregados[pasta] = importlib.import_module("edicao")
-        finally:
-            sys.path.remove(str(pasta))
-    return _carregados[pasta]
+    with _carregando:
+        if pasta not in _carregados:
+            sys.path.insert(0, str(pasta))
+            try:
+                for nome in ("classificacao", "edicao"):
+                    sys.modules.pop(nome, None)
+                _carregados[pasta] = importlib.import_module("edicao")
+            finally:
+                sys.path.remove(str(pasta))
+        return _carregados[pasta]

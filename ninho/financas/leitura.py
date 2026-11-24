@@ -29,21 +29,11 @@ class TabelaAusente(LookupError):
 
 def transacoes_do_mes(workspace: Path, mes: date) -> list[dict]:
     """The transactions of the month of ``mes`` (its ``anomes_key``), newest first."""
-    caminho = workspace / "data" / "curated" / TABELA
-    if not (caminho / "_delta_log").is_dir():
-        raise TabelaAusente(str(caminho))
     anomes = mes.year * 100 + mes.month
 
-    def ler() -> pl.DataFrame:
-        return (
-            pl.scan_delta(str(caminho))  # noqa: TID251 -- ninho cannot import dataforge.delta_pool; this pool is its own
-            .filter(pl.col("anomes_key") == anomes)
-            .select(COLUNAS)
-            .sort(["date", "id"], descending=True)
-            .collect()
-        )
-
-    return _POOL.submit(ler).result().to_dicts()
+    linhas = _ler(workspace / "data" / "curated" / TABELA, lambda tabela: (
+        tabela.filter(pl.col("anomes_key") == anomes).select(COLUNAS).sort(["date", "id"], descending=True)))
+    return linhas.to_dicts()
 
 
 def _ler(caminho: Path, consulta) -> pl.DataFrame:
