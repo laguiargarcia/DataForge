@@ -15,6 +15,14 @@ export class ErroPedido extends Error {
 }
 
 let semSessao: (() => void) | null = null
+// Conta as trocas de sessão (alguém entrou, alguém saiu): a resposta de um pedido feito numa sessão
+// que já não é a da tela não avisa nada, ou o 401 atrasado da sessão velha derrubaria a nova.
+let epoca = 0
+
+/** A casca avisa que a sessão da tela mudou: os pedidos ainda em voo são da anterior. */
+export function sessaoMudou(): void {
+  epoca += 1
+}
 
 /** A casca diz o que fazer quando um pedido volta sem sessão; devolve como parar de ouvir. */
 export function aoFicarSemSessao(aviso: () => void): () => void {
@@ -32,9 +40,10 @@ export async function pedir<T>(metodo: string, endereco: string, corpo?: unknown
   const opcoes: RequestInit = corpo === undefined
     ? { method: metodo }
     : { method: metodo, headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) }
+  const feitoNa = epoca
   const r = await fetch(endereco, opcoes)
   if (!r.ok) {
-    if (r.status === 401) semSessao?.()
+    if (r.status === 401 && feitoNa === epoca) semSessao?.()
     const detalhe = await r.json().then((c: { detail?: unknown }) => c.detail, () => undefined)
     throw new ErroPedido(typeof detalhe === 'string' ? detalhe : `Falha no pedido: HTTP ${r.status}`, r.status)
   }

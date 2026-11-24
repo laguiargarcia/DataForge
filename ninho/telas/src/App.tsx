@@ -4,7 +4,7 @@ import { Entrar } from './Entrar'
 import { lerEuOuNinguem, permitidos, sair, telaAberta, type Eu } from './eu'
 import { Financas } from './financas/Financas'
 import { Lista } from './lista/Lista'
-import { aoFicarSemSessao } from './pedido'
+import { aoFicarSemSessao, sessaoMudou } from './pedido'
 
 // A casca do ninho (df-8x0m.23.20.2): a barra embaixo troca entre os módulos, cada um com a sua tela
 // em src/<modulo>/. Um módulo novo entra acrescentando um item em MODULOS; o primeiro é a tela inicial.
@@ -25,6 +25,8 @@ const MODULOS: Modulo[] = [
 ]
 
 const telaPedida = () => new URLSearchParams(location.search).get('tela')
+/** Quanto (ms) o "Sair?" espera pelo segundo toque antes de voltar a "Sair". */
+const PRAZO_SAIR = 4000
 
 function Aviso({ texto, botao }: Readonly<{ texto: string; botao?: { rotulo: string; aoTocar: () => void } }>) {
   return (
@@ -46,22 +48,34 @@ export function App() {
   const [escolhida, setEscolhida] = useState(telaPedida)
 
   const entrar = useCallback(() => {
+    sessaoMudou()
     setCarga({ fase: 'carregando' })
     lerEuOuNinguem().then(eu => setCarga(eu ? { fase: 'ok', eu } : { fase: 'fora' }),
       (e: unknown) => setCarga({ fase: 'erro', mensagem: e instanceof Error ? e.message : String(e) }))
   }, [])
   useEffect(entrar, [entrar])
-  useEffect(() => aoFicarSemSessao(() => setCarga({ fase: 'fora' })), [])
+  // Só quem está dentro pode ficar sem sessão: enquanto a casca pergunta quem entrou, é a resposta
+  // dessa pergunta que decide.
+  useEffect(() => aoFicarSemSessao(() => setCarga(c => (c.fase === 'ok' ? { fase: 'fora' } : c))), [])
 
   // O primeiro toque pede a confirmação no próprio botão, que volta ao normal sozinho; o segundo sai.
   const [saindo, setSaindo] = useState(false)
+  const dentro = carga.fase === 'ok'
   useEffect(() => {
+    if (!dentro) return setSaindo(false)   // quem entrar depois acha o botão no estado normal
     if (!saindo) return
-    const prazo = setTimeout(() => setSaindo(false), 4000)
+    const prazo = setTimeout(() => setSaindo(false), PRAZO_SAIR)
     return () => clearTimeout(prazo)
-  }, [saindo])
-  // Com ou sem resposta do servidor a tela sai: sem rede, a sessão fica lá até vencer ou ser encerrada.
-  const encerrar = () => { sair().catch(() => undefined).finally(() => setCarga({ fase: 'fora' })) }
+  }, [saindo, dentro])
+  // A tela sai na hora, com ou sem resposta do servidor (sem rede, a sessão fica lá até vencer ou
+  // ser encerrada), e não leva a tela nem o mês desta pessoa para quem entrar depois.
+  const encerrar = () => {
+    sair().catch(() => undefined)
+    sessaoMudou()
+    setEscolhida(null)
+    history.replaceState(null, '', location.pathname)
+    setCarga({ fase: 'fora' })
+  }
   const tocarSair = () => {
     setSaindo(!saindo)
     if (saindo) encerrar()
@@ -103,19 +117,21 @@ export function App() {
         className="fixed bottom-0 inset-x-0 z-20 bg-cartao border-t border-linha pb-[env(safe-area-inset-bottom)]">
         <ul className="m-0 p-0 list-none max-w-[480px] mx-auto flex">
           {modulos.map(({ id, rotulo }) => (
-            <li key={id} className="flex-1">
+            <li key={id} className="flex-1 min-w-0">
               <button type="button" aria-current={id === tela ? 'page' : undefined} onClick={() => setEscolhida(id)}
                 className={`w-full h-14 flex items-center justify-center font-semibold ${id === tela ? 'text-texto' : 'text-secundario'}`}>
                 {/* O item ativo ganha o azul da marca de fundo, numa pílula: o texto fica no tom escuro. */}
-                <span className={`px-4 py-1.5 rounded-[999px] ${id === tela ? 'bg-marca' : ''}`}>{rotulo}</span>
+                <span className={`px-2 min-[360px]:px-4 py-1.5 rounded-[999px] ${id === tela ? 'bg-marca' : ''}`}>{rotulo}</span>
               </button>
             </li>
           ))}
           <li>
             <button type="button" onClick={tocarSair}
-              className={`h-14 px-4 flex items-center justify-center text-[14px] font-semibold ${saindo ? 'text-alerta' : 'text-secundario'}`}>
+              className={`h-14 px-3 min-[360px]:px-4 flex items-center justify-center text-[14px] font-semibold ${saindo ? 'text-alerta' : 'text-secundario'}`}>
               {saindo ? 'Sair?' : 'Sair'}
             </button>
+            {/* Para quem ouve a tela: o que o "Sair?" quer dizer. */}
+            <span aria-live="polite" className="sr-only">{saindo ? 'Toque em Sair de novo para confirmar.' : ''}</span>
           </li>
         </ul>
       </nav>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { entrar, lerEu, lerEuOuNinguem, permitidos, sair, telaAberta } from './eu'
+import { entrar, lerEuOuNinguem, permitidos, sair, telaAberta } from './eu'
 import { aoFicarSemSessao } from './pedido'
 
 const CASCA = [{ id: 'financas' }, { id: 'lista' }]
@@ -31,23 +31,12 @@ describe('telaAberta', () => {
   })
 })
 
-describe('lerEu', () => {
-  it('pede api/eu e devolve id, nome e módulos', async () => {
-    const fetchFalso = vi.fn(async () => new Response(JSON.stringify({ id: 'id-ana', nome: 'ana', modulos: ['lista'] })))
-    vi.stubGlobal('fetch', fetchFalso)
-    expect(await lerEu()).toEqual({ id: 'id-ana', nome: 'ana', modulos: ['lista'] })
-    expect(fetchFalso).toHaveBeenCalledWith('api/eu', { method: 'GET' })
-  })
-  it('falha com o status quando o servidor recusa', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })))
-    await expect(lerEu()).rejects.toThrow('HTTP 503')
-  })
-})
-
 describe('lerEuOuNinguem', () => {
-  it('devolve quem entrou', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ nome: 'ana', modulos: [] }))))
-    expect(await lerEuOuNinguem()).toEqual({ nome: 'ana', modulos: [] })
+  it('pede api/eu e devolve quem entrou', async () => {
+    const fetchFalso = vi.fn(async () => new Response(JSON.stringify({ id: 'p1', nome: 'ana', modulos: ['lista'] })))
+    vi.stubGlobal('fetch', fetchFalso)
+    expect(await lerEuOuNinguem()).toEqual({ id: 'p1', nome: 'ana', modulos: ['lista'] })
+    expect(fetchFalso).toHaveBeenCalledWith('api/eu', { method: 'GET' })
   })
   it('sem sessão (401) não é erro: é ninguém', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ detail: 'sem sessão' }), { status: 401 })))

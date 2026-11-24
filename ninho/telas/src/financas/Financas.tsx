@@ -70,14 +70,20 @@ export function Financas() {
       setFalhaAplicar(aviso)
     }
     execucaoInteira
-      // A faixa de andamento fica até as duas leituras voltarem, para o aviso não piscar.
-      .then(fim => Promise.all([carregarTransacoes(mesAtual.current), carregarEdicoes()]).then(() => fim))
+      // A faixa de andamento fica até as duas leituras voltarem, para o aviso não piscar. Parada (a
+      // tela saiu ou a sessão acabou), não há o que reler.
+      .then<Fim>(fim => (fim.tipo === 'parada' ? fim
+        : Promise.all([carregarTransacoes(mesAtual.current), carregarEdicoes()]).then(() => fim)))
       .then(fim => encerrar(textoFim(fim)),
         (e: unknown) => encerrar(`Erro na tela ao acompanhar o aplicar: ${mensagem(e)}`))
   }, [carregarTransacoes, carregarEdicoes])
   const iniciarAplicar = () => acompanhar(aplicador.iniciar())
   // A página aberta (ou recarregada) com um aplicar guardado volta a segui-lo em vez de oferecer outro.
-  useEffect(() => { acompanhar(aplicador.retomar()) }, [aplicador, acompanhar])
+  // Quando a tela sai (a pessoa saiu, a sessão acabou), ninguém fica acompanhando por trás.
+  useEffect(() => {
+    acompanhar(aplicador.retomar())
+    return () => aplicador.parar()
+  }, [aplicador, acompanhar])
 
   const valorEdicoes = edicoes.fase === 'ok' ? edicoes.valor : null
   const correcao = (id: string) => valorEdicoes?.correcoes.find(c => c.transacao_id === id)

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { aoFicarSemSessao, ErroPedido, pedir, segmento } from './pedido'
+import { aoFicarSemSessao, ErroPedido, pedir, segmento, sessaoMudou } from './pedido'
 
 function falso(resposta: Response) {
   const f = vi.fn(async (_url: string, _opcoes?: RequestInit) => resposta)
@@ -76,6 +76,22 @@ describe('pedido', () => {
     falso(new Response('{}', { status: 401 }))
     await expect(pedir('GET', 'api/x')).rejects.toBeInstanceOf(ErroPedido)
     expect([velho.mock.calls.length, novo.mock.calls.length]).toEqual([0, 1])
+  })
+
+  it('o 401 de um pedido feito antes de a sessão mudar não avisa: é da sessão velha', async () => {
+    const aviso = vi.fn()
+    const parar = aoFicarSemSessao(aviso)
+    let responder!: (r: Response) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(r => { responder = r })))
+    const velho = pedir('GET', 'api/x')
+    sessaoMudou()   // alguém entrou enquanto o pedido estava em voo
+    responder(new Response('{}', { status: 401 }))
+    await expect(velho).rejects.toMatchObject({ status: 401 })
+    expect(aviso).not.toHaveBeenCalled()
+    falso(new Response('{}', { status: 401 }))
+    await expect(pedir('GET', 'api/x')).rejects.toBeInstanceOf(ErroPedido)   // um pedido da sessão nova avisa
+    expect(aviso).toHaveBeenCalledTimes(1)
+    parar()
   })
 
   it('segmento troca "/" e "."', () => {

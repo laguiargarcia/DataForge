@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { entrar } from './eu'
 import { Logo } from './Logo'
 
@@ -16,6 +16,7 @@ export function Entrar({ aoEntrar }: Props) {
   const [senha, setSenha] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [falha, setFalha] = useState<string | null>(null)
+  const campoSenha = useRef<HTMLInputElement>(null)
 
   function enviar(evento: FormEvent) {
     evento.preventDefault()
@@ -28,6 +29,7 @@ export function Entrar({ aoEntrar }: Props) {
         else {
           setSenha('')
           setFalha('Nome ou senha errados.')
+          campoSenha.current?.focus()   // o botão perdeu o foco ao ser desligado: o teclado fecharia
         }
       },
       () => setFalha('Não foi possível falar com o ninho. Confira a rede e tente de novo.'),
@@ -48,7 +50,7 @@ export function Entrar({ aoEntrar }: Props) {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-[14px] text-secundario">Senha</span>
-            <input type="password" name="password" autoComplete="current-password" enterKeyHint="go" required
+            <input ref={campoSenha} type="password" name="password" autoComplete="current-password" enterKeyHint="go" required
               value={senha} onChange={e => setSenha(e.target.value)} className={classeCampo} />
           </label>
           {falha && <p role="alert" className="m-0 px-4 py-3 rounded-[12px] bg-alerta-fundo text-alerta">{falha}</p>}

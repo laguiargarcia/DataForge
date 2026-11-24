@@ -86,6 +86,7 @@ test('senha errada mostra o erro, limpa a senha e fica no formulário; a certa d
   await expect(formulario(page)).toBeVisible()
   await expect(page.getByLabel('Nome')).toHaveValue(login.nome)
   await expect(page.getByLabel('Senha')).toHaveValue('')
+  await expect(page.getByLabel('Senha')).toBeFocused()   // o teclado do iPhone segue aberto no campo certo
   await expect(barra(page)).toHaveCount(0)
 
   await page.getByLabel('Senha').fill(login.senha)
@@ -101,7 +102,8 @@ test('sem rede o formulário diz que não falou com o ninho, e não que a senha 
   await page.getByRole('button', { name: 'Entrar', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Não foi possível falar com o ninho')
   await expect(page.getByLabel('Senha')).toHaveValue(login.senha)
-  problemas = []   // o pedido abortado vira um erro de console, esperado aqui
+  // O pedido abortado vira um erro de console, esperado aqui; qualquer outro problema segue valendo.
+  problemas = problemas.filter(p => !p.includes('net::ERR_FAILED'))
 })
 
 test('Sair pede confirmação no segundo toque, volta ao formulário e recarregar segue nele', async ({ page }) => {
@@ -119,6 +121,104 @@ test('Sair pede confirmação no segundo toque, volta ao formulário e recarrega
 
   await page.reload()
   await expect(formulario(page)).toBeVisible()
+})
+
+test('o "Sair?" volta a "Sair" sozinho, e quem ouve a tela é avisado do segundo toque', async ({ page }) => {
+  await page.clock.install()
+  await page.goto('')
+  await preencher(page, login.nome, login.senha)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await barra(page).getByRole('button', { name: 'Sair', exact: true }).click()
+  const dica = barra(page).getByText('Toque em Sair de novo para confirmar.')
+  await expect(dica).toHaveCount(1)
+  await expect(dica).toHaveAttribute('aria-live', 'polite')
+  await page.clock.fastForward(3900)
+  await expect(barra(page).getByRole('button', { name: 'Sair?', exact: true })).toBeVisible()
+  await page.clock.fastForward(200)
+  await expect(barra(page).getByRole('button', { name: 'Sair', exact: true })).toBeVisible()
+  await expect(dica).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()   // ninguém saiu
+})
+
+test('sair não leva a tela nem o mês de quem saiu para quem entra depois', async ({ page }) => {
+  await page.goto('')
+  await preencher(page, login.nome, login.senha)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await barra(page).getByRole('button', { name: 'Desejos', exact: true }).click()
+  await expect(page).toHaveURL(/tela=desejos/)
+  await barra(page).getByRole('button', { name: 'Sair', exact: true }).click()
+  await barra(page).getByRole('button', { name: 'Sair?', exact: true }).click()
+  await expect(formulario(page)).toBeVisible()
+  expect(new URL(page.url()).search).toBe('')
+
+  await preencher(page, login.nome, login.senha)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()   // a primeira tela, não Desejos
+  await expect(barra(page).getByRole('button', { name: 'Sair', exact: true })).toBeVisible()   // e não "Sair?"
+})
+
+test('quem não tem módulo nenhum vê o aviso e consegue sair', async ({ page }) => {
+  await page.goto('')
+  await expect(formulario(page)).toBeVisible()
+  await page.route('**/api/eu', rota => rota.fulfill({ json: { id: 'p9', nome: 'caio', modulos: [] } }))
+  await preencher(page, login.nome, login.senha)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await expect(page.getByText('caio, você ainda não tem acesso a nenhuma parte do ninho.')).toBeVisible()
+  await page.unroute('**/api/eu')
+  const saida = page.waitForRequest(r => new URL(r.url()).pathname === '/api/sair' && r.method() === 'POST')
+  await page.getByRole('button', { name: 'Sair', exact: true }).click()
+  await saida
+  await expect(formulario(page)).toBeVisible()
+  await page.reload()
+  await expect(formulario(page)).toBeVisible()
+})
+
+test('dois envios seguidos fazem um pedido de login só', async ({ page }) => {
+  let pedidos = 0
+  await page.route('**/api/entrar', async rota => {
+    pedidos += 1
+    await new Promise(r => setTimeout(r, 300))
+    await rota.continue()
+  })
+  await page.goto('')
+  await preencher(page, login.nome, login.senha)
+  await page.getByLabel('Senha').press('Enter')
+  await page.getByLabel('Senha').press('Enter')
+  await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()
+  expect(pedidos).toBe(1)
+})
+
+test('depois de sair com um aplicar em curso, nada mais pergunta por ele ao servidor', async ({ page }) => {
+  // Um aplicar guardado no aparelho, que o servidor diz estar rodando: a tela de finanças o acompanha.
+  await page.addInitScript(() => localStorage.setItem('ninho.aplicar.run_id', '00000000-0000-4000-8000-000000000001'))
+  let andamentos = 0
+  await page.route('**/api/financas/aplicar/**', rota => {
+    andamentos += 1
+    return rota.fulfill({ json: { run_id: '00000000-0000-4000-8000-000000000001', state: 'running', finished_at: null } })
+  })
+  await page.goto('')
+  await preencher(page, login.nome, login.senha)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await expect(page.getByText('Aplicando: recalculando as categorias…')).toBeVisible()
+  await barra(page).getByRole('button', { name: 'Sair', exact: true }).click()
+  await barra(page).getByRole('button', { name: 'Sair?', exact: true }).click()
+  await expect(formulario(page)).toBeVisible()
+  await page.waitForTimeout(300)   // o pedido que estava em voo termina
+  const aoSair = andamentos
+  await page.waitForTimeout(1500)
+  expect(andamentos).toBe(aoSair)
+})
+
+test('a barra com o Sair cabe num iPhone estreito (320 px)', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('')
+  await preencher(page, login.nome, login.senha)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await expect(barra(page).getByRole('button')).toHaveText(['Finanças', 'Compras', 'Desejos', 'Sair'])
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  const sair = await barra(page).getByRole('button', { name: 'Sair', exact: true }).boundingBox()
+  expect(sair!.x + sair!.width).toBeLessThanOrEqual(320)
+  expect(sair!.width).toBeGreaterThanOrEqual(44)
 })
 
 test('depois de sair, outra pessoa entra no mesmo navegador e vê só o que é dela', async ({ page }) => {

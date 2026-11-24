@@ -7,11 +7,9 @@ import { ErroPedido, pedir } from './pedido'
 /** `id` é o da pessoa em /api/pessoas: a tela dos desejos abre na parte dela. */
 export type Eu = { id: string; nome: string; modulos: string[] }
 
-export const lerEu = () => pedir<Eu>('GET', 'api/eu')
-
 /** Quem entrou, ou null quando não há sessão (o 401 do servidor); qualquer outra recusa é erro. */
 export const lerEuOuNinguem = () =>
-  lerEu().catch((e: unknown) => {
+  pedir<Eu>('GET', 'api/eu').catch((e: unknown) => {
     if (e instanceof ErroPedido && e.status === 401) return null
     throw e
   })
