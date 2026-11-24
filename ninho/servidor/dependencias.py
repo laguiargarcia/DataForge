@@ -6,7 +6,6 @@ check, the name the person typed at login, and a connection to the app database.
 - The user name of HTTP Basic is only a label ("who added it") and may be empty.
 """
 import base64
-import binascii
 import os
 import secrets
 import sqlite3
@@ -27,7 +26,7 @@ def _credenciais(request: Request) -> tuple[str, str]:
         return "", ""
     try:
         bruto = base64.b64decode(dado.strip(), validate=True)
-    except (ValueError, binascii.Error):
+    except ValueError:  # binascii.Error is one
         return "", ""
     try:
         texto = bruto.decode("utf-8")
