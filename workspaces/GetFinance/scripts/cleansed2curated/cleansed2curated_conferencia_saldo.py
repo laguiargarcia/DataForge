@@ -14,7 +14,7 @@ import polars as pl
 exec((Path(__file__).parent.parent / "functions" / "functions.py").read_text(encoding="utf-8"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "report"))
 from conferencia_saldo import EM_ABERTO, ESTADOS, NAO_FECHA, TOLERANCIA, aplicar_explicacoes, conferencia_saldo
-from edicao import abrir, ler_explicacoes
+from edicao import abrir_leitura, ler_explicacoes
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", required=True)   # raw (accounts and transactions, every partition)
@@ -29,7 +29,7 @@ raw_transactions = pl.concat([pl.read_parquet(f, columns=["id", "date", "ingeste
 # The transactions are cleansed's, the set the report sums; dim_account names each account.
 transactions = read_delta_table("cleansed", "transactions")
 dim_account = read_delta_table(args.target, "dim_account")
-conn = abrir(_connection_root("edicao"))
+conn = abrir_leitura(_connection_root("edicao"))
 try:
     explicacoes = ler_explicacoes(conn)
 finally:

@@ -2,7 +2,7 @@
 transação e divergências da conferência pelo saldo marcadas como explicadas), em SQLite, e a versão delas.
 
 O banco fica em data/ (conexão `edicao` do connections.yaml): é ambiente, nenhum deploy o leva,
-então uma edição nunca é sobrescrita e cada workspace tem as suas. O ETL só lê; quem escreve é a
+então uma edição nunca é sobrescrita e cada workspace tem as suas. O ETL só lê, por `abrir_leitura`; quem escreve é a
 carga inicial (uma vez) e o backend do app Finanças (apps/financas/backend), pelas funções de
 escrita no fim deste módulo. Cada uma valida, grava e soma 1 em `versao` numa transação só; uma
 gravação recusada levanta `Recusa` e não muda nada.
@@ -73,6 +73,22 @@ def abrir(caminho: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(caminho)
     conn.executescript(_ESQUEMA)
     return conn
+
+
+def abrir_leitura(caminho: Path) -> sqlite3.Connection:
+    """Abre o banco só para leitura: é a abertura do ETL, que nunca escreve nele (df-8x0m.23.13.3).
+    Uma gravação por esta conexão levanta sqlite3.OperationalError. Sem arquivo ainda (ninguém
+    editou nem semeou), devolve um banco vazio em memória com o mesmo esquema: nada a ler, e nada
+    é criado em disco."""
+    caminho = Path(caminho)
+    if not caminho.is_file():
+        conn = sqlite3.connect(":memory:")
+        conn.executescript(_ESQUEMA)
+        conn.execute("PRAGMA query_only = ON")
+        return conn
+    # absolute(), não resolve(): resolve() troca uma unidade mapeada pelo caminho de rede, e o SQLite
+    # recusa um URI com servidor.
+    return sqlite3.connect(f"{caminho.absolute().as_uri()}?mode=ro", uri=True)
 
 
 def _ler(conn: sqlite3.Connection, tabela: str, colunas: dict[str, str]) -> pl.DataFrame:
