@@ -217,6 +217,12 @@ ignore_imports = ["dataforge.api.routers.triggers -> dataforge.cli"]
 # Repo-relative paths in coverage.xml, so SonarQube Cloud matches them to its checkout (df-ahua.1.1).
 relative_files = true
 
+[tool.coverage.report]
+# The line every workspace script starts with: it runs scripts/functions/functions.py in the script's
+# namespace. The tests load the functions themselves and drop that line (compile_script in the
+# workspace's tests/_delta_util.py), so no test can cover it.
+exclude_also = ['^exec\(\(Path\(__file__\).*"functions\.py"\)\.read_text']
+
 [tool.setuptools.packages.find]
 include = ["dataforge*"]
 
