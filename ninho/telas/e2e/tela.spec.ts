@@ -109,6 +109,15 @@ test('na Lista, adiciona um item, recarrega, marca como comprado e limpa os comp
   await expect(aComprar).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Limpar comprados' }).click()
+  // Limpar pede confirmação (df-8x0m.23.20.12): o toque não apaga, Cancelar mantém, Apagar apaga.
+  const confirmar = page.getByRole('group', { name: 'Confirmar limpeza' })
+  await expect(confirmar).toContainText('Apagar 1 item comprado?')
+  await expect(comprados.getByRole('checkbox')).toHaveCount(1)
+  await confirmar.getByRole('button', { name: 'Cancelar' }).click()
+  await expect(confirmar).toHaveCount(0)
+  await expect(comprados.getByRole('checkbox')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Limpar comprados' }).click()
+  await confirmar.getByRole('button', { name: 'Apagar', exact: true }).click()
   await expect(itens).toContainText('A lista está vazia.')
   await expect(page.getByRole('button', { name: 'Limpar comprados' })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)
@@ -177,6 +186,7 @@ test('na Lista, uma releitura que falha mantém os itens e um toque não volta a
   await page.unrouteAll()
 
   await page.getByRole('button', { name: 'Limpar comprados' }).click()
+  await page.getByRole('group', { name: 'Confirmar limpeza' }).getByRole('button', { name: 'Apagar', exact: true }).click()
   await expect(itens).toContainText('A lista está vazia.')
   await expect(page.getByRole('alert')).toHaveCount(0)
   // O 503 de propósito aparece no console do navegador; só ele é esperado.
