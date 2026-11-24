@@ -4,7 +4,8 @@
 
 import { ErroPedido, pedir } from './pedido'
 
-export type Eu = { nome: string; modulos: string[] }
+/** `id` é o da pessoa em /api/pessoas: a tela dos desejos abre na parte dela. */
+export type Eu = { id: string; nome: string; modulos: string[] }
 
 export const lerEu = () => pedir<Eu>('GET', 'api/eu')
 

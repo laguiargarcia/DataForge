@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useState, type ComponentType } from 'react'
+import { Desejos } from './desejos/Desejos'
 import { Entrar } from './Entrar'
 import { lerEuOuNinguem, permitidos, sair, telaAberta, type Eu } from './eu'
-import { aoFicarSemSessao } from './pedido'
 import { Financas } from './financas/Financas'
 import { Lista } from './lista/Lista'
+import { aoFicarSemSessao } from './pedido'
 
 // A casca do ninho (df-8x0m.23.20.2): a barra embaixo troca entre os módulos, cada um com a sua tela
 // em src/<modulo>/. Um módulo novo entra acrescentando um item em MODULOS; o primeiro é a tela inicial.
-// Cada tela recebe `aberta`: montada o tempo todo, ela sabe quando aparece (a Lista relê ao abrir).
+// Cada tela recebe `aberta`: montada o tempo todo, ela sabe quando aparece (a Lista relê ao abrir);
+// e `eu`, quem entrou (os Desejos abrem na parte dessa pessoa).
 // A casca pergunta quem entrou antes de montar qualquer tela: só os módulos da pessoa aparecem na
 // barra e só as telas deles são montadas (df-8x0m.23.6.3). Sem sessão (ninguém entrou, ela venceu ou
 // foi encerrada, o que qualquer pedido descobre por um 401), a casca tira as telas e mostra o
 // formulário de login; o "Sair" da barra encerra a sessão deste aparelho (df-8x0m.23.31.5).
 
-type Modulo = { id: string; rotulo: string; Tela: ComponentType<{ aberta: boolean }> }
+type Modulo = { id: string; rotulo: string; Tela: ComponentType<{ aberta: boolean; eu: Eu }> }
 type Carga = { fase: 'carregando' } | { fase: 'fora' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; eu: Eu }
 
 const MODULOS: Modulo[] = [
   { id: 'financas', rotulo: 'Finanças', Tela: Financas },
   { id: 'lista', rotulo: 'Lista', Tela: Lista },
+  { id: 'desejos', rotulo: 'Desejos', Tela: Desejos },
 ]
 
 const telaPedida = () => new URLSearchParams(location.search).get('tela')
@@ -93,7 +96,7 @@ export function App() {
           (o mês, uma linha aberta, um aplicar em curso). */}
       <div className="pb-[calc(56px+env(safe-area-inset-bottom))]">
         {modulos.map(({ id, Tela }) => (
-          <div key={id} hidden={id !== tela}><Tela aberta={id === tela} /></div>
+          <div key={id} hidden={id !== tela}><Tela aberta={id === tela} eu={carga.eu} /></div>
         ))}
       </div>
       <nav aria-label="Módulos"
