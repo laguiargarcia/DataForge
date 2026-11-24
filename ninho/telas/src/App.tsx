@@ -58,17 +58,18 @@ export function App() {
     if (!execucaoInteira) return   // um aplicar já está em curso: o toque não pede outro
     setAplicando(true)
     setFalhaAplicar(null)
+    // Com fim ou com erro, a tela sai do "Aplicando" e mostra o aviso, se houver.
+    const encerrar = (aviso: string | null) => {
+      setAplicando(false)
+      setExecucao(null)
+      setSemContato(null)
+      setFalhaAplicar(aviso)
+    }
     execucaoInteira
       // A faixa de andamento fica até as duas leituras voltarem, para o aviso não piscar.
       .then(fim => Promise.all([carregarTransacoes(mesAtual.current), carregarEdicoes()]).then(() => fim))
-      .then(textoFim, (e: unknown) => `Erro na tela ao acompanhar o aplicar: ${mensagem(e)}`)
-      // Com fim ou com erro, a tela sai do "Aplicando" e mostra o aviso, se houver.
-      .then(aviso => {
-        setAplicando(false)
-        setExecucao(null)
-        setSemContato(null)
-        setFalhaAplicar(aviso)
-      })
+      .then(fim => encerrar(textoFim(fim)),
+        (e: unknown) => encerrar(`Erro na tela ao acompanhar o aplicar: ${mensagem(e)}`))
   }, [carregarTransacoes, carregarEdicoes])
   const iniciarAplicar = () => acompanhar(aplicador.iniciar())
   // A página aberta (ou recarregada) com um aplicar guardado volta a segui-lo em vez de oferecer outro.
