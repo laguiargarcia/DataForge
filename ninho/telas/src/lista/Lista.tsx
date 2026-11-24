@@ -162,19 +162,21 @@ export function Lista({ aberta }: Props) {
               </div>
               {/* Limpar apaga de vez, e também o que a outra pessoa marcou: só depois de confirmar. */}
               {confirmando && (
-                <div role="group" aria-label="Confirmar limpeza" className="rounded-[14px] bg-cartao px-4 py-3 flex items-center gap-2">
-                  <p className="m-0 flex-1 min-w-0">
-                    {comprados.length === 1 ? 'Apagar 1 item comprado?' : `Apagar ${comprados.length} itens comprados?`}
-                  </p>
-                  <button type="button" onClick={() => setConfirmando(false)}
-                    className="h-11 px-4 rounded-[999px] text-secundario font-medium shrink-0">
-                    Cancelar
-                  </button>
-                  <button type="button" disabled={ocupado} className={classeBotao}
-                    onClick={() => { setConfirmando(false); alterar(limparComprados) }}>
-                    Apagar
-                  </button>
-                </div>
+                <fieldset aria-label="Confirmar limpeza" className="m-0 p-0 border-0 min-w-0">
+                  <div className="rounded-[14px] bg-cartao px-4 py-3 flex items-center gap-2">
+                    <p className="m-0 flex-1 min-w-0">
+                      {comprados.length === 1 ? 'Apagar 1 item comprado?' : `Apagar ${comprados.length} itens comprados?`}
+                    </p>
+                    <button type="button" onClick={() => setConfirmando(false)}
+                      className="h-11 px-4 rounded-[999px] text-secundario font-medium shrink-0">
+                      Cancelar
+                    </button>
+                    <button type="button" disabled={ocupado} className={classeBotao}
+                      onClick={() => { setConfirmando(false); alterar(limparComprados) }}>
+                      Apagar
+                    </button>
+                  </div>
+                </fieldset>
               )}
               <ul aria-label="Comprados" className="m-0 p-0 list-none rounded-[14px] bg-cartao overflow-hidden">
                 {comprados.map(i => <Linha key={i.id} item={i} ocupado={ocupado} alterar={alterar} />)}
