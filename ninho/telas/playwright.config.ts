@@ -27,8 +27,10 @@ export default defineConfig({
   },
   projects: [{ name: `iphone-${navegador}`, use: {} }],
   webServer: {
-    // Copia o workspace, roda o finance_demo na cópia e sobe o servidor do ninho sobre ela.
-    command: `"${python}" e2e/servidor.py ${porta} ${senha}`,
+    // O comando único do esqueleto: copia o workspace, roda o finance_demo na cópia e sobe o
+    // servidor do ninho sobre ela; a cópia some quando o teste encerra o servidor.
+    command: `"${python}" "${resolve(raiz, 'scripts/dev/esqueleto.py')}" --porta ${porta}`,
+    env: { NINHO_SENHA: senha },
     url: `http://127.0.0.1:${porta}/`,
     reuseExistingServer: false,
     timeout: 180_000,
