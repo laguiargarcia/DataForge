@@ -1,5 +1,6 @@
 """The shopping list (df-8x0m.23.20.1): its routes under /api/lista, behind the password, saving in
 the app database named by NINHO_BANCO. Items are invented."""
+import base64
 import sqlite3
 
 import pytest
@@ -154,3 +155,20 @@ def test_o_item_sobrevive_a_reabrir_o_banco(lista, banco):
         conn.close()
     assert nomes == {"lista_itens"}      # the module's tables carry its prefix
     assert _textos(TestClient(app)) == [("azeite", False)]
+
+
+@pytest.mark.parametrize("codificacao", ["utf-8", "latin-1"])
+def test_nome_com_acento_entra_e_fica_no_item(lista, codificacao):
+    """FastAPI's own HTTP Basic reads the header as ASCII and answered 401 (df-8x0m.23.20.5)."""
+    cabecalho = {"Authorization": "Basic " + base64.b64encode(f"José:{SENHA}".encode(codificacao)).decode()}
+    r = lista.post("/api/lista/itens", json={"texto": "pão"}, headers=cabecalho)
+    assert r.status_code == 201, r.text
+    assert r.json()["adicionado_por"] == "José"
+
+
+@pytest.mark.parametrize("cabecalho", ["Basic ###", "Basic " + base64.b64encode(b"sem-dois-pontos").decode(),
+                                       "Bearer abc", "Basic"])
+def test_cabecalho_de_login_ilegivel_pede_a_senha(lista, cabecalho):
+    r = lista.get("/api/lista/itens", headers={"Authorization": cabecalho})
+    assert r.status_code == 401
+    assert r.headers["WWW-Authenticate"] == "Basic"
