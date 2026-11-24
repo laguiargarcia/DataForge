@@ -38,7 +38,9 @@ DESEJOS = [("GET", "/api/desejos", None, 200),
            ("PATCH", "/api/desejos/{desejo}", {"realizado": True}, 200),
            ("DELETE", "/api/desejos/{desejo}", None, 204),
            ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": "https://exemplo.invalid/bici"}, 201),
-           ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None, 204)]
+           ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None, 204),
+           ("PUT", "/api/desejos/{desejo}/presente", None, 200),
+           ("DELETE", "/api/desejos/{desejo}/presente", None, 204)]
 ROTAS = ([("financas", *r) for r in FINANCAS] + [("lista", *r) for r in LISTA]
          + [("desejos", *r) for r in DESEJOS])
 IDS = [f"{metodo} {caminho}" for _, metodo, caminho, *_ in ROTAS]
@@ -67,9 +69,11 @@ def servidor(banco, tmp_path, monkeypatch):
 
 def _pedir(servidor, banco, rota, auth):
     _, metodo, caminho, corpo, _ = rota
-    if "{" in caminho:   # an item, a wish and a note that exist, so the route answers its own success
+    if "{" in caminho:   # an item, a wish of ana and a note that exist, so the route answers its own success
         with banco_do_app.aberto(banco) as conn:
-            desejo = desejos.adicionar(conn, {"titulo": "livro", "de_quem": None, "anotacoes": ["capa dura"]}, "ana", set())
+            ana = pessoas.achar(conn, "ana")[0]["id"]
+            desejo = desejos.adicionar(conn, {"titulo": "livro", "de_quem": ana, "anotacoes": ["capa dura"]}, ana,
+                                       {ana: "ana"})
             caminho = caminho.format(id=itens.adicionar(conn, "leite", "ana")["id"], desejo=desejo["id"],
                                      anotacao=desejo["anotacoes"][0]["id"])
     return servidor.request(metodo, caminho, json=corpo, auth=auth)
