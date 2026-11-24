@@ -1,16 +1,13 @@
 """The shopping list (df-8x0m.23.20.1): its routes under /api/lista, behind the login, saving in
 the app database named by NINHO_BANCO. Items and people are invented."""
-import base64
 import sqlite3
 
 import pytest
-from fastapi.testclient import TestClient
 
 from ninho.lista import itens
-from ninho.servidor.app import app
 from ninho.servidor import banco as banco_do_app
 from ninho.servidor import pessoas
-from tests.ninho.conftest import AUTH, BETO
+from tests.ninho.conftest import AUTH, BETO, Cliente
 
 ROTAS = [("get", "/api/lista/itens", None), ("post", "/api/lista/itens", {"texto": "pão"}),
          ("patch", "/api/lista/itens/x", {"comprado": True}), ("delete", "/api/lista/itens/x", None),
@@ -20,7 +17,7 @@ ROTAS = [("get", "/api/lista/itens", None), ("post", "/api/lista/itens", {"texto
 @pytest.fixture
 def lista(banco):
     """The server on an app database of its own, with ana and beto in it."""
-    return TestClient(app)
+    return Cliente()
 
 
 def _adicionar(lista, texto, auth=AUTH):
@@ -37,7 +34,7 @@ def _textos(lista):
 def test_toda_rota_pede_a_senha(lista, metodo, caminho, corpo):
     r = lista.request(metodo, caminho, json=corpo)
     assert r.status_code == 401
-    assert r.headers["www-authenticate"].startswith("Basic")
+    assert "www-authenticate" not in r.headers   # nothing that makes a browser show its own box
     assert lista.request(metodo, caminho, json=corpo, auth=("ana", "outra")).status_code == 401
 
 
@@ -147,25 +144,16 @@ def test_o_item_sobrevive_a_reabrir_o_banco(lista, banco):
         nomes = {linha[0] for linha in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     finally:
         conn.close()
-    assert nomes - {"pessoas"} == {"lista_itens"}   # the module's tables carry its prefix; pessoas is the server's
-    assert _textos(TestClient(app)) == [("azeite", False)]
+    assert nomes - {"pessoas", "sessoes"} == {"lista_itens"}   # the module's tables carry its prefix; the others are the server's
+    assert _textos(Cliente()) == [("azeite", False)]
 
 
-@pytest.mark.parametrize("codificacao", ["utf-8", "latin-1"])
-def test_nome_com_acento_entra_e_fica_no_item(lista, banco, codificacao):
-    """FastAPI's own HTTP Basic reads the header as ASCII and answered 401 (df-8x0m.23.20.5)."""
+@pytest.mark.parametrize("digitado", ["José", "Jose\u0301", " josé "])
+def test_nome_com_acento_entra_e_fica_no_item(lista, banco, digitado):
+    """The name as any keyboard types it (composed or not, any case) is the person's (df-8x0m.23.20.5)."""
     senha = "senha-falsa-do-jose"
     with banco_do_app.aberto(banco) as conn:
         pessoas.criar(conn, "José", senha, ["lista"])
-    cabecalho = {"Authorization": "Basic " + base64.b64encode(f"José:{senha}".encode(codificacao)).decode()}
-    r = lista.post("/api/lista/itens", json={"texto": "pão"}, headers=cabecalho)
+    r = lista.post("/api/lista/itens", json={"texto": "pão"}, auth=(digitado, senha))
     assert r.status_code == 201, r.text
     assert r.json()["adicionado_por"] == "José"
-
-
-@pytest.mark.parametrize("cabecalho", ["Basic ###", "Basic " + base64.b64encode(b"sem-dois-pontos").decode(),
-                                       "Bearer abc", "Basic"])
-def test_cabecalho_de_login_ilegivel_pede_a_senha(lista, cabecalho):
-    r = lista.get("/api/lista/itens", headers={"Authorization": cabecalho})
-    assert r.status_code == 401
-    assert r.headers["WWW-Authenticate"] == "Basic"

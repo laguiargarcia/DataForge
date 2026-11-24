@@ -6,39 +6,41 @@ Configuration comes from the environment, read on every request:
   Its table ``pessoas`` holds who may log in (``ninho.servidor.pessoas``), so without it every route
   answers 503. Finances keeps its edits in the workspace, not here.
 
-Login is per person, by HTTP Basic (``ninho.servidor.dependencias``): 401 without a valid name and
-password. Each module answers only to a person who has it, 403 to anyone else: the finance routes
-below need ``financas``, the list's router (``/api/lista``, ``ninho.lista.rotas``) needs ``lista``,
-the wishlist's (``/api/desejos``, ``ninho.desejos.rotas``) needs ``desejos``. ``GET /api/eu`` says
-who is logged in and which modules they have; ``GET /api/pessoas``, the people of the house.
+Login is a session per person (``ninho.servidor.dependencias``): ``POST /api/entrar`` checks a name
+and a password and answers the cookie of a session; ``POST /api/sair`` ends it. Every other ``/api/``
+route answers 401 without a live session. Each module answers only to a person who has it, 403 to
+anyone else: the finance routes below need ``financas``, the list's router (``/api/lista``,
+``ninho.lista.rotas``) needs ``lista``, the wishlist's (``/api/desejos``, ``ninho.desejos.rotas``)
+needs ``desejos``. ``GET /api/eu`` says who is logged in and which modules they have;
+``GET /api/pessoas``, the people of the house.
 
-The same server hands out the built screen (``ninho/telas/dist``) at ``/`` to anyone logged in: the
-browser asks for the login once and sends it again with every call the page makes to the routes. Only
-its two icons (``/icone-64.png``, ``/icone-180.png``) are open, since Safari asks for the home-screen
-icon without the login.
+The same server hands out the built screen (``ninho/telas/dist``) at ``/`` to anyone: it holds no
+data, and the login form is part of it.
 """
 import logging
 import os
+import sqlite3
 import uuid
 from datetime import date
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ninho.desejos.rotas import rotas as rotas_desejos
 from ninho.financas import aplicar, edicoes, leitura
 from ninho.lista.rotas import rotas as rotas_lista
-from ninho.servidor.dependencias import Casa, Pessoa, entrar, exigir
+from ninho.servidor import dependencias, sessoes
+from ninho.servidor.dependencias import Casa, Pessoa, conexao, entrar, exigir
 
 TELAS = Path(__file__).resolve().parents[1] / "telas" / "dist"
 MES = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
-# No /docs, /redoc or /openapi.json: they would answer without a login and map every route.
+# No /docs, /redoc or /openapi.json: they answer without a login and would map every route.
 app = FastAPI(title="ninho", docs_url=None, redoc_url=None, openapi_url=None)
 _log = logging.getLogger("ninho")
 _FINANCAS = [Depends(exigir("financas"))]
@@ -144,20 +146,35 @@ def pessoas_da_casa(casa: Casa) -> dict:
     return {"pessoas": casa}
 
 
-# The icons are only the logo (no data), and the browser asks for them without the password: Safari
-# fetches the home-screen icon on its own when a page is added to the iPhone's home screen (df-8x0m.23.29).
-@app.get("/icone-{lado}.png", include_in_schema=False)
-def icone(lado: str) -> FileResponse:
-    """An icon of the screen, open to anyone; every other file of the screen asks for the password."""
-    if lado not in ("64", "180"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
-    return FileResponse(TELAS.resolve() / f"icone-{lado}.png")
+class Credenciais(BaseModel):
+    nome: str = Field(default="", max_length=200)
+    senha: str = Field(default="", max_length=1000)
 
 
-@app.get("/{caminho:path}", dependencies=[Depends(entrar)], include_in_schema=False)
+@app.post("/api/entrar", status_code=status.HTTP_204_NO_CONTENT)
+def abrir_sessao(corpo: Credenciais, response: Response, conn: Annotated[sqlite3.Connection, Depends(conexao)]) -> None:
+    """Log in: a right name and password open a session and answer its cookie. A wrong password, an
+    unknown name and an empty field all answer the same 401."""
+    pessoa = dependencias.conferir(conn, corpo.nome, corpo.senha)
+    if pessoa is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "nome ou senha errados")
+    dependencias.por_cookie(response, sessoes.abrir(conn, pessoa["id"]))
+
+
+@app.post("/api/sair", status_code=status.HTTP_204_NO_CONTENT)
+def encerrar_sessao(request: Request, response: Response, conn: Annotated[sqlite3.Connection, Depends(conexao)]) -> None:
+    """Log out: end the session of the request, if there is one, and clear the cookie."""
+    token = request.cookies.get(sessoes.COOKIE, "")
+    if token:
+        sessoes.encerrar(conn, token)
+    dependencias.tirar_cookie(response)
+
+
+@app.get("/{caminho:path}", include_in_schema=False)
 def tela(caminho: str) -> FileResponse:
-    """The built screen: its page at "/" and the files it asks for. Declared last, so every route
-    above answers first; nothing outside the built folder is ever handed out."""
+    """The built screen: its page at "/" and the files it asks for, open to anyone (the login form
+    is in it, and Safari asks for the home-screen icon without cookies). Declared last, so every
+    route above answers first; nothing outside the built folder is ever handed out."""
     pasta = TELAS.resolve()
     try:
         arquivo = (pasta / (caminho or "index.html")).resolve()

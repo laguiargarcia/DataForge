@@ -14,6 +14,8 @@ import unicodedata
 import uuid
 from datetime import UTC, datetime
 
+from ninho.servidor import sessoes
+
 MODULOS = ("financas", "lista", "desejos")
 LIMITE_NOME = 50
 SENHA_MINIMA = 8   # characters (Lucas, 2026-11-24; df-8x0m.23.6.5)
@@ -181,11 +183,21 @@ def criar(conn: sqlite3.Connection, nome: str, senha: str, modulos: list[str]) -
 
 
 def trocar_senha(conn: sqlite3.Connection, nome: str, senha: str) -> None:
+    """A new password for <nome>, which ends every session the person had: whoever was in with the
+    old one logs in again."""
     senha_hash = gerar_hash(validar_senha(senha))
     with conn:
         _tabela(conn)
         id_ = _existente(conn, nome)[0]
         conn.execute("UPDATE pessoas SET senha_hash = ? WHERE id = ?", (senha_hash, id_))
+        sessoes.encerrar_as_de(conn, id_)
+
+
+def sair(conn: sqlite3.Connection, nome: str) -> int:
+    """End every session of <nome> (a lost phone); how many there were."""
+    with conn:
+        _tabela(conn)
+        return sessoes.encerrar_as_de(conn, _existente(conn, nome)[0])
 
 
 def definir_modulos(conn: sqlite3.Connection, nome: str, modulos: list[str]) -> dict:
@@ -231,10 +243,17 @@ def refazer_hash(conn: sqlite3.Connection, id_: str, senha: str, conferido: str)
 
 def achar(conn: sqlite3.Connection, nome: str) -> tuple[dict, str] | None:
     """The person of <nome> and the stored hash, without checking any password; None when nobody
-    has that name. For the server's memory of checks that passed: the hash says when one is stale."""
+    has that name."""
     _tabela(conn)
     linha = _achar(conn, nome)
     return (_pessoa(linha[:4]), linha[4]) if linha else None
+
+
+def por_id(conn: sqlite3.Connection, id_: str) -> dict | None:
+    """The person of a session, as stored now; None when there is no such person any more."""
+    _tabela(conn)
+    linha = conn.execute("SELECT id, nome, modulos, criada_em FROM pessoas WHERE id = ?", (id_,)).fetchone()
+    return _pessoa(linha) if linha else None
 
 
 def listar(conn: sqlite3.Connection) -> list[dict]:

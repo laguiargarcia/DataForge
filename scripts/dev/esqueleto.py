@@ -3,7 +3,7 @@ workspace to a scratch home, run the synthetic job (finance_demo) there with Dat
 ninho server (routes and screen) over that copy. Never the checkout's own workspace, never real data.
 The app database (NINHO_BANCO: the people, the shopping list) is a file in the same folder,
 <home>/ninho.db, and gets one person with every module, whose name and password come from
-NINHO_ESQUELETO_NOME and NINHO_ESQUELETO_SENHA: the login the browser asks for. They are read only
+NINHO_ESQUELETO_NOME and NINHO_ESQUELETO_SENHA: the login the server asks for. They are read only
 here and taken out of the environment, so neither finance_demo nor the server sees them. Run again
 on the same --home, the person gets that password and every module. A second person, with the
 shopping list only, is created when NINHO_ESQUELETO_NOME_LISTA and NINHO_ESQUELETO_SENHA_LISTA are
