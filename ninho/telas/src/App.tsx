@@ -4,8 +4,9 @@ import { Lista } from './lista/Lista'
 
 // A casca do ninho (df-8x0m.23.20.2): a barra embaixo troca entre os módulos, cada um com a sua tela
 // em src/<modulo>/. Um módulo novo entra acrescentando um item em MODULOS; o primeiro é a tela inicial.
+// Cada tela recebe `aberta`: montada o tempo todo, ela sabe quando aparece (a Lista relê ao abrir).
 
-type Modulo = { id: string; rotulo: string; Tela: ComponentType }
+type Modulo = { id: string; rotulo: string; Tela: ComponentType<{ aberta: boolean }> }
 
 const MODULOS: Modulo[] = [
   { id: 'financas', rotulo: 'Finanças', Tela: Financas },
@@ -37,7 +38,7 @@ export function App() {
           (o mês, uma linha aberta, um aplicar em curso). */}
       <div className="pb-[calc(56px+env(safe-area-inset-bottom))]">
         {MODULOS.map(({ id, Tela }) => (
-          <div key={id} hidden={id !== tela}><Tela /></div>
+          <div key={id} hidden={id !== tela}><Tela aberta={id === tela} /></div>
         ))}
       </div>
       <nav aria-label="Módulos"

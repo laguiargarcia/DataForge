@@ -1,6 +1,7 @@
 """Bring the ninho walking skeleton up with one command (df-8x0m.23.13.6): copy the GetFinance
 workspace to a scratch home, run the synthetic job (finance_demo) there with DataForge, and serve the
 ninho server (routes and screen) over that copy. Never the checkout's own workspace, never real data.
+The app database (NINHO_BANCO, the shopping list) is a file in the same folder, <home>/ninho.db.
 
 Used by hand, by the end-to-end test (tests/ninho/test_esqueleto.py) and by the screen's browser test
 (ninho/telas/playwright.config.ts). The password comes from NINHO_SENHA, as the server reads it.
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         args.home.mkdir(parents=True, exist_ok=True)
     with nullcontext(args.home) if args.home else tempfile.TemporaryDirectory(prefix="ninho-esqueleto-", ignore_cleanup_errors=True) as home:
         os.environ["NINHO_WORKSPACE"] = str(preparar(Path(home)))
+        os.environ["NINHO_BANCO"] = str(Path(home) / "ninho.db")
         uvicorn.run(app, host=args.endereco, port=args.porta)
     return 0
 

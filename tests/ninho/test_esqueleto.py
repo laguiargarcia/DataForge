@@ -2,7 +2,9 @@
 (scripts/dev/esqueleto.py) runs finance_demo on a scratch copy and serves ninho as a process of its
 own; the test talks to it only over HTTP, with the password: it reads the month, corrects a
 category (app database), applies (the engine, by its command line), follows the run and reads the
-corrected category back. No TestClient and no DataForge server: the four pieces talk for real."""
+corrected category back; and it adds a shopping-list item, marks it bought and reads it back
+(NINHO_BANCO, a file in the skeleton's own folder). No TestClient and no DataForge server: the four
+pieces talk for real."""
 import os
 import signal
 import socket
@@ -108,5 +110,13 @@ def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):
                       if linha["id"] == alvo["id"])
         assert (depois["subcategoria"], depois["corrigida"]) == (nova, True)
         assert http.get("/api/financas/edicoes").json()["pendente"] is False
+
+        # The list: an item there and back, in the app database the skeleton keeps in its own folder.
+        criado = http.post("/api/lista/itens", json={"texto": "biscoito"})
+        assert criado.status_code == 201, criado.text
+        marcado = http.patch(f"/api/lista/itens/{criado.json()['id']}", json={"comprado": True})
+        assert marcado.status_code == 200, marcado.text
+        assert [(i["texto"], i["comprado"]) for i in http.get("/api/lista/itens").json()["itens"]] == [("biscoito", True)]
+        assert (home / "ninho.db").is_file()
 
     assert _parar(processo) == 0, log.read_text(encoding="utf-8")[-4000:]   # stops cleanly, nothing left up
