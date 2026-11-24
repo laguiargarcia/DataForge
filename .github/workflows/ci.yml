@@ -191,6 +191,37 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-app-financas, path: report/, if-no-files-found: ignore }
+  telas-ninho:
+    # The ninho screen (df-8x0m.23.13.5), in the mould of app-financas: unit tests, and the committed
+    # dist/ (which the ninho server hands out) must be the build of the current src/. The Playwright
+    # test stays local (it runs finance_demo on a scratch copy and needs a browser).
+    # Not a required check itself: the required `tests` job needs it.
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    defaults: { run: { working-directory: ninho/telas } }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: ninho/telas/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Unit tests and build
+        shell: bash   # pipefail: each command's exit code survives the tee
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          { npm test && npm run build; } 2>&1 | tee "$GITHUB_WORKSPACE/report/telas-ninho.txt"
+      - name: Committed dist is the build
+        shell: bash
+        run: |
+          changed=$(git status --porcelain --untracked-files=all -- dist)
+          if [ -n "$changed" ]; then echo "dist differs from the build of src (run npm run build and commit dist):"; echo "$changed"; exit 1; fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-telas-ninho, path: report/, if-no-files-found: ignore }
   coverage:
     # Merges every part's coverage into the coverage.xml the sonar job reads, and the shards'
     # durations into the cache the next run splits by. Waits only for the jobs that write them, so
@@ -230,10 +261,10 @@ jobs:
         if: steps.durations.outputs.merged == 'true'
         with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
   tests:
-    # Required check: every engine shard, the GUI job, the GetFinance tests, its web app, the
+    # Required check: every engine shard, the GUI job, the GetFinance tests, its web app, the ninho screen, the
     # extra random orders (an order-dependent failure blocks the merge too, df-n8ac.29) and the
     # coverage merge passed.
-    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, orders, coverage]
+    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, telas-ninho, orders, coverage]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -243,11 +274,12 @@ jobs:
           GUI: "${{ needs.tests-gui.result }}"
           GETFINANCE: "${{ needs.tests-getfinance.result }}"
           APP: "${{ needs.app-financas.result }}"
+          TELAS: "${{ needs.telas-ninho.result }}"
           ORDERS: "${{ needs.orders.result }}"
           COVERAGE: "${{ needs.coverage.result }}"
         run: |
-          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, orders: $ORDERS, coverage: $COVERAGE"
-          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$ORDERS" = "success" ] && [ "$COVERAGE" = "success" ]
+          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, telas-ninho: $TELAS, orders: $ORDERS, coverage: $COVERAGE"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$TELAS" = "success" ] && [ "$ORDERS" = "success" ] && [ "$COVERAGE" = "success" ]
   tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
     # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage
@@ -683,7 +715,7 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
     # mutation-ok: it writes the mutation gate's report (df-n8ac.32).
-    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, mutation-ok, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, telas-ninho, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, mutation-ok, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
