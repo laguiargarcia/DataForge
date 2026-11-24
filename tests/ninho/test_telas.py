@@ -77,3 +77,34 @@ def test_a_tela_commitada_tem_a_pagina_e_os_arquivos_que_ela_pede():
     pedidos = re.findall(r'(?:src|href)="\./(assets/[^"]+)"', pagina)
     assert pedidos
     assert all((servidor.TELAS / pedido).is_file() for pedido in pedidos)
+
+
+@pytest.fixture
+def com_icones(telas):
+    for lado in ("64", "180"):
+        (servidor.TELAS / f"icone-{lado}.png").write_bytes(b"\x89PNG icone " + lado.encode())
+    return telas
+
+
+@pytest.mark.parametrize("lado", ["64", "180"])
+def test_os_icones_abrem_sem_a_senha(com_icones, lado):
+    """Safari asks for the home-screen icon without the password (df-8x0m.23.29)."""
+    r = com_icones.get(f"/icone-{lado}.png")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    assert r.content.endswith(lado.encode())
+
+
+@pytest.mark.parametrize(("caminho", "esperado"), [
+    ("/icone-32.png", 404), ("/icone-..%2Findex.html.png", 401),
+    ("/icone-64.png/x", 401), ("/assets/tela.js", 401), ("/index.html", 401), ("/", 401)])
+def test_so_os_icones_abrem_sem_a_senha(com_icones, caminho, esperado):
+    assert com_icones.get(caminho).status_code == esperado
+
+
+def test_os_icones_que_a_pagina_pede_abrem_sem_a_senha():
+    pagina = (servidor.TELAS / "index.html").read_text(encoding="utf-8")
+    icones = re.findall(r'<link rel="(?:icon|apple-touch-icon)"[^>]*href="\./([^"]+)"', pagina)
+    assert sorted(icones) == ["icone-180.png", "icone-64.png"]
+    cliente = TestClient(servidor.app)
+    assert all(cliente.get(f"/{icone}").status_code == 200 for icone in icones)

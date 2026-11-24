@@ -12,7 +12,9 @@ below need ``financas``, the list's router (``/api/lista``, ``ninho.lista.rotas`
 ``GET /api/eu`` says who is logged in and which modules they have.
 
 The same server hands out the built screen (``ninho/telas/dist``) at ``/`` to anyone logged in: the
-browser asks for the login once and sends it again with every call the page makes to the routes.
+browser asks for the login once and sends it again with every call the page makes to the routes. Only
+its two icons (``/icone-64.png``, ``/icone-180.png``) are open, since Safari asks for the home-screen
+icon without the login.
 """
 import logging
 import os
@@ -130,6 +132,16 @@ app.include_router(rotas_lista, dependencies=[Depends(exigir("lista"))])
 def eu(pessoa: Pessoa) -> dict:
     """Who is logged in and the modules they may open (the screen's bottom bar shows only those)."""
     return {"nome": pessoa["nome"], "modulos": pessoa["modulos"]}
+
+
+# The icons are only the logo (no data), and the browser asks for them without the password: Safari
+# fetches the home-screen icon on its own when a page is added to the iPhone's home screen (df-8x0m.23.29).
+@app.get("/icone-{lado}.png", include_in_schema=False)
+def icone(lado: str) -> FileResponse:
+    """An icon of the screen, open to anyone; every other file of the screen asks for the password."""
+    if lado not in ("64", "180"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
+    return FileResponse(TELAS.resolve() / f"icone-{lado}.png")
 
 
 @app.get("/{caminho:path}", dependencies=[Depends(entrar)], include_in_schema=False)
