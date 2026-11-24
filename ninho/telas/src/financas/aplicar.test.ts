@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ErroPedido, type Execucao } from './api'
+import { ErroPedido } from '../pedido'
+import { type Execucao } from './api'
 import { Aplicador, ESPERA, guardaLocal, PAUSA, textoFim, textoSemContato, textoAndamento, type Guarda, type Motor } from './aplicar'
 
 const FIM = '2026-11-24T10:00:00'
