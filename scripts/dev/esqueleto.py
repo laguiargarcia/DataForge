@@ -3,8 +3,9 @@ workspace to a scratch home, run the synthetic job (finance_demo) there with Dat
 ninho server (routes and screen) over that copy. Never the checkout's own workspace, never real data.
 The app database (NINHO_BANCO: the people, the shopping list) is a file in the same folder,
 <home>/ninho.db, and gets one person with every module, whose name and password come from
-NINHO_ESQUELETO_NOME and NINHO_ESQUELETO_SENHA (read only here, never by the server): the login the
-browser asks for. Run again on the same --home, the person gets that password and every module.
+NINHO_ESQUELETO_NOME and NINHO_ESQUELETO_SENHA: the login the browser asks for. They are read only
+here and taken out of the environment, so neither finance_demo nor the server sees them. Run again
+on the same --home, the person gets that password and every module.
 
 Used by hand, by the end-to-end test (tests/ninho/test_esqueleto.py) and by the screen's browser test
 (ninho/telas/playwright.config.ts).
@@ -69,7 +70,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--porta", type=int, default=8100, help="port (default 8100)")
     parser.add_argument("--home", type=Path, help="folder for the copy (default: a temporary one, removed at the end)")
     args = parser.parse_args(argv)
-    login = os.environ.get("NINHO_ESQUELETO_NOME", ""), os.environ.get("NINHO_ESQUELETO_SENHA", "")
+    # Taken out of the environment: neither finance_demo nor the server and the jobs it starts get them.
+    login = os.environ.pop("NINHO_ESQUELETO_NOME", ""), os.environ.pop("NINHO_ESQUELETO_SENHA", "")
     if not all(login):
         parser.error("defina NINHO_ESQUELETO_NOME e NINHO_ESQUELETO_SENHA: o login que o servidor pede")
     try:   # before the copy and finance_demo, which take a while

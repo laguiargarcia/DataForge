@@ -6,6 +6,7 @@ category (app database), applies (the engine, by its command line), follows the 
 corrected category back; and it adds a shopping-list item, marks it bought and reads it back
 (NINHO_BANCO, a file in the skeleton's own folder). No TestClient and no DataForge server: the four
 pieces talk for real."""
+import importlib.util
 import os
 import signal
 import socket
@@ -70,6 +71,32 @@ def esqueleto(tmp_path):
         yield base, home, processo, log
     finally:
         _parar(processo)
+
+
+def test_o_login_do_esqueleto_nao_chega_ao_finance_demo_nem_ao_servidor(tmp_path, monkeypatch):
+    """Its name and password are read once and taken out of the environment (finance_demo, the server
+    and the jobs it starts inherit it)."""
+    especificacao = importlib.util.spec_from_file_location("esqueleto_do_teste", ESQUELETO)
+    modulo = importlib.util.module_from_spec(especificacao)
+    especificacao.loader.exec_module(modulo)
+    vistos, criada = [], []
+
+    def preparar(home):
+        vistos.append(dict(os.environ))
+        return home
+
+    monkeypatch.setattr(modulo, "preparar", preparar)
+    monkeypatch.setattr(modulo, "criar_pessoa", lambda *login: criada.append(login[1:]))
+    monkeypatch.setattr(modulo.uvicorn, "run", lambda *_, **__: vistos.append(dict(os.environ)))
+    monkeypatch.setattr(signal, "signal", lambda *_: None)
+    monkeypatch.setenv("NINHO_ESQUELETO_NOME", ANA[0])
+    monkeypatch.setenv("NINHO_ESQUELETO_SENHA", ANA[1])
+    for nome in ("NINHO_WORKSPACE", "NINHO_BANCO"):
+        monkeypatch.setenv(nome, "")   # main sets them; monkeypatch puts them back afterwards
+    assert modulo.main(["--home", str(tmp_path)]) == 0
+    assert criada == [ANA]
+    assert len(vistos) == 2
+    assert all(ANA[1] not in ambiente.values() and "NINHO_ESQUELETO_SENHA" not in ambiente for ambiente in vistos)
 
 
 def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):

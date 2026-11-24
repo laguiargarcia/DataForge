@@ -4,13 +4,14 @@ import os
 import shutil
 import subprocess
 import sys
+from collections import OrderedDict
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ninho.servidor import banco as banco_do_app
-from ninho.servidor import pessoas
+from ninho.servidor import dependencias, pessoas
 from ninho.servidor.app import app
 
 WORKSPACE = Path(__file__).resolve().parents[2] / "workspaces" / "GetFinance"
@@ -55,6 +56,12 @@ def custo_baixo(monkeypatch):
     """A cheap scrypt, so a login costs nothing; test_pessoas puts the real one back where it needs it."""
     monkeypatch.setattr(pessoas, "_N", 2**4)
     monkeypatch.setattr(pessoas, "_P", 1)
+
+
+@pytest.fixture(autouse=True)
+def memoria_vazia(monkeypatch):
+    """The server's memory of logins that passed starts empty in each test."""
+    monkeypatch.setattr(dependencias, "_conferidas", OrderedDict())
 
 
 @pytest.fixture

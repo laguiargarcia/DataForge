@@ -8,27 +8,34 @@ connection to the app database.
   every route answers 503.
 - A module's routes answer only to a person who has that module; anyone else gets 403.
 - A password checks with scrypt (about 200 ms): each check that passed is remembered in memory, so
-  the next requests of the same name and password cost one read of the table. What is remembered is
-  an HMAC of name and password under a key of this process, never the password, tied to the stored
-  hash it was checked against: when the hash changes (``python -m ninho pessoas senha``, another
-  process) the next request checks scrypt again, and the old password stops working.
+  the next requests of the same person and password cost one read of the table. What is remembered
+  is an HMAC of the person's id and the password under a key of this process, never the password,
+  tied to the stored hash that was actually checked: when the hash changes (``python -m ninho
+  pessoas senha``, another process) the next request checks scrypt again, and the old password
+  stops working. One entry per person, at most ``LIMITE``. A request with no name or no password is
+  401 at once, without a scrypt; an unknown name costs one, like a wrong password.
+- A hash below today's cost is written again at login, with the same password, only while the
+  stored hash is still the one checked (never over a password changed meanwhile).
 """
 import base64
 import hmac
+import logging
 import secrets
 import sqlite3
 import threading
+from collections import OrderedDict
 from collections.abc import Callable, Iterator
-from contextlib import suppress
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 
 from ninho.servidor import banco, pessoas
 
+LIMITE = 32   # people remembered at most; the oldest goes first
 _SEGREDO = secrets.token_bytes(32)
-_conferidas: dict[bytes, tuple[str, str]] = {}   # HMAC of "nome:senha" -> (person's id, stored hash)
+_conferidas: OrderedDict[bytes, tuple[str, str]] = OrderedDict()   # HMAC of "id:senha" -> (id, hash checked)
 _trava = threading.Lock()
+_log = logging.getLogger("ninho")
 
 
 def _credenciais(request: Request) -> tuple[str, str]:
@@ -60,37 +67,59 @@ def conexao() -> Iterator[sqlite3.Connection]:
         yield conn
 
 
-def _chave(nome: str, senha: str) -> bytes:
-    """The name has no ':' (the header is split at the first one), so "nome:senha" is unambiguous."""
-    return hmac.digest(_SEGREDO, f"{nome}:{senha}".encode(), "sha256")
+def _chave(id_: str, senha: str) -> bytes:
+    """Keyed by the person's id, not the name typed: every spelling of one name is one entry. The id
+    has no ':', so "id:senha" is unambiguous."""
+    return hmac.digest(_SEGREDO, f"{id_}:{senha}".encode(), "sha256")
 
 
-def _lembrar(chave: bytes, id_: str, guardado: str) -> None:
-    """Remember a check that passed, forgetting the ones of the same person against an older hash."""
+def _lembrar(chave: bytes, id_: str, conferido: str) -> None:
+    """Remember a check that passed against the hash <conferido>: one entry per person, the oldest
+    person out past ``LIMITE``."""
     with _trava:
-        for velha in [k for k, (outro, h) in _conferidas.items() if outro == id_ and h != guardado]:
+        for velha in [k for k, (outro, _) in _conferidas.items() if outro == id_]:
             del _conferidas[velha]
-        _conferidas[chave] = (id_, guardado)
+        _conferidas[chave] = (id_, conferido)
+        while len(_conferidas) > LIMITE:
+            _conferidas.popitem(last=False)
+
+
+def _lembrada(chave: bytes, id_: str, guardado: str) -> bool:
+    with _trava:
+        lembrada = _conferidas.get(chave)
+    return lembrada is not None and lembrada[0] == id_ and secrets.compare_digest(lembrada[1], guardado)
+
+
+def _refazer(conn: sqlite3.Connection, id_: str, senha: str, conferido: str) -> str:
+    """The hash that stands for <senha> after trying to keep it again at today's cost: the new one
+    when it was written, else <conferido>. A password under today's minimum, a password changed
+    meanwhile, the person deleted meanwhile or a database error leave the stored hash as it was and
+    never fail the login."""
+    try:
+        return pessoas.refazer_hash(conn, id_, senha, conferido) or conferido
+    except (pessoas.Invalido, sqlite3.Error):
+        _log.warning("não deu para refazer o hash de uma pessoa; fica o antigo", exc_info=True)
+        return conferido
 
 
 def _conferir(conn: sqlite3.Connection, nome: str, senha: str) -> dict | None:
-    """The person whose name and password these are, else None; scrypt only when not remembered."""
-    chave = _chave(nome, senha)
+    """The person whose name and password these are, else None; scrypt only when not remembered.
+    The check runs against the row read here, and only that hash is remembered."""
+    if not nome.strip() or not senha:
+        return None   # nothing to check: no header, or a part of it empty
     achada = pessoas.achar(conn, nome)
-    lembrada = _conferidas.get(chave)
-    if achada and lembrada and lembrada[0] == achada[0]["id"] and secrets.compare_digest(lembrada[1], achada[1]):
-        return achada[0]
-    pessoa = pessoas.conferir(conn, nome, senha)
-    if pessoa is None:
+    if achada is None:
+        pessoas.confere(senha, None)   # an unknown name costs what a wrong password costs
         return None
-    if pessoa.pop("precisa_refazer"):
-        # The same password, kept again at today's cost; one shorter than today's minimum is
-        # refused there and keeps working as it is until it is changed.
-        with suppress(pessoas.Invalido):
-            pessoas.trocar_senha(conn, nome, senha)
-    achada = pessoas.achar(conn, nome)
-    if achada:
-        _lembrar(chave, achada[0]["id"], achada[1])
+    pessoa, guardado = achada
+    chave = _chave(pessoa["id"], senha)
+    if _lembrada(chave, pessoa["id"], guardado):
+        return pessoa
+    if not pessoas.confere(senha, guardado):
+        return None
+    if pessoas.precisa_refazer(guardado):
+        guardado = _refazer(conn, pessoa["id"], senha, guardado)
+    _lembrar(chave, pessoa["id"], guardado)
     return pessoa
 
 
