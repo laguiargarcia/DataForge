@@ -47,8 +47,9 @@ export function App() {
           {MODULOS.map(({ id, rotulo }) => (
             <li key={id} className="flex-1">
               <button type="button" aria-current={id === tela ? 'page' : undefined} onClick={() => setTela(id)}
-                className={`w-full h-14 text-center font-medium ${id === tela ? 'text-acento' : 'text-secundario'}`}>
-                {rotulo}
+                className={`w-full h-14 flex items-center justify-center font-semibold ${id === tela ? 'text-texto' : 'text-secundario'}`}>
+                {/* O item ativo ganha o azul da marca de fundo, numa pílula: o texto fica no tom escuro. */}
+                <span className={`px-4 py-1.5 rounded-[999px] ${id === tela ? 'bg-marca' : ''}`}>{rotulo}</span>
               </button>
             </li>
           ))}

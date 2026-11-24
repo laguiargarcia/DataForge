@@ -240,3 +240,16 @@ test('corrige a categoria de uma transação, aplica e vê a categoria nova', as
   await expect(linhas(page).first().locator('[data-campo="categoria"]')).toHaveText(nova)
   await expect(pendencia(page)).toHaveCount(0)
 })
+
+test('a página servida mostra o logo do ninho e tem os ícones da identidade', async ({ page, request }) => {
+  await page.goto(`?mes=${MES}`)
+  const logo = page.getByRole('img', { name: 'ninho' }).first()
+  await expect(logo).toBeVisible()
+  expect(await logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true)
+  for (const rel of ['icon', 'apple-touch-icon']) {
+    const href = await page.locator(`link[rel="${rel}"]`).getAttribute('href')
+    const resposta = await request.get(new URL(href!, page.url()).href)
+    expect(resposta.status()).toBe(200)
+    expect(resposta.headers()['content-type']).toBe('image/png')
+  }
+})
