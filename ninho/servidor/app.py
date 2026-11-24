@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
-from ninho.financas import edicoes, leitura
+from ninho.financas import aplicar, edicoes, leitura
 
 MES = r"^\d{4}-(0[1-9]|1[0-2])$"
 
@@ -86,3 +86,28 @@ def desfazer_correcao(transacao_id: str, workspace: Annotated[Path, Depends(_wor
         edicoes.desfazer(workspace, transacao_id)
     except edicoes.Recusa as recusa:
         raise _recusada(recusa) from recusa
+
+
+def _sem_motor(erro: aplicar.SemMotor) -> HTTPException:
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, f"o DataForge não respondeu: {erro}")
+
+
+@app.post("/api/financas/aplicar", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(_entrar)])
+def pedir_aplicar(workspace: Annotated[Path, Depends(_workspace)]) -> dict:
+    """Ask the engine to redo the categories and the numbers; answers the run to follow."""
+    try:
+        return aplicar.pedir(workspace)
+    except aplicar.SemMotor as erro:
+        raise _sem_motor(erro) from erro
+
+
+@app.get("/api/financas/aplicar/{run_id}", dependencies=[Depends(_entrar)])
+def andamento_aplicar(run_id: str, workspace: Annotated[Path, Depends(_workspace)],
+                      esperar: Annotated[float, Query(ge=0, le=60)] = 0) -> dict:
+    """The state of an apply run; ``esperar`` (seconds, up to 60) holds the answer until it ends."""
+    try:
+        return aplicar.andamento(workspace, run_id, esperar)
+    except aplicar.Desconhecida as erro:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "execução não encontrada") from erro
+    except aplicar.SemMotor as erro:
+        raise _sem_motor(erro) from erro
