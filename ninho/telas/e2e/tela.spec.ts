@@ -34,6 +34,35 @@ test('abre no mês do endereço, cabe na largura do iPhone e troca de mês', asy
   await expect(linhas(page).first()).toBeVisible()
 })
 
+test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async ({ page }) => {
+  const barra = page.getByRole('navigation', { name: 'Módulos' })
+  const botao = (rotulo: string) => barra.getByRole('button', { name: rotulo, exact: true })
+  await page.goto(`?mes=${MES}`)
+  await expect(botao('Finanças')).toHaveAttribute('aria-current', 'page')
+  await expect(botao('Lista')).not.toHaveAttribute('aria-current')
+  await expect(linhas(page).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Mês anterior' }).click()
+  await expect(page.getByText('maio de 2026')).toBeVisible()
+
+  await botao('Lista').click()
+  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Itens da lista' })).toContainText('A lista está vazia.')
+  await expect(page.getByRole('heading', { name: 'Transações' })).toBeHidden()
+  await expect(botao('Lista')).toHaveAttribute('aria-current', 'page')
+  await expect(page).toHaveURL(/\?mes=2026-05&tela=lista$/)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  // Recarregar fica na mesma tela.
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Lista', exact: true })).toBeVisible()
+
+  await botao('Finanças').click()
+  await expect(page.getByRole('heading', { name: 'Transações' })).toBeVisible()
+  await expect(page.getByText('maio de 2026')).toBeVisible()
+  await expect(linhas(page).first()).toBeVisible()
+  await expect(page).toHaveURL(/\?mes=2026-05$/)
+})
+
 test('corrige a categoria de uma transação, aplica e vê a categoria nova', async ({ page }) => {
   // Um aplicar em curso nunca vira dois (df-8x0m.23.13.10): toque duplo e recarregar não pedem outro.
   const pedidosAplicar: string[] = []
