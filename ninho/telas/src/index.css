@@ -13,7 +13,7 @@
 @theme {
   --color-fundo: #f8f0de;        /* creme da folha */
   --color-cartao: #fffbf2;
-  --color-texto: #2a3248;        /* 11,2:1 sobre o creme */
+  --color-texto: #041e42;        /* a cor escura da identidade: 14,6:1 sobre o creme */
   --color-secundario: #5b6275;   /* 5,4:1 sobre o creme */
   --color-marca: #99b2d9;        /* o azul da marca: preenchimentos e item ativo, nunca texto */
   --color-acento: #3d5a8f;       /* o azul da marca escurecido, para títulos e texto: 6,0:1 */

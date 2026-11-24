@@ -7,6 +7,7 @@ identity sheet, so nobody has to open the image to know a colour or a font.
 | File | What it is |
 | --- | --- |
 | `logo-ninho.png` | The logo: the illustration with the word "ninho" under it. 342 × 300 px, transparent background. |
+| `desenho-ninho.png` | The drawing without the word, from Lucas (2026-11-24): 644 × 554 px, transparent background. It came as 2000 × 1200 on opaque black; the black was turned into transparency (brightness as opacity, so the soft edges of the branches stay) and the image cropped to the drawing. The source of the square icons. |
 | `identidade-visual-original.png` | The identity sheet as received (1920 × 1080): the logo, the two fonts and the three colours. The source of this file; do not edit it. |
 
 ## Logo
@@ -20,10 +21,9 @@ line, soft shapes, no hard corners.
 - Do not recolour it, stretch it, crop the branches or separate the word from the drawing. When only
   a square mark fits (an app icon), use the drawing without the word, on cream.
 - The screens' icons (`ninho/telas/public/icone-64.png`, the tab icon, and `icone-180.png`, the
-  iPhone home-screen icon) are the drawing without the word, cut from `logo-ninho.png` and centred on
-  cream at 82 % of the side. Cut again from a vector when there is one.
-- It is a raster file, 342 × 300: fine up to about that size on screen. A larger use (splash screen,
-  a store icon) needs a vector or a larger export from Lucas.
+  iPhone home-screen icon) are `desenho-ninho.png` centred on cream at 86 % of the side.
+- `logo-ninho.png` is 342 × 300: fine up to about that size on screen. A larger use of the logo with
+  the word (a splash screen) needs a vector or a larger export from Lucas.
 
 ## Colours
 
@@ -38,13 +38,14 @@ line, soft shapes, no hard corners.
 
 **Text needs a darker colour.** The three colours are all light: the blue on cream has a contrast of
 about 1.9 to 1, far below what running text needs (4.5 to 1). So the brand blue is for the logo and
-filled shapes (buttons, the active item), never for text. The sheet gives no dark colour; these
-derived tones were chosen when the identity was applied to the screens (df-8x0m.23.25), each a darker
-shade of the sheet's hues, with its contrast measured against the cream:
+filled shapes (buttons, the active item), never for text. The dark colour is
+`#041e42`, a deep navy given by Lucas (2026-11-24) apart from the sheet; the other tones were derived
+when the identity was applied to the screens (df-8x0m.23.25), each a darker shade of the sheet's
+hues, with its contrast measured against the cream:
 
 | Name | Hex | Contrast on cream | Use |
 | --- | --- | --- | --- |
-| Ink (texto) | `#2a3248` | 11.2 : 1 | running text; also the text on a brand-blue button (5.9 : 1 on `#99b2d9`) |
+| Ink (texto) | `#041e42` | 14.6 : 1 | the identity's dark colour: running text; also the text on a brand-blue button (7.7 : 1 on `#99b2d9`) |
 | Secondary (secundário) | `#5b6275` | 5.4 : 1 | dates, labels, empty states |
 | Dark blue (acento) | `#3d5a8f` | 6.0 : 1 | the screen titles and text links: the brand blue, darkened |
 | Dark green (entrada) | `#2f6b3a` | 5.6 : 1 | positive amounts and the tick of a bought item: the brand green, darkened |
@@ -73,4 +74,4 @@ A screen should look like it belongs next to the drawing.
 
 - Whether Lucas has a licence and the files of Migra for use on the web. Until then the titles use
   the system serif (`ui-serif`, Georgia).
-- A vector version of the logo (or a larger export from Lucas); the icons are cut from the PNG until then.
+- A vector version of the logo with the word, or a larger export of it, for uses larger than 342 × 300.
