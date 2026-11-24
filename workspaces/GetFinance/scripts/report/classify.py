@@ -5,6 +5,7 @@
 # a tela de edição compara com a versão atual para avisar edição ainda não recalculada; df-cns.8).
 import argparse
 import sys
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,11 +21,10 @@ parser.add_argument("--source", required=True)   # curated
 parser.add_argument("--target", required=True)   # curated
 args = parser.parse_args()
 
-conn = abrir(_connection_root("edicao"))
-dicionario, mapeamento = ler_tabelas(conn)
-correcoes = ler_correcoes(conn)
-versao = ler_versao(conn)
-conn.close()
+with closing(abrir(_connection_root("edicao"))) as conn:   # fecha também quando a leitura falha
+    dicionario, mapeamento = ler_tabelas(conn)
+    correcoes = ler_correcoes(conn)
+    versao = ler_versao(conn)
 
 fact = read_delta_table(args.source, "fact_transaction")
 classificada = classificar(fact, dicionario, mapeamento, correcoes)

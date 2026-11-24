@@ -9,10 +9,11 @@ CI=true, as on a runner, and compares the examples it saw.
 import os
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
-from dataforge.testing import LEAK_HINT
+from dataforge.testing import LEAK_HINT, pytest_terminal_summary
 
 _TEST = """import os
 from hypothesis import given, strategies as st
@@ -106,3 +107,35 @@ def test_a_file_left_open_in_a_reference_cycle_fails_its_own_module(tmp_path):
     assert proc.returncode == 1, proc.stdout + proc.stderr
     assert "2 passed, 1 error" in proc.stdout
     assert LEAK_HINT in proc.stdout
+
+
+class _Reporter:
+    """The part of pytest's terminal reporter the summary hook uses."""
+
+    def __init__(self, **stats):
+        self.stats = {kind: [SimpleNamespace(longrepr=text) for text in texts] for kind, texts in stats.items()}
+        self.written = []
+
+    def section(self, title):
+        self.written.append(title)
+
+    def write_line(self, line):
+        self.written.append(line)
+
+
+@pytest.mark.parametrize("stats", [
+    {"failed": ["E   ResourceWarning: unclosed database in <sqlite3.Connection object at 0x1>"]},
+    {"error": ["pytest.PytestUnraisableExceptionWarning: Exception ignored while finalizing file"]},
+    {"passed": ["ok"], "failed": ["assert 1 == 2", "ResourceWarning: unclosed file"]},
+])
+def test_the_summary_explains_a_leak_among_the_failures_and_errors(stats):
+    reporter = _Reporter(**stats)
+    pytest_terminal_summary(reporter)
+    assert reporter.written == ["leaked connection or file", LEAK_HINT]
+
+
+@pytest.mark.parametrize("stats", [{}, {"failed": ["assert 1 == 2"]}, {"passed": ["ResourceWarning"]}])
+def test_the_summary_is_silent_without_a_leak_failure(stats):
+    reporter = _Reporter(**stats)
+    pytest_terminal_summary(reporter)
+    assert reporter.written == []
