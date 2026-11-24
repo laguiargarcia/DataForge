@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { andamento, lerEdicoes, lerTransacoes, pedirAplicar, type Edicoes, type Execucao, type Transacao } from './api'
-import { aplicar, textoAndamento } from './aplicar'
+import { Aplicador, guardaLocal, mensagem, textoAndamento, textoFim, textoSemContato, type Fim } from './aplicar'
 import { deslocar, mesDe, mesValido, rotuloMes } from './formato'
 import { Linha } from './Linha'
 
@@ -8,8 +8,6 @@ import { Linha } from './Linha'
 // corrigir a categoria de uma, o aviso de edições não aplicadas e o aplicar com o andamento.
 
 type Carga<T> = { fase: 'carregando' } | { fase: 'erro'; mensagem: string } | { fase: 'ok'; valor: T }
-
-const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** O mês do endereço (?mes=AAAA-MM), para recarregar a página no mesmo mês; senão, o mês de hoje. */
 function mesInicial(): string {
@@ -29,8 +27,15 @@ export function App() {
   const [transacoes, setTransacoes] = useState<Carga<Transacao[]>>({ fase: 'carregando' })
   const [edicoes, setEdicoes] = useState<Carga<Edicoes>>({ fase: 'carregando' })
   const [aberta, setAberta] = useState<string | null>(null)
+  // Do toque em "Aplicar" (ou da página aberta com um aplicar em curso) até as leituras voltarem.
+  const [aplicando, setAplicando] = useState(false)
   const [execucao, setExecucao] = useState<Execucao | null>(null)
+  const [semContato, setSemContato] = useState<string | null>(null)
   const [falhaAplicar, setFalhaAplicar] = useState<string | null>(null)
+  const [aplicador] = useState(() => new Aplicador({ pedirAplicar, andamento }, guardaLocal('ninho.aplicar.run_id'), {
+    aoMudar: e => { setExecucao(e); setSemContato(null) },
+    aoPerderContato: e => setSemContato(textoSemContato(e)),
+  }))
 
   const carregarTransacoes = useCallback((m: string) =>
     lerTransacoes(m).then(
@@ -49,16 +54,23 @@ export function App() {
   }, [mes, carregarTransacoes])
   useEffect(() => { carregarEdicoes() }, [carregarEdicoes])
 
-  const iniciarAplicar = () => {
+  const acompanhar = useCallback((execucaoInteira: Promise<Fim> | null) => {
+    if (!execucaoInteira) return   // um aplicar já está em curso: o toque não pede outro
+    setAplicando(true)
     setFalhaAplicar(null)
-    aplicar({ pedirAplicar, andamento }, setExecucao)
+    execucaoInteira
       // A faixa de andamento fica até as duas leituras voltarem, para o aviso não piscar.
       .then(fim => Promise.all([carregarTransacoes(mesAtual.current), carregarEdicoes()]).then(() => fim))
-      .then(
-        fim => { setExecucao(null); if (fim.state !== 'success') setFalhaAplicar(textoAndamento(fim)) },
-        e => { setExecucao(null); setFalhaAplicar(`O aplicar não começou: ${mensagem(e)}`) },
-      )
-  }
+      .then(fim => {
+        setAplicando(false)
+        setExecucao(null)
+        setSemContato(null)
+        setFalhaAplicar(textoFim(fim))
+      })
+  }, [carregarTransacoes, carregarEdicoes])
+  const iniciarAplicar = () => acompanhar(aplicador.iniciar())
+  // A página aberta (ou recarregada) com um aplicar guardado volta a segui-lo em vez de oferecer outro.
+  useEffect(() => { acompanhar(aplicador.retomar()) }, [aplicador, acompanhar])
 
   const valorEdicoes = edicoes.fase === 'ok' ? edicoes.valor : null
   const correcao = (id: string) => valorEdicoes?.correcoes.find(c => c.transacao_id === id)
@@ -81,16 +93,18 @@ export function App() {
       </header>
 
       <main className="max-w-[480px] mx-auto px-4 pb-[max(24px,env(safe-area-inset-bottom))] flex flex-col gap-3">
-        {execucao && (
-          <output className="block rounded-[14px] bg-ativa px-4 py-3">{textoAndamento(execucao)}</output>
+        {aplicando && (
+          <output className="block rounded-[14px] bg-ativa px-4 py-3">
+            {semContato ?? (execucao ? textoAndamento(execucao) : 'Aplicando…')}
+          </output>
         )}
-        {!execucao && falhaAplicar && (
+        {!aplicando && falhaAplicar && (
           <div role="alert" className="rounded-[14px] bg-alerta-fundo px-4 py-3 flex items-center gap-3">
             <p className="m-0 flex-1 text-alerta break-words min-w-0">{falhaAplicar}</p>
             <button type="button" className={classeBotao} onClick={iniciarAplicar}>Tentar de novo</button>
           </div>
         )}
-        {!execucao && !falhaAplicar && valorEdicoes?.pendente && (
+        {!aplicando && !falhaAplicar && valorEdicoes?.pendente && (
           <div className="rounded-[14px] bg-cartao px-4 py-3 flex items-center gap-3">
             <p className="m-0 flex-1">Há edições não aplicadas</p>
             <button type="button" className={classeBotao} onClick={iniciarAplicar}>Aplicar</button>
