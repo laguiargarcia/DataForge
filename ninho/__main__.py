@@ -1,11 +1,13 @@
 """The ninho command, run on the server machine: ``python -m ninho pessoas <criar|senha|modulos|listar>``.
 
 The only way to create a person or change a password (docs/architecture-v2/people-and-visibility.md):
-the password is asked at the prompt, twice, never taken as an argument. The app database is
+the password is asked at the prompt, twice, never taken as an argument nor read from a pipe (the
+command refuses when its input is not a terminal). The app database is
 ``--banco`` or ``NINHO_BANCO``.
 """
 import argparse
 import getpass
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -16,8 +18,11 @@ class Erro(Exception):
     """Something the person running the command has to fix; its text is shown as it is."""
 
 
+NENHUM = "nenhum"   # a word for no module: PowerShell 5.1 may drop an empty argument given to an exe
+
+
 def _modulos(texto: str) -> list[str]:
-    return texto.split(",") if texto else []
+    return [] if texto.strip().casefold() in ("", NENHUM) else texto.split(",")
 
 
 def _arquivo(opcao: str | None) -> Path:
@@ -31,8 +36,16 @@ def _arquivo(opcao: str | None) -> Path:
     return Path(opcao)
 
 
+def _terminal() -> bool:
+    return sys.stdin is not None and sys.stdin.isatty()
+
+
 def _pedir_senha() -> str:
-    senha = getpass.getpass("Senha: ")
+    """The password typed twice at the prompt. Refused without a terminal: getpass would then read
+    it from a pipe with echo on Linux, and from the console, not the pipe, on Windows."""
+    if not _terminal():
+        raise Erro("a senha só é pedida num terminal, e a entrada deste comando não é um; nada mudou")
+    senha = pessoas.validar_senha(getpass.getpass("Senha: "))
     if getpass.getpass("Repita a senha: ") != senha:
         raise Erro("as duas senhas não são iguais; nada mudou")
     return senha
@@ -54,7 +67,7 @@ def _parser() -> argparse.ArgumentParser:
     acoes.add_parser("senha", parents=[comum], help="troca a senha; a nova é pedida no prompt").add_argument("nome")
     modulos = acoes.add_parser("modulos", parents=[comum], help="define os módulos (substitui os de antes)")
     modulos.add_argument("nome")
-    modulos.add_argument("modulos", help=f"separados por vírgula, entre: {','.join(pessoas.MODULOS)}; '' para nenhum")
+    modulos.add_argument("modulos", help=f"separados por vírgula, entre: {','.join(pessoas.MODULOS)}; '{NENHUM}' para nenhum")
     acoes.add_parser("listar", parents=[comum], help="mostra as pessoas, sem senha")
     return raiz
 
@@ -65,10 +78,11 @@ def _executar(args: argparse.Namespace) -> None:
             todas = pessoas.listar(conn)
             print("\n".join(_linha(p) for p in todas) if todas else "nenhuma pessoa")
         elif args.acao == "criar":
+            nome = pessoas.validar_nome(args.nome)
             modulos = pessoas.modulos_validos(_modulos(args.modulos))
-            if pessoas.existe(conn, args.nome):
-                raise pessoas.Repetido(f"já existe alguém com o nome {args.nome.strip()}")
-            print(f"criada: {_linha(pessoas.criar(conn, args.nome, _pedir_senha(), modulos))}")
+            if pessoas.existe(conn, nome):
+                raise pessoas.Repetido(f"já existe alguém com o nome {nome}")
+            print(f"criada: {_linha(pessoas.criar(conn, nome, _pedir_senha(), modulos))}")
         elif args.acao == "senha":
             if not pessoas.existe(conn, args.nome):
                 raise pessoas.Ausente(args.nome.strip())
@@ -91,6 +105,12 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except KeyboardInterrupt:
         print("\ncancelado; nada mudou", file=sys.stderr)
+        return 1
+    except EOFError:
+        print("\nerro: a entrada terminou antes da senha; nada mudou", file=sys.stderr)
+        return 1
+    except sqlite3.Error as erro:
+        print(f"erro: não deu para usar o banco do app ({type(erro).__name__}: {erro})", file=sys.stderr)
         return 1
     return 0
 
