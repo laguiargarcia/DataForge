@@ -34,7 +34,8 @@ MES = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 _STATUS = {"invalido": 422, "conflito": 409, "ausente": 404}
 
-app = FastAPI(title="ninho")
+# No /docs, /redoc or /openapi.json: they would answer without the password and map every route.
+app = FastAPI(title="ninho", docs_url=None, redoc_url=None, openapi_url=None)
 _log = logging.getLogger("ninho")
 def _workspace() -> Path:
     pasta = os.environ.get("NINHO_WORKSPACE")  # noqa: TID251 -- ninho reads its own environment; dataforge.compat is the engine's
@@ -127,8 +128,11 @@ def tela(caminho: str) -> FileResponse:
     """The built screen: its page at "/" and the files it asks for. Declared last, so every route
     above answers first; nothing outside the built folder is ever handed out."""
     pasta = TELAS.resolve()
-    arquivo = (pasta / (caminho or "index.html")).resolve()
-    if caminho.startswith("api/") or not arquivo.is_relative_to(pasta) or not arquivo.is_file():
+    try:
+        arquivo = (pasta / (caminho or "index.html")).resolve()
+    except ValueError:  # a path the file system cannot hold, such as one with a null byte
+        arquivo = None
+    if arquivo is None or caminho.startswith("api/") or not arquivo.is_relative_to(pasta) or not arquivo.is_file():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "não encontrado")
     # The page names its files by the hash of their content; the page itself must be asked again.
     cabecalhos = {"Cache-Control": "no-cache"} if arquivo.name == "index.html" else None
