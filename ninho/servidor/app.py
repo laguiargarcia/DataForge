@@ -8,8 +8,9 @@ Configuration comes from the environment, read on every request:
 
 Login is per person, by HTTP Basic (``ninho.servidor.dependencias``): 401 without a valid name and
 password. Each module answers only to a person who has it, 403 to anyone else: the finance routes
-below need ``financas``, the list's router (``/api/lista``, ``ninho.lista.rotas``) needs ``lista``.
-``GET /api/eu`` says who is logged in and which modules they have.
+below need ``financas``, the list's router (``/api/lista``, ``ninho.lista.rotas``) needs ``lista``,
+the wishlist's (``/api/desejos``, ``ninho.desejos.rotas``) needs ``desejos``. ``GET /api/eu`` says
+who is logged in and which modules they have; ``GET /api/pessoas``, the people of the house.
 
 The same server hands out the built screen (``ninho/telas/dist``) at ``/`` to anyone logged in: the
 browser asks for the login once and sends it again with every call the page makes to the routes.
@@ -25,9 +26,10 @@ from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from ninho.desejos.rotas import rotas as rotas_desejos
 from ninho.financas import aplicar, edicoes, leitura
 from ninho.lista.rotas import rotas as rotas_lista
-from ninho.servidor.dependencias import Pessoa, entrar, exigir
+from ninho.servidor.dependencias import Casa, Pessoa, entrar, exigir
 
 TELAS = Path(__file__).resolve().parents[1] / "telas" / "dist"
 MES = r"^\d{4}-(0[1-9]|1[0-2])$"
@@ -124,12 +126,20 @@ def andamento_aplicar(run_id: uuid.UUID, workspace: Annotated[Path, Depends(_wor
 
 
 app.include_router(rotas_lista, dependencies=[Depends(exigir("lista"))])
+app.include_router(rotas_desejos, dependencies=[Depends(exigir("desejos"))])
 
 
 @app.get("/api/eu")
 def eu(pessoa: Pessoa) -> dict:
-    """Who is logged in and the modules they may open (the screen's bottom bar shows only those)."""
-    return {"nome": pessoa["nome"], "modulos": pessoa["modulos"]}
+    """Who is logged in (id and name) and the modules they may open (the screen's bottom bar shows
+    only those)."""
+    return {"id": pessoa["id"], "nome": pessoa["nome"], "modulos": pessoa["modulos"]}
+
+
+@app.get("/api/pessoas", dependencies=[Depends(entrar)])
+def pessoas_da_casa(casa: Casa) -> dict:
+    """The people of the house, ``{id, nome}`` each, to anyone logged in: whose a wish is."""
+    return {"pessoas": casa}
 
 
 @app.get("/{caminho:path}", dependencies=[Depends(entrar)], include_in_schema=False)

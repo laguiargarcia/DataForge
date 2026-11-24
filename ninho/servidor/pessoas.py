@@ -14,7 +14,7 @@ import unicodedata
 import uuid
 from datetime import UTC, datetime
 
-MODULOS = ("financas", "lista")
+MODULOS = ("financas", "lista", "desejos")
 LIMITE_NOME = 50
 SENHA_MINIMA = 8   # characters (Lucas, 2026-11-24; df-8x0m.23.6.5)
 

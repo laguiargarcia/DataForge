@@ -105,7 +105,8 @@ def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):
     with httpx.Client(base_url=base, auth=ANA, timeout=120) as http:
         assert httpx.get(f"{base}/api/financas/edicoes").status_code == 401   # nobody in without a login
         assert httpx.get(f"{base}/api/eu", auth=(ANA[0], "senha-errada")).status_code == 401
-        assert http.get("/api/eu").json() == {"nome": ANA[0], "modulos": ["financas", "lista"]}
+        eu = http.get("/api/eu").json()
+        assert (eu["nome"], eu["modulos"]) == (ANA[0], ["financas", "lista", "desejos"])
         pagina = http.get("/")
         assert pagina.status_code == 200   # the screen comes from the same server
         assert "<html" in pagina.text.lower()

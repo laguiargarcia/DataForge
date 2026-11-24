@@ -1,6 +1,7 @@
 """What the server gives every module's routes (docs/architecture-v2/server-modules.md and
-people-and-visibility.md): the login of a person, the check that the person has a module, and a
-connection to the app database.
+people-and-visibility.md): the login of a person, the check that the person has a module, a
+connection to the app database and the people of the house (id and name only), so a module that
+marks data as someone's never reads the table ``pessoas`` itself.
 
 - Login is HTTP Basic: the name and the password of a person of the table ``pessoas`` of
   ``NINHO_BANCO`` (``ninho.servidor.pessoas``). A wrong password, an unknown name and a missing or
@@ -147,3 +148,12 @@ def exigir(modulo: str) -> Callable[[dict], dict]:
         return pessoa
 
     return com_o_modulo
+
+
+def pessoas_da_casa(conn: Annotated[sqlite3.Connection, Depends(conexao)]) -> list[dict]:
+    """Everyone who may log in, as ``{id, nome}`` in the order they were created: never the hash nor
+    the modules."""
+    return [{"id": pessoa["id"], "nome": pessoa["nome"]} for pessoa in pessoas.listar(conn)]
+
+
+Casa = Annotated[list[dict], Depends(pessoas_da_casa)]

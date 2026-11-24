@@ -1,5 +1,5 @@
 """Shared by the ninho tests: the GetFinance workspace after the synthetic run, and an app database
-with two invented people: ana, with every module, and beto, with the list only."""
+with two invented people: ana, with every module, and beto, with the list and the wishlist."""
 import os
 import shutil
 import subprocess
@@ -18,7 +18,7 @@ WORKSPACE = Path(__file__).resolve().parents[2] / "workspaces" / "GetFinance"
 ANA = ("ana", "senha-falsa-da-ana")
 BETO = ("beto", "senha-falsa-do-beto")
 AUTH = ANA
-MODULOS = {"ana": ["financas", "lista"], "beto": ["lista"]}
+MODULOS = {"ana": ["financas", "lista", "desejos"], "beto": ["lista", "desejos"]}
 
 
 def rodar_job(home: Path, job: str) -> None:
