@@ -1,13 +1,11 @@
 // Quem entrou e quais módulos pode abrir (GET /api/eu, ninho/servidor/app.py). A casca lê isto antes
 // de montar as telas: a barra mostra só os módulos da pessoa (docs/architecture-v2/people-and-visibility.md).
 
+import { pedir } from './pedido'
+
 export type Eu = { nome: string; modulos: string[] }
 
-export async function lerEu(): Promise<Eu> {
-  const r = await fetch('api/eu')
-  if (!r.ok) throw new Error(`Falha no pedido: HTTP ${r.status}`)
-  return (await r.json()) as Eu
-}
+export const lerEu = () => pedir<Eu>('GET', 'api/eu')
 
 /** Os módulos da casca que a pessoa tem, na ordem da casca. */
 export function permitidos<T extends { id: string }>(todos: readonly T[], eu: Eu): T[] {

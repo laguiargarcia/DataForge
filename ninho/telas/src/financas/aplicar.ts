@@ -2,7 +2,8 @@
 // Um aplicar em curso nunca vira dois (df-8x0m.23.13.10): o Aplicador recusa um segundo pedido
 // enquanto o primeiro vive, um erro ao acompanhar volta a acompanhar o mesmo id, e o id fica guardado
 // no aparelho até o fim, para a página recarregada retomar a mesma execução.
-import { ErroPedido, type Execucao } from './api'
+import { ErroPedido } from '../pedido'
+import { type Execucao } from './api'
 
 /** Quanto cada pedido de andamento segura a resposta: poucos pedidos, e um aviso a cada passo. */
 export const ESPERA = 20
