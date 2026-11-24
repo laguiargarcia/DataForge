@@ -152,3 +152,17 @@ def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):
         assert (home / "ninho.db").is_file()
 
     assert _parar(processo) == 0, log.read_text(encoding="utf-8")[-4000:]   # stops cleanly, nothing left up
+
+
+def test_a_segunda_pessoa_do_esqueleto_so_tem_a_lista(tmp_path):
+    """The screen's browser test logs in as someone without finances (df-8x0m.23.6.3)."""
+    especificacao = importlib.util.spec_from_file_location("esqueleto_da_segunda_pessoa", ESQUELETO)
+    modulo = importlib.util.module_from_spec(especificacao)
+    especificacao.loader.exec_module(modulo)
+    arquivo = tmp_path / "ninho.db"
+    modulo.criar_pessoa(arquivo, "ana", "senha-falsa-da-ana")
+    modulo.criar_pessoa(arquivo, "beto", "senha-falsa-do-beto", modulos=("lista",))
+    with modulo.banco.aberto(arquivo) as conn:
+        assert {p["nome"]: p["modulos"] for p in modulo.pessoas.listar(conn)} == {
+            "ana": list(modulo.pessoas.MODULOS), "beto": ["lista"]}
+
