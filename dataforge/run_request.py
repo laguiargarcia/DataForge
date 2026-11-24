@@ -4,8 +4,7 @@ What a product calls through the CLI (`dataforge run --detach`, `dataforge run-s
 records the run and hands it to a detached process, so the run goes on when the caller exits; the
 state lives in the run history (`job_runs`), so it survives a restart of whoever asked.
 """
-import subprocess
-import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -14,9 +13,11 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .compat import data_dir, db_url, global_db_url, resolve_workspace
-from .db import ExecucaoORM, JobRunORM, init_db, utcnow
+from . import instance
+from .compat import data_dir, db_url, global_db_url, logs_dir, resolve_workspace
+from .db import ExecucaoORM, JobRunORM, ScheduleORM, init_db, utcnow
 from .engine import run_job
+from .orphans import reconcile_or_log
 from .liveness import current_owner_text
 from .parser import load_job
 
@@ -26,7 +27,13 @@ DB_FILE = "dataforge.db"
 EXIT_INVALID_REQUEST = 2
 EXIT_BUSY = 3  # reserved: today every request waits in the workspace queue (df-8x0m.23.15)
 
-# job_runs.reason while a requested run waits for another job of its workspace to end.
+# How long the request waits for the detached process to take the run over (a Windows interpreter
+# can take seconds to start).
+START_SECONDS = 60.0
+_POLL_SECONDS = 0.05
+
+# job_runs.reason while a requested run waits for another job of its workspace to end. Only on a
+# `pending` row: it is cleared when the run starts.
 WAITING = "waiting_for_workspace"
 _REASON_CHARS = 500
 
@@ -47,51 +54,80 @@ def _load(workspace: str, job: str):
         raise InvalidRequest(f"Job '{job}' of workspace '{workspace}' is not valid: {exc}") from exc
 
 
-def _spawn_detached(command: list[str]) -> None:
-    """Start `command` so that it outlives this process and its console."""
-    options: dict = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
-    if sys.platform == "win32":
-        options["creationflags"] = (
-            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        )
-    else:
-        options["start_new_session"] = True
-    subprocess.Popen(command, close_fds=True, **options)
+def _log_path() -> Path:
+    return logs_dir() / "run-requests.log"
 
 
-def request_run(workspace: str, job: str, dataforge_command: list[str]) -> dict:
-    """Record a run of `job` and start it in a detached process; answer its state at once.
+def request_run(workspace: str, job: str, dataforge_command: list[str], start_seconds: float = START_SECONDS) -> dict:
+    """Record a run of `job`, start it in a detached process and answer its state.
 
     `dataforge_command` is the token list that starts this installation's CLI. Raises
     InvalidRequest, before recording anything, when the workspace or the job cannot be loaded.
+
+    The row is born owned by this process, which stays until the detached one has taken it over:
+    a sweep of orphaned runs (dataforge.orphans) in between sees a live owner. If the detached
+    process never takes over, the run is ended as failed here, with the reason.
     """
     _load(workspace, job)
     run_id = str(uuid.uuid4())
+    mine = current_owner_text()
     with Session(init_db(global_db_url())) as session:
-        # No owner yet: the detached process takes the row over when it starts. With this
-        # process as owner, a sweep after it exits would read the run as orphaned.
         session.add(JobRunORM(
             id=run_id, workspace=workspace, job=job, status="pending", started_at=utcnow(),
-            owner_id="system", trigger="manual", owner_process=None,
+            owner_id="system", trigger="manual", owner_process=mine,
         ))
+        schedule = session.get(ScheduleORM, f"{workspace}:{job}")
+        if schedule:
+            schedule.last_run_at = utcnow()
         session.commit()
-    _spawn_detached([*dataforge_command, "run-requested", workspace, job, run_id])
+    instance.spawn_detached([*dataforge_command, "run-requested", workspace, job, run_id], _log_path())
+    deadline = time.monotonic() + start_seconds
+    while not _taken_over(run_id, mine):
+        if time.monotonic() >= deadline:
+            _never_started(run_id, mine)
+            break
+        time.sleep(_POLL_SECONDS)
     return run_state(run_id)
 
 
-def _set_reason(run_id: str, reason: str | None, take_over: bool = False) -> None:
+def _taken_over(run_id: str, requester: str) -> bool:
+    with Session(init_db(global_db_url())) as session:
+        run = session.get(JobRunORM, run_id)
+        return run is None or run.owner_process != requester
+
+
+def _never_started(run_id: str, requester: str) -> None:
+    with Session(init_db(global_db_url())) as session:
+        run = session.get(JobRunORM, run_id)
+        if run and run.owner_process == requester and run.status == "pending":
+            run.status, run.finished_at = "failed", utcnow()
+            run.reason = f"The run process did not start (see {_log_path()})."
+            session.commit()
+
+
+def _take_over(run_id: str) -> bool:
+    """Make this process the owner of a requested run; False when there is nothing left to run."""
+    with Session(init_db(global_db_url())) as session:
+        run = session.get(JobRunORM, run_id)
+        if run is None or run.status != "pending":
+            return False
+        run.owner_process = current_owner_text()
+        session.commit()
+        return True
+
+
+def _set_reason(run_id: str, reason: str | None) -> None:
     with Session(init_db(global_db_url())) as session:
         run = session.get(JobRunORM, run_id)
         if run:
             run.reason = reason
-            if take_over:
-                run.owner_process = current_owner_text()
             session.commit()
 
 
 def execute_requested(workspace: str, job: str, run_id: str) -> None:
     """Run what request_run recorded. Called in the detached process."""
-    _set_reason(run_id, None, take_over=True)
+    if not _take_over(run_id):
+        return
     try:
         workspace_path, loaded = _load(workspace, job)
         run_job(
@@ -130,7 +166,7 @@ def run_state(run_id: str) -> dict | None:
     """The run's state as the fixed-field object a program reads; None for an unknown id.
 
     `state` is one of: pending (accepted, not started), waiting (in the workspace queue),
-    running, success, failed, or whatever other end status the history holds (an interrupted run).
+    running, success, failed. A run whose process died is ended as failed, with the reason.
     """
     if not (data_dir() / DB_FILE).is_file():
         return None
@@ -138,6 +174,10 @@ def run_state(run_id: str) -> dict | None:
         run = session.get(JobRunORM, run_id)
         if run is None:
             return None
+        if run.finished_at is None:
+            # A run whose process died says pending or running forever: end it before answering.
+            reconcile_or_log(run.workspace)
+            session.refresh(run)
         state = "waiting" if run.status == "pending" and run.reason == WAITING else run.status
         failed_task, output = _failure(run.workspace, run_id) if run.status == "failed" else (None, None)
         reason = None if run.reason == WAITING else run.reason
