@@ -71,8 +71,14 @@ function Cartao({ desejo, eu, aberto, alternar, fechar, todas, ocupado, alterar 
   const [titulo, setTitulo] = useState(desejo.titulo)
   const [confirmando, setConfirmando] = useState(false)
   const campoNota = useRef<HTMLInputElement>(null)
-  // Aberto de novo, o campo do título volta ao título de agora (a outra pessoa pode tê-lo mudado).
-  useEffect(() => { if (aberto) setTitulo(desejo.titulo) }, [aberto, desejo.titulo])
+  // O campo do título segue o título do servidor enquanto a pessoa não mexeu nele (a outra pode
+  // tê-lo mudado); o que ela digitou e ainda não salvou fica, também quando salvar falha.
+  const tituloVisto = useRef(desejo.titulo)
+  useEffect(() => {
+    setTitulo(atual => (atual.trim() === tituloVisto.current ? desejo.titulo : atual))
+    tituloVisto.current = desejo.titulo
+  }, [desejo.titulo])
+  useEffect(() => { if (aberto) setTitulo(tituloVisto.current) }, [aberto])
   useEffect(() => { if (!aberto) setConfirmando(false) }, [aberto])
 
   const enviarNota = (evento: FormEvent) => {
@@ -90,7 +96,8 @@ function Cartao({ desejo, eu, aberto, alternar, fechar, todas, ocupado, alterar 
   const salvarTitulo = (evento: FormEvent) => {
     evento.preventDefault()
     if (!novoTitulo || novoTitulo === desejo.titulo) return
-    alterar(() => editar(desejo.id, { titulo: novoTitulo }), mudado(desejo, { titulo: novoTitulo }))
+    // Sem mostrar antes da resposta: recusado, o título do cartão não muda e o campo guarda o texto.
+    alterar(() => editar(desejo.id, { titulo: novoTitulo }))
   }
   const mover = (chave: string) => {
     const de_quem = chave === DOS_DOIS ? null : chave
@@ -173,8 +180,8 @@ function Cartao({ desejo, eu, aberto, alternar, fechar, todas, ocupado, alterar 
           {/* Apagar leva o desejo e as anotações de vez, também os da outra pessoa: só depois de confirmar. */}
           {confirmando && (
             <fieldset aria-label="Confirmar apagar" className="m-0 p-0 border-0 min-w-0">
-              <div className="rounded-[20px] bg-fundo px-4 py-3 flex flex-wrap items-center gap-2">
-                <p className="m-0 flex-1 min-w-0 break-words">Apagar “{desejo.titulo}”?</p>
+              <div className="rounded-[20px] bg-fundo px-4 py-3 flex flex-wrap items-center justify-end gap-2">
+                <p className="m-0 basis-full min-w-0 break-words">Apagar “{desejo.titulo}”?</p>
                 <button type="button" onClick={() => setConfirmando(false)} className={`${classeDiscreto} text-secundario`}>
                   Cancelar
                 </button>
@@ -224,9 +231,12 @@ export function Desejos({ aberta, eu }: Props) {
     }))
   }
 
+  // O cartão aberto vale para o desejo onde ele estava: realizado pela outra pessoa, ele vai para o
+  // arquivo fechado, não aberto lá dentro.
+  const chave = (d: Desejo) => `${d.id}:${d.realizado}`
   const cartao = (d: Desejo) => (
-    <Cartao key={d.id} desejo={d} eu={eu.id} aberto={aberto === d.id} todas={todas} ocupado={ocupado} alterar={alterar}
-      alternar={() => setAberto(a => (a === d.id ? null : d.id))} fechar={() => setAberto(null)} />
+    <Cartao key={d.id} desejo={d} eu={eu.id} aberto={aberto === chave(d)} todas={todas} ocupado={ocupado} alterar={alterar}
+      alternar={() => setAberto(a => (a === chave(d) ? null : chave(d)))} fechar={() => setAberto(null)} />
   )
 
   return (
@@ -283,7 +293,7 @@ export function Desejos({ aberta, eu }: Props) {
           )}
           {/* Os realizados ficam em arquivo, recolhidos no fim da parte: dá para desmarcar ou apagar. */}
           {realizados.length > 0 && (
-            <details className="flex flex-col gap-3">
+            <details key={parte} className="flex flex-col gap-3">
               <summary className="cursor-pointer py-3 font-semibold text-secundario">Realizados ({realizados.length})</summary>
               <ul aria-label="Realizados" className="m-0 p-0 list-none rounded-[20px] bg-cartao overflow-hidden">
                 {realizados.map(cartao)}

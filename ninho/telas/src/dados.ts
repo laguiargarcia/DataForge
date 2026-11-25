@@ -23,19 +23,22 @@ export function useDados<T>(aberta: boolean, ler: () => Promise<T>, oQue: string
   // Com os dados já na tela, uma releitura que falha (o iPhone desbloqueado com a rede ainda voltando)
   // mantém o que está lá e mostra o aviso; o estado de erro com "Tentar de novo" é só para a primeira
   // carga. Uma releitura boa tira o aviso, salvo quando ela fecha uma mudança que falhou (`manterFalha`).
-  const reler = useCallback((manterFalha = false) => {
+  // Responde se a leitura falhou sendo ainda a mais recente (quem pediu pode ter o que desfazer).
+  const reler = useCallback((manterFalha = false): Promise<boolean> => {
     const esta = ++ultima.current
     return ler().then(
       valor => {
-        if (ultima.current !== esta) return
+        if (ultima.current !== esta) return false
         carregou.current = true
         setCarga({ fase: 'ok', valor })
         if (!manterFalha) setFalha(null)
+        return false
       },
       e => {
-        if (ultima.current !== esta) return
+        if (ultima.current !== esta) return false
         if (!carregou.current) setCarga({ fase: 'erro', mensagem: mensagem(e) })
         else if (!manterFalha) setFalha(`Não foi possível reler ${oQue}: ${mensagem(e)}`)
+        return true
       },
     )
   }, [ler, oQue])
@@ -52,14 +55,26 @@ export function useDados<T>(aberta: boolean, ler: () => Promise<T>, oQue: string
 
   // Cada mudança vai ao servidor e depois relê tudo, com a ordem do servidor e o que a outra pessoa
   // tenha mudado; se falhar, relê também (o que se mudou pode ter sido apagado do outro lado).
-  // Uma mudança com `antes` já aparece no toque; a releitura confirma ou desfaz.
+  // Uma mudança com `antes` já aparece no toque; a releitura confirma ou desfaz. Sem rede, a mudança
+  // falha e a releitura também: aí a tela volta ao que mostrava antes do toque, em vez de ficar com
+  // uma mudança que não aconteceu (df-8x0m.23.22.7).
   const alterar = useCallback((acao: () => Promise<unknown>, antes?: (valor: T) => T) => {
     setOcupado(true)
     setFalha(null)
     ++ultima.current   // uma leitura pedida antes do toque e respondida depois não desfaz a mudança
-    if (antes) setCarga(c => (c.fase === 'ok' ? { fase: 'ok', valor: antes(c.valor) } : c))
+    let anterior: Carga<T> | null = null
+    if (antes) {
+      setCarga(c => {
+        if (c.fase !== 'ok') return c
+        anterior = c
+        return { fase: 'ok', valor: antes(c.valor) }
+      })
+    }
     acao()
-      .then(() => reler(), (e: unknown) => { setFalha(mensagem(e)); return reler(true) })
+      .then(() => reler(), async (e: unknown) => {
+        setFalha(mensagem(e))
+        if (await reler(true) && anterior) setCarga(anterior)
+      })
       .finally(() => setOcupado(false))
   }, [reler])
 
