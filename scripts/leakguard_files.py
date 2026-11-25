@@ -29,6 +29,7 @@ WORKSPACE_ARCHIVE_SUFFIXES = (".zip", ".7z", ".gz", ".tgz", ".bz2", ".xz", ".zst
 PUBLIC_BINARY_SUFFIXES = {".woff", ".woff2", ".ttf", ".otf", ".eot", ".png", ".jpg", ".jpeg", ".gif",
                           ".ico", ".webp"}
 PRIVATE_FILE = "private file (data, report, .env, real config, a data artifact or gitignored)"
+HISTORY = "history"   # what the audit of the history calls its text: no file name, so no file's exemption
 UTF16_MARKS = (b"\xff\xfe", b"\xfe\xff")   # the byte order marks: little and big endian
 BINARY_IN_WORKSPACE = "binary file inside a workspace (a dump or a backup cannot be read for real values)"
 
@@ -75,28 +76,20 @@ class GitError(Exception):
     """git could not run or failed: the guard fails closed, since an empty answer would pass."""
 
 
-def _run_git(args, ok, **how):
-    """What git answered; GitError when git is missing or exits with a code not in `ok`. Paths come out
-    as they are (core.quotePath=false), not as octal escapes that would hide a value written in them."""
+def _git(*args, stdin=None, ok=(0,), text=True):
+    """git's output, as UTF-8 text or, with text=False, as the bytes it wrote (the content of a file
+    that is not UTF-8); GitError when git is missing or exits with a code not in `ok`. Paths come out as
+    they are (core.quotePath=false), not as octal escapes that would hide a value written in them."""
+    how = {"encoding": "utf-8", "errors": "replace"} if text else {}
     try:
-        done = subprocess.run(["git", "-c", "core.quotePath=false", *args], capture_output=True, check=False, **how)
+        done = subprocess.run(["git", "-c", "core.quotePath=false", *args], input=stdin, capture_output=True, check=False, **how)
     except OSError as e:
         raise GitError(f"git {args[0]} could not run ({type(e).__name__}: {e})") from e
     if done.returncode not in ok:
-        wrote = done.stderr if isinstance(done.stderr, str) else done.stderr.decode("utf-8", errors="replace")
+        wrote = done.stderr if text else done.stderr.decode(errors="replace")
         said = wrote.strip().partition("\n")[0]   # its first line says what went wrong
         raise GitError(f"git {args[0]} failed with exit code {done.returncode}" + (f": {said}" if said else ""))
     return done.stdout
-
-
-def _git(*args, stdin=None, ok=(0,)):
-    """git's output as UTF-8 text (see _run_git)."""
-    return _run_git(args, ok, input=stdin, encoding="utf-8", errors="replace")
-
-
-def _git_bytes(*args, stdin=None):
-    """git's output as the bytes it wrote: the content of a file that is not UTF-8."""
-    return _run_git(args, (0,), input=stdin)
 
 
 def _outside(path, top):
@@ -184,11 +177,11 @@ def _utf16_blobs():
             path_of.setdefault(sha, path)
     if not path_of:
         return []
-    out = _git_bytes("cat-file", "--batch", stdin="".join(f"{sha}\n" for sha in path_of).encode("ascii"))
+    out = _git("cat-file", "--batch", stdin="".join(f"{sha}\n" for sha in path_of).encode(), text=False)
     blobs, at = [], 0
     while at < len(out):
         end = out.index(b"\n", at)
-        sha, kind, size = out[at:end].decode("ascii").split()
+        sha, kind, size = out[at:end].decode().split()
         data = out[end + 1:end + 1 + int(size)]
         at = end + 1 + int(size) + 1   # git ends each object with a line feed
         if kind == "blob" and data.startswith(UTF16_MARKS):
@@ -203,10 +196,10 @@ def check_history(sources):
     unquoted, see _git). --text makes the log show what git takes for binary (a text with a NUL, where it
     would print 'Binary files differ'); a UTF-16 version is read apart, decoded as a file is."""
     log = _git("log", "--all", "-p", "-m", "--text", "--no-color", "--format=commit %H%n%B")
-    failures = check_text("history", log, sources)
+    failures = check_text(HISTORY, log, sources)
     for path, data in _utf16_blobs():
         shown = _path_failures(path, sources)[0]
-        failures += check_text("history", _decode(data), sources, where=lambda n, shown=shown: f"history: {shown}:{n}")
+        failures += check_text(HISTORY, _decode(data), sources, where=lambda n, shown=shown: f"history: {shown}:{n}")
     paths = {p for p in _git("log", "--all", "-m", "--name-only", "-z", "--format=").split("\0") if p}
     return failures + [f"history: {_path_failures(p, sources)[0]}: private file was committed"
                        for p in sorted(paths) if _private_reason(p, set())]
