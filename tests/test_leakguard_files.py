@@ -424,3 +424,32 @@ def test_a_commit_message_is_the_first_line_after_its_hash(repo, capsys, tmp_pat
     code, _, failures = run(capsys, "--history")
     assert code == 1
     assert [f.split(" ->")[0] for f in failures] == ["REAL: history:2"]
+
+
+def test_history_reads_what_git_takes_for_binary(repo, capsys, tmp_path):
+    """df-wkay: a text with a NUL and a UTF-16 one (PowerShell `>`) are 'Binary files differ' in a plain
+    log; the audit reads them as the staged check does, after a later commit removed them."""
+    repo("ok.py", "x = 1\n")
+    (tmp_path / "nul.txt").write_bytes(b"header\x00\n" + EMAIL.encode() + b"\n")
+    (tmp_path / "u16.txt").write_bytes(f"x\nFulano de Tal\n{CPF}\n".encode("utf-16"))
+    (tmp_path / "u16be.txt").write_bytes(b"\xfe\xff" + f"{CPF}\n".encode("utf-16-be"))
+    (tmp_path / "copy.txt").write_bytes(b"\xfe\xff" + f"{CPF}\n".encode("utf-16-be"))   # the same version twice
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "add", cwd=tmp_path)
+    _git("rm", "-q", "nul.txt", "u16.txt", "u16be.txt", "copy.txt", cwd=tmp_path)
+    _git("commit", "-qm", "remove", cwd=tmp_path)
+    assert run(capsys, "--all")[2] == []
+    failures = run(capsys, "--history")[2]
+    emails = [f for f in failures if f.startswith("EMAIL: history:")]   # in the log: the commit that adds, the one that removes
+    assert [f.partition(" -> ")[2] for f in emails] == ["'so…' (17 chars)"] * 2
+    assert [f for f in failures if f.startswith(("CPF: history: ", "NAME: history: "))] == [
+        "CPF: history: copy.txt:1 -> '52…' (11 chars)", "CPF: history: u16.txt:3 -> '52…' (11 chars)",
+        "NAME: history: u16.txt:2 -> 'Fu…' (13 chars)"]
+
+
+def test_history_with_no_file_asks_git_for_no_content(monkeypatch):
+    asked = []
+    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: "")
+    monkeypatch.setattr(leakguard_files, "_git_bytes", lambda *args, **kw: asked.append(args) or b"")
+    assert leakguard_files.check_history([]) == []
+    assert asked == []
