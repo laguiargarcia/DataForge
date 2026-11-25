@@ -68,6 +68,7 @@ def _parser() -> argparse.ArgumentParser:
     modulos = acoes.add_parser("modulos", parents=[comum], help="define os módulos (substitui os de antes)")
     modulos.add_argument("nome")
     modulos.add_argument("modulos", help=f"separados por vírgula, entre: {','.join(pessoas.MODULOS)}; '{NENHUM}' para nenhum")
+    acoes.add_parser("sair", parents=[comum], help="encerra as sessões da pessoa em todos os aparelhos").add_argument("nome")
     acoes.add_parser("listar", parents=[comum], help="mostra as pessoas, sem senha")
     return raiz
 
@@ -87,7 +88,9 @@ def _executar(args: argparse.Namespace) -> None:
             if not pessoas.existe(conn, args.nome):
                 raise pessoas.Ausente(args.nome.strip())
             pessoas.trocar_senha(conn, args.nome, _pedir_senha())
-            print(f"senha trocada: {args.nome.strip()}")
+            print(f"senha trocada: {args.nome.strip()} (as sessões abertas foram encerradas)")
+        elif args.acao == "sair":
+            print(f"sessões encerradas: {pessoas.sair(conn, args.nome)}")
         else:
             print(f"módulos definidos: {_linha(pessoas.definir_modulos(conn, args.nome, _modulos(args.modulos)))}")
 

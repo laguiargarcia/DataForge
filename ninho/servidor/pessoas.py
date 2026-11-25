@@ -3,8 +3,8 @@
 
 A password is kept only as a scrypt hash (standard library) with a salt of its own, in the form
 ``scrypt$<n>$<r>$<p>$<salt hex>$<key hex>``: the parameters travel with the hash, so raising them
-later leaves the old hashes valid, and ``conferir`` says when one is below the current cost so the
-login can write it again. A name is unique without telling upper from lower case; names and
+later leaves the old hashes valid, and ``precisa_refazer`` says when one is below the current cost
+so the login can write it again (``refazer_hash``). A name is unique without telling upper from lower case; names and
 passwords are compared in Unicode NFC, so the same text typed on two keyboards is the same.
 """
 import hashlib
@@ -13,6 +13,8 @@ import sqlite3
 import unicodedata
 import uuid
 from datetime import UTC, datetime
+
+from ninho.servidor import sessoes
 
 MODULOS = ("financas", "lista", "desejos")
 LIMITE_NOME = 50
@@ -27,6 +29,9 @@ _TAMANHO = 32
 # Checked against when the name is unknown, so that costs one scrypt like a wrong password. A random
 # key no password derives to: building it costs nothing.
 _SAL_FALSO, _CHAVE_FALSA = secrets.token_hex(16), secrets.token_hex(_TAMANHO)
+
+# Opens a write transaction at once, so what it reads cannot change before it writes.
+_ESCRITA = "BEGIN IMMEDIATE"
 
 _TABELA = """
 CREATE TABLE IF NOT EXISTS pessoas (
@@ -170,7 +175,7 @@ def criar(conn: sqlite3.Connection, nome: str, senha: str, modulos: list[str]) -
     _tabela(conn)
     try:
         with conn:
-            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(_ESCRITA)
             if _achar(conn, nome) is not None:
                 raise Repetido(f"já existe alguém com o nome {nome}")
             conn.execute("INSERT INTO pessoas (id, nome, senha_hash, modulos, criada_em) VALUES (?, ?, ?, ?, ?)",
@@ -181,11 +186,38 @@ def criar(conn: sqlite3.Connection, nome: str, senha: str, modulos: list[str]) -
 
 
 def trocar_senha(conn: sqlite3.Connection, nome: str, senha: str) -> None:
+    """A new password for <nome>, which ends every session the person had: whoever was in with the
+    old one logs in again."""
     senha_hash = gerar_hash(validar_senha(senha))
+    _tabela(conn)
+    sessoes.tabela(conn)
     with conn:
-        _tabela(conn)
+        conn.execute(_ESCRITA)   # one write with ``abrir_sessao``: no session of the old password slips in
         id_ = _existente(conn, nome)[0]
         conn.execute("UPDATE pessoas SET senha_hash = ? WHERE id = ?", (senha_hash, id_))
+        sessoes.encerrar_as_de(conn, id_)
+
+
+def sair(conn: sqlite3.Connection, nome: str) -> int:
+    """End every session of <nome> (a lost phone); how many there were."""
+    _tabela(conn)
+    sessoes.tabela(conn)
+    with conn:
+        return sessoes.encerrar_as_de(conn, _existente(conn, nome)[0])
+
+
+def abrir_sessao(conn: sqlite3.Connection, id_: str, conferido: str) -> str | None:
+    """A session for the person <id_>, whose password was just checked against the stored hash
+    <conferido>: its token, or None when that hash is no longer the stored one. The check and the
+    insert are one write transaction, so a password changed between the scrypt and here (the
+    command, another process) opens nothing: a new password always ends every session of the old."""
+    _tabela(conn)
+    sessoes.tabela(conn)
+    with conn:
+        conn.execute(_ESCRITA)
+        if conn.execute("SELECT 1 FROM pessoas WHERE id = ? AND senha_hash = ?", (id_, conferido)).fetchone() is None:
+            return None
+        return sessoes.abrir(conn, id_)
 
 
 def definir_modulos(conn: sqlite3.Connection, nome: str, modulos: list[str]) -> dict:
@@ -201,8 +233,7 @@ def definir_modulos(conn: sqlite3.Connection, nome: str, modulos: list[str]) -> 
 def conferir(conn: sqlite3.Connection, nome: str, senha: str) -> dict | None:
     """The person when <senha> is the password of <nome>, else None (also for a malformed stored
     hash). An unknown name still costs one hash check, the same time as a wrong password. The person
-    carries ``precisa_refazer``: True when the stored hash is not at today's cost, so the caller may
-    keep a new one with ``trocar_senha``."""
+    carries ``precisa_refazer``: True when the stored hash is not at today's cost."""
     _tabela(conn)
     linha = _achar(conn, nome)
     if not confere(senha, linha[4] if linha else None):
@@ -231,10 +262,17 @@ def refazer_hash(conn: sqlite3.Connection, id_: str, senha: str, conferido: str)
 
 def achar(conn: sqlite3.Connection, nome: str) -> tuple[dict, str] | None:
     """The person of <nome> and the stored hash, without checking any password; None when nobody
-    has that name. For the server's memory of checks that passed: the hash says when one is stale."""
+    has that name."""
     _tabela(conn)
     linha = _achar(conn, nome)
     return (_pessoa(linha[:4]), linha[4]) if linha else None
+
+
+def por_id(conn: sqlite3.Connection, id_: str) -> dict | None:
+    """The person of a session, as stored now; None when there is no such person any more."""
+    _tabela(conn)
+    linha = conn.execute("SELECT id, nome, modulos, criada_em FROM pessoas WHERE id = ?", (id_,)).fetchone()
+    return _pessoa(linha) if linha else None
 
 
 def listar(conn: sqlite3.Connection) -> list[dict]:

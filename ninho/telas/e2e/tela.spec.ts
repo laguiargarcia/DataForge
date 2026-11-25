@@ -1,11 +1,19 @@
-import { test, expect, type Page } from '@playwright/test'
-import { soLista } from '../playwright.config'
+import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import { login, soLista } from '../playwright.config'
+
+// Abre uma sessão da pessoa no servidor: o cookie fica no contexto, e a página já abre com ele.
+// (O formulário de login da tela vem em df-8x0m.23.31.5; até lá o teste entra pela rota.)
+async function entrar(contexto: BrowserContext, quem: { nome: string; senha: string }) {
+  const r = await contexto.request.post('api/entrar', { data: quem })
+  expect(r.status()).toBe(204)
+}
 
 // Guarda: requisição fora da origem, erro de console ou erro de página reprova o teste.
 let problemas: string[] = []
 
 test.beforeEach(async ({ page, baseURL }) => {
   problemas = []
+  await entrar(page.context(), login)
   const origem = new URL(baseURL!).origin
   page.on('request', r => {
     const u = r.url()
@@ -65,8 +73,9 @@ test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async 
 })
 
 test('quem só tem a lista vê a barra sem Finanças nem Desejos, abre direto na Lista e não pede nada às finanças', async ({ browser, baseURL }) => {
-  // Outra pessoa, outro login: um contexto próprio com as credenciais dela (df-8x0m.23.6.3).
-  const contexto = await browser.newContext({ baseURL, httpCredentials: soLista })
+  // Outra pessoa, outro login: um contexto próprio com a sessão dela (df-8x0m.23.6.3).
+  const contexto = await browser.newContext({ baseURL })
+  await entrar(contexto, soLista)
   const page = await contexto.newPage()
   const pedidos: string[] = []
   const erros: string[] = []
