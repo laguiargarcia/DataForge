@@ -39,11 +39,11 @@ def _workspace(tmp_path: Path, with_edicao: bool = True) -> Path:
     return ws
 
 
-def _run(ws: Path, destino: str, manter: int) -> int:
+def _run(ws: Path, destino: str, manter: int, *mais: str) -> int:
     """The script's exit code: 0 when it ran to the end, 1 when it stopped with a SystemExit message."""
     ns = exec_functions({"__file__": str(_SCRIPT)})
     ns["_workspace_root"] = lambda: ws
-    old_argv, sys.argv = sys.argv, ["backup_dados.py", "--destino", destino, "--manter", str(manter)]
+    old_argv, sys.argv = sys.argv, ["backup_dados.py", "--destino", destino, "--manter", str(manter), *mais]
     try:
         exec(_CODE, ns)
     except SystemExit as fim:
@@ -97,6 +97,43 @@ def test_a_missing_statement_folder_is_no_error(tmp_path, capsys):
     assert _run(ws, "../backups", 3) == 0
     assert "0 extrato(s)" in capsys.readouterr().out
     assert not (ws / "data" / "extratos").exists()   # the backup only reads it
+
+
+def test_the_house_app_database_goes_into_the_zip_as_a_readable_copy(tmp_path, capsys):
+    """df-8x0m.23.20.11: ninho.db lives outside the workspace and has no rebuild; --ninho is relative
+    to the workspace, like --destino."""
+    ws = _workspace(tmp_path)
+    (tmp_path / "ninho-dados").mkdir()
+    conn = sqlite3.connect(tmp_path / "ninho-dados" / "ninho.db")
+    conn.execute("PRAGMA journal_mode=WAL")   # the last writes are in the -wal file, which a copy of the file alone would miss
+    conn.execute("CREATE TABLE lista_itens (texto TEXT)")
+    conn.execute("INSERT INTO lista_itens VALUES ('leite')")
+    conn.commit()
+    assert _run(ws, "../backups", 3, "--ninho", "../ninho-dados/ninho.db") == 0   # with the writer still connected
+    conn.close()
+    assert "+ ninho.db," in capsys.readouterr().out
+    (zipped,) = sorted((tmp_path / "backups").glob("getfinance-*.zip"))
+    with zipfile.ZipFile(zipped) as z:
+        assert "edicao.db" in z.namelist()
+        z.extract("ninho.db", tmp_path / "restored")
+    restored = sqlite3.connect(tmp_path / "restored" / "ninho.db")
+    assert restored.execute("SELECT texto FROM lista_itens").fetchall() == [("leite",)]
+    restored.close()
+
+
+def test_without_the_house_app_database_the_zip_goes_without_it_and_says_so(tmp_path, capsys):
+    ws = _workspace(tmp_path)
+    assert _run(ws, "../backups", 3, "--ninho", "../ninho-dados/ninho.db") == 0
+    assert "+ sem ninho.db," in capsys.readouterr().out
+    (zipped,) = sorted((tmp_path / "backups").glob("getfinance-*.zip"))
+    with zipfile.ZipFile(zipped) as z:
+        assert "ninho.db" not in z.namelist()
+    assert not (tmp_path / "ninho-dados").exists()   # the backup only reads it
+
+
+def test_the_backup_job_names_the_house_app_database_of_prod():
+    job = (SCRIPTS.parent / "jobs" / "backup" / "job.yaml").read_text(encoding="utf-8")
+    assert "      ninho: ../../ninho-dados/ninho.db\n" in job
 
 
 def test_destination_is_relative_to_the_workspace_not_the_cwd(tmp_path, monkeypatch):
