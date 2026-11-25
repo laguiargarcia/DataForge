@@ -317,6 +317,26 @@ def test_a_restored_cache_returns_the_texts_and_tests_it_was_found_on_and_leaves
     assert not (copy / "mutants" / "testloop-test-files.json").exists()
 
 
+@pytest.mark.parametrize(("texts", "tests", "stats_kept"), [
+    ({"x_f": "sha256:1"}, TESTS_HASHES, True),
+    (None, None, True),                                   # nothing to compare against: as recorded
+    ({"x_f": "sha256:2"}, TESTS_HASHES, False),           # a function changed (df-2dlq)
+    ({"x_f": "sha256:1", "x_g": "sha256:3"}, TESTS_HASHES, False),   # a new function (df-2dlq)
+    ({"x_f": "sha256:1"}, {"tests/test_mod.py": "sha256:u"}, False),  # a test file changed (df-g4qq)
+])
+def test_a_restored_cache_keeps_mutmuts_stats_only_while_no_function_or_test_file_changed(
+        tmp_path, texts, tests, stats_kept):
+    """mutmut, from restored stats, collects stats only for tests with a new name: they go when a
+    function or a test file changed, so it collects them all; the verdicts in the .meta stay."""
+    cache, copy = tmp_path / "cache", tmp_path / "copy"
+    mutate_cmd.save_cache(_mutants_dir(tmp_path / "run" / "mutants", "run").parent, cache, "pkg/mod.py",
+                          {"x_f": "sha256:1"}, TESTS_HASHES, TOOL_CONFIG)
+    assert mutate_cmd.restore_cache(cache, copy, "pkg/mod.py", TOOL_CONFIG, texts, tests) == mutate_cmd.Cached(
+        {"x_f": "sha256:1"}, TESTS_HASHES)
+    assert (copy / "mutants" / "mutmut-stats.json").exists() == stats_kept
+    assert (copy / "mutants" / "pkg" / "mod.py.meta").read_text() == "run pkg/mod.py.meta"
+
+
 def test_test_hashes_name_each_test_file_with_the_hash_of_its_bytes(tmp_path):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_a.py").write_text("a")

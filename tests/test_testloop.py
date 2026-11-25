@@ -800,6 +800,22 @@ def test_a_function_added_since_the_cache_is_linked_to_the_tests_that_reach_it_t
     assert verdicts(second) == verdicts(fresh)
 
 
+def test_an_old_test_edited_to_reach_another_function_is_linked_to_it_as_without_a_cache(tmp_path):
+    """df-g4qq: mutmut, from restored stats, collects stats only for tests with a new name; test_double
+    keeps its name and starts reaching Box.double, whose text did not change."""
+    repo, _ = marked_repo(tmp_path)
+    test = repo / "tests" / "test_mod.py"
+    test.write_text(TEST_MARKED.replace("    assert Box().double(3) == 6\n", "    Box\n"))
+    cache = tmp_path / "cache"
+    first = mutate_cached(repo, cache)
+    assert any(function_of(m) == "xǁBoxǁdouble" for m in first["not_tested"])
+    test.write_text(TEST_MARKED)
+    second = mutate_cached(repo, cache)
+    assert second["cache"] == "restored"
+    fresh = run_ok(repo, "mutate", "sample/mod.py")
+    assert verdicts(second) == verdicts(fresh)
+
+
 @pytest.mark.parametrize("key", ["timeout_multiplier = 30", 'process_isolation = "forkserver"'])
 def test_a_cache_written_under_another_tool_config_is_not_restored(tmp_path, key):
     """df-n8ac.48: mutmut keeps a killed verdict through a new timeout_multiplier or process_isolation,
