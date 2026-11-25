@@ -95,7 +95,7 @@ copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.
 process_isolation = "forkserver"
 # 449 mutants, 67 s of mutate on a laptop when it was 351, about three times that in a CI job: two jobs.
 shards = 2
-# 12 survivors on a laptop:
+# 13 survivors on a laptop:
 #   _git check=None / dropped: check=False is the default, so the result is the same.
 #   _git "core.quotepath=false" / "CORE.QUOTEPATH=FALSE": git config names and booleans ignore case.
 #   _path_failures check_text(None, ...): `rel` only exempts uv.lock from the document patterns and
@@ -106,6 +106,8 @@ shards = 2
 #     On a FIFO it would block, but git does not track one, so no caller passes it.
 #   check_history check_text(None, ...) for a UTF-16 version (df-wkay): as in _path_failures, `rel` only
 #     exempts some file names, and "history" is none of them.
+#   _commit_parts batched strict=True / False / dropped: re.split with three groups, past its first
+#     piece, always gives a multiple of three (df-nzhx).
 # 4 more on the CI runner:
 #   check_history -m dropped or -M: git 2.56 shows merge diffs and paths without -m; an older git
 #     does not, and there the tests kill them.
