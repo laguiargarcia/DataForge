@@ -102,6 +102,7 @@ Node is needed only to change the front end, from the app folder after `npm ci`:
 | `data/raw/` | **No.** Pluggy only returns a short window of history | Backed up weekly by the `backup` job |
 | `data/edicao.db` (categories, rules and corrections you edit) | **No** | Same backup |
 | `data/extratos/` (the bank statement PDFs you drop there) | **No.** The bank's app exports them | Same backup |
+| `../../ninho-dados/ninho.db` (the house app's database: people, shopping list, wishes; outside the workspace) | **No** | Same backup |
 | `data/cleansed/` | Yes | `scripts/reprocess.py --source raw --target cleansed --entity all` |
 | `data/curated/` | Yes | Dropped and recreated on every run (`finance_daily` or `reclassificar`) |
 | `data/bridge/`, `report/` | Yes / ignored | Workbook era, not maintained |
@@ -121,11 +122,14 @@ Rules that follow from this table:
 ## Backup
 
 `jobs/backup` (trigger `triggers/backup.yaml`, weekly) zips `data/raw/`, a consistent copy of
-`data/edicao.db` and the statement PDFs of `data/extratos/` into `../../../_backups/GetFinance/` (relative to the prod workspace, so
+`data/edicao.db`, the statement PDFs of `data/extratos/` and a consistent copy of the house app's
+database (`../../ninho-dados/ninho.db`, the param `ninho`; where it does not exist the zip goes without it) into `../../../_backups/GetFinance/` (relative to the prod workspace, so
 `projects/_backups/GetFinance/` on the same disk, outside every repo) and keeps the newest few. The
 destination and how many to keep are params in `jobs/backup/job.yaml`. To restore, unzip `raw/` over
 `data/raw/`, `edicao.db` over `data/edicao.db` and `extratos/` over `data/extratos/`, then rebuild cleansed
-with `reprocess.py`.
+with `reprocess.py`. To restore the house app's database, stop the ninho server, put the zip's `ninho.db`
+at the path `NINHO_BANCO` names (removing a `ninho.db-wal` and a `ninho.db-shm` left beside it) and start
+the server again; sessions older than the copy are still valid, newer ones log in again.
 
 ## Bank statements (df-z4fh.5)
 

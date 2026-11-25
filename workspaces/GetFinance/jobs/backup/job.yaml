@@ -3,10 +3,12 @@ name: backup
 # de data/extratos (df-z4fh.5). Disparado por
 # triggers/backup.yaml; também roda à mão antes de mexer perto do raw: `dataforge run GetFinance backup`.
 # destino é relativo à raiz do workspace: ../../../_backups/GetFinance = projects/_backups/GetFinance,
-# fora de qualquer repo, no mesmo disco.
+# fora de qualquer repo, no mesmo disco. ninho é o banco do app da casa (df-8x0m.23.20.11), também relativo
+# ao workspace: ../../ninho-dados/ninho.db = <prod>/ninho-dados/ninho.db; vai no mesmo zip.
 tasks:
   - name: backup
     script: backup/backup_dados.py
     params:
       destino: ../../../_backups/GetFinance
       manter: 8
+      ninho: ../../ninho-dados/ninho.db
