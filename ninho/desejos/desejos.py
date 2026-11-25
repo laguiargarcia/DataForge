@@ -8,13 +8,14 @@ people itself: the caller hands it the person calling (``eu``, an id) and the pe
 
 The surprise gift (df-8x0m.23.23): a person who is not the owner of a wish may mark "vou dar" on it,
 a row of ``desejos_presentes``, at most one per wish. The owner must never find out, so every wish
-leaves this module through ``_vista``, which gives the owner ``presente: None`` without reading the
-mark, and the rules of the mark refuse the owner before they read it: whatever the owner asks, the
+leaves this module through ``_vista``, which gives the owner ``presente: None`` whatever the mark,
+and the rules of the mark refuse the owner before they read it: whatever the owner asks, the
 answer is the one it would be with no mark."""
 import sqlite3
 import unicodedata
 import uuid
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Collection, Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
@@ -43,7 +44,10 @@ CREATE TABLE IF NOT EXISTS desejos_presentes (
     quem TEXT NOT NULL,
     marcado_em TEXT NOT NULL
 )""")
-_COLUNAS = "id, titulo, de_quem, adicionado_por, realizado, realizado_em, criado_em"
+# A wish and its mark come in one statement: between two, a change of owner and a new mark could
+# show the mark to the new owner (df-8x0m.23.23.3).
+_LEITURA = ("SELECT d.id, d.titulo, d.de_quem, d.adicionado_por, d.realizado, d.realizado_em, d.criado_em, p.quem "
+            "FROM desejos_desejos d LEFT JOIN desejos_presentes p ON p.desejo_id = d.id")
 
 
 class Invalido(ValueError):
@@ -56,6 +60,15 @@ class Ausente(LookupError):
 
 class DeOutraPessoa(ValueError):
     """The mark of the wish is someone else's: only who marked it unmarks it, and a wish has one."""
+
+
+@contextmanager
+def _escrita(conn: sqlite3.Connection) -> Iterator[None]:
+    """One write transaction, taken before the first read: what is read inside it cannot change
+    before the write (two notes at the limit, two marks on one wish)."""
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        yield
 
 
 def _agora() -> str:
@@ -123,28 +136,20 @@ def _anotacoes(conn: sqlite3.Connection, desejo_id: str) -> list[dict]:
     return [{"id": id_, "texto": texto, "link": e_link(texto)} for id_, texto in linhas]
 
 
-def _presente(conn: sqlite3.Connection, desejo_id: str, eu: str, casa: Mapping[str, str]) -> dict | None:
-    """The mark of a wish as a person who is not its owner sees it: who will give it and whether it
-    is <eu>; None when nobody marked it."""
-    marca = conn.execute("SELECT quem FROM desejos_presentes WHERE desejo_id = ?", (desejo_id,)).fetchone()
-    if marca is None:
-        return None
-    return {"de": casa.get(marca[0], ""), "meu": marca[0] == eu}
-
-
 def _vista(conn: sqlite3.Connection, linha: tuple, eu: str, casa: Mapping[str, str]) -> dict:
-    """The one place a wish becomes what <eu> sees. The owner always gets ``presente: None`` and the
-    mark is not even read for them; a wish of both has no mark."""
-    id_, titulo, de_quem, adicionado_por, realizado, realizado_em, criado_em = linha
-    secreto = de_quem is None or de_quem == eu
+    """The one place a wish becomes what <eu> sees, from a row of ``_LEITURA``. The owner always gets
+    ``presente: None``, whatever the mark; a wish of both has no mark. Anyone else gets who will give
+    it and whether it is <eu>, or None when nobody marked it."""
+    id_, titulo, de_quem, adicionado_por, realizado, realizado_em, criado_em, quem_da = linha
+    sem_presente = de_quem is None or de_quem == eu or quem_da is None
     return {"id": id_, "titulo": titulo, "de_quem": de_quem, "adicionado_por": adicionado_por,
             "realizado": bool(realizado), "realizado_em": realizado_em, "criado_em": criado_em,
             "anotacoes": _anotacoes(conn, id_),
-            "presente": None if secreto else _presente(conn, id_, eu, casa)}
+            "presente": None if sem_presente else {"de": casa.get(quem_da, ""), "meu": quem_da == eu}}
 
 
 def _um(conn: sqlite3.Connection, id_: str, eu: str, casa: Mapping[str, str]) -> dict:
-    linha = conn.execute(f"SELECT {_COLUNAS} FROM desejos_desejos WHERE id = ?", (id_,)).fetchone()  # noqa: S608 -- the columns are a constant
+    linha = conn.execute(f"{_LEITURA} WHERE d.id = ?", (id_,)).fetchone()
     if linha is None:
         raise Ausente(id_)
     return _vista(conn, linha, eu, casa)
@@ -156,8 +161,8 @@ def listar(conn: sqlite3.Connection, eu: str, casa: Mapping[str, str]) -> list[d
     order never looks at the marks."""
     _tabelas(conn)
     linhas = conn.execute(
-        f"SELECT {_COLUNAS} FROM desejos_desejos "  # noqa: S608 -- the columns are a constant
-        "ORDER BY realizado, CASE WHEN realizado THEN realizado_em ELSE criado_em END DESC, rowid DESC"
+        f"{_LEITURA} "
+        "ORDER BY d.realizado, CASE WHEN d.realizado THEN d.realizado_em ELSE d.criado_em END DESC, d.rowid DESC"
     ).fetchall()
     return [_vista(conn, linha, eu, casa) for linha in linhas]
 
@@ -237,8 +242,7 @@ def anotar(conn: sqlite3.Connection, id_: str, texto: str, eu: str, casa: Mappin
     transaction, so two notes at once cannot pass the limit together."""
     texto = _anotacao(texto)
     _tabelas(conn)
-    with conn:
-        conn.execute("BEGIN IMMEDIATE")
+    with _escrita(conn):
         if conn.execute("SELECT 1 FROM desejos_desejos WHERE id = ?", (id_,)).fetchone() is None:
             raise Ausente(id_)
         (quantas,) = conn.execute("SELECT COUNT(*) FROM desejos_anotacoes WHERE desejo_id = ?", (id_,)).fetchone()
@@ -273,8 +277,7 @@ def marcar(conn: sqlite3.Connection, id_: str, eu: str, casa: Mapping[str, str])
     """<eu> will give the wish of another person; answers the wish. Marking again is no change;
     DeOutraPessoa when someone else already marked it."""
     _tabelas(conn)
-    with conn:
-        conn.execute("BEGIN IMMEDIATE")
+    with _escrita(conn):
         _marcavel(conn, id_, eu)
         marca = conn.execute("SELECT quem FROM desejos_presentes WHERE desejo_id = ?", (id_,)).fetchone()
         if marca is None:
@@ -289,8 +292,7 @@ def desmarcar(conn: sqlite3.Connection, id_: str, eu: str) -> None:
     """<eu> will not give it after all. Unmarking a wish with no mark is no change; DeOutraPessoa
     when the mark is someone else's."""
     _tabelas(conn)
-    with conn:
-        conn.execute("BEGIN IMMEDIATE")
+    with _escrita(conn):
         _marcavel(conn, id_, eu)
         cursor = conn.execute("DELETE FROM desejos_presentes WHERE desejo_id = ? AND quem = ?", (id_, eu))
         if cursor.rowcount == 0 and conn.execute("SELECT 1 FROM desejos_presentes WHERE desejo_id = ?",

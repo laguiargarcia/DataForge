@@ -2,13 +2,16 @@
 and their notes in the app database named by NINHO_BANCO; and GET /api/pessoas, the people of the
 house a wish can be of. Wishes and people are invented; the addresses are of the reserved .invalid
 domain."""
+import contextlib
 import itertools
 import sqlite3
+import threading
 import uuid
 
 import pytest
 
 from ninho.desejos import desejos
+from ninho.desejos.rotas import rotas as rotas_dos_desejos
 from ninho.servidor import banco as banco_do_app
 from ninho.servidor import pessoas
 from tests.ninho.conftest import ANA, BETO, MODULOS, Cliente
@@ -465,7 +468,12 @@ DO_DONO = [("GET", "/api/desejos", None),
            ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": LINK}),
            ("DELETE", "/api/desejos/{desejo}/anotacoes/{anotacao}", None),
            ("PUT", "/api/desejos/{desejo}/presente", None),
-           ("DELETE", "/api/desejos/{desejo}/presente", None)]
+           ("DELETE", "/api/desejos/{desejo}/presente", None),
+           ("PATCH", "/api/desejos/{desejo}", {"realizado": False}),
+           ("PATCH", "/api/desejos/{desejo}", {"de_quem": "{beto}", "titulo": "tênis novo"}),
+           ("PATCH", "/api/desejos/{desejo}", {"de_quem": "ninguém"}),
+           ("POST", "/api/desejos/{desejo}/anotacoes", {"texto": ""}),
+           ("DELETE", "/api/desejos/{desejo}/anotacoes/nenhuma", None)]
 IDS_DO_DONO = [f"{metodo} {caminho} {corpo}" for metodo, caminho, corpo in DO_DONO]
 
 
@@ -504,3 +512,77 @@ def test_o_dono_recebe_o_mesmo_com_a_marca_e_sem_ela(tmp_path, monkeypatch, pedi
     sem = _o_que_a_ana_recebe(tmp_path, monkeypatch, pedido, marcado=False)
     com = _o_que_a_ana_recebe(tmp_path, monkeypatch, pedido, marcado=True)
     assert com == sem
+
+
+def test_a_comparacao_do_dono_cobre_todas_as_rotas_dos_desejos():
+    """A new route of the wishlist has to enter DO_DONO: the comparison is only as wide as the list."""
+    do_router = {(metodo, rota.path.replace("{id_}", "{desejo}").replace("{anotacao_id}", "{anotacao}"))
+                 for rota in rotas_dos_desejos.routes for metodo in rota.methods}
+    assert do_router <= {(metodo, caminho) for metodo, caminho, _ in DO_DONO}
+
+
+def test_a_marca_de_outra_pessoa_e_409_pelas_rotas(servidor, banco, ids):
+    """Three people on the wishlist: caio cannot take over beto's mark nor undo it, and still sees it."""
+    caio = ("caio", "senha-falsa-do-caio")
+    with banco_do_app.aberto(banco) as conn:
+        pessoas.criar(conn, *caio, ("desejos",))
+    desejo = _criar(servidor, "tênis", ids["ana"])
+    assert servidor.put(f"/api/desejos/{desejo['id']}/presente", auth=BETO).status_code == 200
+    for metodo, mensagem in (("PUT", "outra pessoa já vai dar este desejo"), ("DELETE", "só quem marcou desmarca")):
+        r = servidor.request(metodo, f"/api/desejos/{desejo['id']}/presente", auth=caio)
+        assert (r.status_code, r.json()["detail"]) == (409, mensagem)
+    assert _presente(servidor, desejo["id"], caio) == {"de": "beto", "meu": False}
+    assert _marcas(banco) == [(desejo["id"], ids["beto"])]
+
+
+def test_o_desejo_e_a_marca_saem_numa_leitura_so(banco):
+    """No statement reads the marks apart from the wishes: between two reads the wish could change
+    owner and be marked, and the new owner would see the mark (df-8x0m.23.23.3)."""
+    with banco_do_app.aberto(banco) as conn:
+        desejo = desejos.adicionar(conn, {"titulo": "tênis", "de_quem": "a"}, "a", CASA)
+        desejos.marcar(conn, desejo["id"], "b", CASA)
+        comandos: list[str] = []
+        conn.set_trace_callback(comandos.append)
+        assert desejos.listar(conn, "b", CASA)[0]["presente"] == {"de": "beto", "meu": True}
+        assert desejos.editar(conn, desejo["id"], {"titulo": "tênis novo"}, "c", CASA)["presente"]["meu"] is False
+        conn.set_trace_callback(None)
+    leituras = [c for c in comandos if c.lstrip().upper().startswith("SELECT") and "desejos_presentes" in c]
+    assert leituras
+    assert all("desejos_desejos" in c for c in leituras)
+
+
+def test_duas_anotacoes_ao_mesmo_tempo_nao_passam_do_limite(banco, monkeypatch):
+    """Two people note the same wish, one note below the limit, each on its own connection, and both
+    are held just before the insert until the other gets there too (or a moment passes). The write
+    transaction of ``anotar`` lets only one count at a time, so one gets in and the other is refused;
+    counted outside it, both would count 49 and both would get in (df-8x0m.23.22.5)."""
+    with banco_do_app.aberto(banco) as conn:
+        quase = [f"nota {i}" for i in range(desejos.LIMITE_ANOTACOES - 1)]
+        desejo = desejos.adicionar(conn, {"titulo": "t", "de_quem": None, "anotacoes": quase}, "a", CASA)
+    juntas = threading.Barrier(2, timeout=1)
+    inserir = desejos._inserir_anotacoes
+
+    def inserir_depois_da_outra(*args):
+        with contextlib.suppress(threading.BrokenBarrierError):
+            juntas.wait()
+        inserir(*args)
+
+    monkeypatch.setattr(desejos, "_inserir_anotacoes", inserir_depois_da_outra)
+    resultados: list[str] = []
+
+    def anotar(texto):
+        with banco_do_app.aberto(banco) as conn:
+            try:
+                desejos.anotar(conn, desejo["id"], texto, "a", CASA)
+                resultados.append("entrou")
+            except desejos.Invalido:
+                resultados.append("recusada")
+
+    pessoas_anotando = [threading.Thread(target=anotar, args=(texto,)) for texto in ("uma", "outra")]
+    for pessoa in pessoas_anotando:
+        pessoa.start()
+    for pessoa in pessoas_anotando:
+        pessoa.join(timeout=30)
+    assert sorted(resultados) == ["entrou", "recusada"]
+    with banco_do_app.aberto(banco) as conn:
+        assert len(desejos.listar(conn, "a", CASA)[0]["anotacoes"]) == desejos.LIMITE_ANOTACOES
