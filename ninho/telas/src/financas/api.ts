@@ -1,6 +1,6 @@
 // Cliente das rotas de finanças do servidor do ninho (ninho/servidor/app.py). A página vem do mesmo
-// servidor, atrás do mesmo login (HTTP Basic, o nome e a senha da pessoa): o navegador pede ao abrir a
-// página e manda de novo em cada pedido daqui, então nenhum pedido trata de senha.
+// servidor, e a sessão de quem entrou vai num cookie que o navegador manda sozinho em cada pedido
+// daqui: nenhum pedido trata de senha (src/pedido.ts).
 
 import { pedir as pedirAoServidor, segmento } from '../pedido'
 

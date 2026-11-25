@@ -33,6 +33,9 @@ export type Fim =
   | { tipo: 'naoComecou'; erro: unknown }
   /** O id guardado não é de uma execução que o servidor conheça. */
   | { tipo: 'esquecida' }
+  /** A tela deixou de acompanhar (saiu da página, ou a sessão acabou); a execução segue no servidor
+   * e o id fica guardado, para a tela que abrir depois retomá-la. O aplicar é da casa, não da pessoa. */
+  | { tipo: 'parada' }
 
 /** Acabou quando o motor diz a hora do fim (vale para sucesso e falha). */
 export const acabou = (e: Execucao) => e.finished_at != null
@@ -43,9 +46,13 @@ const dormirMs = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 // 404: o servidor não conhece o id; 422: o guardado nem é um id. Os dois não têm o que acompanhar.
 const desconhecida = (erro: unknown) => erro instanceof ErroPedido && (erro.status === 404 || erro.status === 422)
+// 401: não há mais sessão. Insistir só bateria no servidor sem login até alguém entrar de novo.
+const semSessao = (erro: unknown) => erro instanceof ErroPedido && erro.status === 401
 
 export class Aplicador {
   private emCurso = false
+  // Cada `parar` abre uma vida nova: o que estava seguindo percebe que é da vida velha e sai.
+  private vida = 0
 
   constructor(
     private readonly motor: Motor,
@@ -77,27 +84,45 @@ export class Aplicador {
     return this.travado(() => this.seguir(runId, 0))
   }
 
+  /** A tela foi embora: quem estiver seguindo uma execução para no próximo passo, sem mais pedidos,
+   * e termina em 'parada'. O id guardado fica; depois disso `retomar` e `iniciar` valem de novo. */
+  parar(): void {
+    this.vida += 1
+    this.emCurso = false
+  }
+
   private travado(trabalho: () => Promise<Fim>): Promise<Fim> | null {
     if (this.emCurso) return null
     this.emCurso = true
-    return trabalho().finally(() => { this.emCurso = false })
+    const vida = this.vida
+    return trabalho().finally(() => { if (vida === this.vida) this.emCurso = false })
+  }
+
+  /** O que um erro ao acompanhar quer dizer: o fim, ou `null` (depois da pausa) para tentar de novo. */
+  private async aoFalhar(erro: unknown, vida: number): Promise<Fim | null> {
+    if (vida !== this.vida || semSessao(erro)) return { tipo: 'parada' }
+    if (desconhecida(erro)) {
+      this.guarda.esquecer()
+      return { tipo: 'esquecida' }
+    }
+    this.avisos.aoPerderContato(erro)
+    await this.dormir(PAUSA)
+    return vida === this.vida ? null : { tipo: 'parada' }
   }
 
   private async seguir(runId: string, primeiraEspera: number): Promise<Fim> {
     let espera = primeiraEspera
+    const vida = this.vida
     for (;;) {
       let execucao: Execucao
       try {
         execucao = await this.motor.andamento(runId, espera)
       } catch (erro) {
-        if (desconhecida(erro)) {
-          this.guarda.esquecer()
-          return { tipo: 'esquecida' }
-        }
-        this.avisos.aoPerderContato(erro)
-        await this.dormir(PAUSA)
+        const fim = await this.aoFalhar(erro, vida)
+        if (fim) return fim
         continue
       }
+      if (vida !== this.vida) return { tipo: 'parada' }
       this.avisos.aoMudar(execucao)
       if (acabou(execucao)) {
         this.guarda.esquecer()

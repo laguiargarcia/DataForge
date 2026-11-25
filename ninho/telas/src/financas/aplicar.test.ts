@@ -104,6 +104,60 @@ describe('Aplicador.iniciar', () => {
     expect(motor.pedirAplicar).toHaveBeenCalledTimes(1)
   })
 
+  it('um 401 ao acompanhar para de acompanhar, sem insistir, e mantém o id para depois', async () => {
+    const motor = { pedirAplicar: vi.fn(async () => exec('pending')),
+      andamento: vi.fn(async (_id: string, _esperar: number): Promise<Execucao> => { throw new ErroPedido('sem sessão', 401) }) }
+    const { aplicador, guarda, semContato, dormir } = montar(motor)
+    expect(await aplicador.iniciar()).toEqual({ tipo: 'parada' })
+    expect(motor.andamento).toHaveBeenCalledTimes(1)
+    expect(semContato).toEqual([])
+    expect(dormir).not.toHaveBeenCalled()
+    expect(guarda.id).toBe('r1')
+    expect(textoFim({ tipo: 'parada' })).toBeNull()
+    // Quem entrar depois retoma a mesma execução, sem pedir outra.
+    motor.andamento.mockImplementation(async () => exec('success', FIM))
+    expect((await aplicador.retomar())?.tipo).toBe('acabou')
+    expect(motor.pedirAplicar).toHaveBeenCalledTimes(1)
+  })
+
+  it('parar encerra quem está acompanhando no passo seguinte, sem novo pedido, e libera retomar', async () => {
+    const primeiro = adiado<Execucao>()
+    const motor = { pedirAplicar: vi.fn(async () => exec('pending')),
+      andamento: vi.fn((_id: string, _esperar: number) => primeiro.promessa) }
+    const { aplicador, guarda, vistos } = montar(motor)
+    const seguindo = aplicador.iniciar()!
+    await vi.waitFor(() => expect(motor.andamento).toHaveBeenCalledTimes(1))
+    aplicador.parar()
+    // Já livre para a tela seguinte, mesmo com o pedido antigo ainda em voo.
+    const segundo = adiado<Execucao>()
+    motor.andamento.mockImplementation(() => segundo.promessa)
+    const retomado = aplicador.retomar()
+    expect(retomado).not.toBeNull()
+    primeiro.responder(exec('running'))
+    expect(await seguindo).toEqual({ tipo: 'parada' })
+    expect(vistos).toEqual(['pending'])          // o estado que chegou depois de parar não é avisado
+    expect(aplicador.iniciar()).toBeNull()       // o fim do antigo não destrava o que segue agora
+    segundo.responder(exec('success', FIM))
+    expect((await retomado)?.tipo).toBe('acabou')
+    expect(motor.andamento).toHaveBeenCalledTimes(2)
+    expect(guarda.id).toBeNull()
+  })
+
+  it('parar durante a pausa de um erro não volta a pedir', async () => {
+    const pausa = adiado<void>()
+    const motor = { pedirAplicar: vi.fn(async () => exec('pending')),
+      andamento: vi.fn(async (_id: string, _esperar: number): Promise<Execucao> => { throw new TypeError('Load failed') }) }
+    const guarda = guardaFalsa()
+    const aplicador = new Aplicador(motor, guarda, { aoMudar: () => {}, aoPerderContato: () => {} }, () => pausa.promessa)
+    const seguindo = aplicador.iniciar()!
+    await vi.waitFor(() => expect(motor.andamento).toHaveBeenCalledTimes(1))
+    aplicador.parar()
+    pausa.responder()
+    expect(await seguindo).toEqual({ tipo: 'parada' })
+    expect(motor.andamento).toHaveBeenCalledTimes(1)
+    expect(guarda.id).toBe('r1')
+  })
+
   // Caso 2: um erro ao acompanhar (rede caiu, 502, aba suspensa pelo Safari).
   it('um erro ao acompanhar avisa que o aplicar segue e volta a acompanhar o mesmo id, sem novo pedido', async () => {
     const respostas: (() => Execucao)[] = [
