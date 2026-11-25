@@ -1,4 +1,4 @@
-import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import { test, expect, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import { login, soDesejos, soLista } from '../playwright.config'
 
 // Abre uma sessão da pessoa no servidor: o cookie fica no contexto, e a página já abre com ele.
@@ -236,6 +236,10 @@ test('nos Desejos, cria um desejo dos dois com um texto e um link, move, marca r
   await parte('ana').click()
   await expect(titulo).toBeVisible()
   await expect(anotacoes.getByRole('listitem')).toHaveCount(2)
+  // O servidor guardou a mudança: recarregada, a página ainda o mostra na parte da ana.
+  await page.reload()
+  await expect(parte('ana')).toHaveAttribute('aria-pressed', 'true')
+  await expect(titulo).toBeVisible()
 
   // Realizado: sai dos abertos e fica no arquivo recolhido, de onde é apagado.
   await titulo.click()
@@ -243,6 +247,8 @@ test('nos Desejos, cria um desejo dos dois com um texto e um link, move, marca r
   await expect(regiao).toContainText('Nenhum desejo em aberto.')
   const realizados = page.getByRole('list', { name: 'Realizados' })
   await expect(realizados).toBeHidden()
+  await page.reload()
+  await expect(regiao).toContainText('Nenhum desejo em aberto.')
   await page.getByText('Realizados (1)').click()
   const realizado = realizados.getByRole('button', { name: 'bicicleta', exact: true })
   await expect(realizado).toBeVisible()
@@ -258,6 +264,8 @@ test('nos Desejos, cria um desejo dos dois com um texto e um link, move, marca r
   await confirmar.getByRole('button', { name: 'Apagar', exact: true }).click()
   await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
   await expect(page.getByText('Realizados (1)')).toHaveCount(0)
+  await page.reload()
+  await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
   await parte('Nós dois').click()
   await expect(regiao).toContainText('Nenhum desejo aqui ainda.')
   await expect(page.getByRole('alert')).toHaveCount(0)
@@ -358,6 +366,158 @@ test('o presente-surpresa: caio marca "Vou dar este" num desejo da ana, e a pág
 })
 
 // Um "a página voltou a ficar visível" (o iPhone desbloqueado): a Lista relê.
+const recusa = (status: number, detalhe: string) =>
+  ({ status, contentType: 'application/json', body: JSON.stringify({ detail: detalhe }) })
+const menorLado = async (alvo: Locator) => {
+  const caixa = (await alvo.boundingBox())!
+  return Math.min(caixa.width, caixa.height)
+}
+const cabeNaLargura = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+
+test('nos Desejos, um título recusado fica no campo, um título e um endereço longos cabem, e os Realizados recolhem ao trocar de parte', async ({ page }) => {
+  const LONGO = `${'desejo-'.repeat(28)}fim!`   // 200 caracteres sem espaço
+  const ENDERECO = `https://exemplo.invalid/${'a'.repeat(300)}`
+  await page.goto('?tela=desejos')
+  const partes = page.getByRole('group', { name: 'De quem' })
+  const parte = (rotulo: string) => partes.getByRole('button', { name: rotulo, exact: true })
+  const abertos = page.getByRole('list', { name: 'Desejos', exact: true })
+  const realizados = page.getByRole('list', { name: 'Realizados' })
+  const novo = page.getByRole('textbox', { name: 'Novo desejo' })
+  const criar = async (titulo: string) => {
+    await novo.fill(titulo)
+    await novo.press('Enter')
+    await expect(abertos.getByRole('button', { name: titulo, exact: true })).toBeVisible()
+  }
+  const realizar = async (titulo: string) => {
+    await abertos.getByRole('button', { name: titulo, exact: true }).click()
+    await page.getByRole('button', { name: 'Realizado', exact: true }).click()
+    await expect(abertos.getByRole('button', { name: titulo, exact: true })).toHaveCount(0)
+  }
+
+  // Um realizado na parte dos dois, para ela ter o seu arquivo (recolhido).
+  await parte('Nós dois').click()
+  await criar('cinema ao ar livre')
+  await realizar('cinema ao ar livre')
+  await expect(realizados).toBeHidden()
+
+  await parte('ana').click()
+  await criar('violão')
+  await abertos.getByRole('button', { name: 'violão', exact: true }).click()
+  const campoTitulo = page.getByRole('textbox', { name: 'Título' })
+  const salvar = page.getByRole('button', { name: 'Salvar' })
+  await expect(campoTitulo).toHaveValue('violão')
+
+  // O servidor recusa o título: o cartão fica com o de antes e o campo com o que foi digitado.
+  await page.route('**/api/desejos/*', r => (r.request().method() === 'PATCH' ? r.fulfill(recusa(422, 'o servidor recusou')) : r.fallback()))
+  await campoTitulo.fill('violão de nylon')
+  await salvar.click()
+  await expect(page.getByRole('alert')).toContainText('o servidor recusou')
+  await expect(campoTitulo).toHaveValue('violão de nylon')
+  await expect(abertos.getByRole('button', { name: 'violão', exact: true })).toBeVisible()
+  await page.unrouteAll()
+  await salvar.click()
+  await expect(abertos.getByRole('button', { name: 'violão de nylon', exact: true })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+
+  // Um título no limite e um endereço comprido, sem espaço para quebrar: a tela ainda cabe.
+  await campoTitulo.fill(LONGO)
+  await salvar.click()
+  const longo = abertos.getByRole('button', { name: LONGO, exact: true })
+  await expect(longo).toBeVisible()
+  const nota = page.getByRole('textbox', { name: 'Nova anotação' })
+  await nota.fill(ENDERECO)
+  await nota.press('Enter')
+  const anotacoes = page.getByRole('list', { name: `Anotações de ${LONGO}` })
+  await expect(anotacoes.getByRole('link')).toHaveCount(1)
+  expect(await cabeNaLargura(page)).toBe(true)
+
+  // A confirmação de apagar: a pergunta numa linha só dela, os botões com 44 px, e ainda cabe.
+  await page.getByRole('button', { name: 'Apagar desejo' }).click()
+  const confirmar = page.getByRole('group', { name: 'Confirmar apagar' })
+  const pergunta = (await confirmar.getByRole('paragraph').boundingBox())!
+  const caixa = (await confirmar.boundingBox())!
+  expect(pergunta.width).toBeGreaterThan(caixa.width - 40)
+  for (const alvo of [confirmar.getByRole('button', { name: 'Cancelar' }), confirmar.getByRole('button', { name: 'Apagar', exact: true }), salvar]) {
+    expect(await menorLado(alvo)).toBeGreaterThanOrEqual(44)
+  }
+  expect(await cabeNaLargura(page)).toBe(true)
+  await confirmar.getByRole('button', { name: 'Cancelar' }).click()
+
+  // Apagar uma anotação vale também depois de recarregar.
+  await page.getByRole('button', { name: `Apagar a anotação ${ENDERECO}` }).click()
+  await expect(anotacoes).toHaveCount(0)
+  await page.reload()
+  await expect(longo).toBeVisible()
+  await expect(anotacoes).toHaveCount(0)
+
+  // Realizado e aberto o arquivo desta parte, a outra parte mostra o seu ainda recolhido.
+  await realizar(LONGO)
+  const arquivo = page.getByText('Realizados (1)')
+  expect(await menorLado(arquivo)).toBeGreaterThanOrEqual(44)
+  await arquivo.click()
+  await expect(realizados.getByRole('button', { name: LONGO, exact: true })).toBeVisible()
+  await parte('Nós dois').click()
+  await expect(page.getByText('Realizados (1)')).toBeVisible()
+  await expect(realizados).toBeHidden()
+
+  // Desmarcar realizado devolve o desejo aos abertos, e o servidor guarda.
+  await parte('ana').click()
+  await page.getByText('Realizados (1)').click()
+  await realizados.getByRole('button', { name: LONGO, exact: true }).click()
+  await page.getByRole('button', { name: 'Desmarcar realizado' }).click()
+  await expect(longo).toBeVisible()
+  await page.reload()
+  await expect(longo).toBeVisible()
+  await expect(page.getByText('Realizados (1)')).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  // O 422 de propósito aparece no console do navegador; só ele é esperado.
+  problemas = problemas.filter(p => !p.startsWith('console: Failed to load resource: the server responded with a status of 422'))
+})
+
+test('sem rede, apagar falha e a releitura também: a Lista e os Desejos voltam ao que mostravam', async ({ page }) => {
+  const semRede = (caminho: string) => page.route(caminho, r => r.fulfill(recusa(503, 'sem rede')))
+  const releituraFalhou = (caminho: string) =>
+    page.waitForResponse(r => new URL(r.url()).pathname === caminho && r.request().method() === 'GET' && r.status() === 503)
+
+  await page.goto('?tela=lista')
+  const item = page.getByRole('textbox', { name: 'Novo item' })
+  await item.fill('sal grosso')
+  await item.press('Enter')
+  const sal = page.getByRole('checkbox', { name: 'sal grosso' })
+  await expect(sal).toBeVisible()
+  await semRede('**/api/lista/**')
+  let falhou = releituraFalhou('/api/lista/itens')
+  await page.getByRole('button', { name: 'Apagar sal grosso' }).click()
+  await falhou
+  await expect(page.getByRole('alert')).toContainText('sem rede')
+  await expect(sal).toBeVisible()
+  await page.unrouteAll()
+  await page.getByRole('button', { name: 'Apagar sal grosso' }).click()
+  await expect(sal).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+
+  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Desejos', exact: true }).click()
+  const novo = page.getByRole('textbox', { name: 'Novo desejo' })
+  await novo.fill('rede de descanso')
+  await novo.press('Enter')
+  const rede = page.getByRole('list', { name: 'Desejos', exact: true }).getByRole('button', { name: 'rede de descanso', exact: true })
+  await rede.click()
+  await semRede('**/api/desejos**')
+  falhou = releituraFalhou('/api/desejos')
+  await page.getByRole('button', { name: 'Apagar desejo' }).click()
+  await page.getByRole('group', { name: 'Confirmar apagar' }).getByRole('button', { name: 'Apagar', exact: true }).click()
+  await falhou
+  await expect(page.getByRole('alert')).toContainText('sem rede')
+  await expect(rede).toBeVisible()
+  await page.unrouteAll()
+  await rede.click()
+  await page.getByRole('button', { name: 'Apagar desejo' }).click()
+  await page.getByRole('group', { name: 'Confirmar apagar' }).getByRole('button', { name: 'Apagar', exact: true }).click()
+  await expect(rede).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  problemas = problemas.filter(p => !p.startsWith('console: Failed to load resource: the server responded with a status of 503'))
+})
+
 const voltarAVer = (page: Page) => page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
 
 test('na Lista, uma releitura que falha mantém os itens e um toque não volta atrás com uma leitura velha', async ({ page }) => {
