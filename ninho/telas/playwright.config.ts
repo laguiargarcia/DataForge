@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { createServer } from 'node:net'
 import { resolve } from 'node:path'
 
 // O teste de navegador da tela, no tamanho de um iPhone. O alvo é o Safari do iPhone, então o motor
@@ -7,8 +8,21 @@ import { resolve } from 'node:path'
 const raiz = resolve(import.meta.dirname, '../..')
 const python = process.env.NINHO_PYTHON ?? resolve(raiz, '.venv/bin/python')
 const navegador = (process.env.NAVEGADOR ?? 'chromium') as 'chromium' | 'webkit'
-// A porta pode vir de fora: duas sessões rodando o e2e ao mesmo tempo não cabem na mesma.
-const porta = Number(process.env.NINHO_E2E_PORTA ?? 8766)
+// Uma porta livre que o sistema escolhe na hora: duas sessões rodando o e2e ao mesmo tempo não cabem
+// na mesma. Ela fica em NINHO_E2E_PORTA, de onde os processos que o Playwright abre (e que leem este
+// arquivo de novo) pegam a mesma; quem quiser uma porta certa põe a variável no comando.
+function portaLivre(): Promise<number> {
+  return new Promise((achou, falhou) => {
+    const sonda = createServer()
+    sonda.once('error', falhou)
+    sonda.listen(0, '127.0.0.1', () => {
+      const { port } = sonda.address() as { port: number }
+      sonda.close(() => achou(port))
+    })
+  })
+}
+process.env.NINHO_E2E_PORTA ??= String(await portaLivre())
+const porta = Number(process.env.NINHO_E2E_PORTA)
 // A pessoa que o esqueleto cria no banco do app da cópia: só do servidor de teste, sobre o dado sintético.
 export const login = { nome: 'ana', senha: 'senha-falsa-do-teste-da-tela' }
 // Uma segunda pessoa, só com a lista: o teste da barra entra como ela (e2e/tela.spec.ts).
