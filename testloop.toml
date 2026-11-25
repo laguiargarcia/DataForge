@@ -109,8 +109,10 @@ shards = 2
 # 4 more on the CI runner:
 #   check_history -m dropped or -M: git 2.56 shows merge diffs and paths without -m; an older git
 #     does not, and there the tests kill them.
-# min_score is the laptop's 437/449 less those 4: 433/449.
-min_score = 0.9643
+# And on the runner x__utf16_blobs__mutmut_59 times out (it dies on the laptop); a timeout counts on
+# neither side (df-hazn).
+# min_score is the laptop's 437/449 less those 4 and that timeout: 432/448, what main measures.
+min_score = 0.9642
 
 
 [targets."dataforge/apps.py"]

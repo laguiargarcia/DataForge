@@ -786,6 +786,20 @@ def test_a_cached_mutate_with_the_same_tests_reruns_only_the_changed_function(tm
     assert verdicts(second) == verdicts(fresh)
 
 
+def test_a_function_added_since_the_cache_is_linked_to_the_tests_that_reach_it_through_an_old_one(tmp_path):
+    """df-2dlq: mutmut's cached stats link a function to the tests that reached it when they were
+    collected; a new function called by an old one must get the old tests, as without a cache."""
+    repo, _ = marked_repo(tmp_path)
+    cache = tmp_path / "cache"
+    mutate_cached(repo, cache)
+    mod = repo / "sample" / "mod.py"
+    mod.write_text(MOD_SHARDED_SRC.replace("return x * 2", "return _twice(x)") + "\n\ndef _twice(x):\n    return x * 2\n")
+    second = mutate_cached(repo, cache)
+    assert second["cache"] == "restored"
+    fresh = run_ok(repo, "mutate", "sample/mod.py")
+    assert verdicts(second) == verdicts(fresh)
+
+
 @pytest.mark.parametrize("key", ["timeout_multiplier = 30", 'process_isolation = "forkserver"'])
 def test_a_cache_written_under_another_tool_config_is_not_restored(tmp_path, key):
     """df-n8ac.48: mutmut keeps a killed verdict through a new timeout_multiplier or process_isolation,
