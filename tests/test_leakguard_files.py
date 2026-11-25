@@ -430,13 +430,13 @@ def test_history_reads_what_git_takes_for_binary(repo, capsys, tmp_path):
     """df-wkay: a text with a NUL and a UTF-16 one (PowerShell `>`) are 'Binary files differ' in a plain
     log; the audit reads them as the staged check does, after a later commit removed them."""
     repo("ok.py", "x = 1\n")
-    (tmp_path / "nul.txt").write_bytes(b"header\x00\n" + EMAIL.encode() + b"\n")
+    (tmp_path / "stray.txt").write_bytes(b"header\x00\n" + EMAIL.encode() + b"\n")
     (tmp_path / "u16.txt").write_bytes(f"x\nFulano de Tal\n{CPF}\n".encode("utf-16"))
     (tmp_path / "u16be.txt").write_bytes(b"\xfe\xff" + f"{CPF}\n".encode("utf-16-be"))
     (tmp_path / "copy.txt").write_bytes(b"\xfe\xff" + f"{CPF}\n".encode("utf-16-be"))   # the same version twice
     _git("add", "-A", cwd=tmp_path)
     _git("commit", "-qm", "add", cwd=tmp_path)
-    _git("rm", "-q", "nul.txt", "u16.txt", "u16be.txt", "copy.txt", cwd=tmp_path)
+    _git("rm", "-q", "stray.txt", "u16.txt", "u16be.txt", "copy.txt", cwd=tmp_path)
     _git("commit", "-qm", "remove", cwd=tmp_path)
     assert run(capsys, "--all")[2] == []
     failures = run(capsys, "--history")[2]
