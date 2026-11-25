@@ -3,6 +3,7 @@ what git says (the files .gitignore excludes, every tracked file, the whole hist
 scripts/leakguard.py (df-n8ac.36), whose docstring describes the whole guard."""
 import os
 import re
+import secrets
 import subprocess
 from pathlib import Path
 
@@ -194,8 +195,8 @@ def _utf16_blobs():
 # of the decision. Only the message is let through; the commit's diff is still read.
 ACCEPTED_MESSAGES = {"d2cb9cf0544c4667918927a500d6170456599830": "df-0eat"}
 HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.MULTILINE)   # only these ranges, not the context after
-MERGE_LOGIN = re.compile(r"^Merge pull request #\d+ from [^/\s]+/", re.MULTILINE)   # the login is public on GitHub
-COMMIT_START, MESSAGE_START, MESSAGE_END = "\x01", "\x02", "\x03"   # frame each commit in the log
+MERGE_LOGIN = re.compile(r"^Merge pull request #\d+ from [^/\s]+/")   # the subject only; the login is public on GitHub
+FIRST_HUNK = re.compile(r"^@@ ", re.MULTILINE)
 
 
 def _blank(match):
@@ -203,36 +204,65 @@ def _blank(match):
     return re.sub(r"[^\n]", " ", match.group(0))
 
 
-def _commit_parts(log):
-    """(hash, message, diff) of each entry of the log (a merge shows once per parent under -m)."""
-    for entry in log.split(COMMIT_START)[1:]:
-        sha, _, rest = entry.partition(MESSAGE_START)
-        message, _, diff = rest.partition(MESSAGE_END)
-        yield sha, message.removeprefix("\n"), diff
+def _log_format(nonce):
+    """The log's frame: markers at the start of a line, named by a nonce chosen for this run. A line of
+    a diff starts with ' ', '+', '-' or a backslash, so no file's content can forge one; a message
+    could, only by guessing the nonce."""
+    return f"--format={nonce}C %H%n{nonce}M%n%B%n{nonce}E"
+
+
+def _commit_parts(log, nonce):
+    """(hash, message, diff) of each commit in the log (a merge shows once per parent under -m)."""
+    pieces = re.split(rf"^{nonce}C (\S+)\n{nonce}M\n", log, flags=re.MULTILINE)
+    for sha, rest in zip(pieces[1::2], pieces[2::2], strict=True):
+        message, _, diff = rest.partition(f"\n{nonce}E\n")
+        yield sha, message, diff
+
+
+def _section_path(header):
+    """The path a section's file has, from its '+++ b/' line ('--- a/' when the file is gone); None when
+    it names none (a rename with no change, a mode change): nothing then earns a file's exemption."""
+    after, before = None, None
+    for line in header.split("\n"):
+        if line.startswith("+++ b/"):
+            after = line[6:].rstrip("\t")
+        elif line.startswith("--- a/"):
+            before = line[6:].rstrip("\t")
+    return after or before
 
 
 def _file_sections(diff):
-    """(path, the section's text) for each file of a commit's diff; a section starts at its 'diff --git'
-    header, which names the file as 'a/<path> b/<path>'."""
-    starts = [m.start() for m in re.finditer(r"^diff --git ", diff, re.MULTILINE)] + [len(diff)]
-    for start, end in zip(starts, starts[1:], strict=False):
+    """(path or None, its header text, its body) for each file of a commit's diff, and (None, text, "")
+    for any text before the first file, which nothing may leave unread. A section starts at its
+    'diff --git' line; the body starts at the first hunk."""
+    starts = [m.start() for m in re.finditer(r"^diff --git ", diff, re.MULTILINE)]
+    if not starts or starts[0]:
+        yield None, diff[:starts[0] if starts else len(diff)], ""
+    for start, end in zip(starts, [*starts[1:], len(diff)][:len(starts)], strict=True):
         section = diff[start:end]
-        yield section.partition("\n")[0].rpartition(" b/")[2], section
+        hunk = FIRST_HUNK.search(section)
+        cut = hunk.start() if hunk else len(section)
+        header = section[:cut]
+        yield _section_path(header), header, section[cut:]
 
 
-def _history_failures(log, sources):
-    """The findings in the log, each commit read as its message and, apart, each file of its diff (so a
-    file's exemption holds, as in check_files). Each finding once: -m shows a merge's diff per parent."""
-    failures = []
-    for sha, message, diff in _commit_parts(log):
+def _history_failures(log, sources, nonce):
+    """The findings in the log, each commit read as its message and, apart, each file of its diff: the
+    header with no exemption (a rename into LICENSE shows its old name there), the hunks under their
+    file's own, as in check_files. Each finding once: -m shows a merge's diff per parent."""
+    failures, shown_of = [], {}
+    for sha, message, diff in _commit_parts(log, nonce):
         short = f"history {sha[:7]}"
         if sha not in ACCEPTED_MESSAGES:
             text = MERGE_LOGIN.sub(_blank, message)
             failures += check_text(HISTORY, text, sources, where=lambda n, short=short: f"{short} msg:{n}")
-        for path, section in _file_sections(diff):
-            shown = _path_failures(path, sources)[0]
-            failures += check_text(path, HUNK_HEADER.sub(_blank, section), sources,
-                                   where=lambda n, short=short, shown=shown: f"{short} {shown}:{n}")
+        for path, header, body in _file_sections(diff):
+            if path not in shown_of:
+                shown_of[path] = _path_failures(path, sources)[0] if path else "diff"
+            shown, lines = shown_of[path], header.count("\n")
+            failures += check_text(HISTORY, header, sources, where=lambda n, short=short, shown=shown: f"{short} {shown}:{n}")
+            failures += check_text(path or HISTORY, HUNK_HEADER.sub(_blank, body), sources,
+                                   where=lambda n, short=short, shown=shown, lines=lines: f"{short} {shown}:{n + lines}")
     return list(dict.fromkeys(failures))
 
 
@@ -244,9 +274,9 @@ def check_history(sources):
     would print 'Binary files differ'); a UTF-16 version is read apart, decoded as a file is. Noise that
     is no leak is let through: a hunk header's line ranges, the login of a merge's message, and what
     check_files lets through in its path (LICENSE, uv.lock)."""
-    log = _git("log", "--all", "-p", "-m", "--text", "--no-color",
-               f"--format={COMMIT_START}%H{MESSAGE_START}%n%B{MESSAGE_END}")
-    failures = _history_failures(log, sources)
+    nonce = secrets.token_hex(8)
+    log = _git("log", "--all", "-p", "-m", "--text", "--no-color", _log_format(nonce))
+    failures = _history_failures(log, sources, nonce)
     for path, data in _utf16_blobs():
         shown = _path_failures(path, sources)[0]
         failures += check_text(HISTORY, _decode(data), sources, where=lambda n, shown=shown: f"history: {shown}:{n}")
