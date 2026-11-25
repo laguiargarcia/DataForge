@@ -203,10 +203,10 @@ test('depois de sair com um aplicar em curso, nada mais pergunta por ele ao serv
   await barra(page).getByRole('button', { name: 'Sair', exact: true }).click()
   await barra(page).getByRole('button', { name: 'Sair?', exact: true }).click()
   await expect(formulario(page)).toBeVisible()
-  await page.waitForTimeout(300)   // o pedido que estava em voo termina
   const aoSair = andamentos
-  await page.waitForTimeout(1500)
-  expect(andamentos).toBe(aoSair)
+  // A rede sossega: com alguém ainda acompanhando, cada resposta puxaria outro pedido e ela nunca pararia.
+  await page.waitForLoadState('networkidle')
+  expect(andamentos).toBeLessThanOrEqual(aoSair + 1)   // no máximo o pedido que já estava em voo
 })
 
 test('a barra com o Sair cabe num iPhone estreito (320 px)', async ({ page }) => {

@@ -98,6 +98,18 @@ export class Aplicador {
     return trabalho().finally(() => { if (vida === this.vida) this.emCurso = false })
   }
 
+  /** O que um erro ao acompanhar quer dizer: o fim, ou `null` (depois da pausa) para tentar de novo. */
+  private async aoFalhar(erro: unknown, vida: number): Promise<Fim | null> {
+    if (vida !== this.vida || semSessao(erro)) return { tipo: 'parada' }
+    if (desconhecida(erro)) {
+      this.guarda.esquecer()
+      return { tipo: 'esquecida' }
+    }
+    this.avisos.aoPerderContato(erro)
+    await this.dormir(PAUSA)
+    return vida === this.vida ? null : { tipo: 'parada' }
+  }
+
   private async seguir(runId: string, primeiraEspera: number): Promise<Fim> {
     let espera = primeiraEspera
     const vida = this.vida
@@ -106,14 +118,8 @@ export class Aplicador {
       try {
         execucao = await this.motor.andamento(runId, espera)
       } catch (erro) {
-        if (vida !== this.vida || semSessao(erro)) return { tipo: 'parada' }
-        if (desconhecida(erro)) {
-          this.guarda.esquecer()
-          return { tipo: 'esquecida' }
-        }
-        this.avisos.aoPerderContato(erro)
-        await this.dormir(PAUSA)
-        if (vida !== this.vida) return { tipo: 'parada' }
+        const fim = await this.aoFalhar(erro, vida)
+        if (fim) return fim
         continue
       }
       if (vida !== this.vida) return { tipo: 'parada' }
