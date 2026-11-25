@@ -215,7 +215,7 @@ def _log_format(nonce):
 def _commit_parts(log, nonce):
     """(hash, message, diff) of each commit in the log (a merge shows once per parent under -m)."""
     frame = rf"^{nonce}C (\S+)\n{nonce}M\n(.*?)\n{nonce}E\n"
-    return itertools.batched(re.split(frame, log, flags=re.MULTILINE | re.DOTALL)[1:], 3)  # noqa: B911 -- the split makes groups of three (hash, message, diff)
+    return itertools.batched(re.split(frame, log, flags=re.MULTILINE | re.DOTALL)[1:], 3, strict=True)
 
 
 def _section_path(header):
