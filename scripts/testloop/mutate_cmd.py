@@ -18,7 +18,9 @@ config the run writes (process_isolation, timeout_multiplier, pytest arguments, 
 one the cache was written under (df-n8ac.48). A reused verdict stays through any other change
 outside its function: a weakened test (for a killed one), the module's constants or imports, a function
 it calls (in this module or another), a base class, the files in `copy`, conftest.py, `env` in
-testloop.toml. The full run of main, which starts from no cache, audits those (df-n8ac.35).
+testloop.toml. mutmut's stats (which tests reach which function) are restored only while every function
+has the text it had in the cache; otherwise they are collected anew, because from a restored copy it
+collects only for new tests and would link a new function to them alone (df-2dlq). The full run of main, which starts from no cache, audits those (df-n8ac.35).
 """
 
 import ast
@@ -58,7 +60,7 @@ NOTHING_MATCHES = "Filtered for specific mutants, but nothing matches"
 PROBE = "testloop-cache-probe"
 
 # What the cache keeps of mutmut's mutants/ (df-n8ac.38): its stats (which tests reach which
-# function, their durations) and a .meta per mutated file (each mutant's verdict, each function's
+# function, their durations; restored only while no function is new or changed, df-2dlq) and a .meta per mutated file (each mutant's verdict, each function's
 # hash). Both name files relative to the copy, so they move to a new copy. The mutant sources are left
 # out: mutmut writes them anew, and one newer than its source would make mutmut skip the hash check.
 MUTANTS = "mutants"
@@ -122,14 +124,21 @@ def _recorded(mutants: Path, name: str, module: str):
         return None
 
 
-def restore_cache(cache_dir: Path, copy: Path, module: str, tool_config: str) -> Cached | None:
+def restore_cache(cache_dir: Path, copy: Path, module: str, tool_config: str,
+                  texts: dict[str, str] | None = None) -> Cached | None:
     """Put the cached state into the copy's mutants/ and return the module's function texts and test
     files it was found on; None, with nothing restored, when the cache holds no state or its verdicts
-    were found under another tool config (or none recorded)."""
+    were found under another tool config (or none recorded). When `texts` (the module's function texts
+    now) has a function the cache lacks or has with another text, the stats are not restored, only the
+    .meta files (df-2dlq): mutmut would collect stats only for the tests that are new, and link a new
+    function only to them, so its mutants would survive for lack of the old tests."""
     mutants = cache_dir / MUTANTS
     if _recorded(mutants, CONFIG_FILE, module) != tool_config or _copy_state(mutants, copy / MUTANTS) == 0:
         return None
-    return Cached(_recorded(mutants, TEXTS_FILE, module) or {}, _recorded(mutants, TESTS_FILE, module))
+    cached = Cached(_recorded(mutants, TEXTS_FILE, module) or {}, _recorded(mutants, TESTS_FILE, module))
+    if texts is not None and any(cached.texts.get(function) != text for function, text in texts.items()):
+        (copy / MUTANTS / STATS_FILE).unlink(missing_ok=True)   # df-2dlq: mutmut collects the stats anew
+    return cached
 
 
 def save_cache(copy: Path, cache_dir: Path, module: str, texts: dict[str, str], tests: dict[str, str],  # noqa: PLR0913 -- one argument per record the cache keeps
@@ -517,7 +526,7 @@ def main(config: Config, module: str, budget_seconds: float = DEFAULT_BUDGET_SEC
             cache_dir = Path(cache_dir).resolve()
             job.texts = _module_texts(config, module)
             tests_now = test_hashes(config.repo, tests)
-            cached = restore_cache(cache_dir, copy, module, tool_config)
+            cached = restore_cache(cache_dir, copy, module, tool_config, job.texts)
             if cached is not None:
                 job.restored, job.cached_texts, job.same_tests = True, cached.texts, cached.tests == tests_now
         try:
