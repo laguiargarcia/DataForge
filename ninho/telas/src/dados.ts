@@ -26,21 +26,21 @@ export function useDados<T>(aberta: boolean, ler: () => Promise<T>, oQue: string
   // Responde se a leitura falhou sendo ainda a mais recente (quem pediu pode ter o que desfazer).
   const reler = useCallback((manterFalha = false): Promise<boolean> => {
     const esta = ++ultima.current
+    let falhou = false
     return ler().then(
       valor => {
-        if (ultima.current !== esta) return false
+        if (ultima.current !== esta) return
         carregou.current = true
         setCarga({ fase: 'ok', valor })
         if (!manterFalha) setFalha(null)
-        return false
       },
       e => {
-        if (ultima.current !== esta) return false
+        if (ultima.current !== esta) return
+        falhou = true
         if (!carregou.current) setCarga({ fase: 'erro', mensagem: mensagem(e) })
         else if (!manterFalha) setFalha(`Não foi possível reler ${oQue}: ${mensagem(e)}`)
-        return true
       },
-    )
+    ).then(() => falhou)
   }, [ler, oQue])
 
   // A casca mantém a tela montada e escondida: ler só quando ela está aberta, e reler quando a
