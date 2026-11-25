@@ -424,3 +424,64 @@ def test_a_commit_message_is_the_first_line_after_its_hash(repo, capsys, tmp_pat
     code, _, failures = run(capsys, "--history")
     assert code == 1
     assert [f.split(" ->")[0] for f in failures] == ["REAL: history:2"]
+
+
+def test_history_reads_what_git_takes_for_binary(repo, capsys, tmp_path):
+    """df-wkay: a text with a NUL and a UTF-16 one (PowerShell `>`) are 'Binary files differ' in a plain
+    log; the audit reads them as the staged check does, after a later commit removed them."""
+    repo("ok.py", "x = 1\n")
+    (tmp_path / "stray.txt").write_bytes(b"header\x00\n" + EMAIL.encode() + b"\n")
+    (tmp_path / "u16.txt").write_bytes(f"x\nFulano de Tal\n{CPF}\n".encode("utf-16"))
+    (tmp_path / "u16be.txt").write_bytes(b"\xfe\xff" + f"{CPF}\n".encode("utf-16-be"))
+    (tmp_path / "copy.txt").write_bytes(b"\xfe\xff" + f"{CPF}\n".encode("utf-16-be"))   # the same version twice
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "add", cwd=tmp_path)
+    _git("rm", "-q", "stray.txt", "u16.txt", "u16be.txt", "copy.txt", cwd=tmp_path)
+    _git("commit", "-qm", "remove", cwd=tmp_path)
+    assert run(capsys, "--all")[2] == []
+    failures = run(capsys, "--history")[2]
+    emails = [f for f in failures if f.startswith("EMAIL: history:")]   # in the log: the commit that adds, the one that removes
+    assert [f.partition(" -> ")[2] for f in emails] == ["'so…' (17 chars)"] * 2
+    assert [f for f in failures if f.startswith(("CPF: history: ", "NAME: history: "))] == [
+        "CPF: history: copy.txt:1 -> '52…' (11 chars)", "CPF: history: u16.txt:3 -> '52…' (11 chars)",
+        "NAME: history: u16.txt:2 -> 'Fu…' (13 chars)"]
+
+
+def test_history_with_no_file_asks_git_for_no_content(monkeypatch):
+    asked = []
+    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: asked.append(args[0]) or "")
+    assert leakguard_files.check_history([]) == []
+    assert asked == ["log", "rev-list", "log"]
+
+
+def test_the_utf16_versions_are_cut_out_of_what_git_wrote_byte_for_byte(monkeypatch):
+    """Each object comes as '<id> <type> <size>', a line feed, its bytes and one more line feed. Only a
+    file version with a byte order mark is kept, under the first path it had, whatever comes before it."""
+    le, be = b"\xff\xfe" + "a\n".encode("utf-16-le"), b"\xfe\xff" + "b".encode("utf-16-be")
+    objects = [("1" * 40, "blob", le), ("2" * 40, "tree", b"\xff\xfe tree bytes\n"), ("3" * 40, "blob", b"plain\n"),
+               ("4" * 40, "blob", be)]
+    listing = f"{'0' * 40}\n{'1' * 40} first.txt\n{'1' * 40} again.txt\n{'2' * 40} dir\n{'3' * 40} plain.txt\n{'4' * 40} dir/b e.txt\n"
+    asked = {}
+
+    def git(*args, stdin=None, text=True):
+        if args[0] == "rev-list":
+            return listing
+        asked.update(args=args, stdin=stdin, text=text)
+        return b"".join(f"{sha} {kind} {len(data)}\n".encode() + data + b"\n" for sha, kind, data in objects)
+
+    monkeypatch.setattr(leakguard_files, "_git", git)
+    assert leakguard_files._utf16_blobs() == [("first.txt", le), ("dir/b e.txt", be)]
+    assert asked == {"args": ("cat-file", "--batch"), "text": False,
+                     "stdin": "".join(f"{n * 40}\n" for n in "1234").encode()}
+
+
+def test_git_in_bytes_gives_the_bytes_and_says_why_it_failed_whatever_git_wrote(repo, tmp_path, monkeypatch):
+    (tmp_path / "u16.txt").write_bytes(b"\xff\xfea\x00\r\x00\n\x00")
+    sha = leakguard_files._git("hash-object", "-w", "u16.txt").strip()
+    assert leakguard_files._git("cat-file", "blob", sha, text=False) == b"\xff\xfea\x00\r\x00\n\x00"
+    assert leakguard_files._git("cat-file", "--batch", stdin=f"{sha}\n".encode(), text=False).startswith(sha.encode() + b" blob 8\n")
+    monkeypatch.setattr(leakguard_files.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a[0], 128, stdout=b"", stderr=b" fatal: \xff bad\nmore\n"))
+    with pytest.raises(leakguard_files.GitError) as raised:
+        leakguard_files._git("cat-file", "--batch", text=False)
+    assert str(raised.value) == "git cat-file failed with exit code 128: fatal: \ufffd bad"
