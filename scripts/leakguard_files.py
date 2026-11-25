@@ -2,6 +2,7 @@
 what git says (the files .gitignore excludes, every tracked file, the whole history). Part of
 scripts/leakguard.py (df-n8ac.36), whose docstring describes the whole guard."""
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -189,14 +190,63 @@ def _utf16_blobs():
     return blobs
 
 
+# A commit whose message holds a finding the owner decided to leave in the history: full hash -> the bead
+# of the decision. Only the message is let through; the commit's diff is still read.
+ACCEPTED_MESSAGES = {"d2cb9cf0544c4667918927a500d6170456599830": "df-0eat"}
+HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.MULTILINE)   # only these ranges, not the context after
+MERGE_LOGIN = re.compile(r"^Merge pull request #\d+ from [^/\s]+/", re.MULTILINE)   # the login is public on GitHub
+COMMIT_START, MESSAGE_START, MESSAGE_END = "\x01", "\x02", "\x03"   # frame each commit in the log
+
+
+def _blank(match):
+    """The matched text as spaces of the same length, so no line and no column moves."""
+    return re.sub(r"[^\n]", " ", match.group(0))
+
+
+def _commit_parts(log):
+    """(hash, message, diff) of each entry of the log (a merge shows once per parent under -m)."""
+    for entry in log.split(COMMIT_START)[1:]:
+        sha, _, rest = entry.partition(MESSAGE_START)
+        message, _, diff = rest.partition(MESSAGE_END)
+        yield sha, message.removeprefix("\n"), diff
+
+
+def _file_sections(diff):
+    """(path, the section's text) for each file of a commit's diff; a section starts at its 'diff --git'
+    header, which names the file as 'a/<path> b/<path>'."""
+    starts = [m.start() for m in re.finditer(r"^diff --git ", diff, re.MULTILINE)] + [len(diff)]
+    for start, end in zip(starts, starts[1:], strict=False):
+        section = diff[start:end]
+        yield section.partition("\n")[0].rpartition(" b/")[2], section
+
+
+def _history_failures(log, sources):
+    """The findings in the log, each commit read as its message and, apart, each file of its diff (so a
+    file's exemption holds, as in check_files). Each finding once: -m shows a merge's diff per parent."""
+    failures = []
+    for sha, message, diff in _commit_parts(log):
+        short = f"history {sha[:7]}"
+        if sha not in ACCEPTED_MESSAGES:
+            text = MERGE_LOGIN.sub(_blank, message)
+            failures += check_text(HISTORY, text, sources, where=lambda n, short=short: f"{short} msg:{n}")
+        for path, section in _file_sections(diff):
+            shown = _path_failures(path, sources)[0]
+            failures += check_text(path, HUNK_HEADER.sub(_blank, section), sources,
+                                   where=lambda n, short=short, shown=shown: f"{short} {shown}:{n}")
+    return list(dict.fromkeys(failures))
+
+
 def check_history(sources):
     """Every version of every file, every commit message, merges included, and every path ever committed.
     The paths are read NUL-separated: without -z git quotes a non-ASCII one ("relat\\303\\263rio.db") and
     its suffix would not match. The paths' own findings are in the log, in its diff headers (written
     unquoted, see _git). --text makes the log show what git takes for binary (a text with a NUL, where it
-    would print 'Binary files differ'); a UTF-16 version is read apart, decoded as a file is."""
-    log = _git("log", "--all", "-p", "-m", "--text", "--no-color", "--format=commit %H%n%B")
-    failures = check_text(HISTORY, log, sources)
+    would print 'Binary files differ'); a UTF-16 version is read apart, decoded as a file is. Noise that
+    is no leak is let through: a hunk header's line ranges, the login of a merge's message, and what
+    check_files lets through in its path (LICENSE, uv.lock)."""
+    log = _git("log", "--all", "-p", "-m", "--text", "--no-color",
+               f"--format={COMMIT_START}%H{MESSAGE_START}%n%B{MESSAGE_END}")
+    failures = _history_failures(log, sources)
     for path, data in _utf16_blobs():
         shown = _path_failures(path, sources)[0]
         failures += check_text(HISTORY, _decode(data), sources, where=lambda n, shown=shown: f"history: {shown}:{n}")

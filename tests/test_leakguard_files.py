@@ -4,14 +4,15 @@ what git says (ignored files, tracked files, the whole history).
 Every PII-shaped or "real" value is made up and assembled at run time (tests/leakguard_fixtures.py).
 """
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from scripts import leakguard_files, leakguard_values
+from scripts import leakguard_files, leakguard_patterns, leakguard_values
 from tests import leakguard_fixtures
-from tests.leakguard_fixtures import CNPJ, CPF, EMAIL, NUMBER_BARE, OWNER, RECEIVER, _git, run
+from tests.leakguard_fixtures import AMOUNT, CNPJ, CPF, EMAIL, NUMBER_BARE, OWNER, RECEIVER, _git, run
 
 repo = pytest.fixture(leakguard_fixtures.repo)
 workspace = pytest.fixture(leakguard_fixtures.workspace)
@@ -404,7 +405,7 @@ def test_history_reads_every_branch_merge_resolutions_and_the_paths_of_both(hist
     assert code == 1
     assert sorted({f.rsplit(", ", 1)[1] for f in failures if f.startswith("REAL")}) == [
         "raw.accounts.owner from ws)", "raw.transactions.paymentData from ws)"]
-    assert all(f.startswith("REAL: history:") for f in failures if f.startswith("REAL"))
+    assert all(f.startswith("REAL: history ") for f in failures if f.startswith("REAL"))
     assert sorted(f for f in failures if f.startswith("history:")) == [
         "history: branch.db: private file was committed", "history: merged.db: private file was committed"]
 
@@ -423,7 +424,7 @@ def test_a_commit_message_is_the_first_line_after_its_hash(repo, capsys, tmp_pat
     _git("commit", "-qm", f"pay {RECEIVER}", cwd=tmp_path)
     code, _, failures = run(capsys, "--history")
     assert code == 1
-    assert [f.split(" ->")[0] for f in failures] == ["REAL: history:2"]
+    assert [f.split(" ->")[0] for f in failures] == ["REAL: history " + _head(tmp_path) + " msg:1"]
 
 
 def test_history_reads_what_git_takes_for_binary(repo, capsys, tmp_path):
@@ -440,11 +441,84 @@ def test_history_reads_what_git_takes_for_binary(repo, capsys, tmp_path):
     _git("commit", "-qm", "remove", cwd=tmp_path)
     assert run(capsys, "--all")[2] == []
     failures = run(capsys, "--history")[2]
-    emails = [f for f in failures if f.startswith("EMAIL: history:")]   # in the log: the commit that adds, the one that removes
+    emails = [f for f in failures if f.startswith("EMAIL: history ")]   # in the log: the commit that adds, the one that removes
     assert [f.partition(" -> ")[2] for f in emails] == ["'so…' (17 chars)"] * 2
     assert [f for f in failures if f.startswith(("CPF: history: ", "NAME: history: "))] == [
         "CPF: history: copy.txt:1 -> '52…' (11 chars)", "CPF: history: u16.txt:3 -> '52…' (11 chars)",
         "NAME: history: u16.txt:2 -> 'Fu…' (13 chars)"]
+
+
+def _head(tmp_path):
+    return _git("rev-parse", "--short=7", "HEAD", cwd=tmp_path).stdout.decode().strip()
+
+
+def _log(*commits):
+    """The log as check_history reads it: (hash, message, diff) of each commit, framed."""
+    return "".join(f"\x01{sha}\x02\n{message}\x03\n{diff}" for sha, message, diff in commits)
+
+
+SHA = "a" * 40
+FAKE_NAME = "Fulano" + "Zeta"
+
+
+def _diff(path, *lines, hunk="@@ -1 +1 @@"):
+    return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n{hunk}\n" + "".join(f"{x}\n" for x in lines)
+
+
+@pytest.fixture
+def named(monkeypatch):
+    monkeypatch.setattr(leakguard_patterns, "NAME_PATTERNS", [re.compile(FAKE_NAME, re.IGNORECASE)])
+
+
+def test_a_hunk_header_range_is_not_read_as_an_amount_but_its_context_text_is():
+    sources = [("ws", {AMOUNT: "raw.transactions.amount", RECEIVER.lower(): "raw.transactions.paymentData"})]
+    header = f"@@ -1,2 +{AMOUNT.replace('.', ',')} @@"
+    assert leakguard_files._history_failures(_log((SHA, "m", _diff("f.py", "+x", hunk=header))), sources) == []
+    in_context = leakguard_files._history_failures(
+        _log((SHA, "m", _diff("f.py", "+x", hunk=f"{header} pay {RECEIVER} now"))), sources)
+    assert len(in_context) == 1
+    assert in_context[0].startswith(f"REAL: history {SHA[:7]} f.py:4 -> ")
+
+
+def test_the_login_of_a_merge_message_is_let_through_but_not_the_rest_of_its_line(named):
+    merge = f"Merge pull request #12 from {FAKE_NAME}/fix/x"
+    assert leakguard_files._history_failures(_log((SHA, merge, "")), []) == []
+    other = f"Merge pull request #12 from other/{FAKE_NAME}-branch"
+    assert [f.split(" ->")[0] for f in leakguard_files._history_failures(_log((SHA, other, "")), [])] == [
+        f"NAME: history {SHA[:7]} msg:1"]
+    assert leakguard_files._history_failures(_log((SHA, f"thanks {FAKE_NAME}", "")), [])
+
+
+def test_the_attribution_files_and_the_lock_are_exempt_as_in_check_files(named):
+    diff = _diff("LICENSE", f"+(c) {FAKE_NAME}") + _diff("uv.lock", f'+hash = "{CPF}"')
+    assert leakguard_files._history_failures(_log((SHA, "m", diff)), []) == []
+    elsewhere = _diff("docs/LICENSE", f"+(c) {FAKE_NAME}") + _diff("lock.txt", f"+{CPF}")
+    assert [f.split(" ->")[0] for f in leakguard_files._history_failures(_log((SHA, "m", elsewhere)), [])] == [
+        f"NAME: history {SHA[:7]} docs/LICENSE:5", f"CPF: history {SHA[:7]} lock.txt:5"]
+
+
+def test_a_message_accepted_by_decision_is_let_through_but_its_diff_is_read(named, monkeypatch):
+    monkeypatch.setitem(leakguard_files.ACCEPTED_MESSAGES, SHA, "df-test")
+    failures = leakguard_files._history_failures(_log((SHA, f"by {FAKE_NAME}", _diff("f.py", f"+{FAKE_NAME}"))), [])
+    assert [f.split(" ->")[0] for f in failures] == [f"NAME: history {SHA[:7]} f.py:5"]
+    assert leakguard_files._history_failures(_log(("b" * 40, f"by {FAKE_NAME}", "")), [])
+
+
+def test_a_real_value_in_a_normal_diff_line_and_in_another_commits_message_is_found(named):
+    failures = leakguard_files._history_failures(
+        _log((SHA, "ok", _diff("f.py", f"+owner = '{FAKE_NAME}'")), ("b" * 40, f"pay {FAKE_NAME}", "")), [])
+    assert [f.split(" ->")[0] for f in failures] == [f"NAME: history {SHA[:7]} f.py:5", f"NAME: history {'b' * 7} msg:1"]
+
+
+def test_the_same_finding_of_a_merge_shown_once_per_parent_is_reported_once(named):
+    entry = (SHA, "merge", _diff("f.py", f"+{FAKE_NAME}"))
+    assert len(leakguard_files._history_failures(_log(entry, entry), [])) == 1
+
+
+def test_a_path_with_a_finding_is_masked_in_the_history_location(named):
+    failures = leakguard_files._history_failures(_log((SHA, "m", _diff(f"{FAKE_NAME}.txt", "+x"))), [])
+    assert failures
+    assert not [f for f in failures if FAKE_NAME in f]
 
 
 def test_history_with_no_file_asks_git_for_no_content(monkeypatch):
