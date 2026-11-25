@@ -10,11 +10,11 @@ const navegador = (process.env.NAVEGADOR ?? 'chromium') as 'chromium' | 'webkit'
 // A porta pode vir de fora: duas sessões rodando o e2e ao mesmo tempo não cabem na mesma.
 const porta = Number(process.env.NINHO_E2E_PORTA ?? 8766)
 // A pessoa que o esqueleto cria no banco do app da cópia: só do servidor de teste, sobre o dado sintético.
-const login = { username: 'ana', password: 'senha-falsa-do-teste-da-tela' }
+export const login = { nome: 'ana', senha: 'senha-falsa-do-teste-da-tela' }
 // Uma segunda pessoa, só com a lista: o teste da barra entra como ela (e2e/tela.spec.ts).
-export const soLista = { username: 'beto', password: 'outra-senha-falsa-da-tela' }
+export const soLista = { nome: 'beto', senha: 'outra-senha-falsa-da-tela' }
 // Uma terceira, só com os desejos: quem marca o presente-surpresa num desejo da ana (e2e/tela.spec.ts).
-export const soDesejos = { username: 'caio', password: 'mais-uma-senha-falsa-da-tela' }
+export const soDesejos = { nome: 'caio', senha: 'mais-uma-senha-falsa-da-tela' }
 
 export default defineConfig({
   testDir: './e2e',
@@ -27,7 +27,6 @@ export default defineConfig({
     ...devices['iPhone 15'],
     browserName: navegador,
     baseURL: `http://127.0.0.1:${porta}/`,
-    httpCredentials: login,
     timezoneId: 'America/Sao_Paulo',
     locale: 'pt-BR',
   },
@@ -37,9 +36,9 @@ export default defineConfig({
     // servidor do ninho sobre ela; a cópia some quando o teste encerra o servidor.
     command: `"${python}" "${resolve(raiz, 'scripts/dev/esqueleto.py')}" --porta ${porta}`,
     env: {
-      NINHO_ESQUELETO_NOME: login.username, NINHO_ESQUELETO_SENHA: login.password,
-      NINHO_ESQUELETO_NOME_LISTA: soLista.username, NINHO_ESQUELETO_SENHA_LISTA: soLista.password,
-      NINHO_ESQUELETO_NOME_DESEJOS: soDesejos.username, NINHO_ESQUELETO_SENHA_DESEJOS: soDesejos.password,
+      NINHO_ESQUELETO_NOME: login.nome, NINHO_ESQUELETO_SENHA: login.senha,
+      NINHO_ESQUELETO_NOME_LISTA: soLista.nome, NINHO_ESQUELETO_SENHA_LISTA: soLista.senha,
+      NINHO_ESQUELETO_NOME_DESEJOS: soDesejos.nome, NINHO_ESQUELETO_SENHA_DESEJOS: soDesejos.senha,
     },
     url: `http://127.0.0.1:${porta}/`,
     reuseExistingServer: false,

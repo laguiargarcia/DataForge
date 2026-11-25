@@ -7,13 +7,11 @@ import sqlite3
 import uuid
 
 import pytest
-from fastapi.testclient import TestClient
 
 from ninho.desejos import desejos
 from ninho.servidor import banco as banco_do_app
 from ninho.servidor import pessoas
-from ninho.servidor.app import app
-from tests.ninho.conftest import ANA, BETO, MODULOS
+from tests.ninho.conftest import ANA, BETO, MODULOS, Cliente
 
 LINK = "https://exemplo.invalid/bicicleta"
 # Every route, as (method, path, body, the route's own success code); {desejo} and {anotacao} are
@@ -33,7 +31,7 @@ CASA = {"a": "ana", "b": "beto", "c": "caio"}   # for the rules called without t
 @pytest.fixture
 def servidor(banco):
     """The server on an app database of its own, with ana and beto both on the wishlist."""
-    return TestClient(app)
+    return Cliente()
 
 
 @pytest.fixture
@@ -90,7 +88,7 @@ def test_cada_rota_da_403_a_quem_nao_tem_o_modulo(servidor, banco, rota):
 def test_cada_rota_da_401_sem_login(servidor, banco, rota, auth):
     r = _pedir(servidor, banco, rota, auth)
     assert r.status_code == 401
-    assert r.headers["www-authenticate"] == "Basic"
+    assert "www-authenticate" not in r.headers   # nothing that makes a browser show its own box
 
 
 @pytest.mark.parametrize("rota", ROTAS, ids=IDS)
@@ -268,9 +266,9 @@ def test_o_desejo_sobrevive_a_reabrir_o_banco(servidor, banco, ids):
         nomes = {linha[0] for linha in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     finally:
         conn.close()
-    assert {nome for nome in nomes if nome not in ("pessoas", "lista_itens")} == {
+    assert {nome for nome in nomes if nome not in ("pessoas", "sessoes", "lista_itens")} == {
         "desejos_desejos", "desejos_anotacoes", "desejos_presentes"}
-    assert _todos(TestClient(app)) == [desejo]
+    assert _todos(Cliente()) == [desejo]
 
 
 def test_pessoas_diz_id_e_nome_e_nunca_o_hash(servidor, banco, ids):
@@ -294,7 +292,7 @@ def test_pessoas_responde_a_quem_nao_tem_modulo_nenhum(servidor, banco):
 def test_pessoas_sem_login_e_401(servidor, auth):
     r = servidor.get("/api/pessoas", auth=auth)
     assert r.status_code == 401
-    assert r.headers["www-authenticate"] == "Basic"
+    assert "www-authenticate" not in r.headers   # nothing that makes a browser show its own box
 
 
 def test_eu_diz_o_id(servidor, ids):
@@ -484,7 +482,7 @@ def _o_que_a_ana_recebe(tmp_path, monkeypatch, pedido, marcado):
             pessoas.criar(conn, nome, senha, MODULOS[nome])
         ids = {pessoa["nome"]: pessoa["id"] for pessoa in pessoas.listar(conn)}
     monkeypatch.setenv("NINHO_BANCO", str(arquivo))
-    servidor = TestClient(app)
+    servidor = Cliente()
     desejo = _criar(servidor, "tênis", ids["ana"], anotacoes=["capa dura"])
     _criar(servidor, "livro", ids["ana"])   # an unmarked wish beside it, so the order is compared too
     if marcado:

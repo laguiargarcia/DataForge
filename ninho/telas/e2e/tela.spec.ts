@@ -1,5 +1,13 @@
-import { test, expect, type Page } from '@playwright/test'
-import { soDesejos, soLista } from '../playwright.config'
+import { test, expect, type BrowserContext, type Page } from '@playwright/test'
+import { login, soDesejos, soLista } from '../playwright.config'
+
+// Abre uma sessão da pessoa no servidor: o cookie fica no contexto, e a página já abre com ele.
+// Estes testes são das telas, então entram direto pela rota; o formulário de login tem os seus em
+// e2e/entrar.spec.ts.
+async function entrar(contexto: BrowserContext, quem: { nome: string; senha: string }) {
+  const r = await contexto.request.post('api/entrar', { data: quem })
+  expect(r.status()).toBe(204)
+}
 
 // Guarda: requisição fora da origem, erro de console ou erro de página reprova o teste.
 let problemas: string[] = []
@@ -16,6 +24,7 @@ function vigiar(page: Page, baseURL: string) {
 
 test.beforeEach(async ({ page, baseURL }) => {
   problemas = []
+  await entrar(page.context(), login)
   vigiar(page, baseURL!)
 })
 
@@ -69,8 +78,9 @@ test('a barra embaixo abre a Lista e volta para Finanças no mesmo mês', async 
 })
 
 test('quem só tem a lista vê a barra sem Finanças nem Desejos, abre direto na Lista e não pede nada às finanças', async ({ browser, baseURL }) => {
-  // Outra pessoa, outro login: um contexto próprio com as credenciais dela (df-8x0m.23.6.3).
-  const contexto = await browser.newContext({ baseURL, httpCredentials: soLista })
+  // Outra pessoa, outro login: um contexto próprio com a sessão dela (df-8x0m.23.6.3).
+  const contexto = await browser.newContext({ baseURL })
+  await entrar(contexto, soLista)
   const page = await contexto.newPage()
   const pedidos: string[] = []
   const erros: string[] = []
@@ -82,7 +92,8 @@ test('quem só tem a lista vê a barra sem Finanças nem Desejos, abre direto na
   await page.goto(`?tela=financas&mes=${MES}`)
   await expect(page.getByRole('heading', { name: 'Compras', exact: true })).toBeVisible()
   const barra = page.getByRole('navigation', { name: 'Módulos' })
-  await expect(barra.getByRole('button')).toHaveCount(1)
+  // Só o módulo dela e o Sair, que é da casca.
+  await expect(barra.getByRole('button')).toHaveText(['Compras', 'Sair'])
   await expect(barra.getByRole('button', { name: 'Compras', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(barra.getByRole('button', { name: 'Desejos', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Desejos', exact: true })).toHaveCount(0)
@@ -288,7 +299,8 @@ test('o presente-surpresa: caio marca "Vou dar este" num desejo da ana, e a pág
   await expect(regiaoDe(page).getByText('Você vai dar')).toBeVisible()
 
   // O caio, no contexto dele, marca o desejo da ana.
-  const contexto = await browser.newContext({ baseURL, httpCredentials: soDesejos })
+  const contexto = await browser.newContext({ baseURL })
+  await entrar(contexto, soDesejos)
   const caio = await contexto.newPage()
   vigiar(caio, baseURL!)
   await caio.goto('?tela=desejos')

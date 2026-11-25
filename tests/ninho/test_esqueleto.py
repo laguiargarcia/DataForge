@@ -20,6 +20,7 @@ import polars as pl
 import pytest
 
 from ninho.financas import leitura
+from ninho.servidor import sessoes
 from tests.ninho.conftest import ANA, BETO
 
 ESQUELETO = Path(__file__).resolve().parents[2] / "scripts" / "dev" / "esqueleto.py"
@@ -102,9 +103,15 @@ def test_o_login_do_esqueleto_nao_chega_ao_finance_demo_nem_ao_servidor(tmp_path
 def test_o_esqueleto_le_corrige_aplica_e_mostra_o_resultado(esqueleto):
     base, home, processo, log = esqueleto
     workspace = home / "workspaces" / "GetFinance"
-    with httpx.Client(base_url=base, auth=ANA, timeout=120) as http:
-        assert httpx.get(f"{base}/api/financas/edicoes").status_code == 401   # nobody in without a login
-        assert httpx.get(f"{base}/api/eu", auth=(ANA[0], "senha-errada")).status_code == 401
+    with httpx.Client(base_url=base, timeout=120) as http:
+        assert http.get("/api/financas/edicoes").status_code == 401   # nobody in without a session
+        assert http.post("/api/entrar", json={"nome": ANA[0], "senha": "senha-errada"}).status_code == 401
+        entrada = http.post("/api/entrar", json={"nome": ANA[0], "senha": ANA[1]})
+        assert entrada.status_code == 204, entrada.text
+        # The cookie is Secure and this server is plain HTTP on the loopback (in prod HTTPS ends at
+        # Tailscale), so the client would keep it to itself: it goes by hand.
+        http.headers["Cookie"] = f"{sessoes.COOKIE}={entrada.cookies[sessoes.COOKIE]}"
+        http.cookies.clear()
         eu = http.get("/api/eu").json()
         assert (eu["nome"], eu["modulos"]) == (ANA[0], ["financas", "lista", "desejos"])
         pagina = http.get("/")

@@ -4,14 +4,13 @@ import os
 import shutil
 import subprocess
 import sys
-from collections import OrderedDict
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from ninho.servidor import banco as banco_do_app
-from ninho.servidor import dependencias, pessoas
+from ninho.servidor import pessoas, sessoes
 from ninho.servidor.app import app
 
 WORKSPACE = Path(__file__).resolve().parents[2] / "workspaces" / "GetFinance"
@@ -19,6 +18,35 @@ ANA = ("ana", "senha-falsa-da-ana")
 BETO = ("beto", "senha-falsa-do-beto")
 AUTH = ANA
 MODULOS = {"ana": ["financas", "lista", "desejos"], "beto": ["lista", "desejos"]}
+
+
+class Cliente(TestClient):
+    """The server as a browser sees it, over HTTPS (the session cookie is ``Secure``). ``auth=(name,
+    password)`` on a request means "asked by this person": the client logs in at ``/api/entrar`` the
+    first time it sees the pair and sends that session's cookie; a pair the server refuses leaves the
+    request without a session, like anyone who never logged in. Its own cookie jar is never used, so
+    a request without ``auth`` carries no session."""
+
+    def __init__(self, servidor=app):
+        super().__init__(servidor, base_url="https://testserver")
+        self.sessoes: dict[tuple[str, str], str | None] = {}
+
+    def entrar(self, nome: str, senha: str) -> str | None:
+        """The token of a new session of the person, or None when the server refuses the login."""
+        r = super().request("POST", "/api/entrar", json={"nome": nome, "senha": senha})
+        self.cookies.clear()
+        return r.cookies.get(sessoes.COOKIE)
+
+    def request(self, method, url, *, auth=None, headers=None, **kwargs):
+        cabecalhos = dict(headers or {})
+        if isinstance(auth, tuple):   # httpx hands its own marker when the call gives none
+            if auth not in self.sessoes:
+                self.sessoes[auth] = self.entrar(*auth)
+            if self.sessoes[auth]:
+                cabecalhos["Cookie"] = f"{sessoes.COOKIE}={self.sessoes[auth]}"
+        resposta = super().request(method, url, headers=cabecalhos, **kwargs)
+        self.cookies.clear()
+        return resposta
 
 
 def rodar_job(home: Path, job: str) -> None:
@@ -58,12 +86,6 @@ def custo_baixo(monkeypatch):
     monkeypatch.setattr(pessoas, "_P", 1)
 
 
-@pytest.fixture(autouse=True)
-def memoria_vazia(monkeypatch):
-    """The server's memory of logins that passed starts empty in each test."""
-    monkeypatch.setattr(dependencias, "_conferidas", OrderedDict())
-
-
 @pytest.fixture
 def banco(tmp_path, monkeypatch):
     """The app database of the test (NINHO_BANCO), with ana and beto in it."""
@@ -81,4 +103,4 @@ def cliente(workspace, banco, monkeypatch):
     monkeypatch.setenv("NINHO_WORKSPACE", str(workspace))
     for nome in ("GETFINANCE_DATA", "MERCHANT_NORM_CONFIG"):   # never reach a job the server starts
         monkeypatch.delenv(nome, raising=False)
-    return TestClient(app)
+    return Cliente()

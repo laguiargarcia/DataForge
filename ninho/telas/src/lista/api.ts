@@ -1,5 +1,5 @@
 // Cliente das rotas da lista de compras (ninho/lista/rotas.py). Como em finanças, a página vem do
-// mesmo servidor atrás do login da pessoa (HTTP Basic), que o navegador manda em cada pedido daqui.
+// mesmo servidor, com a sessão de quem entrou num cookie que o navegador manda em cada pedido daqui.
 
 import { pedir as pedirAoServidor, segmento } from '../pedido'
 

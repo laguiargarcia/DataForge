@@ -5,11 +5,9 @@ route of the month's transactions answers from it, read-only, only to a person l
 
 import polars as pl
 import pytest
-from fastapi.testclient import TestClient
 
 from ninho.financas import leitura
-from ninho.servidor.app import app
-from tests.ninho.conftest import ANA, AUTH
+from tests.ninho.conftest import ANA, AUTH, Cliente
 
 ROTA = "/api/financas/transacoes"
 
@@ -17,7 +15,7 @@ ROTA = "/api/financas/transacoes"
 @pytest.fixture
 def cliente(workspace_demo, banco, monkeypatch):
     monkeypatch.setenv("NINHO_WORKSPACE", str(workspace_demo))
-    return TestClient(app)
+    return Cliente()
 
 
 def _tabela(workspace):
@@ -60,7 +58,7 @@ def test_sem_a_senha_certa_responde_401(cliente, workspace_demo, auth):
     mes, _ = _um_mes(workspace_demo)
     r = cliente.get(ROTA, params={"mes": mes}, auth=auth)
     assert r.status_code == 401
-    assert r.headers["www-authenticate"].startswith("Basic")
+    assert "www-authenticate" not in r.headers   # nothing that makes a browser show its own box
     assert "transacoes" not in r.json()
 
 
