@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  adicionar, anotar, apagar, daParte, desanotar, DOS_DOIS, editar, guardarParte, lerDesejos, lerParteGuardada,
-  lerPessoas, parteDe, parteInicial, partes, type Desejo,
+  acaoDoPresente, adicionar, anotar, apagar, daParte, desanotar, desmarcarPresente, DOS_DOIS, editar, guardarParte,
+  lerDesejos, lerParteGuardada, lerPessoas, marcarPresente, parteDe, parteInicial, partes, type Desejo,
 } from './api'
 
 const resposta = (status: number, corpo?: unknown) =>
@@ -16,7 +16,7 @@ function falso(...respostas: Response[]) {
 const desejo = (titulo: string, de_quem: string | null = null, realizado = false): Desejo => ({
   id: titulo, titulo, de_quem, adicionado_por: 'ana', realizado,
   realizado_em: realizado ? '2026-11-24T11:00:00+00:00' : null, criado_em: '2026-11-24T10:00:00+00:00',
-  anotacoes: [{ id: 'n1', texto: 'https://exemplo.invalid/a', link: true }],
+  anotacoes: [{ id: 'n1', texto: 'https://exemplo.invalid/a', link: true }], presente: null,
 })
 
 const PESSOAS = [{ id: 'id-ana', nome: 'ana' }, { id: 'id-beto', nome: 'beto' }]
@@ -72,6 +72,25 @@ describe('api dos desejos', () => {
     expect(f.mock.calls[0]).toEqual(['api/desejos/d%2F1/anotacoes/n%2E1', { method: 'DELETE' }])
   })
 
+  it('marca "vou dar" com PUT, sem corpo, e devolve o desejo com a marca', async () => {
+    const marcado = { ...desejo('livro', 'id-beto'), presente: { de: 'ana', meu: true } }
+    const f = falso(resposta(200, marcado))
+    expect(await marcarPresente('d/1')).toEqual(marcado)
+    expect(f.mock.calls[0]).toEqual(['api/desejos/d%2F1/presente', { method: 'PUT' }])
+  })
+
+  it('desmarca com DELETE, 204 sem corpo', async () => {
+    const f = falso(resposta(204))
+    await expect(desmarcarPresente('d1')).resolves.toBeUndefined()
+    expect(f.mock.calls[0]).toEqual(['api/desejos/d1/presente', { method: 'DELETE' }])
+  })
+
+  it('a marca recusada (de outra pessoa, ou o desejo é seu) traz a mensagem do servidor', async () => {
+    falso(resposta(409, { detail: 'outra pessoa já vai dar' }), resposta(422, { detail: 'o desejo é seu' }))
+    await expect(marcarPresente('d1')).rejects.toThrow('outra pessoa já vai dar')
+    await expect(desmarcarPresente('d1')).rejects.toThrow('o desejo é seu')
+  })
+
   it('a recusa traz a mensagem do servidor', async () => {
     falso(resposta(404, { detail: 'desejo não encontrado' }))
     await expect(editar('x', { realizado: true })).rejects.toThrow('desejo não encontrado')
@@ -109,6 +128,22 @@ describe('parteDe e daParte', () => {
   })
   it('sem desejos, duas listas vazias', () => {
     expect(daParte([], DOS_DOIS)).toEqual({ abertos: [], realizados: [] })
+  })
+})
+
+describe('acaoDoPresente', () => {
+  const comMarca = (meu: boolean): Desejo => ({ ...desejo('livro', 'id-beto'), presente: { de: 'caio', meu } })
+  it('num desejo de outra pessoa sem marca, marcar', () => {
+    expect(acaoDoPresente(desejo('livro', 'id-beto'), 'id-ana')).toBe('marcar')
+  })
+  it('com a marca de quem vê, desmarcar; com a de outra pessoa, nada', () => {
+    expect(acaoDoPresente(comMarca(true), 'id-ana')).toBe('desmarcar')
+    expect(acaoDoPresente(comMarca(false), 'id-ana')).toBeNull()
+  })
+  it('no próprio desejo e num dos dois, nada, com ou sem marca', () => {
+    expect(acaoDoPresente(desejo('livro', 'id-ana'), 'id-ana')).toBeNull()
+    expect(acaoDoPresente(desejo('livro'), 'id-ana')).toBeNull()
+    expect(acaoDoPresente(comMarca(true), 'id-beto')).toBeNull()
   })
 })
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
-  adicionar, anotar, apagar, daParte, desanotar, DOS_DOIS, editar, guardarParte, lerDesejos, lerParteGuardada,
-  lerPessoas, LIMITE_ANOTACAO, LIMITE_ANOTACOES, LIMITE_TITULO, parteDe, parteInicial, partes,
+  acaoDoPresente, adicionar, anotar, apagar, daParte, desanotar, desmarcarPresente, DOS_DOIS, editar, guardarParte,
+  lerDesejos, lerParteGuardada, lerPessoas, LIMITE_ANOTACAO, marcarPresente, LIMITE_ANOTACOES, LIMITE_TITULO, parteDe, parteInicial, partes,
   type Anotacao, type Desejo, type Parte, type Pessoa,
 } from './api'
 import type { Eu } from '../eu'
@@ -12,7 +12,8 @@ import { Logo } from '../Logo'
 // partes no alto (a de cada pessoa e a dos dois), os desejos da parte com as suas anotações (a que o
 // servidor diz ser um endereço vira link, aberto em outra aba), e os realizados recolhidos no fim.
 // Tocar num desejo abre-o para anotar, apagar uma anotação, mudar o título, mover de parte, marcar
-// realizado e apagar. Todos veem e mexem em tudo: a lista é lida ao abrir a tela e de novo cada vez
+// realizado e apagar; num desejo de outra pessoa, "Vou dar este" (o presente-surpresa,
+// df-8x0m.23.23.2). Todos veem e mexem em tudo: a lista é lida ao abrir a tela e de novo cada vez
 // que a tela ou a página volta a aparecer (src/dados.ts).
 
 type Dados = { desejos: Desejo[]; pessoas: Pessoa[] }
@@ -25,6 +26,7 @@ type Alterar = (acao: () => Promise<unknown>, antes?: (desejos: Desejo[]) => Des
 const classeBotao = 'h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold shrink-0 disabled:opacity-40'
 const classeCampo = 'flex-1 min-w-0 h-11 px-4 rounded-[999px] font-sans text-[16px] text-texto placeholder:text-secundario'
 const classeDiscreto = 'h-11 px-4 rounded-[999px] font-medium shrink-0 disabled:opacity-40'
+const classeDesmarcar = `${classeDiscreto} bg-fundo text-texto`
 
 const Xis = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -48,12 +50,23 @@ const semAnotacao = (desejo: Desejo, anotacao: string) =>
 const mudado = (desejo: Desejo, mudancas: Partial<Desejo>) =>
   (desejos: Desejo[]) => desejos.map(d => (d.id === desejo.id ? { ...d, ...mudancas } : d))
 
+// A marca e o botão do presente seguem só o que o servidor manda: para o dono `presente` vem sempre
+// null, e a tela nunca adivinha (sem mudança otimista: uma suposição poderia piscar a marca errada).
+function MarcaDoPresente({ desejo }: Readonly<{ desejo: Desejo }>) {
+  if (!desejo.presente) return null
+  return (
+    <p className="m-0 px-4 pb-2 break-words text-[14px] font-semibold text-entrada">
+      {desejo.presente.meu ? 'Você vai dar' : `${desejo.presente.de} vai dar`}
+    </p>
+  )
+}
+
 type CartaoProps = Readonly<{
-  desejo: Desejo; aberto: boolean; alternar: () => void; fechar: () => void
+  desejo: Desejo; eu: string; aberto: boolean; alternar: () => void; fechar: () => void
   todas: readonly Parte[]; ocupado: boolean; alterar: Alterar
 }>
 
-function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: CartaoProps) {
+function Cartao({ desejo, eu, aberto, alternar, fechar, todas, ocupado, alterar }: CartaoProps) {
   const [nota, setNota] = useState('')
   const [titulo, setTitulo] = useState(desejo.titulo)
   const [confirmando, setConfirmando] = useState(false)
@@ -89,6 +102,7 @@ function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: C
     alterar(() => editar(desejo.id, { realizado: !desejo.realizado }), mudado(desejo, { realizado: !desejo.realizado }))
   }
   const cheio = desejo.anotacoes.length >= LIMITE_ANOTACOES
+  const presente = acaoDoPresente(desejo, eu)
 
   return (
     <li className="border-b border-linha last:border-b-0">
@@ -99,6 +113,7 @@ function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: C
         </span>
         <Seta aberto={aberto} />
       </button>
+      <MarcaDoPresente desejo={desejo} />
       {desejo.anotacoes.length > 0 && (
         <ul aria-label={`Anotações de ${desejo.titulo}`} className="m-0 px-4 pb-2 list-none flex flex-col">
           {desejo.anotacoes.map(a => (
@@ -137,6 +152,13 @@ function Cartao({ desejo, aberto, alternar, fechar, todas, ocupado, alterar }: C
               {todas.map(p => <option key={p.chave} value={p.chave}>{p.rotulo}</option>)}
             </select>
           </label>
+          {presente && (
+            <button type="button" disabled={ocupado}
+              onClick={() => alterar(() => (presente === 'marcar' ? marcarPresente : desmarcarPresente)(desejo.id))}
+              className={`${presente === 'marcar' ? classeBotao : classeDesmarcar} self-start`}>
+              {presente === 'marcar' ? 'Vou dar este' : 'Não vou mais dar'}
+            </button>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={ocupado} onClick={realizar} className={classeBotao}>
               {desejo.realizado ? 'Desmarcar realizado' : 'Realizado'}
@@ -203,7 +225,7 @@ export function Desejos({ aberta, eu }: Props) {
   }
 
   const cartao = (d: Desejo) => (
-    <Cartao key={d.id} desejo={d} aberto={aberto === d.id} todas={todas} ocupado={ocupado} alterar={alterar}
+    <Cartao key={d.id} desejo={d} eu={eu.id} aberto={aberto === d.id} todas={todas} ocupado={ocupado} alterar={alterar}
       alternar={() => setAberto(a => (a === d.id ? null : d.id))} fechar={() => setAberto(null)} />
   )
 
