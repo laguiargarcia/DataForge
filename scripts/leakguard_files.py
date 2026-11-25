@@ -1,10 +1,11 @@
 """The leak guard's files: which paths are private, how a file and a path are read and checked, and
 what git says (the files .gitignore excludes, every tracked file, the whole history). Part of
 scripts/leakguard.py (df-n8ac.36), whose docstring describes the whole guard."""
+import itertools
 import os
 import re
-import secrets
 import subprocess
+import uuid
 from pathlib import Path
 
 from scripts import leakguard_patterns, leakguard_values
@@ -213,10 +214,8 @@ def _log_format(nonce):
 
 def _commit_parts(log, nonce):
     """(hash, message, diff) of each commit in the log (a merge shows once per parent under -m)."""
-    pieces = re.split(rf"^{nonce}C (\S+)\n{nonce}M\n", log, flags=re.MULTILINE)
-    for sha, rest in zip(pieces[1::2], pieces[2::2], strict=True):
-        message, _, diff = rest.partition(f"\n{nonce}E\n")
-        yield sha, message, diff
+    frame = rf"^{nonce}C (\S+)\n{nonce}M\n(.*?)\n{nonce}E\n"
+    return itertools.batched(re.split(frame, log, flags=re.MULTILINE | re.DOTALL)[1:], 3)  # noqa: B911 -- the split makes groups of three (hash, message, diff)
 
 
 def _section_path(header):
@@ -232,18 +231,15 @@ def _section_path(header):
 
 
 def _file_sections(diff):
-    """(path or None, its header text, its body) for each file of a commit's diff, and (None, text, "")
-    for any text before the first file, which nothing may leave unread. A section starts at its
-    'diff --git' line; the body starts at the first hunk."""
+    """(path or None, its header text, its body) for each file of a commit's diff, the text before the
+    first file included (nothing may be left unread). A section starts at its 'diff --git' line; the
+    body starts at the first hunk."""
     starts = [m.start() for m in re.finditer(r"^diff --git ", diff, re.MULTILINE)]
-    if not starts or starts[0]:
-        yield None, diff[:starts[0] if starts else len(diff)], ""
-    for start, end in zip(starts, [*starts[1:], len(diff)][:len(starts)], strict=True):
+    for start, end in itertools.pairwise([0, *starts, len(diff)]):
         section = diff[start:end]
         hunk = FIRST_HUNK.search(section)
         cut = hunk.start() if hunk else len(section)
-        header = section[:cut]
-        yield _section_path(header), header, section[cut:]
+        yield _section_path(section[:cut]), section[:cut], section[cut:]
 
 
 def _history_failures(log, sources, nonce):
@@ -274,7 +270,7 @@ def check_history(sources):
     would print 'Binary files differ'); a UTF-16 version is read apart, decoded as a file is. Noise that
     is no leak is let through: a hunk header's line ranges, the login of a merge's message, and what
     check_files lets through in its path (LICENSE, uv.lock)."""
-    nonce = secrets.token_hex(8)
+    nonce = uuid.uuid4().hex
     log = _git("log", "--all", "-p", "-m", "--text", "--no-color", _log_format(nonce))
     failures = _history_failures(log, sources, nonce)
     for path, data in _utf16_blobs():

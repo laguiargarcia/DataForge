@@ -568,6 +568,52 @@ def test_history_keeps_the_frame_bytes_of_the_old_format_inside_content(repo, ca
     assert [f for f in failures if f.startswith("NAME: history ") and "msg:" in f]
 
 
+def test_a_blanked_text_keeps_its_length_and_its_lines():
+    assert leakguard_files._blank(re.match(r"[^\n]+\n?[^\n]*", "ab c\nde")) == "    \n  "
+
+
+def test_a_path_is_taken_whole_from_its_plus_or_minus_line(named):
+    """The tab git adds after a path with a space is cut; a trailing space or letter belongs to the name."""
+    def section(path):
+        return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n+(c) {FAKE_NAME}\n"
+    exempt = _found(_log((SHA, "m", f"diff --git a/LICENSE b/LICENSE\n--- a/LICENSE\t\n+++ b/LICENSE\t\n@@ -1 +1 @@\n+(c) {FAKE_NAME}\n")), [])
+    assert exempt == []
+    gone = _found(_log((SHA, "m", f"diff --git a/LICENSE b/LICENSE\n--- a/LICENSE\t\n+++ /dev/null\n@@ -1 +0,0 @@\n-(c) {FAKE_NAME}\n")), [])
+    assert gone == []
+    for odd in ("LICENSE ", "LICENSEX"):
+        failures = _found(_log((SHA, "m", section(odd))), [])
+        assert [f.split(" ->")[0] for f in failures] == [f"NAME: history {SHA[:7]} {odd}:5"]
+        removed = f"diff --git a/{odd} b/{odd}\n--- a/{odd}\n+++ /dev/null\n@@ -1 +0,0 @@\n-(c) {FAKE_NAME}\n"
+        assert [f.split(" ->")[0] for f in _found(_log((SHA, "m", removed)), [])] == [f"NAME: history {SHA[:7]} {odd}:5"]
+
+
+def test_text_before_the_first_file_is_read_from_its_first_character(named):
+    failures = _found(_log((SHA, "m", f"{FAKE_NAME}\n" + _diff("f.py", "+x"))), [])
+    assert [f.split(" ->")[0] for f in failures] == [f"NAME: history {SHA[:7]} diff:1"]
+
+
+def test_the_default_location_of_a_finding_is_its_path_and_line():
+    assert leakguard_files.check_text("a.txt", f"x\ncpf {CPF}\n", []) == ["CPF: a.txt:2 -> '52…' (11 chars)"]
+
+
+def test_a_message_and_a_header_are_read_as_the_text_called_history(named, monkeypatch):
+    """Whatever a file's name exempts (a digest file, an attribution file), 'history' does not earn."""
+    monkeypatch.setattr(leakguard_patterns, "DIGEST_FILES", {leakguard_files.HISTORY})
+    monkeypatch.setattr(leakguard_patterns, "NAME_EXEMPT_PATHS", {leakguard_files.HISTORY})
+    header = f"diff --git a/f b/f\nrename from {FAKE_NAME}\nrename to g\n"
+    assert _found(_log((SHA, f"cpf {CPF} {FAKE_NAME}", header)), []) == []
+
+
+def test_the_log_is_framed_by_a_new_hex_nonce_each_run(monkeypatch):
+    formats = []
+    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: formats.append(args[-1]) or "")
+    leakguard_files.check_history([])
+    leakguard_files.check_history([])
+    nonces = [re.fullmatch(r"--format=([0-9a-f]{32})C %H%n\1M%n%B%n\1E", f) for f in formats if "C %H" in f]
+    assert len(nonces) == 2
+    assert nonces[0].group(1) != nonces[1].group(1)
+
+
 def test_history_with_no_file_asks_git_for_no_content(monkeypatch):
     asked = []
     monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: asked.append(args[0]) or "")
