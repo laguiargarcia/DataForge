@@ -412,7 +412,7 @@ def test_history_reads_every_branch_merge_resolutions_and_the_paths_of_both(hist
 
 def test_history_counts_lines_from_its_own_format_and_never_colours_it(monkeypatch):
     calls = []
-    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: calls.append(args) or "")
+    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: calls.append(args) or  ("" if kw.get("text", True) else b""))
     leakguard_files.check_history([])
     assert "--no-color" in calls[0]
 
@@ -542,7 +542,7 @@ def test_a_path_is_the_one_of_the_plus_lines_not_what_follows_a_b_in_a_name(name
 
 def test_a_section_with_no_path_line_is_read_with_no_exemption(named):
     rename = f"diff --git a/old b/LICENSE\nsimilarity index 100%\nrename from {FAKE_NAME}\nrename to LICENSE\n"
-    assert [f.split(" ->")[0] for f in _found(_log((SHA, "m", rename)), [])] == [f"NAME: history {SHA[:7]} diff:3"]
+    assert [f.split(" ->")[0] for f in _found(_log((SHA, "m", rename)), [])] == [f"NAME: history {SHA[:7]} LICENSE:3"]
 
 
 def test_the_header_of_an_exempt_file_is_read_but_its_hunks_are_not(named):
@@ -606,7 +606,7 @@ def test_a_message_and_a_header_are_read_as_the_text_called_history(named, monke
 
 def test_the_log_is_framed_by_a_new_hex_nonce_each_run(monkeypatch):
     formats = []
-    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: formats.append(args[-1]) or "")
+    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: formats.append(args[-1]) or  ("" if kw.get("text", True) else b""))
     leakguard_files.check_history([])
     leakguard_files.check_history([])
     nonces = [re.fullmatch(r"--format=([0-9a-f]{32})C %H%n\1M%n%B%n\1E", f) for f in formats if "C %H" in f]
@@ -616,7 +616,7 @@ def test_the_log_is_framed_by_a_new_hex_nonce_each_run(monkeypatch):
 
 def test_history_with_no_file_asks_git_for_no_content(monkeypatch):
     asked = []
-    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: asked.append(args[0]) or "")
+    monkeypatch.setattr(leakguard_files, "_git", lambda *args, **kw: asked.append(args[0]) or  ("" if kw.get("text", True) else b""))
     assert leakguard_files.check_history([]) == []
     assert asked == ["log", "rev-list", "log"]
 
@@ -652,3 +652,42 @@ def test_git_in_bytes_gives_the_bytes_and_says_why_it_failed_whatever_git_wrote(
     with pytest.raises(leakguard_files.GitError) as raised:
         leakguard_files._git("cat-file", "--batch", text=False)
     assert str(raised.value) == "git cat-file failed with exit code 128: fatal: \ufffd bad"
+
+
+def test_a_section_with_no_path_line_is_located_by_the_file_it_is_about(named):
+    """df-cy4s: a rename names its new path, a mode change the path both sides of 'diff --git' share;
+    only text before the first file, or a header naming two different paths, stays 'diff'."""
+    mode = f"diff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\nindex {FAKE_NAME}\n"
+    two = f"diff --git a/x b/y\nindex {FAKE_NAME}\n"
+    short = "diff --git a/\nindex " + FAKE_NAME + "\n"
+    assert [f.split(" ->")[0] for f in _found(_log((SHA, "m", mode + two + short)), [])] == [
+        f"NAME: history {SHA[:7]} run.sh:4", f"NAME: history {SHA[:7]} diff:2"]
+
+
+def test_two_values_masked_alike_on_one_line_are_two_findings_and_a_merge_repeat_is_one(monkeypatch):
+    """df-1q7f: findings print masked (two characters and the length), so two different values can read
+    the same; the count of one text is kept, the repetition of a merge's diff per parent (-m) is not."""
+    twins = f"{FAKE_NAME} and {FAKE_NAME[:2]}{'x' * (len(FAKE_NAME) - 2)}"
+    pattern = re.compile(re.escape(FAKE_NAME) + "|" + re.escape(twins.split(" and ")[1]))
+    monkeypatch.setattr(leakguard_patterns, "NAME_PATTERNS", [pattern])
+    entry = (SHA, "m", _diff("f.py", f"+{twins}"))
+    found = _found(_log(entry, entry), [])
+    assert len(found) == 2
+    assert len(set(found)) == 1
+
+
+def test_a_lone_carriage_return_cannot_start_a_forged_section(repo, capsys, tmp_path, named):
+    """df-ovkt: read as text, a lone CR in content would end a line, and what follows could pose as a
+    'diff --git' section of LICENSE whose hunks are exempt from the name check."""
+    forged = f"\0x\rdiff --git a/LICENSE b/LICENSE\r+++ b/LICENSE\r@@ -1 +1 @@\r+by {FAKE_NAME}\n"
+    (tmp_path / "f.bin").write_bytes(forged.encode())
+    (tmp_path / "crlf.txt").write_bytes(f"a\r\nby {FAKE_NAME}\r\n".encode())
+    _git("add", "-A", cwd=tmp_path)
+    _git("commit", "-qm", "add", cwd=tmp_path)
+    failures = [f.partition(" -> ")[0] for f in run(capsys, "--history")[2] if f.startswith("NAME")]
+    assert failures == [f"NAME: history {_head(tmp_path)} crlf.txt:8", f"NAME: history {_head(tmp_path)} f.bin:7"]
+
+
+def test_the_log_text_reads_crlf_as_one_line_and_a_lone_cr_as_a_space():
+    assert leakguard_files._log_text("a\r\nb\rc\n".encode()) == "a\nb c\n"
+    assert leakguard_files._log_text(b"\xff") == "\ufffd"

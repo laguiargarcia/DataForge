@@ -1,6 +1,7 @@
 """The leak guard's files: which paths are private, how a file and a path are read and checked, and
 what git says (the files .gitignore excludes, every tracked file, the whole history). Part of
 scripts/leakguard.py (df-n8ac.36), whose docstring describes the whole guard."""
+import collections
 import itertools
 import os
 import re
@@ -230,6 +231,34 @@ def _section_path(header):
     return after or before
 
 
+def _section_name(header):
+    """The file a section with no '+++'/'---' line is about (a rename with no change, a mode change),
+    to say where a finding is: its 'rename to' line, else the path its 'diff --git' line names on both
+    sides; None for text before the first file. Never an exemption: only _section_path gives one."""
+    lines = header.split("\n")
+    renamed = [line.removeprefix("rename to ") for line in lines if line.startswith("rename to ")]
+    if renamed:
+        return renamed[0]
+    both = lines[0].removeprefix("diff --git a/")
+    half = (len(both) - 3) // 2
+    return both[:half] if both != lines[0] and both[half:half + 3] == " b/" and both[half + 3:] == both[:half] else None
+
+
+def _log_text(data):
+    """The log's bytes as text, CRLF read as LF and a lone CR as a space. Text mode would read a lone CR
+    (a binary shown with --text, a file of CR-only lines) as a new line, which content could use to
+    start a forged 'diff --git' section that earns a file's exemption."""
+    return data.decode(errors="replace").replace("\r\n", "\n").replace("\r", " ")
+
+
+def _keep_counts(found, failures):
+    """Add `found` (the findings of one text) to `failures` (a Counter): each finding as many times as
+    one text holds it, at most. Two values masked alike on one line are two; the same finding in the
+    diff of a merge against each parent (-m) is one."""
+    for failure, count in collections.Counter(found).items():
+        failures[failure] = max(failures[failure], count)
+
+
 def _file_sections(diff):
     """(path or None, its header text, its body) for each file of a commit's diff, the text before the
     first file included (nothing may be left unread). A section starts at its 'diff --git' line; the
@@ -246,20 +275,23 @@ def _history_failures(log, sources, nonce):
     """The findings in the log, each commit read as its message and, apart, each file of its diff: the
     header with no exemption (a rename into LICENSE shows its old name there), the hunks under their
     file's own, as in check_files. Each finding once: -m shows a merge's diff per parent."""
-    failures, shown_of = [], {}
+    failures, shown_of = collections.Counter(), {}
     for sha, message, diff in _commit_parts(log, nonce):
         short = f"history {sha[:7]}"
         if sha not in ACCEPTED_MESSAGES:
             text = MERGE_LOGIN.sub(_blank, message)
-            failures += check_text(HISTORY, text, sources, where=lambda n, short=short: f"{short} msg:{n}")
+            _keep_counts(check_text(HISTORY, text, sources, where=lambda n, short=short: f"{short} msg:{n}"), failures)
         for path, header, body in _file_sections(diff):
-            if path not in shown_of:
-                shown_of[path] = _path_failures(path, sources)[0] if path else "diff"
-            shown, lines = shown_of[path], header.count("\n")
-            failures += check_text(HISTORY, header, sources, where=lambda n, short=short, shown=shown: f"{short} {shown}:{n}")
-            failures += check_text(path or HISTORY, HUNK_HEADER.sub(_blank, body), sources,
-                                   where=lambda n, short=short, shown=shown, lines=lines: f"{short} {shown}:{n + lines}")
-    return list(dict.fromkeys(failures))
+            name = path or _section_name(header)
+            if name not in shown_of:
+                shown_of[name] = _path_failures(name, sources)[0] if name else "diff"
+            shown, lines = shown_of[name], header.count("\n")
+            _keep_counts(check_text(HISTORY, header, sources, where=lambda n, short=short, shown=shown: f"{short} {shown}:{n}"),
+                         failures)
+            _keep_counts(check_text(path or HISTORY, HUNK_HEADER.sub(_blank, body), sources,
+                                    where=lambda n, short=short, shown=shown, lines=lines: f"{short} {shown}:{n + lines}"),
+                         failures)
+    return list(failures.elements())
 
 
 def check_history(sources):
@@ -271,7 +303,7 @@ def check_history(sources):
     is no leak is let through: a hunk header's line ranges, the login of a merge's message, and what
     check_files lets through in its path (LICENSE, uv.lock)."""
     nonce = uuid.uuid4().hex
-    log = _git("log", "--all", "-p", "-m", "--text", "--no-color", _log_format(nonce))
+    log = _log_text(_git("log", "--all", "-p", "-m", "--text", "--no-color", _log_format(nonce), text=False))
     failures = _history_failures(log, sources, nonce)
     for path, data in _utf16_blobs():
         shown = _path_failures(path, sources)[0]
