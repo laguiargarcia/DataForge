@@ -26,6 +26,7 @@ type Alterar = (acao: () => Promise<unknown>, antes?: (desejos: Desejo[]) => Des
 const classeBotao = 'h-11 px-5 rounded-[999px] bg-marca text-texto font-semibold shrink-0 disabled:opacity-40'
 const classeCampo = 'flex-1 min-w-0 h-11 px-4 rounded-[999px] font-sans text-[16px] text-texto placeholder:text-secundario'
 const classeDiscreto = 'h-11 px-4 rounded-[999px] font-medium shrink-0 disabled:opacity-40'
+const classeDesmarcar = `${classeDiscreto} bg-fundo text-texto`
 
 const Xis = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -154,7 +155,7 @@ function Cartao({ desejo, eu, aberto, alternar, fechar, todas, ocupado, alterar 
           {presente && (
             <button type="button" disabled={ocupado}
               onClick={() => alterar(() => (presente === 'marcar' ? marcarPresente : desmarcarPresente)(desejo.id))}
-              className={`${presente === 'marcar' ? classeBotao : `${classeDiscreto} bg-fundo text-texto`} self-start`}>
+              className={`${presente === 'marcar' ? classeBotao : classeDesmarcar} self-start`}>
               {presente === 'marcar' ? 'Vou dar este' : 'Não vou mais dar'}
             </button>
           )}
