@@ -146,8 +146,7 @@ def instance(element_, tags=(), metadata=None, id_="prod.servidor"):
 def test_a_marked_deployment_instance_of_a_today_element_fails(tag, element_):
     found = marcas.problems({"deployment": {"instances": [instance(element_, [tag], {"bead": "df-a"})]}})
     assert len(found) == 1
-    assert "prod.servidor" in found[0]
-    assert "hoje" in found[0]
+    assert found[0].startswith(f"prod.servidor (instância de {element_}): #{tag} no modelo de hoje")
 
 
 def test_a_marked_deployment_instance_of_a_target_element_passes():

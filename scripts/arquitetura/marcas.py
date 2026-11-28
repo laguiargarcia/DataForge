@@ -93,12 +93,14 @@ def _today_problems(model: dict) -> list[str]:
              f"estendem seus elementos) ou {alvo} (alvo.c4), para a conferência saber de qual modelo ele é"
              for top in tops if not top.endswith((hoje, alvo))]
     deployment = model.get("deployment") or {}
-    for items, ends in ((model.get("elements"), ("id",)), (model.get("relations"), ("source", "target")),
-                        (deployment.get("instances"), ("element",))):
+    for items, ends, instances in ((model.get("elements"), ("id",), False),
+                                   (model.get("relations"), ("source", "target"), False),
+                                   (deployment.get("instances"), ("element",), True)):
         for item in items or ():
             tags = [t for t in item.get("tags") or () if t in TAGS]
             if tags and any(modelo.e_hoje(item.get(end)) for end in ends):
-                found.append(f"{item.get('id')}: #{tags[0]} no modelo de hoje; as marcas ficam só no alvo "
+                label = f"{item.get('id')} (instância de {item.get('element')})" if instances else item.get("id")
+                found.append(f"{label}: #{tags[0]} no modelo de hoje; as marcas ficam só no alvo "
                              f"(ids sob um elemento de topo ...{alvo})")
     return found
 
