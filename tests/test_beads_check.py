@@ -1056,3 +1056,32 @@ def test_the_contexto_mode_fails_open(tmp_path):
                        text=True, cwd=tmp_path, env={"PATH": "/nonexistent", "CLAUDE_PROJECT_DIR": str(tmp_path)},
                        check=False)
     assert (r.returncode, r.stdout) == (0, "")
+
+
+def test_the_cut_keeps_every_own_box_before_parents_and_far_ends(ctx, tmp_path, monkeypatch):
+    monkeypatch.setattr(check, "MAX_CONTEXT", 3)
+    ctx(issue("df-k", "task", ["c4:a.y", "c4:a.x"]))
+    text = ctx_text(check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path))
+    assert [line.split(" ")[1] for line in text.splitlines()[1:4]] == ["a.x", "a.y", "a"]
+    assert text.endswith("- ... e mais 2")  # b and c, the far ends of both boxes, once each
+
+
+def test_no_model_on_main_gives_nothing(ctx, tmp_path, monkeypatch):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    monkeypatch.setattr(check, "model_on_main", lambda _repo: None)
+    assert check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path) is None
+
+
+def test_a_line_with_two_claims_gives_both(ctx, tmp_path):
+    ctx(issue("df-k", "task", ["c4:a.x"]), issue("df-j", "task", ["c4:b"]))
+    text = ctx_text(check.contexto(ctx_event("bd update df-k --claim && bd update df-j --claim", tmp_path), tmp_path))
+    assert text.index("df-k:") < text.index("df-j:")
+
+
+def test_main_contexto_dispatches_to_the_context(ctx, tmp_path, monkeypatch, capsys):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    monkeypatch.setattr(check.sys, "stdin", __import__("io").StringIO(
+        json.dumps(ctx_event("bd update df-k --claim", tmp_path))))
+    assert check.main(["contexto"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "docs/x.md" in out["hookSpecificOutput"]["additionalContext"]

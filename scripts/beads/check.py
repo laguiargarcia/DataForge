@@ -782,11 +782,24 @@ def box_line(model: dict, box: str, docs: dict[str, str], front: Callable[[str],
     return " · ".join(parts)
 
 
+def ordered_boxes(model: dict, values: list[str]) -> list[str]:
+    """The neighbours of every box in `values`, in a fixed order: the boxes themselves, then their
+    parents, then the far ends; so the cut at MAX_CONTEXT drops far ends first."""
+    own, parents, ends = [], [], []
+    for value in values:
+        found = neighbours(model, value)
+        if not found:
+            continue
+        own.append(found[0])
+        parent = value.rpartition(".")[0]
+        parents += [b for b in found[1:] if b == parent]
+        ends += [b for b in found[1:] if b != parent]
+    return list(dict.fromkeys(own + parents + ends))
+
+
 def context_for(issue: dict, model: dict, docs: dict[str, str], front: Callable[[str], dict]) -> str:
     """The context for one claimed bead; empty for a transversal bead or one without a c4: box."""
-    boxes = []
-    for value in label_values(set(issue.get("labels") or ()), "c4"):
-        boxes += [b for b in neighbours(model, value) if b not in boxes]
+    boxes = ordered_boxes(model, sorted(label_values(set(issue.get("labels") or ()), "c4")))
     if not boxes:
         return ""
     lines = [box_line(model, b, docs, front) for b in boxes[:MAX_CONTEXT]]
