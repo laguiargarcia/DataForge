@@ -167,7 +167,7 @@ def _lista(text: str, where: str) -> list[str]:
 def _item(line: str) -> str | None:
     """The value of a `- item` line, or None when the line is not one."""
     rest = line.lstrip()
-    return rest[1:].strip() if rest[:1] == "-" and rest[1:2].isspace() else None
+    return rest[1:].strip() if rest.startswith("-") and rest[1:2].isspace() else None
 
 
 def _chave_valor(line: str, where: str) -> tuple[str, str]:
