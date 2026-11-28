@@ -18,6 +18,9 @@ API, for the other scripts (put scripts/ on sys.path, as scripts/beads/check.py 
 
     from arquitetura import modelo
     m = modelo.load()            # or modelo.load(path): the dict below, read from the JSON file
+    modelo.HOJE, modelo.ALVO     # "Hoje", "Alvo": the top-level id suffix of today's and the target model
+    modelo.sistema(id)           # the top-level segment of an element id ("casaAlvo.servidorAlvo" -> "casaAlvo")
+    modelo.e_hoje(id)            # whether that segment ends in HOJE: the element is today's model
 
 Layout of the dict. Every key is always present; an absent text is null, an absent list [] and
 absent metadata {}. Lists of records are sorted by "id", tags are sorted, links keep source order.
