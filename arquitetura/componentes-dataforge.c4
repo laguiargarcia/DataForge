@@ -115,22 +115,7 @@ model {
 
   // De outros contêineres para um componente do DataForge.
   // O ninho pede o job pela CLI: a seta sai do componente Finanças dele (componentes-ninho.c4).
-  casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
-  casaHoje.financasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede e acompanha jobs (HTTP, DATAFORGE_API)' {
-    metadata {
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
-  casaHoje.financasHoje -> casaHoje.dataforgeHoje.appsHoje 'Importa o middleware do token (app_guard)' {
-    metadata {
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
-  casaHoje.financasHoje -> casaHoje.dataforgeHoje.deltaPoolHoje 'Lê o lago pelas threads do delta_pool' {
-    metadata {
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
+  // As do app Finanças (front e backend) partem dos componentes dele, em componentes-app-financas.c4.
 
   // Do DataForge para fora.
   casaHoje.dataforgeHoje.cliHoje -> agendadorHoje 'Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)' {
@@ -153,7 +138,7 @@ model {
       codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/rollback.py']
     }
   }
-  casaHoje.dataforgeHoje.appsHoje -> casaHoje.financasHoje 'Inicia e para o backend (processo uvicorn com token)' {
+  casaHoje.dataforgeHoje.appsHoje -> casaHoje.financasHoje.rotasFinancasHoje 'Inicia e para o backend (processo uvicorn com token)' {
     metadata {
       codigo ['dataforge/app_backends.py', 'dataforge/app_backend_host.py']
     }
@@ -163,7 +148,7 @@ model {
       codigo ['dataforge/apps.py']
     }
   }
-  casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje 'Repassa /apps/<ws>/financas/api com o token' {
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje.rotasFinancasHoje 'Repassa /apps/<ws>/financas/api com o token' {
     metadata {
       codigo ['dataforge/api/routers/apps.py']
     }
@@ -492,6 +477,10 @@ views {
     title 'Hoje: componentes do DataForge'
     description 'Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista'
     include *
+    // Três componentes do front chamam a API (componentes-app-financas.c4): um rótulo só, senão '[...]'.
+    include casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje.apiHoje with {
+      title 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
+    }
     exclude * -> casaHoje.dataforgeHoje.compatHoje
   }
 }

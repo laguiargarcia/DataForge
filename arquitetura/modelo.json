@@ -426,6 +426,21 @@
       "title": "Backend GetFinance"
     },
     {
+      "description": "O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge; acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace",
+      "id": "casaHoje.financasHoje.rotasFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/backend/main.py",
+          "workspaces/GetFinance/apps/financas/backend/__init__.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, polars, pypdf, httpx, PyYAML",
+      "title": "Rotas do backend Finanças"
+    },
+    {
       "description": "As telas do app Finanças: tabelas, edição de categorias, regras e correções, conferência e extratos",
       "id": "casaHoje.frontFinancasHoje",
       "kind": "conteiner",
@@ -436,6 +451,106 @@
       "tags": [],
       "technology": "React, TypeScript; na janela Qt do DataForge ou no navegador do PC",
       "title": "Front do app Finanças"
+    },
+    {
+      "description": "A página (index.html, de que o vite faz a do build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report, das transações classificadas e do banco de edição, e a recarga depois do Aplicar",
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/index.html",
+          "workspaces/GetFinance/apps/financas/src/main.tsx",
+          "workspaces/GetFinance/apps/financas/src/App.tsx"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Casca do app"
+    },
+    {
+      "description": "pedir: o cliente HTTP do backend do app, relativo à página (api/...), e as chamadas de edição (categorias, regras, correções, explicações), do Aplicar e do andamento de uma execução; os textos do efeito de uma regra e da faixa de pendência",
+      "id": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/edicao.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript, fetch",
+      "title": "Cliente do backend e edição"
+    },
+    {
+      "description": "Funções puras sobre conferencia_saldo e lancamentos_suspeitos: ordena, agrupa e formata; as regras estão no pipeline",
+      "id": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/conferencia.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Conferência"
+    },
+    {
+      "description": "Envio do PDF do extrato e a lista dos guardados pelo cliente do backend; os textos do envio, do período e do job extrato",
+      "id": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Extratos"
+    },
+    {
+      "description": "Funções puras: escolhe as linhas do mês nas tabelas do report e as transações de cada categoria, e formata valores e meses; as regras estão no pipeline",
+      "id": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/resumo.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Resumo do mês"
+    },
+    {
+      "description": "lerTabela: lê uma tabela do curated pela rota genérica de tabelas do DataForge, com o workspace tirado da URL do app",
+      "id": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript, fetch",
+      "title": "Leitura de tabelas"
+    },
+    {
+      "description": "Os componentes React das telas: cartões do resumo e do detalhe, Conferência (lê as suas tabelas), Extratos, Categorias, Transações, a faixa de pendência com o Aplicar e a tabela editável",
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components"
+      },
+      "tags": [],
+      "technology": "React, TypeScript, Tailwind",
+      "title": "Telas"
+    },
+    {
+      "description": "Funções puras da aba Transações: busca, filtros e o estado da correção manual de cada linha",
+      "id": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/transacoes.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Transações"
     },
     {
       "description": "raw, cleansed e curated do GetFinance",
@@ -1259,7 +1374,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje: Repassa /apps/<ws>/financas/api com o token",
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje.rotasFinancasHoje: Repassa /apps/<ws>/financas/api com o token",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1267,7 +1382,7 @@
       },
       "source": "casaHoje.dataforgeHoje.apiHoje",
       "tags": [],
-      "target": "casaHoje.financasHoje",
+      "target": "casaHoje.financasHoje.rotasFinancasHoje",
       "technology": null,
       "title": "Repassa /apps/<ws>/financas/api com o token"
     },
@@ -1332,7 +1447,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.financasHoje: Inicia e para o backend (processo uvicorn com token)",
+      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.financasHoje.rotasFinancasHoje: Inicia e para o backend (processo uvicorn com token)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1343,7 +1458,7 @@
       },
       "source": "casaHoje.dataforgeHoje.appsHoje",
       "tags": [],
-      "target": "casaHoje.financasHoje",
+      "target": "casaHoje.financasHoje.rotasFinancasHoje",
       "technology": null,
       "title": "Inicia e para o backend (processo uvicorn com token)"
     },
@@ -2259,48 +2374,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.dataforgeHoje.apiHoje: Pede e acompanha jobs (HTTP, DATAFORGE_API)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.dataforgeHoje.apiHoje",
-      "technology": null,
-      "title": "Pede e acompanha jobs (HTTP, DATAFORGE_API)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.dataforgeHoje.appsHoje: Importa o middleware do token (app_guard)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.dataforgeHoje.appsHoje",
-      "technology": null,
-      "title": "Importa o middleware do token (app_guard)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.dataforgeHoje.deltaPoolHoje: Lê o lago pelas threads do delta_pool",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.dataforgeHoje.deltaPoolHoje",
-      "technology": null,
-      "title": "Lê o lago pelas threads do delta_pool"
-    },
-    {
-      "description": null,
       "id": "casaHoje.financasHoje -> casaHoje.dataforgeHoje: Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP",
       "kind": null,
       "links": [],
@@ -2349,34 +2422,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje.conferenciasHoje: Importa extrato",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.conferenciasHoje",
-      "technology": null,
-      "title": "Importa extrato"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje.regrasHoje: Importa edicao e classificacao",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.regrasHoje",
-      "technology": null,
-      "title": "Importa edicao e classificacao"
-    },
-    {
-      "description": null,
       "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje: Importa edicao, extrato e classificacao dos scripts (scripts/report)",
       "kind": null,
       "links": [],
@@ -2389,15 +2434,129 @@
     },
     {
       "description": null,
-      "id": "casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api",
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)",
       "kind": null,
       "links": [],
-      "metadata": {},
-      "source": "casaHoje.frontFinancasHoje",
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
       "tags": [],
       "target": "casaHoje.dataforgeHoje.apiHoje",
       "technology": null,
-      "title": "Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api"
+      "title": "Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.appsHoje: Importa o middleware do token (app_guard)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Importa o middleware do token (app_guard)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.deltaPoolHoje: Lê as tabelas Delta pelas threads do delta_pool",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.deltaPoolHoje",
+      "technology": null,
+      "title": "Lê as tabelas Delta pelas threads do delta_pool"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.tasksHoje: Importa o pacote dataforge: o __init__ registra os tipos de task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.tasksHoje",
+      "technology": null,
+      "title": "Importa o pacote dataforge: o __init__ registra os tipos de task"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.edicaoHoje: Lê e escreve: categorias, regras, correções, explicações",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.edicaoHoje",
+      "technology": null,
+      "title": "Lê e escreve: categorias, regras, correções, explicações"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.extratosHoje: Grava o PDF enviado; relê os guardados para recusar duplicata e apaga temporários velhos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.extratosHoje",
+      "technology": null,
+      "title": "Grava o PDF enviado; relê os guardados para recusar duplicata e apaga temporários velhos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.lagoHoje: Lê o curated e as contas do cleansed",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.lagoHoje",
+      "technology": null,
+      "title": "Lê o curated e as contas do cleansed"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.conferenciasHoje: Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.conferenciasHoje",
+      "technology": null,
+      "title": "Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.regrasHoje: Importa edicao e classificacao",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.regrasHoje",
+      "technology": null,
+      "title": "Importa edicao e classificacao"
     },
     {
       "description": null,
@@ -2410,6 +2569,275 @@
       "target": "casaHoje.dataforgeHoje",
       "technology": null,
       "title": "Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Pede o JS e o CSS do build (dist/assets) pela rota do app",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/dist/index.html"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Pede o JS e o CSS do build (dist/assets) pela rota do app"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Lê o banco de edição",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Lê o banco de edição"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Monta o resumo do mês",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Monta o resumo do mês"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje: Lê as tabelas do report e as transações classificadas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "technology": null,
+      "title": "Lê as tabelas do report e as transações classificadas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.telasFinancasHoje: Mostra as telas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "technology": null,
+      "title": "Mostra as telas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Chama o backend pelo proxy /apps/<ws>/financas/api",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/edicao.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Chama o backend pelo proxy /apps/<ws>/financas/api"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Formata os valores",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/conferencia.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Formata os valores"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.extratosFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Envia e lista pelo pedir()",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Envia e lista pelo pedir()"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.extratosFinancasHoje -> casaHoje.frontFinancasHoje.transacoesFinancasHoje: Formata as datas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "technology": null,
+      "title": "Formata as datas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.tabelasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Grava as edições, aplica e acompanha a execução",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/src/components/CartaoIntervalo.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/FaixaPendencia.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaCategorias.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaExtratos.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx"
+        ]
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Grava as edições, aplica e acompanha a execução"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.conferenciaFinancasHoje: Monta a conferência",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/src/components/CartaoConferencia.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/CartaoIntervalo.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/ListaIntervalos.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/ListaSuspeitos.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/SeloEstado.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaConferencia.tsx"
+        ]
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje",
+      "technology": null,
+      "title": "Monta a conferência"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.extratosFinancasHoje: Envia o PDF e lista os guardados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components/TelaExtratos.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "technology": null,
+      "title": "Envia o PDF e lista os guardados"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Tipos e formato dos valores",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/src/components/CartaoDetalhe.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/ListaCategorias.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx"
+        ]
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Tipos e formato dos valores"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje: A Conferência lê as suas tabelas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components/TelaConferencia.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "technology": null,
+      "title": "A Conferência lê as suas tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.transacoesFinancasHoje: Filtra a lista de transações",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "technology": null,
+      "title": "Filtra a lista de transações"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.transacoesFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Tipo da correção",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/transacoes.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Tipo da correção"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.transacoesFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Tipo da transação e rótulo do mês",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/transacoes.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Tipo da transação e rótulo do mês"
     },
     {
       "description": null,
@@ -3390,6 +3818,18 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje: Usa o app Finanças no PC (janela Qt ou navegador)",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "technology": null,
+      "title": "Usa o app Finanças no PC (janela Qt ou navegador)"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.frontFinancasHoje: Usa o app Finanças no PC (janela Qt ou navegador)",
       "kind": null,
       "links": [],
@@ -3520,6 +3960,26 @@
       "title": "Alvo v2: contexto",
       "type": "element",
       "viewOf": "casaAlvo"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-app-financas-backend",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do backend Finanças",
+      "type": "element",
+      "viewOf": "casaHoje.financasHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-app-financas-front",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do front do app Finanças",
+      "type": "element",
+      "viewOf": "casaHoje.frontFinancasHoje"
     },
     {
       "description": "Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista",
