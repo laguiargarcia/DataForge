@@ -242,16 +242,21 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           npx --yes "likec4@$LIKEC4_VERSION" validate --max-warnings 0 arquitetura 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura.txt"
-      - name: The committed modelo.json is the export of the .c4
+      - name: modelo.json is the export of the .c4, and every view edge reads at its word
         # df-8x0m.23.43: the checks that read the model read arquitetura/modelo.json; a .c4 changed
-        # without `python3 scripts/arquitetura/modelo.py gerar` fails here. Standard library only.
+        # without `python3 scripts/arquitetura/modelo.py gerar` fails here. It also fails on a view
+        # edge a reader cannot take at its word (arquitetura/README.md rules 3 and 5): drawn '[...]',
+        # hiding joined titles, joining kinds, coloured by one of the joined marks
+        # (df-8x0m.23.47.12, .17), or a hoje-conteineres pair against rule 5 (df-8x0m.23.47.21).
+        # Standard library only.
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           python3 scripts/arquitetura/modelo.py conferir 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-modelo.txt"
-      - name: Every mark of the target carries a bead
+      - name: Every mark of the target carries a bead, and every unmarked component arrow mirrors today
         # df-8x0m.23.37: an element or arrow tagged novo, muda or sai has exactly one of them and a
         # well-formed bead id. Whether that bead is still open is the close hook's half (no bd here).
+        # df-8x0m.23.47.20: an unmarked component arrow of the target has today's twin, same title and codigo.
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"

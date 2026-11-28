@@ -276,3 +276,55 @@ def test_main_exits_2_when_bd_fails_and_still_prints_the_format_problems(tmp_pat
 def test_the_versioned_model_is_fully_marked():
     """The real model: every mark of arquitetura/ carries a well-formed bead (CI's half)."""
     assert marcas.problems(marcas.modelo.load()) == []
+
+
+def componente(fqn):
+    return {**element(fqn), "kind": "componente"}
+
+
+ESPELHO = model(
+    [componente("casaHoje.dfHoje.apiHoje"), componente("casaHoje.dfHoje.motorHoje"),
+     componente("casaHoje.ninhoHoje.servidorHoje"), element("casaHoje.dbDataforgeHoje"),
+     componente("casaAlvo.dfAlvo.apiAlvo"), componente("casaAlvo.dfAlvo.motorAlvo"),
+     componente("casaAlvo.dfAlvo.rotaTabelasAlvo"), componente("casaAlvo.servidorAlvo.nucleoAlvo"),
+     element("casaAlvo.historicoAlvo")],
+    [relation("casaHoje.dfHoje.apiHoje", "casaHoje.dfHoje.motorHoje", metadata={"codigo": ["a.py"]}),
+     relation("casaHoje.ninhoHoje.servidorHoje", "casaHoje.dbDataforgeHoje", metadata={"codigo": ["n.py"]},
+              title="grava"),
+     relation("casaAlvo.dfAlvo.apiAlvo", "casaAlvo.dfAlvo.motorAlvo", metadata={"codigo": ["a.py"]}),
+     relation("casaAlvo.dfAlvo.rotaTabelasAlvo", "casaAlvo.dfAlvo.motorAlvo", metadata={"codigo": ["a.py"]}),
+     relation("casaAlvo.servidorAlvo.nucleoAlvo", "casaAlvo.historicoAlvo", metadata={"codigo": ["n.py"]},
+              title="grava"),
+     relation("casaAlvo.dfAlvo.apiAlvo", "casaAlvo.historicoAlvo", ["novo"], {"bead": "df-a.1"}),
+     relation("casaAlvo.dfAlvo", "casaAlvo.historicoAlvo", title="resumo do alvo")],
+)
+
+
+def test_every_unmarked_target_component_arrow_mirrors_one_of_today():
+    """df-8x0m.23.47.20: the Hoje twin of each end (README exceptions too), same title and codigo;
+    marked arrows and container arrows stay out."""
+    assert marcas.problems(ESPELHO) == []
+
+
+@pytest.mark.parametrize(("change", "problem"), [
+    ({"title": "outro"}, "seta sem marca sem par no hoje (casaHoje.dfHoje.apiHoje -> casaHoje.dfHoje.motorHoje "
+                         "com o mesmo título); ponha a marca da mudança ou copie o título e o codigo da seta de hoje"),
+    ({"metadata": {"codigo": ["b.py"]}},
+     "seta sem marca com codigo diferente do da seta de hoje casaHoje.dfHoje.apiHoje -> casaHoje.dfHoje.motorHoje: "
+     "usa; ponha a marca da mudança ou copie o codigo de hoje"),
+    ({"target": "casaAlvo.novoAlvo"}, "seta sem marca sem par no hoje (casaHoje.dfHoje.apiHoje -> None com o "
+                                      "mesmo título); ponha a marca da mudança ou copie o título e o codigo da "
+                                      "seta de hoje"),
+])
+def test_an_unmarked_target_component_arrow_out_of_step_with_today_fails(change, problem):
+    broken = json.loads(json.dumps(ESPELHO))
+    arrow = broken["relations"][2]
+    arrow.update(change)
+    assert marcas.problems(broken) == [f"{arrow['id']}: {problem}"]
+
+
+def test_a_today_leaf_name_used_twice_has_no_twin():
+    broken = json.loads(json.dumps(ESPELHO))
+    broken["elements"].append(componente("casaHoje.outroHoje.motorHoje"))
+    assert [p.split(": ", 1)[0] for p in marcas.problems(broken)] == [
+        "casaAlvo.dfAlvo.apiAlvo -> casaAlvo.dfAlvo.motorAlvo", "casaAlvo.dfAlvo.rotaTabelasAlvo -> casaAlvo.dfAlvo.motorAlvo"]

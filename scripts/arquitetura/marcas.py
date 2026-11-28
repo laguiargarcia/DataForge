@@ -34,7 +34,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: arquit
 
 from arquitetura import modelo
 
-TAGS = ("novo", "muda", "sai")
+TAGS = modelo.MARCAS
+COMPONENTE = "componente"
+# Target ids (last segment) whose today twin is not the id with Hoje in place of Alvo (README,
+# component rules): two component ids already taken by a target container or database, the re-cut
+# of the API, and the target's containers and database that today has under another name.
+GEMEOS = {"nucleoAlvo": "servidorHoje", "historicoRunsAlvo": "historicoHoje", "rotaTabelasAlvo": "apiHoje",
+          "appsAlvo": "apiHoje", "historicoAlvo": "dbDataforgeHoje", "bancoAppAlvo": "bancoNinhoHoje",
+          "appCelularAlvo": "telasNinhoHoje"}
 KEY = "bead"
 BEAD_ID = re.compile(r"df-[a-z0-9]+(?:\.\d+)*")  # used with fullmatch: no trailing newline
 BD_TIMEOUT = 20
@@ -105,10 +112,51 @@ def _today_problems(model: dict) -> list[str]:
     return found
 
 
+def _gemeo(id_: str, hoje: dict[str, str]) -> str | None:
+    """The today element of a target element id: the today element whose last segment is the target's
+    with HOJE in place of ALVO (or its GEMEOS entry). None when there is no single one."""
+    leaf = id_.rsplit(".", 1)[-1]
+    name = GEMEOS.get(leaf) or (leaf.removesuffix(modelo.ALVO) + modelo.HOJE if leaf.endswith(modelo.ALVO) else None)
+    return hoje.get(name) if name else None
+
+
+def _twin_problems(model: dict) -> list[str]:
+    """An unmarked component arrow of the target (an end is a component) is today's arrow as it is
+    (README, "Marcas do alvo"): today has the arrow between the twins of its ends, with the same title
+    and codigo (df-8x0m.23.47.20). Container arrows stay out: today keeps a container arrow only as
+    the summary of several component arrows (README rule 5), the target keeps its own as the plan."""
+    elements = model.get("elements") or ()
+    componentes = {e.get("id") for e in elements if e.get("kind") == COMPONENTE}
+    leaves: dict[str, list[str]] = {}
+    for e in elements:
+        if modelo.e_hoje(e.get("id")):
+            leaves.setdefault(str(e.get("id")).rsplit(".", 1)[-1], []).append(e.get("id"))
+    hoje = {leaf: ids[0] for leaf, ids in leaves.items() if len(ids) == 1}
+    today = {(r.get("source"), r.get("target"), r.get("title") or ""): r for r in model.get("relations") or ()
+             if modelo.e_hoje(r.get("source"))}
+    found = []
+    for r in model.get("relations") or ():
+        source, target = r.get("source"), r.get("target")
+        if modelo.e_hoje(source) or any(t in TAGS for t in r.get("tags") or ()) \
+                or not {source, target} & componentes:
+            continue
+        twin = (_gemeo(source, hoje), _gemeo(target, hoje), r.get("title") or "")
+        codigo = (r.get("metadata") or {}).get("codigo")
+        match = today.get(twin) if None not in twin else None
+        if match is None:
+            found.append(f"{r.get('id')}: seta sem marca sem par no hoje ({twin[0]} -> {twin[1]} com o mesmo "
+                         "título); ponha a marca da mudança ou copie o título e o codigo da seta de hoje")
+        elif (match.get("metadata") or {}).get("codigo") != codigo:
+            found.append(f"{r.get('id')}: seta sem marca com codigo diferente do da seta de hoje {match.get('id')}; "
+                         "ponha a marca da mudança ou copie o codigo de hoje")
+    return found
+
+
 def problems(model: dict) -> list[str]:
-    """What CI checks: each mark has exactly one tag and well-formed bead ids, and only the target
-    carries marks."""
-    return [p for label, item in _items(model) for p in _item_problems(label, item)] + _today_problems(model)
+    """What CI checks: each mark has exactly one tag and well-formed bead ids, only the target
+    carries marks, and every unmarked component arrow of the target mirrors one of today."""
+    return ([p for label, item in _items(model) for p in _item_problems(label, item)] + _today_problems(model)
+            + _twin_problems(model))
 
 
 def marked_beads(model: dict) -> dict[str, list[str]]:

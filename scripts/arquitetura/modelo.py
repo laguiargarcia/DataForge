@@ -74,6 +74,11 @@ VIEW_TYPES = ("element", "dynamic", "deployment")
 # Suffix of every top-level element id: the model it belongs to. Today's model is hoje.c4 and the
 # files that extend its elements (componentes-*.c4); the export keeps no source file (df-8x0m.23.46).
 HOJE, ALVO = "Hoje", "Alvo"
+# The marks of the target (README, "Marcas do alvo"), in the order the views' tag rules list them:
+# the last rule that matches a joined relation gives an edge its colour. SEM_MARCA is the colour of
+# an unmarked relation (LikeC4's default).
+MARCAS = ("novo", "muda", "sai")
+SEM_MARCA = "gray"
 
 
 def sistema(id_) -> str:
@@ -161,7 +166,7 @@ def _view(raw: dict) -> dict:
             "steps": steps}
 
 
-def _aresta_ambigua(view: str, edge: dict, rels: dict) -> list[str]:
+def _aresta_ambigua(view: str, edge: dict, rels: dict, cores: dict | None = None) -> list[str]:
     """What one edge of an element or deployment view hides from a reader (README rule 3). LikeC4
     joins the relations between a node's descendants into one edge: with distinct titles it shows
     '[...]', or one of them and none of the rest, unless the view gives a title (`with { title }`)
@@ -181,6 +186,11 @@ def _aresta_ambigua(view: str, edge: dict, rels: dict) -> list[str]:
     problems = []
     if label == "[...]":
         problems.append(f"{where} is drawn as '[...]': give it one title in the view ({fix})")
+    elif len(titles) > 1 and not label and "" not in direct:
+        hidden = ", ".join(repr(t) for t in sorted(titles - {""}))
+        problems.append(f"{where} joins {len(joined)} relations and comes out with no title, hiding {hidden}: "
+                        f"give it a title of its own in the view ({fix}), or draw an arrow straight between "
+                        "the two")
     elif len(titles) > 1 and label in titles and label not in direct:
         problems.append(f"{where} joins {len(joined)} relations and shows only {label!r}: give it a title "
                         f"of its own in the view, none of the joined ones ({fix}), or draw an arrow "
@@ -190,6 +200,74 @@ def _aresta_ambigua(view: str, edge: dict, rels: dict) -> list[str]:
         problems.append(f"{where} joins relations of kinds {', '.join(kinds)} and is drawn as "
                         f"{edge.get('kind') or '(none)'}: give the arrows behind it one kind, or exclude the odd one "
                         f"from the view (exclude <child> -> <target>)")
+    return problems + _cor_ambigua(where, edge, joined, cores or {})
+
+
+def marca(relation: dict) -> str | None:
+    """The mark of the target (MARCAS) a relation carries, None when it has none."""
+    return next((t for t in MARCAS if t in (relation.get("tags") or ())), None)
+
+
+def _cor_ambigua(where: str, edge: dict, joined: list[dict], cores: dict) -> list[str]:
+    """An edge joining relations of different marks (README, component rules). The view's tag rules
+    (`include * -> * where tag is #x with { color }`, in the order of MARCAS) give it the colour of
+    the last mark that any joined relation has. The colour must be the one of the arrow straight
+    between the two nodes, or one the view gives after the tag rules; with no direct arrow, a
+    colour given by the view is known by not being the one the tag rules pick."""
+    marks = {marca(r) for r in joined}
+    if len(marks) <= 1:
+        return []
+    color = edge.get("color")
+    direct = {cores.get(marca(r), SEM_MARCA) for r in joined
+              if (_ref(r["source"]), _ref(r["target"])) == (edge["source"], edge["target"])}
+    named = ", ".join(f"#{m}" if m else "(no mark)" for m in sorted(marks, key=lambda m: MARCAS.index(m) if m else -1))
+    fix = f"include {edge['source']} -> {edge['target']} with {{ color ... }}"
+    if direct:
+        if color in direct:
+            return []
+        want = " or ".join(sorted(direct))
+        fix = f"include {edge['source']} -> {edge['target']} with {{ color {min(direct)} }}"
+        return [f"{where} joins relations marked {named} and is drawn {color}, not {want}, the colour of the "
+                f"arrow straight between the two: give it that colour after the tag rules ({fix})"]
+    picked = cores.get(next(m for m in reversed(MARCAS) if m in marks), SEM_MARCA)
+    if color != picked:
+        return []
+    return [f"{where} joins relations marked {named} and is drawn {color}, the colour the tag rules pick from "
+            f"one of them: give it the colour of the edge after the tag rules ({fix}), or draw an arrow "
+            "straight between the two"]
+
+
+def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
+    """README rule 5: in `view`, a pair of nodes has a direct arrow only over more than one arrow
+    between their descendants, counting the ones the view excludes; a pair of several with no direct
+    arrow gets a title from the view (known, as in rule 3, by being none of the joined titles)."""
+    vista = (raw.get("views") or {}).get(view)
+    if vista is None:
+        return []
+    nodes = [n["id"] for n in vista.get("nodes") or []]
+
+    def node(id_: str) -> str | None:
+        owners = [n for n in nodes if id_ == n or id_.startswith(n + ".")]
+        return max(owners, key=len) if owners else None
+
+    pairs: dict[tuple[str, str], list[dict]] = {}
+    for r in (raw.get("relations") or {}).values():
+        a, b = node(_ref(r["source"])), node(_ref(r["target"]))
+        if a and b and a != b:
+            pairs.setdefault((a, b), []).append(r)
+    labels = {(e["source"], e["target"]): e.get("label") or "" for e in vista.get("edges") or []}
+    problems = []
+    for (a, b), rels in sorted(pairs.items()):
+        direct = [r for r in rels if (_ref(r["source"]), _ref(r["target"])) == (a, b)]
+        inner = [r for r in rels if r not in direct]
+        if direct and len(inner) == 1:
+            problems.append(f"view {view}: {a} -> {b} has a direct arrow over one component arrow "
+                            f"({inner[0].get('title') or ''!r}): remove the direct arrow, the view shows that one's "
+                            "title (README rule 5)")
+        elif not direct and len(inner) > 1 and (a, b) in labels \
+                and labels[(a, b)] in {r.get("title") or "" for r in inner}:
+            problems.append(f"view {view}: {a} -> {b} joins {len(inner)} component arrows with no direct arrow: "
+                            "draw one in hoje.c4 whose title sums them up (README rule 5)")
     return problems
 
 
@@ -198,8 +276,10 @@ def arestas_ambiguas(raw: dict) -> list[str]:
     '[...]', showing one of several joined titles, or joining relations of different kinds. The
     steps of a dynamic view are drawn one by one, with their own titles: not checked."""
     rels = raw.get("relations", {}) | raw.get("deployments", {}).get("relations", {})
+    cores = {tag: spec["color"] for tag, spec in (raw.get("specification", {}).get("tags") or {}).items()
+             if tag in MARCAS and (spec or {}).get("color")}
     return [problem for vid, view in sorted(raw.get("views", {}).items()) if view.get("_type") != "dynamic"
-            for edge in view.get("edges") or [] for problem in _aresta_ambigua(vid, edge, rels)]
+            for edge in view.get("edges") or [] for problem in _aresta_ambigua(vid, edge, rels, cores)]
 
 
 def normalizar(raw: dict) -> dict:
@@ -247,7 +327,7 @@ def conferir(fonte: Path = FONTE, saida: Path = SAIDA) -> list[str]:
     diff = list(difflib.unified_diff(velho.splitlines(), novo.splitlines(), str(saida), "export of the .c4",
                                      lineterm=""))
     stale = [f"{saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it"] if diff else []
-    return arestas_ambiguas(raw) + stale + diff
+    return arestas_ambiguas(raw) + regra5(raw) + stale + diff
 
 
 def main(argv: list[str] | None = None) -> int:
