@@ -480,7 +480,8 @@ def test_main_refuses_a_python_older_than_the_repos(tmp_path, capsys, monkeypatc
     monkeypatch.setattr(componentes, "_python", lambda: version)
     monkeypatch.setattr(componentes.modelo, "load", lambda: {"elements": [], "relations": []})
     monkeypatch.setattr(componentes, "arquivos_do_repo", lambda raiz: [])
-    assert (componentes.main(), capsys.readouterr().out.splitlines()) == expected
+    actual = (componentes.main(), capsys.readouterr().out.splitlines())
+    assert actual == expected
 
 
 def test_the_repos_python_version_reads_major_and_minor(tmp_path):
