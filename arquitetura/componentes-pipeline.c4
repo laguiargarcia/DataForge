@@ -1,0 +1,391 @@
+// Componentes do contêiner Pipeline GetFinance no HOJE (df-8x0m.23.47.6): uma camada de
+// workspaces/GetFinance/scripts por componente, as bibliotecas que elas carregam e os atalhos de bin/.
+//
+// Decisões (as razões estão nas notas do bead):
+// - Cada script é uma task de job (jobs/<job>/job.yaml, campo script) que o DataForge lança como
+//   processo Python. jobs/, connections/ e config/ são YAML e CSV, não código: não são componentes.
+// - A ordem do DAG (depends_on) e a dependência de dado pelo lago não são setas entre componentes: uma
+//   camada não chama a outra, cada uma lê o que a anterior gravou. Elas aparecem como setas para o lago.
+// - Seta para fora (Pluggy, lago, bancos) sai do componente cuja task faz a ação no seu processo; as
+//   bibliotecas (functions, regras) rodam dentro do processo de quem as carrega e não têm seta para fora.
+model {
+  extend casaHoje.pipelineHoje {
+    landingHoje = componente 'landing' {
+      description 'Task fetch do finance_daily: busca contas, transações, faturas e investimentos no Pluggy e grava a partição do dia no raw'
+      technology 'Python'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/landing']
+      }
+    }
+    syntheticHoje = componente 'synthetic' {
+      description 'Task fetch do finance_demo: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial'
+      technology 'Python'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/synthetic']
+      }
+    }
+    raw2cleansedHoje = componente 'raw2cleansed' {
+      description 'Tasks transform*: limpam e deduplicam o raw de contas, faturas, investimentos e transações para o cleansed; o mapa de estabelecimentos vem de config/'
+      technology 'Python, polars, deltalake'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/raw2cleansed']
+      }
+    }
+    cleansed2curatedHoje = componente 'cleansed2curated' {
+      description 'Tasks das dimensões e fatos do curated (contas, calendário, investimentos, saldos, faturas, contrapartes) e das conferências (saldo, fatura, lançamentos suspeitos, extrato e veredito); contas e investimentos usam o config/'
+      technology 'Python, polars, deltalake, pypdf'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/cleansed2curated']
+      }
+    }
+    reportHoje = componente 'report' {
+      description 'Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao do finance_demo; com as funções do relatório (cartao_listas, report_lib, saude)'
+      technology 'Python, polars, deltalake'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/report']
+      }
+    }
+    conferenciasHoje = componente 'Regras de conferência e extrato' {
+      description 'Funções puras de scripts/report que as tasks de conferência carregam: leitura do extrato em PDF, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato'
+      technology 'Python, polars'
+      metadata {
+        codigo [
+          'workspaces/GetFinance/scripts/report/extrato.py',
+          'workspaces/GetFinance/scripts/report/conferencia_fatura.py',
+          'workspaces/GetFinance/scripts/report/conferencia_saldo.py',
+          'workspaces/GetFinance/scripts/report/lancamentos_suspeitos.py',
+          'workspaces/GetFinance/scripts/report/veredito_extrato.py'
+        ]
+      }
+    }
+    regrasHoje = componente 'Regras de edição e classificação' {
+      description 'edicao (abre o edicao.db e lê e grava categorias, regras, correções e explicações) e classificacao (classifica pela regra); módulos soltos que o backend Finanças e o ninho também carregam por sys.path'
+      technology 'Python, SQLite'
+      metadata {
+        codigo [
+          'workspaces/GetFinance/scripts/report/edicao.py',
+          'workspaces/GetFinance/scripts/report/classificacao.py'
+        ]
+      }
+    }
+    backupDadosHoje = componente 'backup' {
+      description 'Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos'
+      technology 'Python'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/backup']
+      }
+    }
+    validationHoje = componente 'validation' {
+      description 'Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e falha quando há algum, para o alerta do job citar'
+      technology 'Python'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/validation']
+      }
+    }
+    functionsHoje = componente 'functions' {
+      description 'Biblioteca que toda task carrega por exec: cliente HTTP do Pluggy (com o .env), conexões do connections.yaml, leitura e gravação do raw (parquet) e do Delta, regras de validação e o subprocesso do reprocess'
+      technology 'Python, requests, polars, deltalake'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/functions']
+      }
+    }
+    reprocessHoje = componente 'reprocess' {
+      description 'Script manual, fora dos jobs: apaga uma tabela do cleansed e roda de novo a transformação dela sobre todo o raw'
+      technology 'Python'
+      metadata {
+        codigo ['workspaces/GetFinance/scripts/reprocess.py']
+      }
+    }
+    binHoje = componente 'bin' {
+      description 'Atalhos de dev, rodados à mão: ativam o .venv da raiz do repo e rodam o finance_daily (run.sh no Linux, run.ps1 no Windows)'
+      technology 'Bash, PowerShell'
+      metadata {
+        codigo ['workspaces/GetFinance/bin']
+      }
+    }
+    achadosHoje = banco 'Achados das validações' {
+      description 'Um JSON por validação com os achados suspeitos (só ids e datas), regravado a cada rodada'
+      technology 'Pasta de JSON (data/validation)'
+    }
+  }
+
+  // DataForge lança cada task (dataforge/tasks/python_handler.py) com o script do job.yaml.
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.landingHoje 'Lança a task fetch (finance_daily)' {
+    metadata {
+      codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml']
+    }
+  }
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje 'Lança a task fetch (finance_demo)' {
+    metadata {
+      codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_demo/job.yaml']
+    }
+  }
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.raw2cleansedHoje 'Lança as tasks transform*' {
+    metadata {
+      codigo [
+        'dataforge/tasks/python_handler.py',
+        'workspaces/GetFinance/jobs/finance_daily/job.yaml',
+        'workspaces/GetFinance/jobs/finance_demo/job.yaml'
+      ]
+    }
+  }
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje 'Lança as tasks das dimensões, fatos e conferências' {
+    metadata {
+      codigo [
+        'dataforge/tasks/python_handler.py',
+        'workspaces/GetFinance/jobs/finance_daily/job.yaml',
+        'workspaces/GetFinance/jobs/finance_demo/job.yaml',
+        'workspaces/GetFinance/jobs/reclassificar/job.yaml',
+        'workspaces/GetFinance/jobs/extrato/job.yaml'
+      ]
+    }
+  }
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify, report e a semente' {
+    metadata {
+      codigo [
+        'dataforge/tasks/python_handler.py',
+        'workspaces/GetFinance/jobs/finance_daily/job.yaml',
+        'workspaces/GetFinance/jobs/finance_demo/job.yaml',
+        'workspaces/GetFinance/jobs/reclassificar/job.yaml'
+      ]
+    }
+  }
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.backupDadosHoje 'Lança a task backup' {
+    metadata {
+      codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/backup/job.yaml']
+    }
+  }
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.validationHoje 'Lança a task data_warnings' {
+    metadata {
+      codigo [
+        'dataforge/tasks/python_handler.py',
+        'workspaces/GetFinance/jobs/finance_daily/job.yaml',
+        'workspaces/GetFinance/jobs/finance_demo/job.yaml'
+      ]
+    }
+  }
+
+  // Quem carrega functions por exec.
+  casaHoje.pipelineHoje.landingHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: cliente Pluggy, gravação do raw' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py']
+    }
+  }
+  casaHoje.pipelineHoje.syntheticHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: gravação do raw' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py']
+    }
+  }
+  casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: leitura do raw, Delta, validação' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/raw2cleansed']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: leitura do raw, Delta, validação' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/cleansed2curated']
+    }
+  }
+  casaHoje.pipelineHoje.reportHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: Delta, validação, conexões' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/scripts/report/classify.py',
+        'workspaces/GetFinance/scripts/report/report_curated.py',
+        'workspaces/GetFinance/scripts/report/carga_inicial_edicao.py'
+      ]
+    }
+  }
+  casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: conexões' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
+    }
+  }
+  casaHoje.pipelineHoje.validationHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: leitura dos achados' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/validation/data_warnings.py']
+    }
+  }
+  casaHoje.pipelineHoje.reprocessHoje -> casaHoje.pipelineHoje.functionsHoje 'Carrega por exec: Delta e o subprocesso da transformação' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/reprocess.py']
+    }
+  }
+
+  // Imports das regras (sys.path.insert para scripts/report).
+  casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.pipelineHoje.conferenciasHoje 'Importa conferencia_fatura' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/raw2cleansed/raw2cleansed.py']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.pipelineHoje.conferenciasHoje 'Importa extrato e as conferências' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_fatura.py',
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py',
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_extrato.py',
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_lancamentos_suspeitos.py',
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_veredito_suspeitos.py'
+      ]
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa classificacao e edicao' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated.py',
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py'
+      ]
+    }
+  }
+  casaHoje.pipelineHoje.reportHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa classificacao e edicao' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/scripts/report/classify.py',
+        'workspaces/GetFinance/scripts/report/carga_inicial_edicao.py',
+        'workspaces/GetFinance/scripts/report/report_lib.py',
+        'workspaces/GetFinance/scripts/report/cartao_listas.py',
+        'workspaces/GetFinance/scripts/report/saude.py'
+      ]
+    }
+  }
+  casaHoje.pipelineHoje.conferenciasHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa classificacao' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/scripts/report/conferencia_saldo.py',
+        'workspaces/GetFinance/scripts/report/lancamentos_suspeitos.py'
+      ]
+    }
+  }
+
+  // Processos lançados.
+  casaHoje.pipelineHoje.reprocessHoje -> casaHoje.pipelineHoje.raw2cleansedHoje 'Roda a transformação como processo Python (run_transform_subprocess)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/reprocess.py', 'workspaces/GetFinance/scripts/functions/functions.py']
+    }
+  }
+  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje 'dataforge jobs run finance_daily' {
+    metadata {
+      codigo ['workspaces/GetFinance/bin/run.sh', 'workspaces/GetFinance/bin/run.ps1']
+    }
+  }
+
+  // Quem de fora carrega as regras.
+  casaHoje.financasHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa edicao e classificacao' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje -> casaHoje.pipelineHoje.conferenciasHoje 'Importa extrato' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.ninhoHoje -> casaHoje.pipelineHoje.regrasHoje 'Carrega edicao por import_module (provisório, df-8x0m.23.14)' {
+    metadata {
+      codigo ['ninho/financas/regras.py']
+    }
+  }
+
+  // Para fora: Pluggy, lago, bancos.
+  casaHoje.pipelineHoje.landingHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (cliente de functions)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py', 'workspaces/GetFinance/scripts/functions/functions.py']
+    }
+  }
+  casaHoje.pipelineHoje.landingHoje -> casaHoje.lagoHoje 'Grava a partição do dia no raw (parquet)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py']
+    }
+  }
+  casaHoje.pipelineHoje.syntheticHoje -> casaHoje.lagoHoje 'Grava o raw sintético (parquet)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py']
+    }
+  }
+  casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.lagoHoje 'Lê o raw (parquet), grava o cleansed (Delta)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/raw2cleansed']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.lagoHoje 'Lê raw, cleansed e curated, grava o curated (Delta)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/cleansed2curated']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -[leitura]-> casaHoje.edicaoHoje 'Lê as explicações (conferência de saldo)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -[leitura]-> casaHoje.extratosHoje 'Lê os PDFs (task extrato)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_extrato.py']
+    }
+  }
+  casaHoje.pipelineHoje.reportHoje -> casaHoje.lagoHoje 'Lê e regrava o curated (Delta)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/report_curated.py']
+    }
+  }
+  casaHoje.pipelineHoje.reportHoje -> casaHoje.edicaoHoje 'Lê categorias, regras e correções (classify); a semente grava as tabelas vazias (finance_demo)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/carga_inicial_edicao.py']
+    }
+  }
+  casaHoje.pipelineHoje.reprocessHoje -> casaHoje.lagoHoje 'Conta e apaga a tabela do cleansed (Delta)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/reprocess.py']
+    }
+  }
+  casaHoje.pipelineHoje.backupDadosHoje -[leitura]-> casaHoje.lagoHoje 'Copia o raw' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
+    }
+  }
+  casaHoje.pipelineHoje.backupDadosHoje -[leitura]-> casaHoje.edicaoHoje 'Copia pela API de backup do SQLite' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
+    }
+  }
+  casaHoje.pipelineHoje.backupDadosHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia pela API de backup do SQLite (--ninho)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
+    }
+  }
+  casaHoje.pipelineHoje.backupDadosHoje -[leitura]-> casaHoje.extratosHoje 'Copia os PDFs' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
+    }
+  }
+  casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje 'Grava o zip e apaga os mais velhos' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
+    }
+  }
+  casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.pipelineHoje.achadosHoje 'Grava os achados (validate)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/raw2cleansed']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.pipelineHoje.achadosHoje 'Grava os achados (validate)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/cleansed2curated']
+    }
+  }
+  casaHoje.pipelineHoje.reportHoje -> casaHoje.pipelineHoje.achadosHoje 'Grava os achados (validate)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/report/classify.py']
+    }
+  }
+  casaHoje.pipelineHoje.validationHoje -[leitura]-> casaHoje.pipelineHoje.achadosHoje 'Lê os achados (read_findings)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/validation/data_warnings.py']
+    }
+  }
+}
+
+views {
+  view hoje-componentes-pipeline of casaHoje.pipelineHoje {
+    title 'Hoje: componentes do pipeline GetFinance'
+    include *
+  }
+}
