@@ -90,13 +90,14 @@ model {
   donoHoje -> casaHoje.ninhoHoje 'Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)'
   outraHoje -> casaHoje.telasNinhoHoje 'Usa a lista e os desejos pelo celular'
   agendadorHoje -> casaHoje.dataforgeHoje 'dataforge scheduled-run'
+  casaHoje.dataforgeHoje -> agendadorHoje 'Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)'
   casaHoje.pipelineHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)'
 
   casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
   casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê e edita os job.yaml; lança cada task como processo Python, com o .env do job'
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job'
   casaHoje.dataforgeHoje -[leitura]-> casaHoje.lagoHoje 'Serve o curated pela rota genérica'
   casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
 

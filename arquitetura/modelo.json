@@ -596,6 +596,18 @@
     },
     {
       "description": null,
+      "id": "casaHoje.dataforgeHoje -> agendadorHoje: Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "casaHoje.dataforgeHoje",
+      "tags": [],
+      "target": "agendadorHoje",
+      "technology": null,
+      "title": "Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)"
+    },
+    {
+      "description": null,
       "id": "casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje: Lê e escreve o histórico de execuções",
       "kind": null,
       "links": [],
@@ -632,7 +644,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita os job.yaml; lança cada task como processo Python, com o .env do job",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -640,7 +652,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Lê e edita os job.yaml; lança cada task como processo Python, com o .env do job"
+      "title": "Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
     },
     {
       "description": null,
