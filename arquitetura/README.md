@@ -169,9 +169,16 @@ que não é teste de ponta a ponta (sem pasta `e2e/` no caminho e sem nome `*_e2
 existe, ou que não declara o teste do título (`def test_...` no Python, `test('...')` no
 Playwright; o título de um `test.describe` não é teste). Falha também numa vista sem passos ou com
 um passo que sai do modelo de hoje: o teste roda o código de hoje. Renomeou um teste e2e ligado a
-um fluxo, troque o título do link no mesmo PR. Os passos não precisam ser setas do modelo: um passo
-diz o que acontece naquele ponto do fluxo; as setas estáticas continuam nas outras vistas. Blocos
-`parallel` viram passos simples no `modelo.json`.
+um fluxo, troque o título do link no mesmo PR.
+
+Cada passo é uma seta do modelo (df-8x0m.23.50): o passo `a -> b` pede uma seta entre `a` e `b`
+em `hoje.c4` ou num `componentes-*.c4`, com qualquer título (o do passo diz o que acontece naquele
+ponto do fluxo). Vale a seta nos dois sentidos, porque uma resposta percorre de volta a seta do
+pedido, e o `modelo.json` não distingue uma resposta (`a <- b`) de um passo `b -> a`: o LikeC4
+exporta os dois iguais. Uma seta entre ancestrais ou descendentes das pontas não conta: o modelo
+desenha as setas até os componentes, então um passo entre componentes pede a seta entre eles. Sem a
+seta, o erro nomeia a vista, o passo e a seta que falta; acrescente a seta ao modelo ou corrija o
+passo. Blocos `parallel` viram passos simples no `modelo.json`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.

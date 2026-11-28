@@ -1,6 +1,7 @@
 """scripts/arquitetura/fluxos.py: every dynamic view of the C4 model (a flow, step by step) names
 the end-to-end test that exercises it, with a link `../<path> 'e2e: <test name>'`, and that test
-exists (df-8x0m.23.41). The flows are today's: their steps use only elements of the hoje model."""
+exists (df-8x0m.23.41). The flows are today's: their steps use only elements of the hoje model, and
+each step is an arrow of the model between the same two elements (df-8x0m.23.50)."""
 
 import importlib.util
 import subprocess
@@ -63,8 +64,12 @@ def view(id_="fluxo-lista", links=(), steps=None, type_="dynamic"):
     return {"id": id_, "type": type_, "title": id_, "links": list(links), "steps": steps}
 
 
-def model(*views):
-    return {"views": list(views)}
+# The arrow of the default step of view(): every test view is drawn on arrows of the model.
+SETA = {"source": "donoHoje", "target": "casaHoje.telasHoje", "title": "usa"}
+
+
+def model(*views, setas=(SETA,)):
+    return {"views": list(views), "relations": list(setas)}
 
 
 def test_declared_tests_of_a_playwright_spec_and_of_python():
@@ -216,6 +221,65 @@ def test_a_symlink_out_of_the_repo_is_refused(repo, tmp_path):
 def test_a_flow_is_of_todays_model(repo, steps, problem):
     found = fluxos.problemas(model(view(links=[link(SPEC, "abre a lista e adiciona um item")], steps=steps)), repo)
     assert found == [f"fluxo-lista: {problem}"]
+
+
+def _passos(repo, *steps, setas=(SETA,)):
+    """The problems of a fluxo-lista view with those steps, drawn on those arrows."""
+    found = fluxos.problemas(model(view(links=[link(SPEC, "abre a lista e adiciona um item")], steps=list(steps)),
+                                   setas=setas), repo)
+    return [p.removeprefix("fluxo-lista: ") for p in found]
+
+
+def _passo(source, target, title="passa"):
+    return {"source": source, "target": target, "title": title}
+
+
+TELAS, LISTA = "casaHoje.telasHoje", "casaHoje.telasHoje.listaHoje"
+
+
+def test_a_step_on_an_arrow_of_the_model_passes_whatever_its_title(repo):
+    assert _passos(repo, _passo("donoHoje", TELAS, "um título que a seta não tem")) == []
+
+
+def test_a_step_without_its_arrow_names_the_view_the_step_and_the_arrow(repo):
+    assert _passos(repo, _passo(TELAS, "casaHoje.bancoHoje", "grava")) == [
+        f"o passo {TELAS} -> casaHoje.bancoHoje 'grava' não é seta do modelo: falta a seta "
+        f"{TELAS} -> casaHoje.bancoHoje (ou casaHoje.bancoHoje -> {TELAS}, se o passo é a resposta dela); "
+        "acrescente a seta ao modelo ou corrija o passo"]
+
+
+def test_a_reply_travels_its_arrow_backwards(repo):
+    """`donoHoje <- casaHoje.telasHoje 'responde'` in a .c4 exports as telas -> dono, exactly like a
+    step written telas -> dono: either is the reply over the arrow dono -> telas, which covers it."""
+    assert _passos(repo, _passo(TELAS, "donoHoje", "responde")) == []
+
+
+@pytest.mark.parametrize(("step", "arrow"), [
+    (_passo("donoHoje", LISTA), {"source": "donoHoje", "target": TELAS}),
+    (_passo("donoHoje", TELAS), {"source": "donoHoje", "target": LISTA}),
+    (_passo(LISTA, "casaHoje.bancoHoje"), {"source": TELAS, "target": "casaHoje.bancoHoje"}),
+    (_passo(LISTA, "donoHoje"), {"source": "donoHoje", "target": TELAS}),
+])
+def test_an_arrow_of_an_ancestor_or_a_descendant_does_not_count(repo, step, arrow):
+    found = _passos(repo, step, setas=[arrow | {"title": "usa"}])
+    assert len(found) == 1
+    assert f"falta a seta {step['source']} -> {step['target']} (ou" in found[0]
+
+
+def test_a_step_out_of_todays_model_is_one_problem_not_two(repo):
+    assert _passos(repo, _passo("donoHoje", "casaAlvo.servidorAlvo")) == [
+        "o passo donoHoje -> casaAlvo.servidorAlvo usa um elemento fora do modelo de hoje"]
+
+
+def test_each_step_without_an_arrow_is_one_problem(repo):
+    assert len(_passos(repo, _passo("donoHoje", TELAS), _passo(TELAS, LISTA), _passo(LISTA, TELAS))) == 2
+
+
+def test_the_committed_flows_are_drawn_on_the_committed_arrows():
+    """Without the model's arrows every step of the versioned flows fails: they are checked against them."""
+    real = fluxos.modelo.load()
+    steps = sum(len(v["steps"]) for v in fluxos.dinamicas(real))
+    assert len([p for p in fluxos.problemas(real | {"relations": []}) if "não é seta do modelo" in p]) == steps > 0
 
 
 def test_the_committed_model_passes():

@@ -1,6 +1,7 @@
 r"""Flows of the C4 model (df-8x0m.23.41): every dynamic view of arquitetura/*.c4 draws one flow of
 today, step by step, and names the end-to-end test that exercises it, so a flow drawn and never run
-fails here instead of going stale.
+fails here instead of going stale. Each step is an arrow of the model (df-8x0m.23.50), so a flow
+cannot draw a link the model lacks.
 
 The view names its test with a link (LikeC4 1.61.1 refuses a metadata block in a view, and a link's
 address is a bare URI token, with no spaces): the address is the test file, relative to arquitetura/
@@ -31,7 +32,14 @@ Fails, one `error:` line per problem, when a dynamic view:
    miss a test, and can also read the text of a later string as code, so a test( inside that
    string counts (a test invented). Keep such a literal out of an e2e file that a flow names;
 6. has no steps, or a step with an end outside today's model (modelo.e_hoje): the tests run today's
-   code, so the flow they exercise is today's.
+   code, so the flow they exercise is today's;
+7. has a step that is not an arrow of the model (df-8x0m.23.50): a step a -> b needs an arrow
+   between a and b, whatever its title, in either direction. The way back is allowed because a
+   reply travels its request's arrow backwards, and the export cannot tell a reply from a step:
+   `a <- b` in a .c4 and `b -> a` both export as b -> a, with the same `dir: back`, which LikeC4
+   also puts on a plain step whose target came earlier in the flow. An arrow between ancestors or
+   descendants of the two ends does not count, because the model draws its arrows down to the
+   components a flow goes through. The fix is to add the arrow to the model or to correct the step.
 
 Reads arquitetura/modelo.json through modelo.load(); the command line takes no argument, so nothing
 from it reaches a file read. Exit 0 when clean, 1 with the problems, 2 on an unknown argument.
@@ -137,18 +145,34 @@ def _problema_do_teste(repo: Path, caminho: str, nome: str) -> str | None:
     return None
 
 
-def _problemas_dos_passos(steps: list) -> list[str]:
+def setas(model: dict) -> set[tuple[str, str]]:
+    """The (source, target) of every arrow of the model."""
+    return {(r["source"], r["target"]) for r in model.get("relations") or ()}
+
+
+def _problema_do_passo(passo: dict, existentes: set[tuple[str, str]]) -> str | None:
+    """Rules 6 and 7 of the module docstring, for one step."""
+    origem, destino = passo["source"], passo["target"]
+    if not (modelo.e_hoje(origem) and modelo.e_hoje(destino)):
+        return f"o passo {origem} -> {destino} usa um elemento fora do modelo de hoje"
+    if (origem, destino) in existentes or (destino, origem) in existentes:
+        return None
+    return (f"o passo {origem} -> {destino} {passo.get('title') or ''!r} não é seta do modelo: falta a "
+            f"seta {origem} -> {destino} (ou {destino} -> {origem}, se o passo é a resposta dela); "
+            "acrescente a seta ao modelo ou corrija o passo")
+
+
+def _problemas_dos_passos(steps: list, existentes: set[tuple[str, str]]) -> list[str]:
     if not steps:
         return ["a vista não tem passos"]
-    return [f"o passo {s['source']} -> {s['target']} usa um elemento fora do modelo de hoje"
-            for s in steps if not (modelo.e_hoje(s["source"]) and modelo.e_hoje(s["target"]))]
+    return [p for p in (_problema_do_passo(s, existentes) for s in steps) if p]
 
 
-def _problemas_da_vista(repo: Path, vista: dict) -> list[str]:
+def _problemas_da_vista(repo: Path, vista: dict, existentes: set[tuple[str, str]]) -> list[str]:
     links = [link for link in vista.get("links") or () if str(link.get("title") or "").startswith(MARCA)]
     achados = [] if links else [f"nenhum link '{PREFIXO}<teste>' para o teste de ponta a ponta"]
     achados += [p for p in (_problema_do_link(repo, link) for link in links) if p]
-    achados += _problemas_dos_passos(vista.get("steps") or [])
+    achados += _problemas_dos_passos(vista.get("steps") or [], existentes)
     return [f"{vista['id']}: {p}" for p in achados]
 
 
@@ -158,8 +182,8 @@ def dinamicas(model: dict) -> list[dict]:
 
 def problemas(model: dict, repo: Path | None = None) -> list[str]:
     """Every problem of the model's dynamic views, sorted by view (module docstring)."""
-    repo = repo or REPO
-    return [p for vista in dinamicas(model) for p in _problemas_da_vista(repo, vista)]
+    repo, existentes = repo or REPO, setas(model)
+    return [p for vista in dinamicas(model) for p in _problemas_da_vista(repo, vista, existentes)]
 
 
 def main(argv: list[str] | None = None) -> int:
