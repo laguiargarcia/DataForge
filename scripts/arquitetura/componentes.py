@@ -89,6 +89,7 @@ import posixpath
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -544,7 +545,7 @@ def _sem_comentarios(fonte: str) -> str:
     return "".join([*partes, fonte[copiado:]])
 
 
-def _ts_from(fonte: str):
+def _ts_from(fonte: str) -> Iterator[tuple[int, str]]:
     """(start, specifier) of each import/export ... from '...', left to right and not overlapping."""
     fim = 0
     for chave in TS_FROM_KEYWORD.finditer(fonte):
