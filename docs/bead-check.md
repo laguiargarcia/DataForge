@@ -1,7 +1,7 @@
 ---
-topic: Bead check (a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note)
-read_when: A "Conferência do bead" refusal on bd create --parent, bd update --claim or bd close; changing which labels a close needs; the cutoff date; the escape hatch
-related_issues: [df-m60c, df-b89w, df-081f, df-ugnz]
+topic: Bead check (a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, and no architecture mark left on the bead)
+read_when: A "Conferência do bead" refusal on bd create --parent, bd update --claim or bd close; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead
+related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37]
 ---
 
 # Bead check
@@ -21,6 +21,7 @@ run, from a PreToolUse hook on Bash. Every other command passes in ~30 ms, untou
 | | `etapa:` | a bead whose `furo-de:` names a bead |
 | | the note: `Conferi:`, `Não conferi:`, `Assumi:` in the reason, each with text | beads created on or after the cutoff |
 | claim and close | at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:`, `inc-real:` | every bead; not session beads at claim |
+| `bd close <id>` | no `#novo`/`#muda`/`#sai` mark of `arquitetura/modelo.json` on `origin/main` still names the bead | every bead, `descartado:`/`duplicado:` closes too |
 
 **One value per label (df-b89w):** `bd create --parent` copies the parent's labels to the child, so a
 child given its own estimate ends with two (`vol:1` and `vol:2`), and the claudemain measurement
@@ -46,7 +47,19 @@ changed (its commits, found by its id, plus its worktree's diff).
 
 **Pass without checks:** epics and session beads at close; a reason starting with `descartado:` or
 `duplicado:`; a bead labelled `fechamento:dispensado`, the escape hatch, used only when Lucas asks
-(the claudemain measurement counts these).
+(the claudemain measurement counts these). Only the escape hatch skips the mark check below.
+
+**Architecture marks (df-8x0m.23.37):** every element or arrow of `arquitetura/alvo.c4` that differs
+from today carries `#novo`, `#muda` or `#sai` and the open bead of that change
+(`arquitetura/README.md`, "Marcas do alvo"). At `bd close` the hook reads
+`origin/main:arquitetura/modelo.json` (`model_on_main`) and refuses the close while a mark still
+names the bead, listing what it marks. Fix: in a PR, remove the mark from `alvo.c4` or move it to
+the bead that carries the change on, run `python3 scripts/arquitetura/modelo.py gerar`, merge, then
+`git fetch` and close. A dropped bead (`descartado:`) is checked too: its mark would point at a
+closed bead. With no `modelo.json` on `origin/main`, or one that is not a JSON object, nothing is
+checked (fail open). CI has no bd, so this is the half of the rule that knows open from closed; the
+CI job `arquitetura` checks only the marks' format (`scripts/arquitetura/marcas.py`), and
+`marcas.py --bd` checks every mark against bd at once.
 
 **Cutoff:** `CUTOFF` in the script, 2026-11-16. Older beads are held only to the rules that predate
 it (real difficulty, origem, camada, erro), and their claims are not checked.

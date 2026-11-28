@@ -557,6 +557,66 @@ def test_no_work_found_means_no_candidates(history):
     assert check.furo_candidates(history, "df-bug") == []
 
 
+# --------------------------------------------------------------------------- marks of the architecture target
+
+
+TASK_DONE = ["vol:1", "inc:1", "vol-real:1", "inc-real:1", "origem:planejado"]
+
+
+def marked_model(bead):
+    return json.dumps({"elements": [{"id": "casaAlvo.app", "tags": ["muda"], "metadata": {"bead": bead}}],
+                       "relations": []})
+
+
+@pytest.fixture
+def marked_main(tmp_path):
+    """origin/main whose arquitetura/modelo.json marks casaAlvo.app with df-t."""
+    repo = make_repo(tmp_path)
+    commit(repo, "arquitetura/modelo.json", marked_model("df-t"), "Mark (df-t)")
+    git(repo, "push", "-q", "origin", "main")
+    git(repo, "fetch", "-q", "origin")
+    return repo
+
+
+def test_a_close_is_refused_while_origin_main_still_marks_the_bead(marked_main):
+    bd = FakeBd(issue("df-t", "task", TASK_DONE))
+    found = check.check_line(f'bd close df-t --reason "{NOTE}"', bd, marked_main)
+    assert len(found) == 1
+    assert "casaAlvo.app" in found[0]
+    assert "arquitetura/alvo.c4" in found[0]
+
+
+def test_the_mark_counts_even_for_a_dropped_bead_but_not_with_the_waiver(marked_main):
+    bd = FakeBd(issue("df-t", "task", TASK_DONE))
+    assert check.check_line('bd close df-t --reason "descartado: x"', bd, marked_main) != []
+    waived = FakeBd(issue("df-t", "task", [check.WAIVER]))
+    assert check.check_line('bd close df-t --reason "x"', waived, marked_main) == []
+
+
+def test_only_origin_main_counts_not_the_local_checkout(marked_main):
+    commit(marked_main, "arquitetura/modelo.json", marked_model("df-other"), "Move the mark (df-t)")
+    assert check.mark_problems(marked_main, "df-t") != []
+    git(marked_main, "push", "-q", "origin", "main")
+    git(marked_main, "fetch", "-q", "origin")
+    assert check.mark_problems(marked_main, "df-t") == []
+    assert check.mark_problems(marked_main, "df-other") != []
+
+
+@pytest.mark.parametrize("text", [None, "", "{not json", "[1, 2]"])
+def test_no_model_or_an_unreadable_one_lets_the_close_through(tmp_path, text):
+    repo = make_repo(tmp_path)
+    if text is not None:
+        commit(repo, "arquitetura/modelo.json", text, "Broken model")
+        git(repo, "push", "-q", "origin", "main")
+        git(repo, "fetch", "-q", "origin")
+    assert check.model_on_main(repo) is None
+    assert check.mark_problems(repo, "df-t") == []
+
+
+def test_model_on_main_reads_the_model_of_origin_main(marked_main):
+    assert check.model_on_main(marked_main) == json.loads(marked_model("df-t"))
+
+
 # --------------------------------------------------------------------------- with a real bd
 
 

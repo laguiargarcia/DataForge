@@ -248,6 +248,13 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           python3 scripts/arquitetura/modelo.py conferir 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-modelo.txt"
+      - name: Every mark of the target carries a bead
+        # df-8x0m.23.37: an element or arrow tagged novo, muda or sai has exactly one of them and a
+        # well-formed bead id. Whether that bead is still open is the close hook's half (no bd here).
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          python3 scripts/arquitetura/marcas.py 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-marcas.txt"
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.

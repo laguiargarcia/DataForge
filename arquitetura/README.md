@@ -7,7 +7,7 @@ arquivos de modelo:
 | Vista | Arquivo | O que mostra |
 | --- | --- | --- |
 | `hoje-contexto`, `hoje-conteineres` | `hoje.c4` | O que roda em prod hoje. Muda quando a prod muda. |
-| `alvo-contexto`, `alvo-conteineres` | `alvo.c4` | O alvo v2 (quatro peças). A tag `aFazer` marca o que falta, `emProd` o que já roda. |
+| `alvo-contexto`, `alvo-conteineres` | `alvo.c4` | O alvo v2 (quatro peças). As marcas `novo`, `muda` e `sai` dizem o que difere de hoje (abaixo). |
 | `index` | `alvo.c4` | Só os dois sistemas, hoje e alvo, como entrada. |
 
 ## Regras do desenho
@@ -20,6 +20,40 @@ arquivos de modelo:
    com `include pessoa -> sistema with { title '...' }`.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
+
+## Marcas do alvo (df-8x0m.23.37)
+
+Todo elemento ou seta de `alvo.c4` que difere de `hoje.c4` leva uma marca só, e o bead aberto da
+mudança em `metadata` (um id ou uma lista):
+
+| Marca | Quer dizer | Cor nas vistas do alvo |
+| --- | --- | --- |
+| `#novo` | ainda não existe | verde, borda tracejada |
+| `#muda` | existe e vai mudar | âmbar |
+| `#sai` | existe hoje e vai sumir; fica no alvo, marcado | vermelho, borda pontilhada |
+
+```
+servidorAlvo = conteiner 'Servidor da casa (ninho)' {
+  #muda
+  metadata {
+    bead ['df-8x0m.23.19', 'df-8x0m.23.21']
+  }
+}
+```
+
+Sem marca: já roda em prod como está. O que some de hoje e não fica desenhado no alvo: os bancos
+`edicao.db` e `ninho.db`, que viram o banco do app, e os extratos em PDF e os zips do backup,
+citados na descrição dele (com os beads dele); a seta do backend que grava o PDF some com o backend,
+até df-8x0m.23.35 dizer onde os extratos moram. A tag vem primeiro no corpo do elemento ou da seta.
+Quando o bead fecha, a marca sai, ou passa para o bead que continua a mudança (um bead de decisão a
+passa para os beads de implementação que criou). A conferência tem duas metades, porque o CI não tem
+bd:
+
+- `python3 scripts/arquitetura/marcas.py` (no CI): falha num item marcado sem bead, com id
+  malformado ou com duas das três marcas, e num `bead` sem marca.
+- `bd close <id>` (hook `scripts/beads/check.py`): recusa fechar um bead que o
+  `arquitetura/modelo.json` do origin/main ainda marca. Para conferir tudo de uma vez, com bd:
+  `python3 scripts/arquitetura/marcas.py --bd`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
