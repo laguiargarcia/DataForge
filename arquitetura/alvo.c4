@@ -1,0 +1,104 @@
+// ALVO v2 (ADR 0006). A tag emProd marca a peça que já roda em prod (o que falta nela está na descrição); aFazer, a que ainda não existe.
+model {
+  donoAlvo = pessoa 'Dono da casa' {
+    description 'Finanças, lista e agenda; administra o DataForge'
+  }
+  outraAlvo = pessoa 'Outra pessoa da casa' {
+    description 'Vê o que é compartilhado e o que é dela'
+  }
+  pluggyAlvo = sistemaExterno 'Pluggy' {
+    description 'Provedor de dados bancários'
+  }
+  outrasFontesAlvo = sistemaExterno 'Outras fontes' {
+    #aFazer
+    description 'Segunda fonte de dados (df-8x0m.23.10)'
+  }
+  agendadorAlvo = sistemaExterno 'Agendador do Windows' {
+    description 'Dispara os jobs (dataforge scheduled-run)'
+  }
+
+  casaAlvo = sistema 'Sistema da casa' {
+    description 'Quatro peças com contratos estreitos; o servidor e o DataForge rodam no PC da casa, o app no celular'
+
+    appCelularAlvo = conteiner 'App no celular' {
+      #emProd
+      technology 'Web app instalada no celular'
+      description 'As telas do ninho (ninho/telas), abertas como app na tela de início. A fazer: cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta (df-8x0m.23.8)'
+    }
+    servidorAlvo = conteiner 'Servidor da casa (ninho)' {
+      #emProd
+      description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
+      technology 'Python, FastAPI'
+    }
+    bancoAppAlvo = banco 'Banco do app' {
+      #emProd
+      description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod; falta a cópia fora deste disco (df-8x0m.23.9, df-8x0m.19). Hoje em dois arquivos SQLite: ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas (df-8x0m.23.14). Onde moram os extratos em PDF: a decidir (df-8x0m.23.35)'
+      technology 'SQLite'
+    }
+    lagoAlvo = banco 'Lago' {
+      #emProd
+      description 'raw (só cresce), cleansed e publicado. Só o pipeline escreve'
+      technology 'Delta Lake'
+    }
+    dataforgeAlvo = conteiner 'DataForge (orquestrador)' {
+      #emProd
+      description 'Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Paredes no repositório (df-8x0m.23.14) a fazer: pastas, pacotes e regra do gate separados, CI por parte'
+      technology 'Python'
+    }
+    historicoAlvo = banco 'Histórico e agendas' {
+      #emProd
+      description 'Escrito só pelo DataForge; o servidor sabe o estado de uma execução por run-state, nunca lê o arquivo'
+      technology 'SQLite (dataforge.db)'
+    }
+  }
+
+  donoAlvo -> casaAlvo.appCelularAlvo 'Usa'
+  outraAlvo -> casaAlvo.appCelularAlvo 'Usa'
+  casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo 'Lê e envia a fila de mudanças (HTTPS pela Tailscale)'
+  donoAlvo -> casaAlvo.dataforgeAlvo 'Tela de admin'
+  agendadorAlvo -> casaAlvo.dataforgeAlvo 'dataforge scheduled-run'
+
+  casaAlvo.servidorAlvo -> casaAlvo.bancoAppAlvo 'Lê e escreve (único escritor)'
+  casaAlvo.servidorAlvo -[leitura]-> casaAlvo.lagoAlvo 'Só leitura, pelas tabelas publicadas'
+  casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
+  casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)'
+  casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
+  casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada; copia no job backup'
+  casaAlvo.dataforgeAlvo -> pluggyAlvo 'Busca dados'
+  casaAlvo.dataforgeAlvo -> outrasFontesAlvo 'Busca dados'
+}
+
+views {
+  view alvo-contexto of casaAlvo {
+    title 'Alvo v2: contexto'
+    include casaAlvo, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, agendadorAlvo
+    include donoAlvo -> casaAlvo with {
+      title 'Usa o app no celular e administra o DataForge'
+    }
+    style element.tag = #aFazer {
+      color amber
+      border dashed
+    }
+    style element.tag = #emProd {
+      color green
+    }
+  }
+  view alvo-conteineres of casaAlvo {
+    title 'Alvo v2: contêineres'
+    include casaAlvo.*, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, agendadorAlvo
+    style element.tag = #aFazer {
+      color amber
+      border dashed
+    }
+    style element.tag = #emProd {
+      color green
+    }
+  }
+}
+
+views {
+  view index {
+    title 'Índice'
+    include casaHoje, casaAlvo
+  }
+}
