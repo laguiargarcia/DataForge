@@ -53,9 +53,12 @@ bd:
   malformado ou com duas das três marcas, e num `bead` sem marca. Falha também numa marca no modelo
   de hoje (df-8x0m.23.46): todo elemento de topo tem id terminado em `Hoje` (o que descreve hoje, em
   `hoje.c4` ou em qualquer arquivo que estende seus elementos) ou em `Alvo`; um elemento marcado sob
-  um topo `...Hoje`, ou uma seta marcada com uma ponta lá, falha, e um elemento de topo com outro
-  sufixo também. O export do LikeC4 não diz de que arquivo vem cada item, por isso o sufixo; só o
-  segmento de topo conta (`casaAlvo.velhoHoje` é do alvo).
+  um topo `...Hoje`, uma seta marcada com uma ponta lá, ou uma instância de deployment marcada de
+  um elemento de lá, falha, e um elemento de topo com outro sufixo também. O export do LikeC4 não
+  diz de que arquivo vem cada item, por isso o sufixo; só o segmento de topo conta
+  (`casaAlvo.velhoHoje` é do alvo). A regra mora em `scripts/arquitetura/modelo.py` (`sistema`,
+  `e_hoje`), a mesma que `componentes.py` usa. Os nós e as setas de deployment ficam fora dela: o
+  id deles é do deployment, sem o sufixo de um modelo.
 - `bd close <id>` (hook `scripts/beads/check.py`): recusa fechar um bead que o
   `arquitetura/modelo.json` do origin/main ainda marca. Para conferir tudo de uma vez, com bd:
   `python3 scripts/arquitetura/marcas.py --bd`.

@@ -99,7 +99,6 @@ from arquitetura import modelo
 
 REPO = Path(__file__).resolve().parents[2]
 COMPONENTE = "componente"
-HOJE = "Hoje"
 CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".ps1")
 TS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 OUT_FOLDERS = frozenset({"dist", "node_modules", "tests", "test", "__tests__", "e2e"})
@@ -177,10 +176,6 @@ def codigo(item: dict) -> list:
     return [valor] if isinstance(valor, str) else list(valor)
 
 
-def sistema(id_: str) -> str:
-    return id_.split(".")[0]
-
-
 def _fora(nome: str) -> bool:
     """A test or a tooling config, by its file name."""
     return ((nome.startswith("test_") and nome.endswith(".py")) or nome.endswith("_test.py")
@@ -228,14 +223,14 @@ def checar_repetidos(elementos: list[dict]) -> list[str]:
     por_caminho: dict[tuple[str, str], set[str]] = {}
     for elemento in elementos:
         for caminho in codigo(elemento):
-            por_caminho.setdefault((sistema(elemento["id"]), caminho), set()).add(elemento["id"])
+            por_caminho.setdefault((modelo.sistema(elemento["id"]), caminho), set()).add(elemento["id"])
     return [f"{caminho!r} is in the codigo of {' and '.join(sorted(ids))}: give it one owner"
             for (_, caminho), ids in sorted(por_caminho.items()) if len(ids) > 1]
 
 
 def donos_do_hoje(elementos: list[dict], repo: Repo) -> dict[str, str]:
     """Rule (2): each code file of the hoje -> the element of longest codigo path that holds it."""
-    caminhos = sorted((c, e["id"]) for e in elementos if sistema(e["id"]).endswith(HOJE) for c in codigo(e))
+    caminhos = sorted((c, e["id"]) for e in elementos if modelo.e_hoje(e["id"]) for c in codigo(e))
     donos = {}
     for arquivo in sorted(repo.arquivos):
         if not e_codigo(arquivo):

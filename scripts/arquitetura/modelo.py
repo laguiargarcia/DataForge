@@ -67,6 +67,19 @@ REPO = Path(__file__).resolve().parents[2]
 FONTE = REPO / "arquitetura"
 SAIDA = FONTE / "modelo.json"
 VIEW_TYPES = ("element", "dynamic", "deployment")
+# Suffix of every top-level element id: the model it belongs to. Today's model is hoje.c4 and the
+# files that extend its elements (componentes-*.c4); the export keeps no source file (df-8x0m.23.46).
+HOJE, ALVO = "Hoje", "Alvo"
+
+
+def sistema(id_) -> str:
+    """The top-level segment of an element id: the system the element belongs to."""
+    return str(id_).split(".", 1)[0]
+
+
+def e_hoje(id_) -> bool:
+    """Whether an element id belongs to today's model: only the top-level segment counts."""
+    return sistema(id_).endswith(HOJE)
 
 
 def load(path: Path | str | None = None) -> dict:
