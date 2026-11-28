@@ -565,3 +565,50 @@ def test_rule_5_refuses_a_direct_arrow_alone_when_an_end_has_components(end, nam
     assert modelo.regra5(raw) == [
         f"view hoje-conteineres: p -> s has a direct arrow and no component arrow, though {named} has "
         "components: draw the arrow from or to the component that does it (README rule 5)"]
+
+
+@pytest.mark.parametrize(("raw", "hidden"), [
+    (_vista(None, ABRE, ("r3", "p", "s.s3", "", None)), "'abre'"),  # two titles, one of them none
+    (_vista(None, ABRE, LE), "'abre', 'lê'"),
+])
+def test_an_untitled_edge_over_two_titles_names_them(raw, hidden):
+    assert modelo.arestas_ambiguas(raw) == [
+        f"view index: p -> s joins 2 relations and comes out with no title, hiding {hidden}: give it a title "
+        "of its own in the view (include p -> s with { title '...' }), or draw an arrow straight between the two"]
+
+
+def test_an_untitled_edge_over_one_title_passes():
+    """LikeC4 shows the only title there is."""
+    assert modelo.arestas_ambiguas(_vista(None, ABRE)) == []
+
+
+def test_two_direct_arrows_of_different_marks_both_name_their_colour():
+    raw = _colorida("red", ("r3", "p", "s", "junta", ("novo",)), ("r7", "p", "s", "outra", ("muda",)), NOVA)
+    assert modelo.arestas_ambiguas(raw) == [
+        "view index: p -> s joins relations marked #novo, #muda and is drawn red, not grass or tomato, the colour "
+        "of the arrow straight between the two: give it that colour after the tag rules "
+        "(include p -> s with { color grass })"]
+
+
+def test_a_mark_with_no_colour_in_the_specification_is_gray():
+    raw = _colorida("gray", NOVA, ("r6", "p", "s.s4", "sai", ("sai",)))
+    raw["specification"]["tags"]["sai"] = {}
+    assert len(modelo.arestas_ambiguas(raw)) == 1
+
+
+def test_rule_5_names_an_untitled_component_arrow_and_reads_an_unlabelled_edge():
+    assert modelo.regra5(_conteineres(RESUMO, ("a", "p.x", "s.y", ""), label="resume")) == [
+        "view hoje-conteineres: p -> s has a direct arrow over one component arrow (''): remove the direct "
+        "arrow, the view shows that one's title (README rule 5)"]
+    assert modelo.regra5(_conteineres(("a", "p.x", "s.y", ""), OUTRA, label=None)) == [
+        "view hoje-conteineres: p -> s joins 2 component arrows with no direct arrow: draw one in hoje.c4 "
+        "whose title sums them up (README rule 5)"]
+
+
+def test_rule_5_takes_the_deepest_node_of_each_end():
+    raw = _conteineres(RESUMO, UMA, OUTRA, label="resume", nodes=("p", "s", "s.z"))
+    raw["views"]["hoje-conteineres"]["edges"].append(
+        {"id": "e2", "source": "p", "target": "s.z", "label": "lê", "relations": ["b"]})
+    assert modelo.regra5(raw) == [
+        "view hoje-conteineres: p -> s has a direct arrow over one component arrow ('abre'): remove the direct "
+        "arrow, the view shows that one's title (README rule 5)"]

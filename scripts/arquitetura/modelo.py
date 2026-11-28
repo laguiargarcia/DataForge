@@ -227,7 +227,7 @@ def _cor_ambigua(where: str, edge: dict, joined: list[dict], cores: dict) -> lis
     color = edge.get("color")
     direct = {cores.get(marca(r), SEM_MARCA) for r in joined
               if (_ref(r["source"]), _ref(r["target"])) == (edge["source"], edge["target"])}
-    named = ", ".join(f"#{m}" if m else "(no mark)" for m in sorted(marks, key=lambda m: MARCAS.index(m) if m else -1))
+    named = ", ".join(["(no mark)"] * (None in marks) + [f"#{m}" for m in MARCAS if m in marks])
     fix = f"include {edge['source']} -> {edge['target']} with {{ color ... }}"
     if direct:
         if color in direct:
@@ -244,6 +244,18 @@ def _cor_ambigua(where: str, edge: dict, joined: list[dict], cores: dict) -> lis
             "straight between the two"]
 
 
+def _no(id_: str, nodes: set) -> str | None:
+    """The deepest of `nodes` that is `id_` or holds it."""
+    while id_ and id_ not in nodes:
+        id_ = id_.rpartition(".")[0]
+    return id_ or None
+
+
+def _tem(node: str, componentes: list[str]) -> bool:
+    """Whether a component sits under `node`."""
+    return any(c.startswith(node + ".") for c in componentes)
+
+
 def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
     """README rule 5: in `view`, a pair of nodes has a direct arrow only over more than one arrow
     between their descendants, counting the ones the view excludes; a pair of several with no direct
@@ -251,30 +263,23 @@ def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
     vista = (raw.get("views") or {}).get(view)
     if vista is None:
         return []
-    nodes = [n["id"] for n in vista.get("nodes") or []]
-
-    def node(id_: str) -> str | None:
-        owners = [n for n in nodes if id_ == n or id_.startswith(n + ".")]
-        return max(owners, key=len) if owners else None
+    nodes = {n["id"] for n in vista.get("nodes") or []}
 
     pairs: dict[tuple[str, str], list[dict]] = {}
     for r in (raw.get("relations") or {}).values():
-        a, b = node(_ref(r["source"])), node(_ref(r["target"]))
+        a, b = _no(_ref(r["source"]), nodes), _no(_ref(r["target"]), nodes)
         if a and b and a != b:
             pairs.setdefault((a, b), []).append(r)
     labels = {(e["source"], e["target"]): e.get("label") or "" for e in vista.get("edges") or []}
     componentes = [e["id"] for e in (raw.get("elements") or {}).values() if e.get("kind") == COMPONENTE]
 
-    def tem_componentes(n: str) -> bool:
-        return any(c.startswith(n + ".") for c in componentes)
-
     problems = []
     for (a, b), rels in sorted(pairs.items()):
         direct = [r for r in rels if (_ref(r["source"]), _ref(r["target"])) == (a, b)]
         inner = [r for r in rels if r not in direct]
-        if direct and not inner and (tem_componentes(a) or tem_componentes(b)):
+        if direct and not inner and (_tem(a, componentes) or _tem(b, componentes)):
             problems.append(f"view {view}: {a} -> {b} has a direct arrow and no component arrow, though "
-                            f"{a if tem_componentes(a) else b} has components: draw the arrow from or to the "
+                            f"{a if _tem(a, componentes) else b} has components: draw the arrow from or to the "
                             "component that does it (README rule 5)")
         elif direct and len(inner) == 1:
             problems.append(f"view {view}: {a} -> {b} has a direct arrow over one component arrow "

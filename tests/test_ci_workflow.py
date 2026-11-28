@@ -647,8 +647,8 @@ def test_the_checks_cover_the_steps_that_matter():
     assert {"tests / Every part passed", "tests-windows / Every part passed", "mutation-ok / Check the mutation jobs"} <= steps["needs"]
     assert {"mutation-ok / Gate each target on its shards", "mutation / Mutate",
             "app-financas / Committed dist is the build", "tests-shard / Engine tests",
-            "arquitetura / Validate the model", "arquitetura / The committed modelo.json is the export of the .c4",
-            "arquitetura / Every mark of the target carries a bead",
+            "arquitetura / Validate the model", "arquitetura / modelo.json is the export of the .c4, and every view edge reads at its word",
+            "arquitetura / Every mark of the target carries a bead, and every unmarked component arrow mirrors today",
             "arquitetura / The component model matches the code",
             "arquitetura / Every flow names its end-to-end test"} <= steps["command"]
     assert steps["action"] == {"leak-scan / gitleaks", "sonar / SonarQube Cloud scan"}
@@ -751,8 +751,8 @@ LOOPHOLES = [
     # (5) a non-required job's step that gates by a plain exit.
     ("mutate-swallows-a-failure", _command_checks, _replace("mutation", "Mutate", "|| failed=1", "|| true")),
     ("committed-dist-exits-0", _command_checks, _replace("app-financas", "Committed dist is the build", "exit 1", "exit 0")),
-    ("stale-model-passes", _command_checks, _set("arquitetura", "The committed modelo.json is the export of the .c4", {"shell": None})),
-    ("unmarked-change-passes", _command_checks, _set("arquitetura", "Every mark of the target carries a bead", {"shell": None})),
+    ("stale-model-passes", _command_checks, _set("arquitetura", "modelo.json is the export of the .c4, and every view edge reads at its word", {"shell": None})),
+    ("unmarked-change-passes", _command_checks, _set("arquitetura", "Every mark of the target carries a bead, and every unmarked component arrow mirrors today", {"shell": None})),
     ("components-pass-without-pipefail", _command_checks, _set("arquitetura", "The component model matches the code", {"shell": None})),
     ("flows-pass-without-pipefail", _command_checks, _set("arquitetura", "Every flow names its end-to-end test", {"shell": None})),
     ("validate-swallows-a-failure", _command_checks, _replace("arquitetura", "Validate the model", "arquitetura 2>&1", "arquitetura || true; true 2>&1")),
