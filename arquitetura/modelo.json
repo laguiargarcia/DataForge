@@ -293,7 +293,7 @@
       "title": "backup"
     },
     {
-      "description": "Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-uv8o",
+      "description": "Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-o0cc",
       "id": "casaHoje.pipelineHoje.binHoje",
       "kind": "componente",
       "links": [],
@@ -1275,7 +1275,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje: Sobra sem uso (df-uv8o): dataforge jobs run finance_daily",
+      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje: Sobra sem uso (df-o0cc): dataforge jobs run finance_daily",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1288,7 +1288,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje",
       "technology": null,
-      "title": "Sobra sem uso (df-uv8o): dataforge jobs run finance_daily"
+      "title": "Sobra sem uso (df-o0cc): dataforge jobs run finance_daily"
     },
     {
       "description": null,

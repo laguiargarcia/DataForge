@@ -97,7 +97,7 @@ model {
       }
     }
     binHoje = componente 'bin' {
-      description 'Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-uv8o'
+      description 'Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-o0cc'
       technology 'Bash, PowerShell'
       metadata {
         codigo ['workspaces/GetFinance/bin']
@@ -267,7 +267,7 @@ model {
       codigo ['workspaces/GetFinance/scripts/reprocess.py', 'workspaces/GetFinance/scripts/functions/functions.py']
     }
   }
-  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje 'Sobra sem uso (df-uv8o): dataforge jobs run finance_daily' {
+  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje 'Sobra sem uso (df-o0cc): dataforge jobs run finance_daily' {
     metadata {
       codigo ['workspaces/GetFinance/bin/run.sh', 'workspaces/GetFinance/bin/run.ps1']
     }
