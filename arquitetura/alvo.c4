@@ -151,7 +151,7 @@ model {
   }
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
   casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
-  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê o workspace.yaml e as conexões, lista e confere os scripts e edita jobs e triggers; lança cada task como processo Python, com o .env do job'
+  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)'
   casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.lagoAlvo 'Serve o curated pela rota genérica' {
     #sai
     metadata {

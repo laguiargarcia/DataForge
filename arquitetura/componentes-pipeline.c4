@@ -125,7 +125,7 @@ model {
     // lê a pasta como arquivos, e o LikeC4 1.61.1 apaga da vista do DataForge a seta da API ao contêiner,
     // já que a API também tem seta aos arquivos do workspace, filho dele (df-8x0m.23.47.18).
     pastaScriptsHoje = banco 'Pasta dos scripts (scripts/)' {
-      description 'workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada script é das camadas, de functions e do reprocess'
+      description 'workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada .py é dos componentes do pipeline'
       technology 'Pasta de arquivos .py'
     }
     achadosHoje = banco 'Achados das validações' {
@@ -363,7 +363,7 @@ model {
       codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
     }
   }
-  casaHoje.pipelineHoje.backupDadosHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia pela API de backup do SQLite (--ninho)' {
+  casaHoje.pipelineHoje.backupDadosHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia no job backup (semanal), pela API de backup do SQLite' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
     }
@@ -373,7 +373,7 @@ model {
       codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
     }
   }
-  casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje 'Grava o zip e apaga os mais velhos' {
+  casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje 'Grava o zip semanal (job backup) e apaga os mais velhos' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
     }

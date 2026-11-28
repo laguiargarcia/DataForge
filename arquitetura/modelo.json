@@ -1074,7 +1074,7 @@
       "title": "Zips do backup"
     },
     {
-      "description": "Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)",
+      "description": "Pessoas, sessões, lista de compras e desejos (fora do repositório; cópia semanal no job backup)",
       "id": "casaHoje.bancoNinhoHoje",
       "kind": "banco",
       "links": [],
@@ -1715,7 +1715,7 @@
       "title": "landing"
     },
     {
-      "description": "workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada script é das camadas, de functions e do reprocess",
+      "description": "workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada .py é dos componentes do pipeline",
       "id": "casaHoje.pipelineHoje.pastaScriptsHoje",
       "kind": "banco",
       "links": [],
@@ -2408,7 +2408,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê o workspace.yaml e as conexões, lista e confere os scripts e edita jobs e triggers; lança cada task como processo Python, com o .env do job",
+      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -2416,7 +2416,7 @@
       "tags": [],
       "target": "casaAlvo.pipelineAlvo",
       "technology": null,
-      "title": "Lê o workspace.yaml e as conexões, lista e confere os scripts e edita jobs e triggers; lança cada task como processo Python, com o .env do job"
+      "title": "Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)"
     },
     {
       "description": null,
@@ -3975,7 +3975,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê o workspace.yaml e as conexões, lista e confere os scripts e edita jobs e triggers; lança cada task como processo Python, com o .env do job",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -3983,7 +3983,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Lê o workspace.yaml e as conexões, lista e confere os scripts e edita jobs e triggers; lança cada task como processo Python, com o .env do job"
+      "title": "Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)"
     },
     {
       "description": null,
@@ -5639,7 +5639,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje: Lê e escreve: pessoas, lista, desejos",
+      "id": "casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje: Lê e escreve: pessoas, sessões, lista, desejos",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -5647,7 +5647,7 @@
       "tags": [],
       "target": "casaHoje.bancoNinhoHoje",
       "technology": null,
-      "title": "Lê e escreve: pessoas, lista, desejos"
+      "title": "Lê e escreve: pessoas, sessões, lista, desejos"
     },
     {
       "description": null,
@@ -5912,7 +5912,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje -> casaHoje.edicaoHoje: Lê (abrir_leitura); o job backup copia",
+      "id": "casaHoje.pipelineHoje -> casaHoje.edicaoHoje: Lê categorias, regras, correções e explicações; o job backup copia",
       "kind": "leitura",
       "links": [],
       "metadata": {},
@@ -5920,7 +5920,7 @@
       "tags": [],
       "target": "casaHoje.edicaoHoje",
       "technology": null,
-      "title": "Lê (abrir_leitura); o job backup copia"
+      "title": "Lê categorias, regras, correções e explicações; o job backup copia"
     },
     {
       "description": null,
@@ -5948,7 +5948,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje: Grava o zip e apaga os mais velhos",
+      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje: Grava o zip semanal (job backup) e apaga os mais velhos",
       "kind": null,
       "links": [],
       "metadata": {
@@ -5958,11 +5958,11 @@
       "tags": [],
       "target": "casaHoje.backupHoje",
       "technology": null,
-      "title": "Grava o zip e apaga os mais velhos"
+      "title": "Grava o zip semanal (job backup) e apaga os mais velhos"
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.bancoNinhoHoje: Copia pela API de backup do SQLite (--ninho)",
+      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.bancoNinhoHoje: Copia no job backup (semanal), pela API de backup do SQLite",
       "kind": "leitura",
       "links": [],
       "metadata": {
@@ -5972,7 +5972,7 @@
       "tags": [],
       "target": "casaHoje.bancoNinhoHoje",
       "technology": null,
-      "title": "Copia pela API de backup do SQLite (--ninho)"
+      "title": "Copia no job backup (semanal), pela API de backup do SQLite"
     },
     {
       "description": null,
@@ -6910,7 +6910,7 @@
     },
     {
       "description": null,
-      "id": "donoHoje -> casaHoje.dataforgeHoje: Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)",
+      "id": "donoHoje -> casaHoje.dataforgeHoje: Abre o app pelo atalho e administra o DataForge (GUI Qt, bandeja, CLI)",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -6918,7 +6918,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje",
       "technology": null,
-      "title": "Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)"
+      "title": "Abre o app pelo atalho e administra o DataForge (GUI Qt, bandeja, CLI)"
     },
     {
       "description": null,
