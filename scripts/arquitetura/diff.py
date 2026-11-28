@@ -60,14 +60,26 @@ def _window(text: str, start: int) -> str:
     return f"`{'…' if start else ''}{piece}{'…' if start + SHORT < len(text) else ''}`"
 
 
+class _Absent:
+    """A key one side of a dict does not have: not the same as the key set to null."""
+
+    def __repr__(self) -> str:
+        return "absent"
+
+
+ABSENT = _Absent()
+
+
 def _short(value) -> str:
     """A value inline: in backticks, on one line, cut at SHORT characters; None is a dash."""
+    if value is ABSENT:
+        return "(absent)"
     return "—" if value is None else _window(_one_line(value), 0)
 
 
 def _pair(old, new) -> tuple[str, str]:
     """Two values inline, both cut around their first difference: a change past SHORT characters still shows."""
-    if old is None or new is None:
+    if old is None or new is None or ABSENT in (old, new):
         return _short(old), _short(new)
     a, b = _one_line(old), _one_line(new)
     first = next((i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b)))
@@ -75,24 +87,37 @@ def _pair(old, new) -> tuple[str, str]:
     return _window(a, start), _window(b, start)
 
 
+def _differing(old: dict, new: dict, skip: frozenset[str] = frozenset()) -> list[tuple[str, object, object]]:
+    """(key, old value, new value) of each key that differs, sorted: a key on one side only differs
+    even when the other side has it null."""
+    return [(key, old.get(key, ABSENT), new.get(key, ABSENT)) for key in sorted((set(old) | set(new)) - skip)
+            if old.get(key, ABSENT) != new.get(key, ABSENT)]
+
+
+def _list_change(field: str, old: list, new: list) -> str:
+    gone, came = [v for v in old if v not in new], [v for v in new if v not in old]
+    if not (gone or came):
+        return f"{field} reordered" if len(old) == len(new) else f"{field} {len(old)} → {len(new)} items"
+    if len(gone) == len(came) and all(isinstance(v, dict) for v in gone + came):
+        # As many records changed as went: each, in order, by key (a renamed step of a dynamic view).
+        at = [next(i for i, v in enumerate(new) if v is n) for n in came]
+        return "; ".join(_field_change(f"{field}[{i}]", o, n) for i, o, n in zip(at, gone, came, strict=True))
+    return f"{field} " + " ".join([f"+{_short(v)}" for v in came] + [f"−{_short(v)}" for v in gone])
+
+
 def _field_change(field: str, old, new) -> str:
     """What changed in one field: per key in a dict, the items added and removed in a list, else old → new."""
     if isinstance(old, dict) and isinstance(new, dict):
-        return "; ".join(_field_change(f"{field}.{key}", old.get(key), new.get(key))
-                         for key in sorted(set(old) | set(new)) if old.get(key) != new.get(key))
+        return "; ".join(_field_change(f"{field}.{key}", was, now) for key, was, now in _differing(old, new))
     if isinstance(old, list) and isinstance(new, list):
-        gone, came = [v for v in old if v not in new], [v for v in new if v not in old]
-        if not (gone or came):
-            return f"{field} reordered" if len(old) == len(new) else f"{field} {len(old)} → {len(new)} items"
-        return f"{field} " + " ".join([f"+{_short(v)}" for v in came] + [f"−{_short(v)}" for v in gone])
+        return _list_change(field, old, new)
     was, now = _pair(old, new)
     return f"{field} {was} → {now}"
 
 
 def changes(old: dict, new: dict, skip: frozenset[str] = frozenset()) -> list[str]:
     """One text per field that differs, in field order; id and the fields in `skip` aside."""
-    return [_field_change(f, old.get(f), new.get(f)) for f in sorted((set(old) | set(new)) - {"id"} - skip)
-            if old.get(f) != new.get(f)]
+    return [_field_change(key, was, now) for key, was, now in _differing(old, new, skip | {"id"})]
 
 
 def _label(record: dict) -> str:

@@ -148,7 +148,32 @@ def test_a_list_shows_what_was_added_removed_or_reordered_and_a_dict_each_key():
     assert diff._field_change("tags", ["x", "y"], ["y", "x"]) == "tags reordered"
     assert diff._field_change("tags", ["x", "x"], ["x"]) == "tags 2 → 1 items"
     assert diff._field_change("metadata", {"bead": "df-1", "doc": "a"}, {"bead": "df-2", "doc": "a", "novo": "s"}) == (
-        "metadata.bead `df-1` → `df-2`; metadata.novo — → `s`")
+        "metadata.bead `df-1` → `df-2`; metadata.novo (absent) → `s`")
+
+
+def test_a_renamed_step_of_a_dynamic_view_shows_the_step_and_the_title_that_changed():
+    """Steps between real-length ids: their JSON passes SHORT characters before the title starts."""
+    def step(title):
+        return {"source": "casaAlvo.appCelularAlvo", "target": "casaAlvo.servidorAlvo", "title": title}
+
+    first = {"source": "pessoaAlvo", "target": "casaAlvo.appCelularAlvo", "title": "abre o app"}
+    base, pr = _model(), _model()
+    base["views"][0] |= {"type": "dynamic", "steps": [first, step("envia a lista de compras")]}
+    pr["views"][0] |= {"type": "dynamic", "steps": [first, step("envia a lista de desejos")]}
+    assert len(diff._one_line(step(""))) > diff.SHORT
+    assert ("- ✏️ `index`: steps[1].title `envia a lista de compras` → `envia a lista de desejos`"
+            in diff.markdown(base, pr))
+
+
+def test_changed_records_in_a_list_pair_only_when_as_many_went_as_came():
+    assert diff._field_change("steps", [{"t": "a"}, {"t": "b"}], [{"t": "c"}]) == 'steps +`{"t": "c"}` −`{"t": "a"}` −`{"t": "b"}`'
+
+
+def test_a_key_null_on_one_side_and_missing_on_the_other_is_a_change():
+    assert diff._field_change("metadata", {"doc": None}, {}) == "metadata.doc — → (absent)"
+    base, pr = _model(), _model()
+    del pr["elements"][0]["technology"]
+    assert "- ✏️ `app`: technology — → (absent)" in diff.markdown(base, pr)
 
 
 @pytest.mark.parametrize("index", range(len(json.loads((ROOT / "arquitetura" / "modelo.json").read_text(encoding="utf-8"))["relations"])))
