@@ -33,13 +33,13 @@ def model(elements=(), relations=()):
 
 
 GOOD = model(
-    [element("casa.app", ["muda"], {"bead": "df-a.1"}),
-     element("fonte", ["novo"], {"bead": ["df-a.2", "df-b"]}),
-     element("casa.velho", ["sai"], {"bead": "df-a.3"}),
-     element("casa.igual"),
-     element("casa.outro", ["emProd"])],
-    [relation("casa.app", "casa.igual", ["muda"], {"bead": "df-a.1"}),
-     relation("casa.igual", "fonte")],
+    [element("casaAlvo.app", ["muda"], {"bead": "df-a.1"}),
+     element("fonteAlvo", ["novo"], {"bead": ["df-a.2", "df-b"]}),
+     element("casaAlvo.velho", ["sai"], {"bead": "df-a.3"}),
+     element("casaAlvo.igual"),
+     element("casaAlvo.outro", ["emProd"])],
+    [relation("casaAlvo.app", "casaAlvo.igual", ["muda"], {"bead": "df-a.1"}),
+     relation("casaAlvo.igual", "fonteAlvo")],
 )
 
 
@@ -48,9 +48,9 @@ def test_a_fully_marked_model_passes():
 
 
 def test_a_marked_element_without_a_bead_fails():
-    found = marcas.problems(model([element("casa.app", ["novo"])]))
+    found = marcas.problems(model([element("casaAlvo.app", ["novo"])]))
     assert len(found) == 1
-    assert "casa.app" in found[0]
+    assert "casaAlvo.app" in found[0]
     assert "sem metadata" in found[0]
 
 
@@ -61,7 +61,7 @@ def test_a_marked_relation_without_a_bead_fails_and_is_named_by_its_ends():
 
 
 def test_two_of_the_three_tags_fail():
-    found = marcas.problems(model([element("x", ["novo", "muda"], {"bead": "df-a"})]))
+    found = marcas.problems(model([element("xAlvo", ["novo", "muda"], {"bead": "df-a"})]))
     assert len(found) == 1
     assert "#muda" in found[0]
     assert "#novo" in found[0]
@@ -69,18 +69,18 @@ def test_two_of_the_three_tags_fail():
 
 @pytest.mark.parametrize("bead", ["", "df-", "DF-1", "df-1 ", "df-1\n", "gf-1", "df-a..1", "df-a.x", "#df-a"])
 def test_a_malformed_bead_id_fails(bead):
-    found = marcas.problems(model([element("x", ["muda"], {"bead": bead})]))
+    found = marcas.problems(model([element("xAlvo", ["muda"], {"bead": bead})]))
     assert len(found) == 1
     assert "malformado" in found[0]
 
 
 @pytest.mark.parametrize("value", [[], ["df-a", 3], {"id": "df-a"}, 7])
 def test_a_bead_value_that_is_not_ids_fails(value):
-    assert len(marcas.problems(model([element("x", ["muda"], {"bead": value})]))) == 1
+    assert len(marcas.problems(model([element("xAlvo", ["muda"], {"bead": value})]))) == 1
 
 
 def test_a_bead_without_a_tag_fails():
-    found = marcas.problems(model([element("x", [], {"bead": "df-a"})]))
+    found = marcas.problems(model([element("xAlvo", [], {"bead": "df-a"})]))
     assert len(found) == 1
     assert "sem marca" in found[0]
 
@@ -89,20 +89,83 @@ def test_a_missing_section_counts_as_empty():
     assert marcas.problems({}) == []
 
 
+@pytest.mark.parametrize("tag", marcas.TAGS)
+@pytest.mark.parametrize("fqn", ["casaHoje", "casaHoje.servidorHoje", "casaHoje.servidor.banco"])
+def test_a_marked_element_of_today_fails(tag, fqn):
+    found = marcas.problems(model([element("casaHoje"), element(fqn, [tag], {"bead": "df-a"})]))
+    assert len(found) == 1
+    assert fqn in found[0]
+    assert "hoje" in found[0]
+
+
+@pytest.mark.parametrize("tag", marcas.TAGS)
+@pytest.mark.parametrize(("source", "target"), [
+    ("casaHoje.app", "casaHoje.servidor"), ("donoHoje", "casaAlvo.app"), ("casaAlvo.app", "pluggyHoje")])
+def test_a_marked_relation_with_an_end_in_today_fails(tag, source, target):
+    found = marcas.problems(model(relations=[relation(source, target, [tag], {"bead": "df-a"})]))
+    assert len(found) == 1
+    assert f"{source} -> {target}: usa" in found[0]
+    assert "hoje" in found[0]
+
+
+def test_a_marked_item_of_today_without_a_bead_names_both_problems():
+    found = marcas.problems(model([element("donoHoje", ["novo"])]))
+    assert len(found) == 2
+
+
+def test_unmarked_items_of_today_pass():
+    today = model([element("casaHoje"), element("casaHoje.app", ["leitura"])],
+                  [relation("donoHoje", "casaHoje.app")])
+    assert marcas.problems(today) == []
+
+
+@pytest.mark.parametrize("top", ["casa", "fonteNova", "casaHojeX", "alvo", "hoje", "casa_Alvo2"])
+def test_a_top_level_element_named_neither_today_nor_target_fails(top):
+    found = marcas.problems(model([element(top), element(f"{top}.filho")]))
+    assert len(found) == 1
+    assert repr(top) in found[0]
+    assert "Hoje" in found[0]
+    assert "Alvo" in found[0]
+
+
+def test_the_suffix_counts_only_on_the_top_level_segment():
+    """A child named ...Hoje under a target system is the target's; a child ...Alvo under today is today's."""
+    assert marcas.problems(model([element("casaAlvo"), element("casaAlvo.velhoHoje", ["sai"], {"bead": "df-a"})])) == []
+    found = marcas.problems(model([element("casaHoje"), element("casaHoje.appAlvo", ["muda"], {"bead": "df-a"})]))
+    assert len(found) == 1
+    assert "casaHoje.appAlvo" in found[0]
+
+
+TOPS = st.from_regex(r"[a-z][a-zA-Z]{0,8}(Hoje|Alvo)?", fullmatch=True)
+
+
+@given(top=TOPS, child=st.booleans(), tag=st.sampled_from(marcas.TAGS))
+def test_a_well_formed_mark_passes_exactly_on_a_target_element(top, child, tag):
+    mark = ([tag], {"bead": "df-a"})
+    elements = [element(top), element(f"{top}.filho", *mark)] if child else [element(top, *mark)]
+    assert (marcas.problems(model(elements)) == []) == top.endswith("Alvo")
+
+
+@given(source=TOPS, target=TOPS, tag=st.sampled_from(marcas.TAGS))
+def test_a_well_formed_marked_relation_passes_exactly_when_no_end_is_today(source, target, tag):
+    found = marcas.problems(model(relations=[relation(f"{source}.a", f"{target}.b", [tag], {"bead": "df-a"})]))
+    assert (found == []) == (not source.endswith("Hoje") and not target.endswith("Hoje"))
+
+
 IDS = st.from_regex(r"df-[a-z0-9]{1,6}(\.[0-9]{1,3}){0,3}", fullmatch=True)
 
 
 @given(tags=st.lists(st.sampled_from(marcas.TAGS), unique=True), beads=st.lists(IDS, max_size=3))
 def test_an_item_passes_exactly_when_it_has_one_tag_and_some_well_formed_bead(tags, beads):
     metadata = {"bead": beads} if beads else {}
-    found = marcas.problems(model([element("x", tags, metadata)]))
+    found = marcas.problems(model([element("xAlvo", tags, metadata)]))
     assert (found == []) == ((len(tags) == 1 and bool(beads)) or (not tags and not beads))
 
 
 def test_marked_beads_maps_each_bead_to_what_it_marks():
     assert marcas.marked_beads(GOOD) == {
-        "df-a.1": ["casa.app", "casa.app -> casa.igual: usa"],
-        "df-a.2": ["fonte"], "df-b": ["fonte"], "df-a.3": ["casa.velho"]}
+        "df-a.1": ["casaAlvo.app", "casaAlvo.app -> casaAlvo.igual: usa"],
+        "df-a.2": ["fonteAlvo"], "df-b": ["fonteAlvo"], "df-a.3": ["casaAlvo.velho"]}
 
 
 def test_bd_problems_name_closed_and_unknown_beads():
@@ -111,7 +174,7 @@ def test_bd_problems_name_closed_and_unknown_beads():
     assert len(found) == 2
     assert "df-b" in found[0]
     assert "fechado" in found[0]
-    assert "fonte" in found[0]
+    assert "fonteAlvo" in found[0]
     assert "df-a.3" in found[1]
     assert "não existe" in found[1]
 
@@ -119,9 +182,9 @@ def test_bd_problems_name_closed_and_unknown_beads():
 def test_main_reads_the_model_file_and_exits_1_with_the_problems(tmp_path, monkeypatch, capsys):
     path = tmp_path / "modelo.json"
     monkeypatch.setattr(marcas.modelo, "SAIDA", path)
-    path.write_text(json.dumps(model([element("x", ["novo"])])), encoding="utf-8")
+    path.write_text(json.dumps(model([element("xAlvo", ["novo"])])), encoding="utf-8")
     assert marcas.main([]) == 1
-    assert "x" in capsys.readouterr().out
+    assert "xAlvo" in capsys.readouterr().out
     path.write_text(json.dumps(GOOD), encoding="utf-8")
     assert marcas.main([]) == 0
 
@@ -178,12 +241,12 @@ def test_bd_status_raises_when_bd_fails_instead_of_calling_the_bead_missing(monk
 def test_main_exits_2_when_bd_fails_and_still_prints_the_format_problems(tmp_path, monkeypatch, capsys):
     path = tmp_path / "modelo.json"
     monkeypatch.setattr(marcas.modelo, "SAIDA", path)
-    path.write_text(json.dumps(model([element("x", ["novo"]), element("y", ["muda"], {"bead": "df-a"})])),
+    path.write_text(json.dumps(model([element("xAlvo", ["novo"]), element("yAlvo", ["muda"], {"bead": "df-a"})])),
                     encoding="utf-8")
     monkeypatch.setattr(marcas.subprocess, "run", fake_run(1, "", "database is locked"))
     assert marcas.main(["--bd"]) == 2
     out, err = capsys.readouterr()
-    assert "x: #novo sem metadata" in out
+    assert "xAlvo: #novo sem metadata" in out
     assert "database is locked" in err
 
 
