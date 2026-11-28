@@ -886,6 +886,21 @@ def test_the_tag_sits_on_the_smallest_elements_of_the_real_model():
         "casaHoje.dataforgeHoje"]
 
 
+def test_a_module_screen_of_the_real_model_needs_the_prod_check():
+    # df-2z3v: each module screen builds its route and reads the answer, so it is tagged too.
+    model = json.loads((SCRIPT.parents[2] / "arquitetura" / "modelo.json").read_text(encoding="utf-8"))
+    screen = served_task("casaHoje.telasNinhoHoje.financasTelasHoje")
+    found = prod(screen, model=model)
+    assert found
+    assert "Servido pela prod:" in found[0]
+    assert prod(screen, f"{NOTE} {SERVED_PROOF}", model=model) == []
+    assert {"casaHoje.telasNinhoHoje.listaTelasHoje", "casaHoje.telasNinhoHoje.desejosTelasHoje",
+            "casaAlvo.appCelularAlvo.listaTelasAlvo", "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+            "casaAlvo.appCelularAlvo.financasTelasAlvo",
+            "casaAlvo.appCelularAlvo.agendaTelasAlvo", "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+            "casaHoje.frontFinancasHoje.telasFinancasHoje"} <= check.served_boxes(model)
+
+
 def test_a_close_line_without_the_prod_check_is_refused_and_with_it_passes(monkeypatch):
     reads = []
     monkeypatch.setattr(check, "model_on_main", lambda repo: reads.append(repo) or SERVED_MODEL)

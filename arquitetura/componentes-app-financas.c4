@@ -34,6 +34,7 @@ model {
 
   extend casaHoje.frontFinancasHoje {
     cascaFinancasHoje = componente 'Casca do app' {
+      #servidoPelaProd
       link ../docs/caixas/casa.frontFinancas.cascaFinancas.md 'doc'
       description 'A página (index.html, de que o vite faz a do build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report, das transações classificadas e do banco de edição, e a recarga depois do Aplicar'
       technology 'React, TypeScript'
@@ -97,6 +98,7 @@ model {
       }
     }
     telasFinancasHoje = componente 'Telas' {
+      #servidoPelaProd
       link ../docs/caixas/casa.frontFinancas.telasFinancas.md 'doc'
       description 'Os componentes React das telas: cartões do resumo e do detalhe, Conferência (lê as suas tabelas), Extratos, Categorias, Transações, a faixa de pendência com o Aplicar e a tabela editável'
       technology 'React, TypeScript, Tailwind'
