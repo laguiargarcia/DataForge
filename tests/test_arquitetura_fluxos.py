@@ -75,6 +75,30 @@ def test_a_describe_is_not_a_test():
     assert "edição" not in fluxos.declarados(SPEC_TEXT, ".ts")
 
 
+@pytest.mark.parametrize("texto", [
+    "// test('x', () => {})\n",
+    "const a = 1 // test('x')\n",
+    "/* test('x', () => {}) */\n",
+    "/*\n * test('x')\n */\n",
+    "const s = \"test('x')\"\n",
+    "const s = 'nada test(\\'x\\') aqui'\n",
+    "const s = `test('x')`\n",
+    "if (/x/.test('x')) {}\n",
+    "contest('x')\n",
+    "$test('x')\n",
+], ids=["line-comment", "comment-after-code", "block-comment", "multiline-block-comment", "double-quoted-string",
+        "single-quoted-string-with-escapes", "template-string", "method-call", "longer-name", "dollar-name"])
+def test_a_name_outside_a_test_call_is_not_a_test(texto):
+    assert fluxos.declarados(texto, ".ts") == set()
+
+
+def test_a_test_after_a_comment_or_a_string_still_counts():
+    texto = ("const u = 'https://exemplo.invalid/a' // um comentário com 'aspas\n"
+             "/* bloco * com estrela */ test('depois', () => {})\n"
+             "test('it\\'s escapado', () => {})\n")
+    assert fluxos.declarados(texto, ".ts") == {"depois", "it's escapado"}
+
+
 def test_views_tied_to_existing_tests_pass(repo):
     good = model(view(links=[link(SPEC, "abre a lista e adiciona um item")]),
                  view("fluxo-alerta", [link(PY, "test_alerta_de_falha"), link(SPEC, "regra nova muda a categoria")]),
@@ -100,6 +124,11 @@ def test_other_links_of_the_view_do_not_count(repo):
     ([{"url": "../app/../app/e2e/tela.spec.ts", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
     ([{"url": "../../fora/e2e/x.spec.ts", "title": "e2e: x"}], "começa com ../"),
     ([{"url": f"../{SPEC}#abre", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
+    ([{"url": f"../{SPEC}?linha=2", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
+    ([{"url": "../app\\e2e\\tela.spec.ts", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
+    ([{"url": "..//app/e2e/tela.spec.ts", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
+    ([{"url": "../app//e2e/tela.spec.ts", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
+    ([{"url": "../app/e2e/", "title": "e2e: abre a lista e adiciona um item"}], "começa com ../"),
     ([{"url": "../app/e2e", "title": "e2e: x"}], "app/e2e não existe"),
     ([link("app/e2e/notas.md", "x")], "app/e2e/notas.md: só sei ler testes .py"),
 ])
@@ -113,6 +142,12 @@ def test_a_view_without_its_test_fails(repo, links, problem):
 def test_each_bad_link_is_one_problem(repo):
     links = [link(SPEC, "abre a lista e adiciona um item"), link(SPEC, "não existe"), link("app/e2e/x.spec.ts", "y")]
     assert len(fluxos.problemas(model(view(links=links)), repo)) == 2
+
+
+def test_an_e2e_file_that_is_not_utf8_is_one_problem(repo):
+    (repo / "app" / "e2e" / "latin1.spec.ts").write_bytes("test('ação', () => {})\n".encode("latin-1"))
+    assert fluxos.problemas(model(view(links=[link("app/e2e/latin1.spec.ts", "ação")])), repo) == [
+        "fluxo-lista: app/e2e/latin1.spec.ts não é texto UTF-8"]
 
 
 def test_a_symlink_out_of_the_repo_is_refused(repo, tmp_path_factory):

@@ -17,10 +17,13 @@ Fails, one `error:` line per problem, when a dynamic view:
 2. links an address that is not `../` and a normal repository path (no `.`, `..` or empty
    segment, no `#` or `?`);
 3. links a file that is not an end-to-end test: no path segment `e2e` and no `*_e2e.py` name;
-4. links a file that does not exist in the repository (a directory, a symlink out of it);
+4. links a file that does not exist in the repository (a directory, a symlink out of it), or one
+   that is not UTF-8 text;
 5. links a test name the file does not declare: in Python a `def test_...` (also async), in a
    Playwright spec a `test('...')` call (`test.only`, `.skip`, `.fixme`, `.fail`, `.slow` too;
-   a `test.describe` title is not a test), on one line, the name without escaped quotes;
+   a `test.describe` title is not a test, nor a test( in a comment, in a string or after a dot);
+   the name is the string literal unescaped. A regex literal with a quote in it is read as a
+   string start (no JS parser), so keep such a literal out of an e2e file that a flow names;
 6. has no steps, or a step with an end outside today's model (modelo.e_hoje): the tests run today's
    code, so the flow they exercise is today's.
 
@@ -45,15 +48,21 @@ PREFIXO = f"{MARCA}: "
 RAIZ_LINK = "../"  # the .c4 files are in arquitetura/: a relative link starts one folder up
 LEGIVEIS = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs")
 TESTE_PY = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+(test_\w+)[ \t]*\(", re.MULTILINE)
-TESTE_TS = re.compile(r"\btest(?:\.(?:only|skip|fixme|fail|slow))?\([ \t\n]*"
-                      r"(?:'([^'\\\n]*)'|\"([^\"\\\n]*)\"|`([^`\\\n]*)`)")
+# A JS/TS string: each character is one escape or one plain character, so the branches never overlap
+# and the match is linear (no backtracking).
+_TEXTO_TS = r"'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`"
+# Read left to right, a comment or a string is consumed whole, so a test( inside one never matches;
+# the lookbehind refuses a method (/x/.test(...)) or a longer name (contest, $test).
+TOKENS_TS = re.compile(r"(?<![.\w$])test(?:\.(?:only|skip|fixme|fail|slow))?\(\s*(?P<nome>" + _TEXTO_TS + r")"
+                       r"|//[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|" + _TEXTO_TS)
+ESCAPE = re.compile(r"\\(.)", re.DOTALL)
 
 
 def declarados(texto: str, sufixo: str) -> set[str]:
     """The test names a file of that suffix declares (rule 5 of the module docstring)."""
     if sufixo == ".py":
         return set(TESTE_PY.findall(texto))
-    return {next(nome for nome in grupos if nome) for grupos in TESTE_TS.findall(texto) if any(grupos)}
+    return {ESCAPE.sub(r"\1", m["nome"][1:-1]) for m in TOKENS_TS.finditer(texto) if m["nome"]}
 
 
 def _caminho(url: str) -> str | None:
@@ -101,7 +110,11 @@ def _problema_do_teste(repo: Path, caminho: str, nome: str) -> str | None:
         return f"{caminho} não existe no repositório"
     if arquivo.suffix not in LEGIVEIS:
         return f"{caminho}: só sei ler testes {', '.join(LEGIVEIS)}"
-    if nome not in declarados(arquivo.read_text(encoding="utf-8"), arquivo.suffix):
+    try:
+        texto = arquivo.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return f"{caminho} não é texto UTF-8"
+    if nome not in declarados(texto, arquivo.suffix):
         return f"{caminho} não declara o teste {nome!r}"
     return None
 

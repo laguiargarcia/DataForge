@@ -4418,8 +4418,13 @@
       "steps": [
         {
           "source": "donoHoje",
+          "target": "casaHoje.telasNinhoHoje.cascaHoje",
+          "title": "Abre a página no mês"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.cascaHoje",
           "target": "casaHoje.telasNinhoHoje.financasTelasHoje",
-          "title": "Abre Finanças no mês e corrige a categoria"
+          "title": "Mostra a tela de finanças, onde corrige a categoria"
         },
         {
           "source": "casaHoje.telasNinhoHoje.financasTelasHoje",

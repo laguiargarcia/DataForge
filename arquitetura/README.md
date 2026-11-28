@@ -141,8 +141,15 @@ com o Python do `.python-version`.
 
 `fluxos.c4` desenha os fluxos principais de hoje passo a passo, uma `dynamic view` por fluxo, e só
 os que já têm teste de ponta a ponta: entrar no ninho, lista de compras, desejos, corrigir a
-categoria no celular e aplicar, o resumo do mês e a regra com correção no app Finanças. Cada vista
-diz qual teste a exercita com um link:
+categoria no celular e aplicar, o resumo do mês e a regra com correção no app Finanças.
+
+Que teste ganha vista: uma vista por fluxo principal, isto é, um caminho que uma pessoa (ou o
+agendador) percorre de ponta a ponta e que passa por um caminho diferente de contêineres ou
+componentes, ligada ao teste e2e que percorre o caminho feliz dele. Variantes e casos de borda do
+mesmo fluxo (senha errada, sem rede, releitura que falha, título longo, barra estreita) não ganham
+vista: passam pelos mesmos passos. Um teste e2e cujo caminho usa um elemento que o modelo de hoje
+não tem (o alerta por e-mail, sem SMTP desenhado) ou que não é fluxo de uma pessoa (dados
+corrompidos no pipeline) também fica sem vista. Cada vista diz qual teste a exercita com um link:
 
 ```
 dynamic view fluxo-lista {

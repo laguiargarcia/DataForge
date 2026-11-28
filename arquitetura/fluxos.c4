@@ -46,7 +46,8 @@ views {
     description 'Corrige a categoria de uma transação, aplica (o job reclassificar) e vê a categoria nova'
     link ../ninho/telas/e2e/tela.spec.ts 'e2e: corrige a categoria de uma transação, aplica e vê a categoria nova'
 
-    donoHoje -> casaHoje.telasNinhoHoje.financasTelasHoje 'Abre Finanças no mês e corrige a categoria'
+    donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Abre a página no mês'
+    casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.financasTelasHoje 'Mostra a tela de finanças, onde corrige a categoria'
     casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'PUT /api/financas/correcoes/<transação>'
     casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje 'Atende a correção'
     casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.edicaoHoje 'Grava a correção (falta aplicar)'
