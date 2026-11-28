@@ -117,7 +117,7 @@ model {
   casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista, desejos'
   casaHoje.ninhoHoje -> casaHoje.edicaoHoje 'Lê e escreve: correções'
   casaHoje.ninhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI'
-  casaHoje.ninhoHoje -> casaHoje.pipelineHoje 'Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14); lê o connections.yaml e o workspace.yaml'
+  casaHoje.ninhoHoje -> casaHoje.pipelineHoje 'Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14); lê o connections.yaml e confere o workspace.yaml'
 }
 
 views {
