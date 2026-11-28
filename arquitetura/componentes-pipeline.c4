@@ -111,18 +111,18 @@ model {
     }
   }
 
-  // DataForge lança cada task (dataforge/tasks/python_handler.py) com o script do job.yaml.
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.landingHoje 'Lança a task fetch (finance_daily)' {
+  // Os tipos de task do DataForge lançam cada task (dataforge/tasks/python_handler.py) com o script do job.yaml.
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.landingHoje 'Lança a task fetch (finance_daily)' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml']
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje 'Lança a task fetch do finance_demo (só dev e CI)' {
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.syntheticHoje 'Lança a task fetch do finance_demo (só dev e CI)' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_demo/job.yaml']
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.raw2cleansedHoje 'Lança as tasks transform*' {
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.raw2cleansedHoje 'Lança as tasks transform*' {
     metadata {
       codigo [
         'dataforge/tasks/python_handler.py',
@@ -131,7 +131,7 @@ model {
       ]
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje 'Lança as tasks das dimensões, fatos e conferências' {
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje 'Lança as tasks das dimensões, fatos e conferências' {
     metadata {
       codigo [
         'dataforge/tasks/python_handler.py',
@@ -142,7 +142,7 @@ model {
       ]
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify e report (a semente, só no finance_demo)' {
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify e report (a semente, só no finance_demo)' {
     metadata {
       codigo [
         'dataforge/tasks/python_handler.py',
@@ -152,12 +152,12 @@ model {
       ]
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.backupDadosHoje 'Lança a task backup' {
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.backupDadosHoje 'Lança a task backup' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/backup/job.yaml']
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.validationHoje 'Lança a task data_warnings' {
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.validationHoje 'Lança a task data_warnings' {
     metadata {
       codigo [
         'dataforge/tasks/python_handler.py',
@@ -269,7 +269,7 @@ model {
       codigo ['workspaces/GetFinance/scripts/reprocess.py', 'workspaces/GetFinance/scripts/functions/functions.py']
     }
   }
-  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje 'Sobra sem uso (df-o0cc): dataforge jobs run finance_daily' {
+  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje.cliHoje 'Sobra sem uso (df-o0cc): dataforge jobs run finance_daily' {
     metadata {
       codigo ['workspaces/GetFinance/bin/run.sh', 'workspaces/GetFinance/bin/run.ps1']
     }

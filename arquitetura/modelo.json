@@ -1020,132 +1020,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.backupDadosHoje: Lança a task backup",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/backup/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.backupDadosHoje",
-      "technology": null,
-      "title": "Lança a task backup"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje: Lança as tasks das dimensões, fatos e conferências",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
-          "workspaces/GetFinance/jobs/finance_demo/job.yaml",
-          "workspaces/GetFinance/jobs/reclassificar/job.yaml",
-          "workspaces/GetFinance/jobs/extrato/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.cleansed2curatedHoje",
-      "technology": null,
-      "title": "Lança as tasks das dimensões, fatos e conferências"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.landingHoje: Lança a task fetch (finance_daily)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/finance_daily/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.landingHoje",
-      "technology": null,
-      "title": "Lança a task fetch (finance_daily)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.raw2cleansedHoje: Lança as tasks transform*",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
-          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.raw2cleansedHoje",
-      "technology": null,
-      "title": "Lança as tasks transform*"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje: Lança as tasks classify e report (a semente, só no finance_demo)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
-          "workspaces/GetFinance/jobs/finance_demo/job.yaml",
-          "workspaces/GetFinance/jobs/reclassificar/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.reportHoje",
-      "technology": null,
-      "title": "Lança as tasks classify e report (a semente, só no finance_demo)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje: Lança a task fetch do finance_demo (só dev e CI)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.syntheticHoje",
-      "technology": null,
-      "title": "Lança a task fetch do finance_demo (só dev e CI)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.validationHoje: Lança a task data_warnings",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "dataforge/tasks/python_handler.py",
-          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
-          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
-        ]
-      },
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.validationHoje",
-      "technology": null,
-      "title": "Lança a task data_warnings"
-    },
-    {
-      "description": null,
       "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
       "kind": null,
       "links": [],
@@ -2151,6 +2025,132 @@
     },
     {
       "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.backupDadosHoje: Lança a task backup",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/backup/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.backupDadosHoje",
+      "technology": null,
+      "title": "Lança a task backup"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje: Lança as tasks das dimensões, fatos e conferências",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml",
+          "workspaces/GetFinance/jobs/reclassificar/job.yaml",
+          "workspaces/GetFinance/jobs/extrato/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.cleansed2curatedHoje",
+      "technology": null,
+      "title": "Lança as tasks das dimensões, fatos e conferências"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.landingHoje: Lança a task fetch (finance_daily)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.landingHoje",
+      "technology": null,
+      "title": "Lança a task fetch (finance_daily)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.raw2cleansedHoje: Lança as tasks transform*",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.raw2cleansedHoje",
+      "technology": null,
+      "title": "Lança as tasks transform*"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.reportHoje: Lança as tasks classify e report (a semente, só no finance_demo)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml",
+          "workspaces/GetFinance/jobs/reclassificar/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.reportHoje",
+      "technology": null,
+      "title": "Lança as tasks classify e report (a semente, só no finance_demo)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.syntheticHoje: Lança a task fetch do finance_demo (só dev e CI)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.syntheticHoje",
+      "technology": null,
+      "title": "Lança a task fetch do finance_demo (só dev e CI)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.validationHoje: Lança a task data_warnings",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.validationHoje",
+      "technology": null,
+      "title": "Lança a task data_warnings"
+    },
+    {
+      "description": null,
       "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje: Lança o script de cada task python como processo, com o .env do job",
       "kind": null,
       "links": [],
@@ -2591,7 +2591,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje: Sobra sem uso (df-o0cc): dataforge jobs run finance_daily",
+      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje.cliHoje: Sobra sem uso (df-o0cc): dataforge jobs run finance_daily",
       "kind": null,
       "links": [],
       "metadata": {
@@ -2602,7 +2602,7 @@
       },
       "source": "casaHoje.pipelineHoje.binHoje",
       "tags": [],
-      "target": "casaHoje.dataforgeHoje",
+      "target": "casaHoje.dataforgeHoje.cliHoje",
       "technology": null,
       "title": "Sobra sem uso (df-o0cc): dataforge jobs run finance_daily"
     },
