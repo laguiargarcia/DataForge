@@ -1,22 +1,28 @@
 // Estado de HOJE: tudo aqui roda em prod. Muda quando a prod muda.
 model {
   donoHoje = pessoa 'Dono da casa' {
+    link ../docs/architecture-v2/people-and-visibility.md 'doc'
     description 'Usa o app Finanças e administra o DataForge e o ninho no PC; usa o ninho (lista, desejos, correções) no celular'
   }
   outraHoje = pessoa 'Outra pessoa da casa' {
+    link ../docs/architecture-v2/people-and-visibility.md 'doc'
     description 'Usa a lista de compras e os desejos pelo celular'
   }
   pluggyHoje = sistemaExterno 'Pluggy' {
+    link ../docs/getfinance-pluggy-integration.md 'doc'
     description 'Provedor de dados bancários'
   }
   agendadorHoje = sistemaExterno 'Agendador do Windows' {
+    link ../docs/caixas/agendador.md 'doc'
     description 'Dispara o job diário e o backup (dataforge scheduled-run)'
   }
 
   casaHoje = sistema 'Sistema da casa' {
+    link ../docs/architecture-v2/README.md 'doc'
     description 'Tudo roda no PC da casa, em prod nativa no Windows; a rede privada é a Tailscale'
 
     dataforgeHoje = conteiner 'DataForge' {
+      link ../docs/architecture.md 'doc'
       description 'Motor, CLI, API e GUI Qt; serve o build do app Finanças, inicia o backend e repassa as chamadas a ele com o token. Processos do mesmo código: segundo plano (API e bandeja), GUI admin, janela do app, CLI e o run destacado (run --detach)'
       technology 'Python, FastAPI, PySide6'
       metadata {
@@ -24,6 +30,7 @@ model {
       }
     }
     pipelineHoje = conteiner 'Pipeline GetFinance' {
+      link ../docs/caixas/casa.pipeline.md 'doc'
       description 'As tasks dos jobs (finance_daily, extrato, reclassificar, backup) e a biblioteca de regras em scripts/report (edicao, classificacao, extrato), que o backend e o ninho importam'
       technology 'Python, polars, deltalake; um processo por task, lançado pelo DataForge'
       metadata {
@@ -31,6 +38,7 @@ model {
       }
     }
     financasHoje = conteiner 'Backend GetFinance' {
+      link ../docs/caixas/casa.financas.md 'doc'
       description 'Processo do backend do app Finanças; importa internos do DataForge, que por sua vez o inicia e lhe repassa as chamadas: acoplamento nos dois sentidos, dor do ADR 0006'
       technology 'Python, FastAPI'
       metadata {
@@ -38,6 +46,7 @@ model {
       }
     }
     frontFinancasHoje = conteiner 'Front do app Finanças' {
+      link ../docs/caixas/casa.frontFinancas.md 'doc'
       description 'As telas do app Finanças: tabelas, edição de categorias, regras e correções, conferência e extratos'
       technology 'React, TypeScript; na janela Qt do DataForge ou no navegador do PC'
       metadata {
@@ -45,6 +54,7 @@ model {
       }
     }
     ninhoHoje = conteiner 'Servidor ninho' {
+      link ../docs/architecture-v2/server-modules.md 'doc'
       description 'Login por pessoa, lista de compras, lista de desejos e correção de categorias, em paralelo ao app Finanças; a CLI de pessoas (python -m ninho pessoas) abre o ninho.db direto'
       technology 'Python, FastAPI'
       metadata {
@@ -52,6 +62,7 @@ model {
       }
     }
     telasNinhoHoje = conteiner 'Telas do ninho' {
+      link ../docs/caixas/casa.telasNinho.md 'doc'
       description 'As telas do ninho: entrar, lista de compras, desejos e correções de finanças, com a identidade visual do ninho'
       technology 'React, TypeScript; web app no navegador do celular'
       metadata {
@@ -59,26 +70,32 @@ model {
       }
     }
     bancoNinhoHoje = banco 'ninho.db' {
+      link ../docs/caixas/casa.bancoNinho.md 'doc'
       description 'Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)'
       technology 'SQLite'
     }
     edicaoHoje = banco 'edicao.db' {
+      link ../docs/architecture-v2/edits.md 'doc'
       description 'Edições de finanças (data/ do workspace). Dois escritores em prod: ninho (correções) e backend Finanças (categorias, regras, correções, explicações); a semente carga_inicial_edicao rodou uma vez (só no finance_demo)'
       technology 'SQLite'
     }
     extratosHoje = banco 'Extratos em PDF' {
+      link ../docs/caixas/casa.extratos.md 'doc'
       description 'PDFs do banco enviados pela tela do app Finanças; não se refazem'
       technology 'Pasta de arquivos (data/extratos)'
     }
     backupHoje = banco 'Zips do backup' {
+      link ../docs/caixas/casa.backup.md 'doc'
       description 'Zip semanal de raw, edicao.db, ninho.db e extratos, fora de qualquer repositório; guarda os 8 mais novos. Ainda no mesmo disco (df-8x0m.19)'
       technology 'Pasta de zips, no mesmo disco'
     }
     lagoHoje = banco 'Lago de dados' {
+      link ../docs/architecture-v2/published-tables.md 'doc'
       description 'raw, cleansed e curated do GetFinance'
       technology 'Delta Lake'
     }
     dbDataforgeHoje = banco 'dataforge.db' {
+      link ../docs/subsystems/db.md 'doc'
       description 'Histórico de execuções: o global (runs dos jobs) e um por workspace (cada task)'
       technology 'SQLite'
     }

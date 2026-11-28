@@ -2,6 +2,8 @@
 topic: Architecture v2 contracts (what the four pieces agree on with each other)
 read_when: Building or changing anything that crosses a boundary between the house server (ninho), the app database, the lake and DataForge; writing one of the contracts; asking what is still undecided in the v2 design
 related_issues: [df-8x0m, df-8x0m.23]
+code: []
+status: pronto
 ---
 
 # Architecture v2 contracts

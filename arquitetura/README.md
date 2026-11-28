@@ -191,6 +191,36 @@ um fluxo, troque o título do link no mesmo PR. Os passos não precisam ser seta
 diz o que acontece naquele ponto do fluxo; as setas estáticas continuam nas outras vistas. Blocos
 `parallel` viram passos simples no `modelo.json`.
 
+## Doc de cada elemento (df-8x0m.23.39.1)
+
+O modelo é o índice dos docs: todo elemento, em todos os níveis (pessoas, sistemas, sistemas
+externos, contêineres, bancos e componentes, do hoje e do alvo), tem um link para um doc de `docs/`,
+logo depois das marcas no corpo dele:
+
+```
+motorHoje = componente 'Motor de execução' {
+  link ../docs/subsystems/engine.md 'doc'
+  ...
+}
+```
+
+O título do link é `doc`; o endereço é relativo a `arquitetura/`, como nos fluxos. Link e não
+`metadata`, porque o link chega ao `modelo.json` e abre o doc na prévia. Vários elementos podem
+dividir um doc: a caixa do hoje e a do alvo da mesma peça, ou um doc de referência que cobre mais de
+uma caixa. O doc abre com o front matter de `docs/documentation.md` (topic, read_when, code,
+status), e o `code:` dele cobre o `codigo` de cada elemento que aponta para ele.
+
+Elemento novo: `python3 scripts/arquitetura/docs.py esbocar` escreve o link no `.c4` e um esboço
+`docs/caixas/<id sem Hoje/Alvo>.md` (status `esboço`), só com o que o modelo diz; depois,
+`modelo.py gerar`. Ele não reescreve doc nem link que já existem. Quando o elemento tem doc de
+referência, troque o endereço do link por ele e acrescente o `codigo` ao `code:` do doc.
+`python3 scripts/arquitetura/docs.py conferir` (no CI, depois do `marcas.py`) falha, com o id do
+elemento, num elemento sem link `doc` ou com dois, num endereço fora de `../docs/<caminho>.md`, num
+doc que não existe, sem front matter ou com front matter incompleto, num `code:` que não cobre o
+`codigo` ou que nomeia um caminho que não existe, e num arquivo de `docs/caixas/` que nenhum
+elemento liga. A docstring do script dá a API que os outros scripts usam (`docs_por_elemento`,
+`ler_front_matter`).
+
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
 

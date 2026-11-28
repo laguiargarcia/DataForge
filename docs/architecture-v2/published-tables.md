@@ -2,6 +2,8 @@
 topic: Reading contract (the tables the pipeline publishes for the server to read)
 read_when: Adding, renaming or changing a table or column a screen reads; changing how the server reads the lake; adding a per-person view of the data
 related_issues: [df-8x0m.23.4, df-8x0m.23.6, df-8x0m.23]
+code: []
+status: pronto
 ---
 
 # Reading contract: lake → house server

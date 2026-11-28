@@ -4,6 +4,7 @@
 model {
   extend casaHoje.dataforgeHoje {
     cliHoje = componente 'CLI' {
+      link ../docs/caixas/casa.dataforge.cli.md 'doc'
       description 'O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, app (o que o atalho roda), stop, deploy, register-triggers, entre outros (jobs, execucoes, validate, init, schedule-sync); registra cada trigger no agendador do sistema'
       technology 'Python, Typer'
       metadata {
@@ -11,6 +12,7 @@ model {
       }
     }
     apiHoje = componente 'API HTTP' {
+      link ../docs/subsystems/api.md 'doc'
       description 'O servidor FastAPI: workspaces, jobs, execuções, triggers, deploy, tabelas do curated, presença e o stream de eventos; serve o build dos apps e repassa as chamadas ao backend deles'
       technology 'Python, FastAPI'
       metadata {
@@ -18,6 +20,7 @@ model {
       }
     }
     guiHoje = componente 'GUI admin e janela do app' {
+      link ../docs/subsystems/gui.md 'doc'
       description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (dataforge gui ou dataforge app, que acham ou iniciam o segundo plano); cliente HTTP da API local'
       technology 'Python, PySide6'
       metadata {
@@ -25,6 +28,7 @@ model {
       }
     }
     segundoPlanoHoje = componente 'Segundo plano (API e bandeja)' {
+      link ../docs/subsystems/gui.md 'doc'
       description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia'
       technology 'Python, PySide6, uvicorn'
       metadata {
@@ -32,6 +36,7 @@ model {
       }
     }
     motorHoje = componente 'Motor de execução' {
+      link ../docs/subsystems/engine.md 'doc'
       description 'Roda um job: DAG das tasks, condições, tentativas, trava por workspace; o pedido de run destacado e o estado de um run (run --detach, run-state)'
       technology 'Python'
       metadata {
@@ -39,6 +44,7 @@ model {
       }
     }
     tasksHoje = componente 'Tipos de task' {
+      link ../docs/caixas/casa.dataforge.tasks.md 'doc'
       description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive'
       technology 'Python'
       metadata {
@@ -46,6 +52,7 @@ model {
       }
     }
     definicaoHoje = componente 'Definição do workspace' {
+      link ../docs/workspace-layout.md 'doc'
       description 'Os modelos (job, task, trigger, conexão), a leitura e a escrita dos YAML do workspace, o YAML do pacote e o cron entre UTC e a hora local'
       technology 'Python, pydantic, PyYAML'
       metadata {
@@ -53,6 +60,7 @@ model {
       }
     }
     historicoHoje = componente 'Histórico de execuções' {
+      link ../docs/subsystems/db.md 'doc'
       description 'As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu'
       technology 'Python, SQLAlchemy'
       metadata {
@@ -60,6 +68,7 @@ model {
       }
     }
     compatHoje = componente 'Compat' {
+      link ../docs/subsystems/compat.md 'doc'
       description 'Caminhos, URLs de banco, porta da API e hosts permitidos, entre Windows e Linux; lê DATAFORGE_HOME'
       technology 'Python'
       metadata {
@@ -67,6 +76,7 @@ model {
       }
     }
     deployHoje = componente 'Deploy' {
+      link ../docs/caixas/casa.dataforge.deploy.md 'doc'
       description 'Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só'
       technology 'Python'
       metadata {
@@ -74,6 +84,7 @@ model {
       }
     }
     appsHoje = componente 'Hospedagem de apps' {
+      link ../docs/caixas/casa.dataforge.apps.md 'doc'
       description 'Acha os apps dos workspaces (app.yaml, dist), inicia e para o backend de cada um num processo uvicorn com um token, o middleware que o backend usa para recusar o que não veio do DataForge e o atalho do Windows'
       technology 'Python, uvicorn'
       metadata {
@@ -81,6 +92,7 @@ model {
       }
     }
     deltaPoolHoje = componente 'Leituras Delta' {
+      link ../docs/caixas/casa.dataforge.deltaPool.md 'doc'
       description 'As leituras Delta de um processo longo em threads que vivem com ele (falha nativa no Windows, df-5lk8)'
       technology 'Python, polars, deltalake'
       metadata {
@@ -88,6 +100,7 @@ model {
       }
     }
     instanciaHoje = componente 'Instância e presença' {
+      link ../docs/caixas/casa.dataforge.instancia.md 'doc'
       description 'Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas'
       technology 'Python, httpx'
       metadata {
@@ -95,6 +108,7 @@ model {
       }
     }
     testesHoje = componente 'Plugin de testes' {
+      link ../docs/testing.md 'doc'
       description 'Plugin do pytest que os testes do motor e os de um workspace carregam; não roda em prod'
       technology 'Python, pytest, Hypothesis'
       metadata {

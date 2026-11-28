@@ -3,6 +3,9 @@ topic: Testing Invariants
 read_when: When writing or debugging tests
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-0lf, df-37a, df-3ul]
+code:
+  - dataforge/testing.py
+status: pronto
 ---
 
 # Testing Invariants

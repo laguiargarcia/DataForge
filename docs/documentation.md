@@ -29,6 +29,38 @@ read and accepted it. Whatever the decision changes is written into the referenc
 in the same change, so the doc says the rule and the bead says why. `docs/adr/` is frozen history:
 no new ADRs, no edits.
 
+## Front matter (df-8x0m.23.39.1)
+
+Each element of the C4 model (`arquitetura/*.c4`) links one doc here, and that doc opens with a
+front matter. `python3 scripts/arquitetura/docs.py conferir` (CI job `arquitetura`) fails when one
+is missing or incomplete:
+
+```yaml
+---
+topic: Engine
+read_when: When working on DAG execution, task running, or job orchestration
+code:
+  - dataforge/engine.py
+  - dataforge/dag.py
+status: pronto
+---
+```
+
+- `topic` and `read_when`: what the doc is about and when to read it.
+- `code`: the files and folders the doc covers, from the repository root. It has to cover the
+  `metadata.codigo` of every element that links the doc (a folder covers what is under it); the
+  doc may add paths, and each one must exist. The model is the single source: change `codigo` in
+  the `.c4`, then here.
+- `status`: `esboço` (a sketch) or `pronto` (a real doc). A box without a doc gets a sketch in
+  `docs/caixas/` from `python3 scripts/arquitetura/docs.py esbocar`, built from the model alone;
+  writing the real doc over it ends with `status: pronto`.
+- Other keys (`related_issues`, `last_synced_at`, `subsystem`) may stay.
+
+The block is a flat subset of YAML, read without a YAML library (the bead hook runs `python3 -S`):
+only `key: value` lines (plain, `"double-quoted"`, `'single-quoted'` or `[a, b]`) and `key:`
+followed by `- item` lines; nothing nested. Quote a value that holds `: ` or starts with a YAML
+sign, so GitHub still renders it.
+
 ## How to Write Docs
 
 - Lead with a `#` heading matching the filename topic

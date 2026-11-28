@@ -3,6 +3,8 @@ topic: GetFinance ↔ Pluggy API Integration
 read_when: Onboarding a new bank/account, debugging the GetFinance fetch, or when Pluggy item/account IDs change after a reconnect
 last_synced_at: "2026-06-04"
 related_issues: [df-6j6, df-1f1]
+code: []
+status: pronto
 ---
 
 # GetFinance ↔ Pluggy Integration

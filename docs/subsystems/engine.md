@@ -4,6 +4,13 @@ read_when: When working on DAG execution, task running, or job orchestration
 subsystem: engine
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-762, df-b95, df-oe8, df-t7v]
+code:
+  - dataforge/conditions.py
+  - dataforge/dag.py
+  - dataforge/engine.py
+  - dataforge/run_request.py
+  - dataforge/runlock.py
+status: pronto
 ---
 
 # Engine

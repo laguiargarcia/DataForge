@@ -557,6 +557,14 @@ the e2e test that exercises it; renaming that test means changing the link's tit
 or `python3 scripts/arquitetura/fluxos.py` (CI job `arquitetura`) fails (`arquitetura/README.md`,
 "Fluxos").
 
+Every element links its doc under `docs/` (`arquitetura/README.md`, "Doc de cada elemento"):
+
+```bash
+python3 scripts/arquitetura/docs.py esbocar    # a new element: writes its link in the .c4 and a sketch docs/caixas/<id>.md
+python3 scripts/arquitetura/modelo.py gerar    # then regenerate modelo.json (esbocar reads it)
+python3 scripts/arquitetura/docs.py conferir   # what CI runs: a missing link, doc or front matter fails, naming the element
+```
+
 ## Workspace web apps (e.g. `workspaces/GetFinance/apps/financas`)
 
 Run from the app folder; needs Node only for development:

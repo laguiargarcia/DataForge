@@ -256,6 +256,14 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           python3 scripts/arquitetura/marcas.py 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-marcas.txt"
+      - name: Every element links its doc
+        # df-8x0m.23.39.1: each element links one doc under docs/ with a front matter (topic,
+        # read_when, code, status) whose code: covers the element's codigo. `docs.py esbocar` writes
+        # the link and a sketch for a new element. Standard library only (python3 -S).
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          python3 -S scripts/arquitetura/docs.py conferir 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-docs.txt"
       - uses: astral-sh/setup-uv@v10.3.3
         # The next step parses every tracked .py with ast: it needs the repo's Python
         # (.python-version), not the runner's python3, which refuses newer syntax.

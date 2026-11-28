@@ -2,6 +2,9 @@
 topic: Server-modules contract (what a module of the ninho house server is, what all modules share, how list and calendar are made)
 read_when: Adding a module to ninho (list, calendar, a fourth one), moving the finance routes, deciding where a module's tables, routes or screen go, or asking whether list and calendar are built or adopted
 related_issues: [df-8x0m.23.7, df-8x0m.23.20, df-8x0m.23.21, df-8x0m.23]
+code:
+  - ninho
+status: pronto
 ---
 
 # Server-modules contract: house server ↔ its modules

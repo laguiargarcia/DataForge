@@ -2,6 +2,8 @@
 topic: Edits contract (the app database, how the pipeline reads what people edited, where the business rules live)
 read_when: Changing where finance edits are stored, how a pipeline script reads them, the "apply" flow, or where classification and editing rules are imported from
 related_issues: [df-8x0m.23.5, df-8x0m.23]
+code: []
+status: pronto
 ---
 
 # Edits contract: app database → pipeline

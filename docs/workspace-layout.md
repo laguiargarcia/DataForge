@@ -3,6 +3,12 @@ topic: Workspace Layout & YAML Reference
 read_when: When dealing with workspace paths, per-workspace data, or YAML reference for workspace/job/task definitions
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-762, df-b95, df-oe8, df-t7v]
+code:
+  - dataforge/cron.py
+  - dataforge/models.py
+  - dataforge/parser.py
+  - dataforge/yamlio.py
+status: pronto
 ---
 
 # Workspace Layout & YAML Reference
