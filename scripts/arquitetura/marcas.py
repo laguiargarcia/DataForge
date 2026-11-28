@@ -6,13 +6,14 @@ the change on (a decision bead hands it to its implementation beads).
 
 Two halves, because CI has no bd (beads are local):
 
-- `marcas.py [modelo.json]` (CI): fails when a marked item has no bead, a malformed id or two of the
+- `marcas.py` (CI): fails when a marked item has no bead, a malformed id or two of the
   three tags, or when an item carries a bead and no mark.
-- `marcas.py --bd [modelo.json]` (local, with bd): also fails when a marked bead is closed or does
+- `marcas.py --bd` (local, with bd): also fails when a marked bead is closed or does
   not exist. The close hook (scripts/beads/check.py) refuses `bd close` of a bead origin/main still
   marks, with `marked_beads`.
 
-Exit 0 when clean, 1 with the problems on stdout, 2 when bd cannot be asked.
+Both read arquitetura/modelo.json through modelo.load(); no argument names a path. Exit 0 when
+clean, 1 with the problems on stdout, 2 when bd cannot be asked or an argument is unknown.
 """
 
 from __future__ import annotations
@@ -128,9 +129,12 @@ def bd_status(bead: str) -> str | None:
 
 
 def main(argv: list[str]) -> int:
-    use_bd = "--bd" in argv
-    paths = [a for a in argv if a != "--bd"]
-    model = modelo.load(paths[0] if paths else None)
+    unknown = [a for a in argv if a != "--bd"]
+    if unknown:
+        sys.stderr.write(f"marcas: argumento desconhecido {unknown[0]!r}; uso: marcas.py [--bd]\n")
+        return 2
+    use_bd = bool(argv)
+    model = modelo.load()
     found = problems(model)
     if use_bd:
         try:

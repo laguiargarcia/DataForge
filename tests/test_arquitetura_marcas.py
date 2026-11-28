@@ -116,20 +116,29 @@ def test_bd_problems_name_closed_and_unknown_beads():
     assert "não existe" in found[1]
 
 
-def test_main_reads_the_model_file_and_exits_1_with_the_problems(tmp_path, capsys):
+def test_main_reads_the_model_file_and_exits_1_with_the_problems(tmp_path, monkeypatch, capsys):
     path = tmp_path / "modelo.json"
+    monkeypatch.setattr(marcas.modelo, "SAIDA", path)
     path.write_text(json.dumps(model([element("x", ["novo"])])), encoding="utf-8")
-    assert marcas.main([str(path)]) == 1
+    assert marcas.main([]) == 1
     assert "x" in capsys.readouterr().out
     path.write_text(json.dumps(GOOD), encoding="utf-8")
-    assert marcas.main([str(path)]) == 0
+    assert marcas.main([]) == 0
+
+
+@pytest.mark.parametrize("argv", [["arquitetura/modelo.json"], ["--bd", "x.json"], ["--json"]])
+def test_main_refuses_any_argument_but_bd(argv, monkeypatch, capsys):
+    monkeypatch.setattr(marcas.modelo, "load", lambda *_a: pytest.fail("read the model"))
+    assert marcas.main(argv) == 2
+    assert "argumento desconhecido" in capsys.readouterr().err
 
 
 def test_main_with_bd_asks_bd_for_each_bead(tmp_path, monkeypatch, capsys):
     path = tmp_path / "modelo.json"
+    monkeypatch.setattr(marcas.modelo, "SAIDA", path)
     path.write_text(json.dumps(GOOD), encoding="utf-8")
     monkeypatch.setattr(marcas, "bd_status", lambda bead: "closed" if bead == "df-b" else "open")
-    assert marcas.main(["--bd", str(path)]) == 1
+    assert marcas.main(["--bd"]) == 1
     assert "df-b" in capsys.readouterr().out
 
 
@@ -168,10 +177,11 @@ def test_bd_status_raises_when_bd_fails_instead_of_calling_the_bead_missing(monk
 
 def test_main_exits_2_when_bd_fails_and_still_prints_the_format_problems(tmp_path, monkeypatch, capsys):
     path = tmp_path / "modelo.json"
+    monkeypatch.setattr(marcas.modelo, "SAIDA", path)
     path.write_text(json.dumps(model([element("x", ["novo"]), element("y", ["muda"], {"bead": "df-a"})])),
                     encoding="utf-8")
     monkeypatch.setattr(marcas.subprocess, "run", fake_run(1, "", "database is locked"))
-    assert marcas.main(["--bd", str(path)]) == 2
+    assert marcas.main(["--bd"]) == 2
     out, err = capsys.readouterr()
     assert "x: #novo sem metadata" in out
     assert "database is locked" in err
