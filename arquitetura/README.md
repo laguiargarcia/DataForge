@@ -86,12 +86,16 @@ Convenções:
 - No alvo, um arquivo só, `componentes-alvo.c4`, com um `extend casaAlvo.<conteiner>` e uma vista
   `alvo-componentes-<conteiner>` por contêiner que fica. Um só porque o alvo é um plano, lido e
   revisto de uma vez, e as suas setas cruzam os contêineres (o que sai de um entra noutro); cada
-  arquivo do hoje é dono do código de um contêiner, o do alvo não é dono de código (regras 3, 4, 7
-  e 8 só no hoje). O alvo desenha só (a) o que tem marca, (b) o que a ADR 0006, um contrato de
+  arquivo do hoje é dono do código de um contêiner, o do alvo não é cobrado pelas regras 3, 4, 7
+  e 8. O alvo desenha só (a) o que tem marca, (b) o que a ADR 0006, um contrato de
   `docs/architecture-v2/` ou um bead de decisão nomeia no alvo, e (c) o mínimo que liga (a) e (b).
   Sem caixa ou seta no alvo: segue como no hoje (vistas `hoje-componentes-*`). Os contêineres que
   saem inteiros ficam só no `alvo.c4`, sem componentes. Um componente que existe tem o id de hoje
-  com o sufixo `Alvo` e o mesmo `codigo`; um componente `#novo` não tem `codigo`.
+  com o sufixo `Alvo` e o mesmo `codigo`; um componente `#novo` não tem `codigo`. Exceções: dois
+  ids, quando o de hoje com `Alvo` já é de um contêiner ou banco do alvo (`servidorHoje` é
+  `nucleoAlvo`; `historicoHoje`, `historicoRunsAlvo`), e o re-corte da API do DataForge, para o que
+  sai ser um componente inteiro: `dataforge/api/routers/tables.py` vai para `rotaTabelasAlvo` e
+  `dataforge/api/routers/apps.py` para `appsAlvo`, que no hoje são do `apiHoje`.
 - Nas vistas do alvo, uma aresta que junta setas de marcas diferentes pegaria a cor da regra de tag
   de uma delas: a vista dá, depois das regras de tag, a cor da seta daquele nível (`with { color }`)
   e, quando os títulos diferem, o título.
