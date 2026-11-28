@@ -55,7 +55,7 @@ model {
     lagoAlvo = banco 'Lago' {
       #muda #servidoPelaProd
       description 'raw (só cresce), cleansed e publicado. Só o pipeline escreve. Muda: as tabelas publicadas viram uma lista com esquema declarado, conferida ao fim de cada job que as escreve'
-      technology 'Delta Lake'
+      technology 'Parquet (raw), Delta Lake (cleansed, curated)'
       metadata {
         bead 'df-8x0m.23.45'
       }
@@ -151,7 +151,7 @@ model {
   }
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
   casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
-  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job'
+  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)'
   casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.lagoAlvo 'Serve o curated pela rota genérica' {
     #sai
     metadata {
@@ -201,7 +201,7 @@ model {
       bead 'df-8x0m.23.3'
     }
   }
-  casaAlvo.financasAlvo -[leitura]-> casaAlvo.lagoAlvo 'Lê direto, fora das tabelas publicadas' {
+  casaAlvo.financasAlvo -[leitura]-> casaAlvo.lagoAlvo 'Lê o curated e as contas do cleansed, fora das tabelas publicadas' {
     #sai
     metadata {
       bead 'df-8x0m.23.3'
