@@ -548,7 +548,7 @@ is installed in the repo. From the repo root (or a worktree):
 
 ```bash
 npx likec4@1.61.1 start arquitetura        # live preview in the browser, reloads on save
-npx likec4@1.61.1 validate arquitetura     # syntax and references
+npx likec4@1.61.1 validate --max-warnings 0 arquitetura   # syntax and semantics; a warning also fails, as in CI
 npx likec4@1.61.1 build arquitetura --output-single-file -o /tmp/claude-1000/likec4-out   # one HTML
 ```
 

@@ -208,10 +208,15 @@ def test_the_committed_model_loads_by_default():
 
 def test_the_readme_the_ci_job_and_modelo_use_the_same_likec4():
     """ci.yml sets the version once, in the job's LIKEC4_VERSION; modelo.py pins it as a constant;
-    every command of the README runs it."""
-    readme = re.findall(r"likec4@\S*", (ROOT / "arquitetura" / "README.md").read_text(encoding="utf-8"))
-    assert readme
-    assert set(readme) == {f"likec4@{modelo.LIKEC4}"}
+    every command of the README and of docs/commands.md runs it, and their validate is CI's."""
+    for doc in (ROOT / "arquitetura" / "README.md", ROOT / "docs" / "commands.md"):
+        text = doc.read_text(encoding="utf-8")
+        pins = re.findall(r"likec4@\S*", text)
+        assert pins, doc
+        assert set(pins) == {f"likec4@{modelo.LIKEC4}"}, doc
+        validates = re.findall(r"likec4@\S+ validate[^\n#]*", text)
+        assert validates, doc
+        assert {v.split(" ", 1)[1].strip() for v in validates} == {"validate --max-warnings 0 arquitetura"}, doc
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert yamlio.load(ci)["jobs"]["arquitetura"]["env"]["LIKEC4_VERSION"] == modelo.LIKEC4
     assert ci.count(modelo.LIKEC4) == 1
