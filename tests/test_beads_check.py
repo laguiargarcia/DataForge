@@ -643,6 +643,14 @@ def test_the_hook_denies_with_the_gaps(tmp_path, monkeypatch):
     assert check.hook(bash_event(f"bd close df-bug --reason {shlex.quote(NOTE)}", tmp_path), tmp_path) is None
 
 
+def test_the_same_line_hint_shows_only_for_a_claim_or_close():
+    hint = "etiquetas na mesma linha"
+    assert hint in check.render(["[bd close df-x] nota de fechamento"])
+    assert hint in check.render(["[bd create A] falta `c4:`", "[bd update df-x --claim] `vol:`"])
+    assert hint not in check.render(["[bd create A] falta `c4:`"])
+    assert hint not in check.render(["`bd create --parent df-a` sem `--no-inherit-labels`"])
+
+
 def test_the_hook_ignores_other_tools(tmp_path):
     assert check.hook({"tool_name": "Edit", "tool_input": {"command": "bd close df-x"}}, tmp_path) is None
 

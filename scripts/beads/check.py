@@ -42,6 +42,7 @@ complains about the last). The one exception is a `bd close` or claim this scrip
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -97,6 +98,7 @@ BATCH_FLAGS = ("--file", "--graph")  # beads come from a file: their labels cann
 C4 = "c4"
 C4_ANYWHERE = "transversal"  # the box of work that is not in one part: how we work, several parts
 LABEL_FLAGS = ("--add-label", "--set-labels")
+SAME_LINE_STEPS = ("[bd update ", "[bd close ")  # gaps that labels set earlier in the line can fill
 LABEL_ADD_WORDS = 3  # `label add <id> <label>`: add, at least one id, the label
 
 
@@ -157,7 +159,9 @@ class Step:
     bead: str = ""
     reason: str = ""
     message: str = ""
-    labels: frozenset[str] = frozenset()  # added earlier in the same line; a create's own labels
+    # claim and close: the labels the line added to this bead before the step; create: the labels the
+    # create itself passes (-l, --labels); refuse: none
+    labels: frozenset[str] = frozenset()
     acceptance: bool = False  # an acceptance criterion given earlier in the line, or in the claim
     title: str = ""  # a create's title
     issue_type: str = ""  # a create's --type, empty for bd's default
@@ -581,17 +585,16 @@ def check_line(command: str, bd: Bd, repo: Path) -> list[str]:
 def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
     """Every gap of these steps, each prefixed with the command and bead it belongs to."""
     out = []
-    boxes: list[set[str] | None] = []  # the model's ids, read at the first create of the line
+    boxes = functools.cache(lambda: box_ids(model_on_main(repo)))  # read at the first create, once
     for step in steps:
         if step.kind == "refuse":
             out.append(step.message)
             continue
         if step.kind == "create":
-            if not boxes:
-                boxes.append(box_ids(model_on_main(repo)))
-            if boxes[0] is not None:  # no model on origin/main: the rule does not run
+            ids = boxes()
+            if ids is not None:  # no model on origin/main: the rule does not run
                 what = f"bd create {step.title}".rstrip()
-                out += [f"[{what}] {f}" for f in c4_problems(step, boxes[0])]
+                out += [f"[{what}] {f}" for f in c4_problems(step, ids)]
             continue
         issue = bd.show(step.bead)
         if issue is None:
@@ -610,8 +613,12 @@ def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
 
 
 def render(problems: list[str]) -> str:
-    return ("Conferência do bead (docs/bead-check.md) barrou o comando. Conserte e rode de novo "
-            "(etiquetas na mesma linha, antes do comando, também valem):\n- " + "\n- ".join(problems))
+    """The refusal. The same-line hint only when a claim or close has gaps: labels set earlier in the
+    line count for those, not for a create (its labels go in the create itself)."""
+    same_line = any(p.startswith(SAME_LINE_STEPS) for p in problems)
+    hint = " (etiquetas na mesma linha, antes do comando, também valem)" if same_line else ""
+    return (f"Conferência do bead (docs/bead-check.md) barrou o comando. Conserte e rode de novo{hint}:\n- "
+            + "\n- ".join(problems))
 
 
 def hook(event: dict, project: Path) -> dict | None:
