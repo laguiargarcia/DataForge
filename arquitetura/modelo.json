@@ -1,8 +1,255 @@
 {
   "deployment": {
-    "instances": [],
-    "nodes": [],
-    "relations": []
+    "instances": [
+      {
+        "description": null,
+        "element": "casaHoje.telasNinhoHoje",
+        "id": "celular.telasNinhoHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Telas do ninho"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.dataforgeHoje",
+        "id": "pcCasa.dev.devDataforge",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "DataForge"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.pipelineHoje",
+        "id": "pcCasa.dev.devPipeline",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Pipeline GetFinance"
+      },
+      {
+        "description": null,
+        "element": "agendadorHoje",
+        "id": "pcCasa.prod.agendadorHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Agendador do Windows"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.backupHoje",
+        "id": "pcCasa.prod.backupHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Zips do backup"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.bancoNinhoHoje",
+        "id": "pcCasa.prod.bancoNinhoHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "ninho.db"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.dataforgeHoje",
+        "id": "pcCasa.prod.dataforgeHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "DataForge"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.dbDataforgeHoje",
+        "id": "pcCasa.prod.dbDataforgeHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "dataforge.db"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.edicaoHoje",
+        "id": "pcCasa.prod.edicaoHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "edicao.db"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.extratosHoje",
+        "id": "pcCasa.prod.extratosHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Extratos em PDF"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.financasHoje",
+        "id": "pcCasa.prod.financasHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Backend GetFinance"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.frontFinancasHoje",
+        "id": "pcCasa.prod.frontFinancasHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Front do app Finanças"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.lagoHoje",
+        "id": "pcCasa.prod.lagoHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Lago de dados"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.ninhoHoje",
+        "id": "pcCasa.prod.ninhoHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Servidor ninho"
+      },
+      {
+        "description": null,
+        "element": "casaHoje.pipelineHoje",
+        "id": "pcCasa.prod.pipelineHoje",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Pipeline GetFinance"
+      }
+    ],
+    "nodes": [
+      {
+        "description": "As telas do ninho, instaladas como web app na tela de início; chamam o servidor ninho por HTTPS pela Tailscale",
+        "id": "celular",
+        "kind": "celular",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "Celular"
+      },
+      {
+        "description": "Cada PR e cada push no main (.github/workflows/ci.yml), com dados falsos; o merge espera o check tests",
+        "id": "ci",
+        "kind": "ci",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": "GitHub Actions",
+        "title": "CI: GitHub Actions"
+      },
+      {
+        "description": "Os testes do motor, da GUI, do GetFinance, do app Finanças e das telas do ninho; o job arquitetura, o portão de qualidade, a guarda de vazamento, a mutação e o Sonar",
+        "id": "ci.ciUbuntu",
+        "kind": "ambiente",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": "ubuntu-latest",
+        "title": "Ubuntu"
+      },
+      {
+        "description": "Os testes do motor e do GetFinance no Python do Windows, e o windows-smoke: o mais perto da prod que o CI chega",
+        "id": "ci.ciWindows",
+        "kind": "ambiente",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": "windows-latest",
+        "title": "Windows"
+      },
+      {
+        "description": "Um PC só, com Windows; a prod roda nativa no Windows e o desenvolvimento no WSL do mesmo PC",
+        "id": "pcCasa",
+        "kind": "pc",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": null,
+        "title": "PC da casa"
+      },
+      {
+        "description": "Linux no mesmo PC: o clone do repositório no disco ext4, um worktree por bead com o próprio venv, os testes locais e o job finance_demo em dados sintéticos. Lê os dados reais da prod só em leitura, nos testes e na guarda de vazamento; daqui uma sessão pode rodar um job da prod, que roda no Windows com o venv de prod (df-9m6m); fora isso a prod só muda pelo deploy",
+        "id": "pcCasa.dev",
+        "kind": "wsl",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": "Ubuntu no WSL, Python do uv",
+        "title": "Dev: WSL"
+      },
+      {
+        "description": "A pasta de prod no disco do Windows: os workspaces com os dados reais, o dataforge.db e o venv de prod. Muda só pelo deploy (scripts/prod/deploy.sh, que o pull no main do clone roda); ninguém roda testes nem edita código ali",
+        "id": "pcCasa.prod",
+        "kind": "ambiente",
+        "links": [],
+        "metadata": {},
+        "tags": [],
+        "technology": "Windows, Python do venv de prod",
+        "title": "Prod: Windows nativo"
+      }
+    ],
+    "relations": [
+      {
+        "description": null,
+        "id": "pcCasa.dev -> ci: Push do branch do bead; o PR roda os jobs",
+        "kind": null,
+        "links": [],
+        "metadata": {},
+        "source": "pcCasa.dev",
+        "tags": [],
+        "target": "ci",
+        "technology": null,
+        "title": "Push do branch do bead; o PR roda os jobs"
+      },
+      {
+        "description": null,
+        "id": "pcCasa.dev -> pcCasa.prod: Deploy: o pull no main do clone roda scripts/prod/deploy.sh",
+        "kind": null,
+        "links": [],
+        "metadata": {},
+        "source": "pcCasa.dev",
+        "tags": [],
+        "target": "pcCasa.prod",
+        "technology": null,
+        "title": "Deploy: o pull no main do clone roda scripts/prod/deploy.sh"
+      }
+    ]
   },
   "elements": [
     {
@@ -88,7 +335,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript",
       "title": "Casca"
@@ -105,7 +353,9 @@
           "ninho/telas/src/Logo.tsx"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Comum às telas"
     },
@@ -118,7 +368,8 @@
         "bead": "df-8x0m.23.8"
       },
       "tags": [
-        "novo"
+        "novo",
+        "servidoPelaProd"
       ],
       "technology": "TypeScript",
       "title": "Cópia local e fila"
@@ -179,7 +430,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "SQLite",
       "title": "Banco do app"
@@ -226,7 +478,8 @@
         "codigo": "dataforge/api"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI",
       "title": "API de admin"
@@ -248,7 +501,8 @@
         ]
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, uvicorn",
       "title": "Hospedagem de apps"
@@ -285,7 +539,8 @@
         "codigo": "dataforge/compat.py"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python",
       "title": "Compat"
@@ -317,7 +572,8 @@
         "codigo": "dataforge/delta_pool.py"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, polars, deltalake",
       "title": "Leituras Delta"
@@ -347,7 +603,8 @@
         "codigo": "dataforge/gui"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, PySide6",
       "title": "Tela de admin"
@@ -364,7 +621,9 @@
           "dataforge/orphans.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, SQLAlchemy",
       "title": "Histórico de execuções"
     },
@@ -381,7 +640,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, httpx",
       "title": "Instância e presença"
@@ -417,7 +677,8 @@
         "codigo": "dataforge/api/routers/tables.py"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI, polars",
       "title": "Rota genérica de tabelas"
@@ -435,7 +696,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, PySide6, uvicorn",
       "title": "Segundo plano (API e bandeja)"
@@ -471,7 +733,8 @@
         "codigo": "workspaces/GetFinance/apps/financas/backend"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI",
       "title": "Backend GetFinance"
@@ -489,7 +752,8 @@
         "codigo": "workspaces/GetFinance/apps/financas"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript; na janela Qt do DataForge ou no navegador do PC",
       "title": "Front do app Finanças"
@@ -500,7 +764,9 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "SQLite (dataforge.db)",
       "title": "Histórico e agendas"
     },
@@ -513,7 +779,8 @@
         "bead": "df-8x0m.23.45"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Delta Lake",
       "title": "Lago"
@@ -625,7 +892,8 @@
         "bead": "df-8x0m.23.45"
       },
       "tags": [
-        "novo"
+        "novo",
+        "servidoPelaProd"
       ],
       "technology": "Python",
       "title": "Tabelas publicadas"
@@ -643,7 +911,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, SQLite",
       "title": "Regras de edição e classificação"
@@ -690,7 +959,8 @@
         "bead": "df-8x0m.23.21"
       },
       "tags": [
-        "novo"
+        "novo",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Agenda"
@@ -703,7 +973,9 @@
       "metadata": {
         "codigo": "ninho/desejos"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de desejos"
     },
@@ -726,7 +998,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, polars, deltalake, SQLite",
       "title": "Finanças"
@@ -739,7 +1012,9 @@
       "metadata": {
         "codigo": "ninho/lista"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de compras"
     },
@@ -760,7 +1035,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Núcleo do servidor"
@@ -803,7 +1079,9 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "SQLite",
       "title": "ninho.db"
     },
@@ -827,7 +1105,9 @@
       "metadata": {
         "codigo": "dataforge/api"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI",
       "title": "API HTTP"
     },
@@ -845,7 +1125,9 @@
           "dataforge/shortcut.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, uvicorn",
       "title": "Hospedagem de apps"
     },
@@ -872,7 +1154,9 @@
       "metadata": {
         "codigo": "dataforge/compat.py"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python",
       "title": "Compat"
     },
@@ -901,7 +1185,9 @@
       "metadata": {
         "codigo": "dataforge/delta_pool.py"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, polars, deltalake",
       "title": "Leituras Delta"
     },
@@ -925,7 +1211,9 @@
       "metadata": {
         "codigo": "dataforge/gui"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, PySide6",
       "title": "GUI admin e janela do app"
     },
@@ -941,7 +1229,9 @@
           "dataforge/orphans.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, SQLAlchemy",
       "title": "Histórico de execuções"
     },
@@ -956,7 +1246,9 @@
           "dataforge/presence.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, httpx",
       "title": "Instância e presença"
     },
@@ -989,7 +1281,9 @@
           "dataforge/gui/daemon.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, PySide6, uvicorn",
       "title": "Segundo plano (API e bandeja)"
     },
@@ -1026,7 +1320,9 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "SQLite",
       "title": "dataforge.db"
     },
@@ -1036,7 +1332,9 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "SQLite",
       "title": "edicao.db"
     },
@@ -1046,7 +1344,9 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Pasta de arquivos (data/extratos)",
       "title": "Extratos em PDF"
     },
@@ -1073,7 +1373,9 @@
           "workspaces/GetFinance/apps/financas/backend/__init__.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, polars, pypdf, httpx, PyYAML",
       "title": "Rotas do backend Finanças"
     },
@@ -1113,7 +1415,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/edicao.ts"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "TypeScript, fetch",
       "title": "Cliente do backend e edição"
     },
@@ -1137,7 +1441,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "TypeScript",
       "title": "Extratos"
     },
@@ -1161,7 +1467,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "TypeScript, fetch",
       "title": "Leitura de tabelas"
     },
@@ -1195,7 +1503,9 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Delta Lake",
       "title": "Lago de dados"
     },
@@ -1219,7 +1529,9 @@
       "metadata": {
         "codigo": "ninho/desejos"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de desejos"
     },
@@ -1234,7 +1546,9 @@
           "ninho/banco.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, polars, deltalake, SQLite",
       "title": "Finanças"
     },
@@ -1246,7 +1560,9 @@
       "metadata": {
         "codigo": "ninho/lista"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de compras"
     },
@@ -1273,7 +1589,9 @@
           "ninho/servidor"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Núcleo do servidor"
     },
@@ -1366,7 +1684,9 @@
           "workspaces/GetFinance/scripts/report/veredito_extrato.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, polars",
       "title": "Regras de conferência e extrato"
     },
@@ -1417,7 +1737,9 @@
           "workspaces/GetFinance/scripts/report/classificacao.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, SQLite",
       "title": "Regras de edição e classificação"
     },
@@ -1500,7 +1822,9 @@
           "ninho/telas/src/eu.ts"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Casca"
     },
@@ -1516,7 +1840,9 @@
           "ninho/telas/src/Logo.tsx"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Comum às telas"
     },
@@ -6870,7 +7196,13 @@
     }
   ],
   "specification": {
-    "deployments": [],
+    "deployments": [
+      "ambiente",
+      "celular",
+      "ci",
+      "pc",
+      "wsl"
+    ],
     "elements": [
       "banco",
       "componente",
@@ -6885,7 +7217,8 @@
     "tags": [
       "muda",
       "novo",
-      "sai"
+      "sai",
+      "servidoPelaProd"
     ]
   },
   "views": [
@@ -7444,6 +7777,16 @@
       "title": "Hoje: contexto",
       "type": "element",
       "viewOf": "casaHoje"
+    },
+    {
+      "description": null,
+      "id": "implantacao",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: implantação",
+      "type": "deployment",
+      "viewOf": null
     },
     {
       "description": null,

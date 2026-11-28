@@ -11,6 +11,7 @@ model {
       }
     }
     apiHoje = componente 'API HTTP' {
+      #servidoPelaProd
       description 'O servidor FastAPI: workspaces, jobs, execuções, triggers, deploy, tabelas do curated, presença e o stream de eventos; serve o build dos apps e repassa as chamadas ao backend deles'
       technology 'Python, FastAPI'
       metadata {
@@ -18,6 +19,7 @@ model {
       }
     }
     guiHoje = componente 'GUI admin e janela do app' {
+      #servidoPelaProd
       description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (dataforge gui ou dataforge app, que acham ou iniciam o segundo plano); cliente HTTP da API local'
       technology 'Python, PySide6'
       metadata {
@@ -25,6 +27,7 @@ model {
       }
     }
     segundoPlanoHoje = componente 'Segundo plano (API e bandeja)' {
+      #servidoPelaProd
       description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia'
       technology 'Python, PySide6, uvicorn'
       metadata {
@@ -53,6 +56,7 @@ model {
       }
     }
     historicoHoje = componente 'Histórico de execuções' {
+      #servidoPelaProd
       description 'As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu'
       technology 'Python, SQLAlchemy'
       metadata {
@@ -60,6 +64,7 @@ model {
       }
     }
     compatHoje = componente 'Compat' {
+      #servidoPelaProd
       description 'Caminhos, URLs de banco, porta da API e hosts permitidos, entre Windows e Linux; lê DATAFORGE_HOME'
       technology 'Python'
       metadata {
@@ -74,6 +79,7 @@ model {
       }
     }
     appsHoje = componente 'Hospedagem de apps' {
+      #servidoPelaProd
       description 'Acha os apps dos workspaces (app.yaml, dist), inicia e para o backend de cada um num processo uvicorn com um token, o middleware que o backend usa para recusar o que não veio do DataForge e o atalho do Windows'
       technology 'Python, uvicorn'
       metadata {
@@ -81,6 +87,7 @@ model {
       }
     }
     deltaPoolHoje = componente 'Leituras Delta' {
+      #servidoPelaProd
       description 'As leituras Delta de um processo longo em threads que vivem com ele (falha nativa no Windows, df-5lk8)'
       technology 'Python, polars, deltalake'
       metadata {
@@ -88,6 +95,7 @@ model {
       }
     }
     instanciaHoje = componente 'Instância e presença' {
+      #servidoPelaProd
       description 'Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas'
       technology 'Python, httpx'
       metadata {

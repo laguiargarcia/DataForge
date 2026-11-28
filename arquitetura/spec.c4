@@ -40,6 +40,33 @@ specification {
     color red
   }
 
+  // Lido por uma tela ou pela API e roda na prod do Windows (df-8x0m.23.42): fechar um bead c4: de
+  // um elemento com esta tag, ou de um descendente dele, pede "Servido pela prod:" no motivo
+  // (scripts/beads/check.py, docs/bead-check.md).
+  tag servidoPelaProd {
+    color sky
+  }
+
+  // Onde cada contêiner roda (implantacao.c4).
+  deploymentNode pc {
+    notation "Computador"
+  }
+  deploymentNode ambiente {
+    notation "Ambiente"
+  }
+  deploymentNode wsl {
+    notation "WSL"
+  }
+  deploymentNode ci {
+    notation "CI"
+  }
+  deploymentNode celular {
+    notation "Celular"
+    style {
+      shape mobile
+    }
+  }
+
   relationship leitura {
     line dotted
   }
