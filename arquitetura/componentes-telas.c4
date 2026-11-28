@@ -123,8 +123,8 @@ model {
   }
 
   // Quem usa: cada pessoa abre a página (index.html), e a casca mostra só as telas dos módulos
-  // dela. Títulos iguais aos das setas de donoHoje e outraHoje para telasNinhoHoje em hoje.c4
-  // (df-8x0m.23.47.12).
+  // dela. As setas de donoHoje e de outraHoje são as únicas dos seus pares: o título de cada uma é o
+  // rótulo da vista de contêineres (README, regra 5).
   donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista, os desejos e as correções pelo celular' {
     metadata {
       codigo ['ninho/telas/index.html']
