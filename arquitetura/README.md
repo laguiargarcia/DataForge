@@ -40,7 +40,9 @@ O job `arquitetura` do CI (`.github/workflows/ci.yml`) roda o mesmo `validate`, 
 `modelo.json` é o modelo exportado, enxuto e ordenado, que os scripts em Python leem
 (`scripts/arquitetura/modelo.py`, cuja docstring dá a API e o formato). Mudou um `.c4`, rode
 `python3 scripts/arquitetura/modelo.py gerar` e versione o `modelo.json` junto: o mesmo job do CI
-falha quando ele não é o export dos `.c4`.
+falha quando ele não é o export dos `.c4`. Duas setas com a mesma origem, o mesmo destino e o mesmo
+título (duas sem título também, mesmo com kind ou tags diferentes) param o `gerar` e o CI: dê a elas
+títulos distintos.
 
 Ao trocar a versão do LikeC4, troque aqui, no job do CI e em `LIKEC4` de `modelo.py` (um teste
 confere os três).

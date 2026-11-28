@@ -216,6 +216,18 @@ def test_two_arrows_with_the_same_title_stop_gerar():
         modelo.normalizar(raw)
 
 
+@pytest.mark.parametrize("acao", ["gerar", "conferir"])
+def test_the_cli_shows_a_refused_model_as_a_message(tmp_path, monkeypatch, acao):
+    raw = _raw()
+    raw["relations"]["1exzn7k"]["title"] = "usa"
+    monkeypatch.setattr(modelo, "exportar", lambda fonte: raw)
+    saida = tmp_path / "modelo.json"
+    with pytest.raises(SystemExit, match="give them distinct titles") as stopped:
+        modelo.main([acao, "--fonte", str(tmp_path), "--saida", str(saida)])
+    assert isinstance(stopped.value.code, str)
+    assert not saida.exists()
+
+
 FAKE_NPX = """#!/bin/sh
 echo "$3" >> "$NPX_LOG"
 if [ "$3" = validate ]; then exit "$NPX_VALIDATE_EXIT"; fi

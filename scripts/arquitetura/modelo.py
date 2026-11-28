@@ -191,10 +191,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fonte", type=Path, default=FONTE)
     parser.add_argument("--saida", type=Path, default=SAIDA)
     args = parser.parse_args(argv)
-    if args.acao == "gerar":
-        gerar(args.fonte, args.saida)
-        return 0
-    diff = conferir(args.fonte, args.saida)
+    try:
+        if args.acao == "gerar":
+            gerar(args.fonte, args.saida)
+            return 0
+        diff = conferir(args.fonte, args.saida)
+    except ValueError as error:  # a model normalizar refuses: the message, not a traceback, in CI
+        raise SystemExit(str(error)) from error
     if diff:
         print(f"{args.saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it")
         print("\n".join(diff))
