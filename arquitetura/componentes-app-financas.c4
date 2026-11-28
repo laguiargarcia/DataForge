@@ -274,6 +274,8 @@ views {
     exclude
       casaHoje.dataforgeHoje.* -> casaHoje.dataforgeHoje.*,
       casaHoje.dataforgeHoje.* -> casaHoje.lagoHoje,
+      casaHoje.dataforgeHoje.* -> casaHoje.pipelineHoje,
+      casaHoje.dataforgeHoje.* -> casaHoje.pipelineHoje.*,
       casaHoje.pipelineHoje.* -> casaHoje.pipelineHoje.*
   }
   view hoje-componentes-app-financas-front of casaHoje.frontFinancasHoje {
