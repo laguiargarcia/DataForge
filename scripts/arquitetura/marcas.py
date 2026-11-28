@@ -121,11 +121,9 @@ def _gemeo(id_: str, hoje: dict[str, str]) -> str | None:
     return hoje.get(name) if name else None
 
 
-def _twin_problems(model: dict) -> list[str]:
-    """An unmarked component arrow of the target (an end is a component) is today's arrow as it is
-    (README, "Marcas do alvo"): today has the arrow between the twins of its ends, with the same title
-    and codigo (df-8x0m.23.47.20). Container arrows stay out: today keeps a container arrow only as
-    the summary of several component arrows (README rule 5), the target keeps its own as the plan."""
+def _twin_index(model: dict) -> tuple[set, dict[str, str], dict[tuple, dict]]:
+    """The component ids, today's elements by unique last segment, and today's arrows by (source,
+    target, title)."""
     elements = model.get("elements") or ()
     componentes = {e.get("id") for e in elements if e.get("kind") == modelo.COMPONENTE}
     leaves: dict[str, list[str]] = {}
@@ -135,27 +133,37 @@ def _twin_problems(model: dict) -> list[str]:
     hoje = {leaf: ids[0] for leaf, ids in leaves.items() if len(ids) == 1}
     today = {(r.get("source"), r.get("target"), r.get("title") or ""): r for r in model.get("relations") or ()
              if modelo.e_hoje(r.get("source"))}
-    found = []
-    for r in model.get("relations") or ():
-        source, target = r.get("source"), r.get("target")
-        if modelo.e_hoje(source) or any(t in TAGS for t in r.get("tags") or ()) \
-                or not {source, target} & componentes:
-            continue
-        twin = (_gemeo(source, hoje), _gemeo(target, hoje), r.get("title") or "")
-        sem = [end for end, t in zip((source, target), twin[:2], strict=True) if t is None]
-        codigo = (r.get("metadata") or {}).get("codigo")
-        match = today.get(twin) if None not in twin else None
-        if sem:
-            found.append(f"{r.get('id')}: seta sem marca e {', '.join(sem)} sem gêmeo único no hoje (o id com "
-                         "Hoje no lugar de Alvo, ou GEMEOS); ponha a marca da mudança")
-        elif match is None:
-            found.append(f"{r.get('id')}: seta sem marca sem par no hoje ({twin[0]} -> {twin[1]} com o mesmo "
-                         "título); ponha a marca da mudança ou copie o título e o codigo da seta de hoje")
-        elif (match.get("metadata") or {}).get("codigo") != codigo:
-            found.append(f"{r.get('id')}: seta sem marca com codigo diferente do da seta de hoje {match.get('id')}; "
-                         "ponha a marca da mudança ou copie o codigo de hoje")
-    return found
+    return componentes, hoje, today
 
+
+def _twin_problem(r: dict, hoje: dict[str, str], today: dict[tuple, dict]) -> list[str]:
+    """What is wrong with one unmarked target component arrow against today."""
+    source, target = r.get("source"), r.get("target")
+    twin = (_gemeo(source, hoje), _gemeo(target, hoje), r.get("title") or "")
+    sem = [end for end, t in zip((source, target), twin[:2], strict=True) if t is None]
+    if sem:
+        return [f"{r.get('id')}: seta sem marca e {', '.join(sem)} sem gêmeo único no hoje (o id com "
+                "Hoje no lugar de Alvo, ou GEMEOS); ponha a marca da mudança"]
+    match = today.get(twin)
+    if match is None:
+        return [f"{r.get('id')}: seta sem marca sem par no hoje ({twin[0]} -> {twin[1]} com o mesmo "
+                "título); ponha a marca da mudança ou copie o título e o codigo da seta de hoje"]
+    if (match.get("metadata") or {}).get("codigo") != (r.get("metadata") or {}).get("codigo"):
+        return [f"{r.get('id')}: seta sem marca com codigo diferente do da seta de hoje {match.get('id')}; "
+                "ponha a marca da mudança ou copie o codigo de hoje"]
+    return []
+
+
+def _twin_problems(model: dict) -> list[str]:
+    """An unmarked component arrow of the target (an end is a component) is today's arrow as it is
+    (README, "Marcas do alvo"): today has the arrow between the twins of its ends, with the same title
+    and codigo (df-8x0m.23.47.20). Container arrows stay out: today keeps a container arrow only as
+    the summary of several component arrows (README rule 5), the target keeps its own as the plan."""
+    componentes, hoje, today = _twin_index(model)
+    return [p for r in model.get("relations") or ()
+            if not modelo.e_hoje(r.get("source")) and not any(t in TAGS for t in r.get("tags") or ())
+            and {r.get("source"), r.get("target")} & componentes
+            for p in _twin_problem(r, hoje, today)]
 
 def problems(model: dict) -> list[str]:
     """What CI checks: each mark has exactly one tag and well-formed bead ids, only the target

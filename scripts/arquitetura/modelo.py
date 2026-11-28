@@ -256,6 +256,28 @@ def _tem(node: str, componentes: list[str]) -> bool:
     return any(c.startswith(node + ".") for c in componentes)
 
 
+def _par_regra5(view: str, pair: tuple[str, str], rels: list[dict], label: str | None,
+                 componentes: list[str]) -> list[str]:
+    """Rule 5 on one pair of nodes (a, b): `rels` are the relations between them, `label` the edge's (None
+    when the view draws none)."""
+    a, b = pair
+    where = f"view {view}: {a} -> {b}"
+    direct = [r for r in rels if (_ref(r["source"]), _ref(r["target"])) == (a, b)]
+    inner = [r for r in rels if r not in direct]
+    if direct and not inner and (_tem(a, componentes) or _tem(b, componentes)):
+        return [f"{where} has a direct arrow and no component arrow, though "
+                f"{a if _tem(a, componentes) else b} has components: draw the arrow from or to the "
+                "component that does it (README rule 5)"]
+    if direct and len(inner) == 1:
+        return [f"{where} has a direct arrow over one component arrow "
+                f"({inner[0].get('title') or ''!r}): remove the direct arrow, the view shows that one's "
+                "title (README rule 5)"]
+    if not direct and len(inner) > 1 and label is not None and label in {r.get("title") or "" for r in inner}:
+        return [f"{where} joins {len(inner)} component arrows with no direct arrow: "
+                "draw one in hoje.c4 whose title sums them up (README rule 5)"]
+    return []
+
+
 def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
     """README rule 5: in `view`, a pair of nodes has a direct arrow only over more than one arrow
     between their descendants, counting the ones the view excludes; a pair of several with no direct
@@ -264,7 +286,6 @@ def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
     if vista is None:
         return []
     nodes = {n["id"] for n in vista.get("nodes") or []}
-
     pairs: dict[tuple[str, str], list[dict]] = {}
     for r in (raw.get("relations") or {}).values():
         a, b = _no(_ref(r["source"]), nodes), _no(_ref(r["target"]), nodes)
@@ -272,25 +293,8 @@ def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
             pairs.setdefault((a, b), []).append(r)
     labels = {(e["source"], e["target"]): e.get("label") or "" for e in vista.get("edges") or []}
     componentes = [e["id"] for e in (raw.get("elements") or {}).values() if e.get("kind") == COMPONENTE]
-
-    problems = []
-    for (a, b), rels in sorted(pairs.items()):
-        direct = [r for r in rels if (_ref(r["source"]), _ref(r["target"])) == (a, b)]
-        inner = [r for r in rels if r not in direct]
-        if direct and not inner and (_tem(a, componentes) or _tem(b, componentes)):
-            problems.append(f"view {view}: {a} -> {b} has a direct arrow and no component arrow, though "
-                            f"{a if _tem(a, componentes) else b} has components: draw the arrow from or to the "
-                            "component that does it (README rule 5)")
-        elif direct and len(inner) == 1:
-            problems.append(f"view {view}: {a} -> {b} has a direct arrow over one component arrow "
-                            f"({inner[0].get('title') or ''!r}): remove the direct arrow, the view shows that one's "
-                            "title (README rule 5)")
-        elif not direct and len(inner) > 1 and (a, b) in labels \
-                and labels[(a, b)] in {r.get("title") or "" for r in inner}:
-            problems.append(f"view {view}: {a} -> {b} joins {len(inner)} component arrows with no direct arrow: "
-                            "draw one in hoje.c4 whose title sums them up (README rule 5)")
-    return problems
-
+    return [problem for (a, b), rels in sorted(pairs.items())
+            for problem in _par_regra5(view, (a, b), rels, labels.get((a, b)), componentes)]
 
 def arestas_ambiguas(raw: dict) -> list[str]:
     """Every edge of a `likec4 export json` view that a reader cannot take at its word: drawn as
