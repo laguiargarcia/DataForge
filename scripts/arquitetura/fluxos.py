@@ -34,12 +34,13 @@ Fails, one `error:` line per problem, when a dynamic view:
 6. has no steps, or a step with an end outside today's model (modelo.e_hoje): the tests run today's
    code, so the flow they exercise is today's;
 7. has a step that is not an arrow of the model (df-8x0m.23.50): a step a -> b needs an arrow
-   between a and b, whatever its title, in either direction. The way back is allowed because a
-   reply travels its request's arrow backwards, and the export cannot tell a reply from a step:
-   `a <- b` in a .c4 and `b -> a` both export as b -> a, with the same `dir: back`, which LikeC4
-   also puts on a plain step whose target came earlier in the flow. An arrow between ancestors or
-   descendants of the two ends does not count, because the model draws its arrows down to the
-   components a flow goes through. The fix is to add the arrow to the model or to correct the step.
+   from a, or from an element inside a, to b, or to an element inside b, whatever its title. This
+   is LikeC4's implied relation: a step between containers is backed by an arrow between their
+   components. An arrow only between ancestors does not count (a step between components needs
+   the arrow between them), and neither does an arrow the other way: a reply needs its own arrow,
+   because the export cannot tell one from a step (`a <- b` in a .c4 and `b -> a` both export as
+   b -> a, with the same `dir: back`, which LikeC4 also puts on a plain step whose target came
+   earlier in the flow). The fix is to add the arrow to the model or to correct the step.
 
 Reads arquitetura/modelo.json through modelo.load(); the command line takes no argument, so nothing
 from it reaches a file read. Exit 0 when clean, 1 with the problems, 2 on an unknown argument.
@@ -150,15 +151,25 @@ def setas(model: dict) -> set[tuple[str, str]]:
     return {(r["source"], r["target"]) for r in model.get("relations") or ()}
 
 
+def _dentro(id_: str, ponta: str) -> bool:
+    """Whether the element id_ is ponta itself or one of its descendants."""
+    return id_ == ponta or id_.startswith(f"{ponta}.")
+
+
+def _coberto(origem: str, destino: str, existentes: set[tuple[str, str]]) -> bool:
+    """Rule 7 of the module docstring: an arrow from origem (or below it) to destino (or below it)."""
+    return any(_dentro(de, origem) and _dentro(para, destino) for de, para in existentes)
+
+
 def _problema_do_passo(passo: dict, existentes: set[tuple[str, str]]) -> str | None:
     """Rules 6 and 7 of the module docstring, for one step."""
     origem, destino = passo["source"], passo["target"]
     if not (modelo.e_hoje(origem) and modelo.e_hoje(destino)):
         return f"o passo {origem} -> {destino} usa um elemento fora do modelo de hoje"
-    if (origem, destino) in existentes or (destino, origem) in existentes:
+    if _coberto(origem, destino, existentes):
         return None
-    return (f"o passo {origem} -> {destino} {passo.get('title') or ''!r} não é seta do modelo: falta a "
-            f"seta {origem} -> {destino} (ou {destino} -> {origem}, se o passo é a resposta dela); "
+    return (f"o passo {origem} -> {destino} {passo.get('title') or ''!r} não é seta do modelo: falta uma "
+            f"seta de {origem} (ou de um elemento dentro dele) para {destino} (ou um elemento dentro dele); "
             "acrescente a seta ao modelo ou corrija o passo")
 
 

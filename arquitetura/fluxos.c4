@@ -2,8 +2,8 @@
 // teste de ponta a ponta. Cada vista leva um link para o teste que a exercita: o endereço é o arquivo
 // (relativo a arquitetura/) e o título é 'e2e: ' com o nome exato do teste;
 // scripts/arquitetura/fluxos.py confere que o arquivo existe e declara esse teste. Os passos usam só
-// elementos do modelo de hoje (hoje.c4 e componentes-*.c4), e cada passo é uma seta do modelo entre
-// as mesmas duas pontas, num sentido ou no outro (df-8x0m.23.50; README, "Fluxos").
+// elementos do modelo de hoje (hoje.c4 e componentes-*.c4), e cada passo é uma seta do modelo, entre
+// as mesmas pontas ou elementos dentro delas, no mesmo sentido (df-8x0m.23.50; README, "Fluxos").
 views {
   dynamic view fluxo-entrar {
     title 'Fluxo: entrar no ninho'

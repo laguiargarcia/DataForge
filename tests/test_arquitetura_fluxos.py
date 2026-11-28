@@ -235,6 +235,11 @@ def _passo(source, target, title="passa"):
 
 
 TELAS, LISTA = "casaHoje.telasHoje", "casaHoje.telasHoje.listaHoje"
+NINHO, ROTA = "casaHoje.ninhoHoje", "casaHoje.ninhoHoje.listaHoje"
+
+
+def _seta(source, target):
+    return {"source": source, "target": target, "title": "usa"}
 
 
 def test_a_step_on_an_arrow_of_the_model_passes_whatever_its_title(repo):
@@ -243,27 +248,41 @@ def test_a_step_on_an_arrow_of_the_model_passes_whatever_its_title(repo):
 
 def test_a_step_without_its_arrow_names_the_view_the_step_and_the_arrow(repo):
     assert _passos(repo, _passo(TELAS, "casaHoje.bancoHoje", "grava")) == [
-        f"o passo {TELAS} -> casaHoje.bancoHoje 'grava' não é seta do modelo: falta a seta "
-        f"{TELAS} -> casaHoje.bancoHoje (ou casaHoje.bancoHoje -> {TELAS}, se o passo é a resposta dela); "
+        f"o passo {TELAS} -> casaHoje.bancoHoje 'grava' não é seta do modelo: falta uma seta de {TELAS} "
+        "(ou de um elemento dentro dele) para casaHoje.bancoHoje (ou um elemento dentro dele); "
         "acrescente a seta ao modelo ou corrija o passo"]
 
 
-def test_a_reply_travels_its_arrow_backwards(repo):
-    """`donoHoje <- casaHoje.telasHoje 'responde'` in a .c4 exports as telas -> dono, exactly like a
-    step written telas -> dono: either is the reply over the arrow dono -> telas, which covers it."""
-    assert _passos(repo, _passo(TELAS, "donoHoje", "responde")) == []
+@pytest.mark.parametrize(("step", "arrow"), [
+    (_passo(TELAS, NINHO), _seta(TELAS, NINHO)),
+    (_passo(TELAS, NINHO), _seta(LISTA, NINHO)),
+    (_passo(TELAS, NINHO), _seta(TELAS, ROTA)),
+    (_passo(TELAS, NINHO), _seta(LISTA, ROTA)),
+    (_passo(LISTA, NINHO), _seta(LISTA, ROTA)),
+])
+def test_an_arrow_between_the_ends_or_inside_them_backs_the_step(repo, step, arrow):
+    """LikeC4's implied relation: a step between containers is backed by an arrow between their
+    components, so the model may draw its arrows only at component level."""
+    assert _passos(repo, step, setas=[arrow]) == []
 
 
 @pytest.mark.parametrize(("step", "arrow"), [
-    (_passo("donoHoje", LISTA), {"source": "donoHoje", "target": TELAS}),
-    (_passo("donoHoje", TELAS), {"source": "donoHoje", "target": LISTA}),
-    (_passo(LISTA, "casaHoje.bancoHoje"), {"source": TELAS, "target": "casaHoje.bancoHoje"}),
-    (_passo(LISTA, "donoHoje"), {"source": "donoHoje", "target": TELAS}),
+    (_passo(NINHO, TELAS), _seta(TELAS, NINHO)),
+    (_passo(ROTA, LISTA), _seta(LISTA, ROTA)),
+    (_passo(LISTA, ROTA), _seta(TELAS, NINHO)),
+    (_passo(LISTA, NINHO), _seta(TELAS, NINHO)),
+    (_passo(TELAS, ROTA), _seta(TELAS, NINHO)),
+    (_passo(LISTA, NINHO), _seta(TELAS, ROTA)),
+    (_passo(TELAS, NINHO), _seta(f"{TELAS}Velho", NINHO)),
+    (_passo(TELAS, NINHO), _seta(LISTA, "casaHoje.bancoHoje")),
 ])
-def test_an_arrow_of_an_ancestor_or_a_descendant_does_not_count(repo, step, arrow):
-    found = _passos(repo, step, setas=[arrow | {"title": "usa"}])
+def test_an_arrow_the_other_way_only_above_or_beside_the_ends_does_not_count(repo, step, arrow):
+    """The other way round is refused (a reply needs its own arrow: the export cannot tell one from
+    a step), and so is an arrow only between ancestors: a step between components needs theirs.
+    A name that only starts like an end (telasHojeVelho) is not inside it."""
+    found = _passos(repo, step, setas=[arrow])
     assert len(found) == 1
-    assert f"falta a seta {step['source']} -> {step['target']} (ou" in found[0]
+    assert f"falta uma seta de {step['source']} (ou" in found[0]
 
 
 def test_a_step_out_of_todays_model_is_one_problem_not_two(repo):

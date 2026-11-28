@@ -171,14 +171,16 @@ Playwright; o título de um `test.describe` não é teste). Falha também numa v
 um passo que sai do modelo de hoje: o teste roda o código de hoje. Renomeou um teste e2e ligado a
 um fluxo, troque o título do link no mesmo PR.
 
-Cada passo é uma seta do modelo (df-8x0m.23.50): o passo `a -> b` pede uma seta entre `a` e `b`
-em `hoje.c4` ou num `componentes-*.c4`, com qualquer título (o do passo diz o que acontece naquele
-ponto do fluxo). Vale a seta nos dois sentidos, porque uma resposta percorre de volta a seta do
-pedido, e o `modelo.json` não distingue uma resposta (`a <- b`) de um passo `b -> a`: o LikeC4
-exporta os dois iguais. Uma seta entre ancestrais ou descendentes das pontas não conta: o modelo
-desenha as setas até os componentes, então um passo entre componentes pede a seta entre eles. Sem a
-seta, o erro nomeia a vista, o passo e a seta que falta; acrescente a seta ao modelo ou corrija o
-passo. Blocos `parallel` viram passos simples no `modelo.json`.
+Cada passo é uma seta do modelo (df-8x0m.23.50): o passo `a -> b` pede, em `hoje.c4` ou num
+`componentes-*.c4`, uma seta de `a` (ou de um elemento dentro de `a`) para `b` (ou um elemento
+dentro de `b`), com qualquer título (o do passo diz o que acontece naquele ponto do fluxo). É a
+relação implícita do LikeC4: um passo entre contêineres vale pela seta entre os componentes deles,
+então o modelo pode desenhar as setas só entre componentes. Não valem uma seta só entre ancestrais
+(um passo entre componentes pede a seta entre eles) nem uma seta no outro sentido: uma resposta
+precisa da própria seta, porque o `modelo.json` não distingue uma resposta (`a <- b`) de um passo
+`b -> a` (o LikeC4 exporta os dois iguais). Sem a seta, o erro nomeia a vista, o passo e a seta que
+falta; acrescente a seta ao modelo ou corrija o passo. Blocos `parallel` viram passos simples no
+`modelo.json`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
