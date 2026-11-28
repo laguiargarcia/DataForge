@@ -108,7 +108,7 @@ model {
       }
     }
     arquivosWorkspaceHoje = banco 'Arquivos do workspace: workspace.yaml, jobs, conexões e config' {
-      description 'Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). A Definição do workspace, no DataForge, lê e escreve jobs e triggers; o Deploy os copia de um workspace a outro (sem uso em prod); o DataForge, as camadas, o ninho e o backend Finanças os leem. Os triggers/ e o config/investments.yaml existem só na prod, fora do git'
+      description 'Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). A Definição do workspace, no DataForge, lê e escreve jobs e triggers; o Deploy copia jobs, config e triggers de um workspace a outro (sem uso em prod); o DataForge, as camadas, o ninho e o backend Finanças os leem. Os triggers/ e o config/investments.yaml existem só na prod, fora do git'
       technology 'YAML e CSV'
       metadata {
         codigo [

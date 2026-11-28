@@ -97,7 +97,7 @@ model {
   casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê e edita a definição do workspace (workspace.yaml, jobs, triggers, conexões); lança cada task como processo Python, com o .env do job'
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job'
   casaHoje.dataforgeHoje -[leitura]-> casaHoje.lagoHoje 'Serve o curated pela rota genérica'
   casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
 
