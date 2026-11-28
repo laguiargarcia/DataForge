@@ -16,6 +16,13 @@ from scripts.arquitetura import modelo
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.fixture(autouse=True)
+def _no_real_npx(tmp_path_factory, monkeypatch):
+    """No test, and no mutant, finds a real npx or node: under WSL a which("NPX") found the Windows
+    npx on /mnt/c and ran it (df-r3kf). A test that needs the fake npx sets PATH to its folder."""
+    monkeypatch.setenv("PATH", str(tmp_path_factory.mktemp("empty-path")))
+
+
 def _raw() -> dict:
     """An export of a model with one of each thing: metadata, links, tags, a relation kind, element,
     dynamic and deployment views, deployment nodes and instances."""
