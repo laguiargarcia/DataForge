@@ -46,25 +46,25 @@ def test_the_reference_docs_are_read_not_blocked(repo, capsys, rel):
     assert run(capsys, repo(rel, f"x = '{CPF}'\n"))[2] == [f"CPF: {rel}:1 -> '52…' (11 chars)"]
 
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
-def _ignored_by_this_repo(rel):
-    return subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=ROOT, check=False).returncode == 0
-
-
-def test_this_repos_gitignore_keeps_out_what_the_guard_blocks():
+def test_this_repos_gitignore_keeps_out_what_the_guard_blocks(tmp_path):
     """df-azm6: the docs/ lines of the repo's own .gitignore and the docs/ entries of BLOCK_PREFIXES
     are the same paths, so a history path added to one side only fails here; and git does ignore
-    each of them, while it lets the reference docs in."""
-    ignored = {line.strip().lstrip("/") for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
-               if line.strip().startswith("/docs/")}
+    each of them, while it lets the reference docs in. The .gitignore is judged in a scratch repo, so
+    the test runs where the tests are not inside a git repo (testloop's copy)."""
+    gitignore = (Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")
+    ignored = {line.strip().lstrip("/") for line in gitignore.splitlines() if line.strip().startswith("/docs/")}
     blocked = {p for p in leakguard_files.BLOCK_PREFIXES if p.startswith("docs/")}
     assert ignored == blocked
+    _git("init", "-q", cwd=tmp_path)
+    (tmp_path / ".gitignore").write_text(gitignore, encoding="utf-8")
+
+    def is_ignored(rel):
+        return subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=tmp_path, check=False).returncode == 0
+
     for prefix in blocked:
-        assert _ignored_by_this_repo(prefix + "x.md" if prefix.endswith("/") else prefix), prefix
+        assert is_ignored(prefix + "x.md" if prefix.endswith("/") else prefix), prefix
     for rel in ("docs/commands.md", "docs/subsystems/api.md"):
-        assert not _ignored_by_this_repo(rel), rel
+        assert not is_ignored(rel), rel
         assert not rel.startswith(leakguard_files.BLOCK_PREFIXES), rel
 
 

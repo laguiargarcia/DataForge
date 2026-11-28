@@ -91,7 +91,7 @@ min_score = 0.9869
 # check_text and check_files join the patterns and the real values into findings: every leak guard test
 # file reaches them (uv.lock, LICENSE and a masked path's findings are tested beside their part).
 tests = ["tests/test_leakguard*.py"]
-copy = ["scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+copy = [".gitignore", "scripts/leakguard*.py", "tests/leakguard_fixtures.py", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
 process_isolation = "forkserver"
 # 449 mutants, 67 s of mutate on a laptop when it was 351, about three times that in a CI job: two jobs.
 shards = 2
