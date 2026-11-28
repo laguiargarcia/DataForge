@@ -12,6 +12,20 @@ de modelo:
 | `alvo-componentes-dataforge`, `-servidor`, `-app-celular`, `-pipeline` | `componentes-alvo.c4` | Os componentes do alvo nos contêineres que ficam: o que tem marca, o que as fontes do alvo nomeiam e o mínimo que os liga (abaixo). |
 | `index` | `alvo.c4` | Só os dois sistemas, hoje e alvo, como entrada. |
 | `fluxo-*` | `fluxos.c4` | Os fluxos principais de hoje, passo a passo, cada um ligado ao seu teste de ponta a ponta (abaixo). |
+| `implantacao` | `implantacao.c4` | Onde roda cada contêiner de hoje: o PC da casa (prod nativa no Windows, dev no WSL do mesmo PC), o CI no GitHub Actions (Ubuntu e Windows) e o celular. Fonte: CLAUDE.md ("Where to work") e ADR 0005; rótulos genéricos, nenhum caminho real. As setas da vista são as da implantação (deploy, push); as dos contêineres ficam nas vistas deles. |
+
+## Servido pela prod (df-8x0m.23.42)
+
+A tag `#servidoPelaProd` vai nos menores elementos (não nas instâncias de implantação) que uma tela
+ou a API leem e que rodam na prod do Windows, no hoje e no alvo: os componentes que servem ou leem
+(API do DataForge, rotas do ninho e do backend Finanças), os componentes de front que chamam um
+servidor e os bancos que uma tela mostra; não os contêineres inteiros, para que um bead da CLI ou do
+motor não seja cobrado. Fechar um bead com `c4:` de um elemento marcado, de um descendente dele, ou de
+um contêiner que tem um marcado dentro (o topo, `casaHoje`/`casaAlvo`, não desce) pede
+`Servido pela prod:` com o comando e o status no `--reason` (hook `scripts/beads/check.py`,
+`docs/bead-check.md`; regra df-p0pu do CLAUDE.md). Quem cria ou muda um elemento que uma tela ou a
+API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do corpo
+(`#muda #servidoPelaProd`).
 
 ## Regras do desenho
 
@@ -230,7 +244,7 @@ doc que não existe, sem front matter ou com front matter incompleto, num `code:
 elemento liga. A docstring do script dá a API que os outros scripts usam (`docs_por_elemento`,
 `ler_front_matter`).
 
-`spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
+`spec.c4` define os tipos de elemento, os de nó de implantação e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
 
 ## Comandos (a partir da raiz do repositório)

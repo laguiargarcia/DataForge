@@ -752,11 +752,11 @@ def test_the_mark_counts_even_for_a_dropped_bead_but_not_with_the_waiver(marked_
 
 def test_only_origin_main_counts_not_the_local_checkout(marked_main):
     commit(marked_main, "arquitetura/modelo.json", marked_model("df-other"), "Move the mark (df-t)")
-    assert check.mark_problems(marked_main, "df-t") != []
+    assert check.mark_problems(check.model_on_main(marked_main), "df-t") != []
     git(marked_main, "push", "-q", "origin", "main")
     git(marked_main, "fetch", "-q", "origin")
-    assert check.mark_problems(marked_main, "df-t") == []
-    assert check.mark_problems(marked_main, "df-other") != []
+    assert check.mark_problems(check.model_on_main(marked_main), "df-t") == []
+    assert check.mark_problems(check.model_on_main(marked_main), "df-other") != []
 
 
 @pytest.mark.parametrize("text", [None, "", "{not json", "[1, 2]"])
@@ -767,11 +767,135 @@ def test_no_model_or_an_unreadable_one_lets_the_close_through(tmp_path, text):
         git(repo, "push", "-q", "origin", "main")
         git(repo, "fetch", "-q", "origin")
     assert check.model_on_main(repo) is None
-    assert check.mark_problems(repo, "df-t") == []
+    assert check.mark_problems(check.model_on_main(repo), "df-t") == []
 
 
 def test_model_on_main_reads_the_model_of_origin_main(marked_main):
     assert check.model_on_main(marked_main) == json.loads(marked_model("df-t"))
+
+
+# --------------------------------------------------------------------------- served by prod
+
+
+SERVED_MODEL = {"elements": [{"id": i, "tags": t} for i, t in (
+    ("casaHoje", []), ("casaHoje.ninhoHoje", []), ("casaHoje.ninhoHoje.listaHoje", ["servidoPelaProd"]),
+    ("casaHoje.ninhoHoje.listaHoje.itensHoje", []), ("casaHoje.ninhoHoje.pessoasCliHoje", []),
+    ("casaHoje.ninhoHojeVelho", []), ("casaHoje.pipelineHoje", []), ("casaHoje.lagoHoje", ["servidoPelaProd"]),
+    ("casaAlvo", []), ("casaAlvo.servidorAlvo", ["muda"]),
+    ("casaAlvo.servidorAlvo.nucleoAlvo", ["muda", "servidoPelaProd"]))], "relations": []}
+SERVED_PROOF = "Servido pela prod: Invoke-WebRequest .../tables/transacoes 200."
+CODE_CHANGED = {"ninho/lista/rotas.py", "arquitetura/hoje.c4"}
+
+
+def served_task(*c4, labels=TASK_DONE, kind="task", created=NEW):
+    return issue("df-t", kind, [*labels, *(f"c4:{v}" for v in c4)], created)
+
+
+def prod(issue_, reason=NOTE, model=SERVED_MODEL, extra=(), changed=CODE_CHANGED):
+    return check.prod_problems(model, issue_, reason, frozenset(extra), lambda _b: set(changed))
+
+
+@pytest.mark.parametrize("box", [
+    "casaHoje.ninhoHoje.listaHoje", "casaHoje.lagoHoje",  # tagged itself
+    "casaHoje.ninhoHoje.listaHoje.itensHoje",  # under a tagged element
+    "casaHoje.ninhoHoje", "casaAlvo.servidorAlvo",  # a container holding a tagged component
+])
+def test_a_box_prod_serves_its_child_or_its_container_needs_the_prod_check(box):
+    found = prod(served_task(box))
+    assert len(found) == 1
+    assert f"`c4:{box}`" in found[0]
+    assert "Invoke-WebRequest" in found[0]
+    assert "8100" in found[0]
+    assert "Servido pela prod:" in found[0]
+
+
+@pytest.mark.parametrize("boxes", [
+    ("casaHoje",), ("casaAlvo",),  # a top box does not reach down to its tagged elements
+    ("casaHoje.ninhoHoje.pessoasCliHoje",), ("casaHoje.ninhoHojeVelho",), ("casaHoje.pipelineHoje",),
+    ("transversal",), (),
+])
+def test_a_box_outside_what_prod_serves_passes(boxes):
+    assert prod(served_task(*boxes)) == []
+
+
+@pytest.mark.parametrize("reason", [
+    f"{NOTE} {SERVED_PROOF}", f"{SERVED_PROOF} {NOTE}",
+    "Conferi: x. servido  PELA prod : app aberto, 200. Não conferi: y. Assumi: z.",
+    f"Servido pela prod: {NOTE} {SERVED_PROOF}",  # an empty mark before a filled one
+    f"Não servido pela prod: falta o deploy. {SERVED_PROOF} {NOTE}",
+])
+def test_any_filled_prod_mark_in_the_reason_passes(reason):
+    assert prod(served_task("casaHoje.lagoHoje"), reason) == []
+
+
+@pytest.mark.parametrize("reason", [f"{NOTE} Servido pela prod:", f"Servido pela prod: {NOTE}",
+                                    f"{NOTE} Servido pela prod: ... ;",
+                                    f"{NOTE} Servido pela prod: Servido pela prod:"])
+def test_the_prod_mark_without_text_is_refused(reason):
+    found = prod(served_task("casaHoje.lagoHoje"), reason)
+    assert len(found) == 1
+    assert "sem texto" in found[0]
+
+
+@pytest.mark.parametrize("reason", [f"{NOTE} Não servido pela prod: falta o deploy.",
+                                    f"{NOTE} nao servido pela prod: x"])
+def test_a_negated_prod_mark_is_no_mark(reason):
+    found = prod(served_task("casaHoje.lagoHoje"), reason)
+    assert len(found) == 1
+    assert "falta `Servido pela prod:`" in found[0]
+
+
+def test_a_label_added_in_the_same_line_counts():
+    assert prod(served_task(), extra={"c4:casaHoje.lagoHoje"}) != []
+
+
+@pytest.mark.parametrize("changed", [{"arquitetura/hoje.c4"}, {"arquitetura/hoje.c4", "arquitetura/modelo.json"}])
+def test_a_bead_that_changed_only_the_drawing_passes(changed):
+    assert prod(served_task("casaHoje.lagoHoje"), changed=changed) == []
+
+
+@pytest.mark.parametrize("changed", [set(), {"arquitetura/hoje.c4", "ninho/lista/rotas.py"}, {"arquitetura.md"}])
+def test_no_changed_files_or_code_outside_the_drawing_is_still_asked(changed):
+    assert prod(served_task("casaHoje.lagoHoje"), changed=changed) != []
+
+
+@pytest.mark.parametrize("passes", [
+    {"reason": "descartado: virou df-x"}, {"reason": "Duplicado: df-y"},
+    {"issue_": served_task("casaHoje.lagoHoje", labels=[*TASK_DONE, check.WAIVER])},
+    {"issue_": served_task("casaHoje.lagoHoje", kind="epic")},
+    {"issue_": served_task("casaHoje.lagoHoje", kind="session")},
+    {"issue_": served_task("casaHoje.lagoHoje", kind="decision")},
+    {"issue_": served_task("casaHoje.lagoHoje", created=OLD)},
+    {"model": None}, {"model": {"elements": "x"}},
+    {"model": {"elements": [{"id": "casaHoje.lagoHoje", "tags": "servidoPelaProd"}, {"tags": ["servidoPelaProd"]}]}},
+])
+def test_dropped_waived_session_epic_decision_old_beads_and_no_model_pass(passes):
+    args = {"issue_": served_task("casaHoje.lagoHoje"), **passes}
+    assert prod(**args) == []
+
+
+def test_the_tag_sits_on_the_smallest_elements_of_the_real_model():
+    model = json.loads((SCRIPT.parents[2] / "arquitetura" / "modelo.json").read_text(encoding="utf-8"))
+    served = check.served_boxes(model)
+    assert check.SERVED_TAG in model["specification"]["tags"]
+    assert {"casaHoje.dataforgeHoje.apiHoje", "casaHoje.ninhoHoje.servidorHoje", "casaHoje.lagoHoje",
+            "casaAlvo.servidorAlvo.nucleoAlvo"} <= served
+    assert not {"casaHoje.dataforgeHoje", "casaHoje.ninhoHoje", "casaAlvo.servidorAlvo"} & served
+    assert check.served_hits({"c4:casaHoje.dataforgeHoje.cliHoje", "c4:casaHoje.dataforgeHoje"}, served) == [
+        "casaHoje.dataforgeHoje"]
+
+
+def test_a_close_line_without_the_prod_check_is_refused_and_with_it_passes(monkeypatch):
+    reads = []
+    monkeypatch.setattr(check, "model_on_main", lambda repo: reads.append(repo) or SERVED_MODEL)
+    monkeypatch.setattr(check, "changed_files", lambda _repo, _bead: set(CODE_CHANGED))
+    bd = FakeBd(served_task("casaHoje.lagoHoje"), issue("df-u", "task", [*TASK_DONE, "c4:casaHoje.lagoHoje"]))
+    found = check.check_steps(check.read_line(f'bd close df-t df-u --reason "{NOTE}"'), bd, Path("."))
+    assert [f.split("]")[0] for f in found] == ["[bd close df-t", "[bd close df-u"]
+    assert "Invoke-WebRequest" in found[0]
+    assert len(reads) == 1  # one git show for the whole line, marks and prod check together
+    proof = f'bd close df-t --reason "{NOTE} {SERVED_PROOF}"'
+    assert check.check_steps(check.read_line(proof), bd, Path(".")) == []
 
 
 # --------------------------------------------------------------------------- with a real bd

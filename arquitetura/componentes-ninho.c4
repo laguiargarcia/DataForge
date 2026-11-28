@@ -17,6 +17,7 @@
 model {
   extend casaHoje.ninhoHoje {
     servidorHoje = componente 'Núcleo do servidor' {
+      #servidoPelaProd
       link ../docs/caixas/casa.ninho.servidor.md 'doc'
       description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO'
       technology 'Python, FastAPI, SQLite'
@@ -33,6 +34,7 @@ model {
       }
     }
     listaHoje = componente 'Lista de compras' {
+      #servidoPelaProd
       link ../docs/caixas/casa.ninho.lista.md 'doc'
       description 'Rotas /api/lista e as regras dos itens (texto, comprado, quem adicionou) na tabela lista_itens do ninho.db, criada no primeiro uso'
       technology 'Python, FastAPI, SQLite'
@@ -41,6 +43,7 @@ model {
       }
     }
     desejosHoje = componente 'Lista de desejos' {
+      #servidoPelaProd
       link ../docs/caixas/casa.ninho.desejos.md 'doc'
       description 'Rotas /api/desejos e as regras dos desejos, das anotações (um endereço http ou https inteiro é link) e do presente surpresa, que o dono do desejo nunca vê, nas tabelas desejos_* do ninho.db, criadas no primeiro uso'
       technology 'Python, FastAPI, SQLite'
@@ -49,6 +52,7 @@ model {
       }
     }
     financasNinhoHoje = componente 'Finanças' {
+      #servidoPelaProd
       link ../docs/caixas/casa.ninho.financasNinho.md 'doc'
       description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db; nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica'
       technology 'Python, polars, deltalake, SQLite'

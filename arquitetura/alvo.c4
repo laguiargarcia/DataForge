@@ -53,7 +53,7 @@ model {
       }
     }
     bancoAppAlvo = banco 'Banco do app' {
-      #muda
+      #muda #servidoPelaProd
       link ../docs/architecture-v2/edits.md 'doc'
       description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod. Muda: hoje são dois arquivos SQLite, ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas; falta a cópia fora deste disco; onde moram os extratos em PDF está a decidir'
       technology 'SQLite'
@@ -62,7 +62,7 @@ model {
       }
     }
     lagoAlvo = banco 'Lago' {
-      #muda
+      #muda #servidoPelaProd
       link ../docs/architecture-v2/published-tables.md 'doc'
       description 'raw (só cresce), cleansed e publicado. Só o pipeline escreve. Muda: as tabelas publicadas viram uma lista com esquema declarado, conferida ao fim de cada job que as escreve'
       technology 'Delta Lake'
@@ -91,12 +91,13 @@ model {
       }
     }
     historicoAlvo = banco 'Histórico e agendas' {
+      #servidoPelaProd
       link ../docs/subsystems/db.md 'doc'
       description 'Escrito só pelo DataForge; o servidor sabe o estado de uma execução por run-state, nunca lê o arquivo'
       technology 'SQLite (dataforge.db)'
     }
     financasAlvo = conteiner 'Backend GetFinance' {
-      #sai
+      #sai #servidoPelaProd
       link ../docs/caixas/casa.financas.md 'doc'
       description 'O backend do app Finanças do PC, iniciado pelo DataForge: segundo escritor das edições, lê o lago direto e importa internos do DataForge e as regras do pipeline. Sai: o que ele faz passa para o módulo finanças do servidor (df-8x0m.23.19), e o DataForge deixa de hospedar apps (df-8x0m.23.3)'
       technology 'Python, FastAPI'
@@ -106,7 +107,7 @@ model {
       }
     }
     frontFinancasAlvo = conteiner 'Front do app Finanças' {
-      #sai
+      #sai #servidoPelaProd
       link ../docs/caixas/casa.frontFinancas.md 'doc'
       description 'As telas do app Finanças no PC: tabelas, edição de categorias, regras e correções, conferência e extratos. Sai: as telas passam para a tela de finanças do app no celular (df-8x0m.23.19), e o DataForge deixa de servir o build e a rota de tabelas (df-8x0m.23.3)'
       technology 'React, TypeScript; na janela Qt do DataForge ou no navegador do PC'

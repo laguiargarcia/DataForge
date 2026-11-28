@@ -17,6 +17,7 @@
 model {
   extend casaHoje.telasNinhoHoje {
     cascaHoje = componente 'Casca' {
+      #servidoPelaProd
       link ../docs/caixas/casa.telasNinho.casca.md 'doc'
       description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair'
       technology 'React, TypeScript'
@@ -25,6 +26,7 @@ model {
       }
     }
     comumTelasHoje = componente 'Comum às telas' {
+      #servidoPelaProd
       link ../docs/caixas/casa.telasNinho.comumTelas.md 'doc'
       description 'O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade'
       technology 'React, TypeScript'

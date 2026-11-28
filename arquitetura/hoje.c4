@@ -70,16 +70,19 @@ model {
       }
     }
     bancoNinhoHoje = banco 'ninho.db' {
+      #servidoPelaProd
       link ../docs/caixas/casa.bancoNinho.md 'doc'
       description 'Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)'
       technology 'SQLite'
     }
     edicaoHoje = banco 'edicao.db' {
+      #servidoPelaProd
       link ../docs/architecture-v2/edits.md 'doc'
       description 'Edições de finanças (data/ do workspace). Dois escritores em prod: ninho (correções) e backend Finanças (categorias, regras, correções, explicações); a semente carga_inicial_edicao rodou uma vez (só no finance_demo)'
       technology 'SQLite'
     }
     extratosHoje = banco 'Extratos em PDF' {
+      #servidoPelaProd
       link ../docs/caixas/casa.extratos.md 'doc'
       description 'PDFs do banco enviados pela tela do app Finanças; não se refazem'
       technology 'Pasta de arquivos (data/extratos)'
@@ -90,11 +93,13 @@ model {
       technology 'Pasta de zips, no mesmo disco'
     }
     lagoHoje = banco 'Lago de dados' {
+      #servidoPelaProd
       link ../docs/architecture-v2/published-tables.md 'doc'
       description 'raw, cleansed e curated do GetFinance'
       technology 'Delta Lake'
     }
     dbDataforgeHoje = banco 'dataforge.db' {
+      #servidoPelaProd
       link ../docs/subsystems/db.md 'doc'
       description 'Histórico de execuções: o global (runs dos jobs) e um por workspace (cada task)'
       technology 'SQLite'
