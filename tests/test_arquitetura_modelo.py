@@ -3,9 +3,7 @@
 the CI job `arquitetura` runs the real export (`conferir`)."""
 
 import copy
-import importlib.util
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -13,11 +11,16 @@ from pathlib import Path
 import pytest
 
 from dataforge import yamlio
+from scripts.arquitetura import modelo
 
 ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("modelo", ROOT / "scripts" / "arquitetura" / "modelo.py")
-modelo = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(modelo)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_npx(tmp_path_factory, monkeypatch):
+    """No test, and no mutant, finds a real npx or node: under WSL a which("NPX") found the Windows
+    npx on /mnt/c and ran it (df-r3kf). A test that needs the fake npx sets PATH to its folder."""
+    monkeypatch.setenv("PATH", str(tmp_path_factory.mktemp("empty-path")))
 
 
 def _raw() -> dict:
@@ -131,7 +134,9 @@ def test_views_keep_type_rules_and_dynamic_steps():
 def test_deployment_splits_nodes_and_instances():
     deployment = modelo.normalizar(_raw())["deployment"]
     assert [n["id"] for n in deployment["nodes"]] == ["prod", "prod.pc"]
-    assert deployment["nodes"][1]["metadata"] == {"servidoPor": "prod"}
+    assert deployment["nodes"][1] == {"id": "prod.pc", "kind": "maquina", "title": "PC", "description": None,
+                                      "technology": "Windows", "tags": [], "metadata": {"servidoPor": "prod"},
+                                      "links": []}
     assert [(i["id"], i["element"], i["title"]) for i in deployment["instances"]] == [
         ("prod.pc.inst", "s.s2", "Filho no PC"), ("prod.pc.s", "s", "Sistema")]
     assert [r["id"] for r in deployment["relations"]] == ["prod.pc.inst -> prod.pc: copia"]
@@ -154,6 +159,18 @@ def test_every_record_has_every_key():
     assert m["deployment"] == {"nodes": [], "instances": [], "relations": []}
 
 
+def test_an_empty_export_is_an_empty_model():
+    assert modelo.normalizar({}) == {
+        "likec4": modelo.LIKEC4,
+        "specification": {"elements": [], "tags": [], "relationships": [], "deployments": []},
+        "elements": [], "relations": [], "views": [],
+        "deployment": {"nodes": [], "instances": [], "relations": []}}
+
+
+def test_the_text_keeps_utf8_as_is():
+    assert '"title": "Índice"' in modelo.texto(modelo.normalizar(_raw()))
+
+
 def test_the_text_does_not_depend_on_the_export_order():
     raw = _raw()
     reordered = {k: dict(reversed(v.items())) if isinstance(v, dict) else v for k, v in reversed(raw.items())}
@@ -161,39 +178,57 @@ def test_the_text_does_not_depend_on_the_export_order():
     assert modelo.texto(modelo.normalizar(reordered)) == modelo.texto(modelo.normalizar(raw))
 
 
-@pytest.mark.parametrize(("where", "value"), [
-    (("relations", "14yrxbb", "source"), {"model": "p", "element": "x"}),
-    (("relations", "14yrxbb", "target"), "s"),
-    (("elements", "p", "description"), {"txt": "a", "md": "b"}),
-    (("views", "impl", "_type"), "sequence"),
+@pytest.mark.parametrize(("where", "value", "message"), [
+    (("relations", "14yrxbb", "source"), {"model": "p", "element": "x"},
+     "unknown LikeC4 relation end: {'model': 'p', 'element': 'x'}"),
+    (("relations", "14yrxbb", "target"), "s", "unknown LikeC4 relation end: 's'"),
+    (("elements", "p", "description"), {"txt": "a", "md": "b"}, "unknown LikeC4 text: {'txt': 'a', 'md': 'b'}"),
+    (("views", "impl", "_type"), "sequence", "unknown LikeC4 view type: 'sequence'"),
 ])
-def test_an_unknown_shape_fails_loudly(where, value):
+def test_an_unknown_shape_fails_loudly(where, value, message):
     """A new LikeC4 shape stops gerar instead of writing a guess."""
     raw = _raw()
     target = raw
     for key in where[:-1]:
         target = target[key]
     target[where[-1]] = value
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as refused:
         modelo.normalizar(raw)
+    assert str(refused.value) == message
 
 
-def test_gerar_writes_what_load_reads_and_conferir_sees_a_stale_file(tmp_path, monkeypatch):
+def test_gerar_writes_what_load_reads_and_conferir_sees_a_stale_file(tmp_path, monkeypatch, capsys):
     raw = _raw()
-    monkeypatch.setattr(modelo, "exportar", lambda fonte: copy.deepcopy(raw))
+
+    def exportar(fonte):
+        assert fonte == tmp_path
+        return copy.deepcopy(raw)
+
+    monkeypatch.setattr(modelo, "exportar", exportar)
     saida = tmp_path / "modelo.json"
     monkeypatch.setattr(modelo, "FONTE", tmp_path)
     monkeypatch.setattr(modelo, "SAIDA", saida)
+    assert modelo.main(["gerar"]) == 0
+    assert saida.read_text(encoding="utf-8") == modelo.texto(modelo.normalizar(raw))
+    saida.unlink()
     modelo.gerar(tmp_path, saida)
     assert modelo.load(saida) == json.loads(modelo.texto(modelo.normalizar(raw)))
     assert modelo.conferir(tmp_path, saida) == []
+    capsys.readouterr()
     assert modelo.main(["conferir"]) == 0
+    assert capsys.readouterr().out == f"{saida} is the export of {tmp_path}, and every view edge reads at its word\n"
     raw["elements"]["s"]["title"] = "Sistema novo"
-    diff = modelo.conferir(tmp_path, saida)
-    assert '-      "title": "Sistema"' in diff
-    assert '+      "title": "Sistema novo"' in diff
+    problems = modelo.conferir(tmp_path, saida)
+    assert problems[:3] == [f"{saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it",
+                            f"--- {saida}", "+++ export of the .c4"]
+    assert '-      "title": "Sistema"' in problems
+    assert '+      "title": "Sistema novo"' in problems
     assert modelo.main(["conferir"]) == 1
+    assert capsys.readouterr().out == "\n".join(problems) + "\n"
     saida.unlink()
+    problems = modelo.conferir(tmp_path, saida)
+    assert problems[1:4] == [f"--- {saida}", "+++ export of the .c4", f"@@ -0,0 +1,{len(problems) - 4} @@"]
+    assert all(line.startswith("+") for line in problems[4:])
     assert modelo.main(["conferir"]) == 1
 
 
@@ -235,7 +270,8 @@ def test_two_arrows_with_the_same_title_stop_gerar():
     could swap the numbers: the PR diff would report arrows that did not change."""
     raw = _raw()
     raw["relations"]["1exzn7k"]["title"] = "usa"
-    with pytest.raises(ValueError, match=r"p -> s\.s2: usa; give them distinct titles"):
+    raw["relations"]["copia"] = raw["relations"]["10wqd61"] | {"id": "copia"}
+    with pytest.raises(ValueError, match=r"same source, target and title: p -> s\.s2: usa, p -> s: lê; give them"):
         modelo.normalizar(raw)
 
 
@@ -253,9 +289,9 @@ def test_the_cli_shows_a_refused_model_as_a_message(tmp_path, monkeypatch, acao)
 
 
 FAKE_NPX = """#!/bin/sh
-echo "$2 $3 $4 $5" >> "$NPX_LOG"
-if [ "$3" = validate ]; then exit "$NPX_VALIDATE_EXIT"; fi
-echo '{"elements": {"a": {"id": "a", "kind": "k"}}}' > "$7"
+echo "$* NO_COLOR=$NO_COLOR" >> "$NPX_LOG"
+if [ "$3" = validate ]; then echo "out: 1 warning"; echo "err: bad" >&2; exit "$NPX_VALIDATE_EXIT"; fi
+echo '{"elements": {"a": {"id": "a", "kind": "k", "title": "Índice"}}}' > "$7"
 """
 
 
@@ -269,27 +305,47 @@ def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_ex
     npx.write_text(FAKE_NPX, encoding="utf-8")
     npx.chmod(0o755)
     log = tmp_path / "calls"
-    # Replaces PATH: under WSL the inherited one reaches the Windows npx (bd memory wsl-which-acha-windows).
-    monkeypatch.setenv("PATH", os.pathsep.join([str(npx.parent), "/usr/bin", "/bin"]))
+    monkeypatch.setenv("PATH", str(npx.parent))  # only the fake: a mutant must never find a real npx
     monkeypatch.setenv("NPX_LOG", str(log))
     monkeypatch.setenv("NPX_VALIDATE_EXIT", str(validate_exit))
+    monkeypatch.delenv("NO_COLOR", raising=False)
     if validate_exit:
-        with pytest.raises(SystemExit, match="likec4 validate failed"):
+        with pytest.raises(SystemExit) as stopped:
             modelo.exportar(tmp_path)
+        assert stopped.value.code == "likec4 validate failed (exit 1):\nout: 1 warning\nerr: bad\n"
     else:
-        assert modelo.exportar(tmp_path) == {"elements": {"a": {"id": "a", "kind": "k"}}}
-    pin = f"likec4@{modelo.LIKEC4}"
-    expected = [f"{pin} validate --max-warnings 0", f"{pin} export json --skip-layout"][:calls]
-    assert log.read_text(encoding="utf-8").splitlines() == expected
+        assert modelo.exportar(tmp_path) == {"elements": {"a": {"id": "a", "kind": "k", "title": "Índice"}}}
+    pin = f"--yes likec4@{modelo.LIKEC4}"
+    expected = [f"{pin} validate --max-warnings 0 {tmp_path} NO_COLOR=1",
+                f"{pin} export json --skip-layout -o <saida> {tmp_path} NO_COLOR=1"][:calls]
+    calls_made = log.read_text(encoding="utf-8").splitlines()
+    assert [re.sub(r" -o \S+ ", " -o <saida> ", call) for call in calls_made] == expected
 
 
-@pytest.mark.parametrize("opcao", ["--fonte", "--saida"])
-def test_the_cli_takes_no_path(opcao):
-    """A path from the command line would reach the npx call and the file write (Sonar S8705,
-    S8707): the CLI only reads arquitetura/ and writes arquitetura/modelo.json."""
+def test_exportar_without_npx_says_how_to_get_it(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(SystemExit) as stopped:
-        modelo.main(["conferir", opcao, "x"])
+        modelo.exportar(tmp_path)
+    assert stopped.value.code == "npx not found: install Node (arquitetura/README.md)"
+
+
+@pytest.mark.parametrize("argv", [["conferir", "--fonte", "x"], ["conferir", "--saida", "x"], ["exportar"]])
+def test_the_cli_takes_no_path(argv, monkeypatch):
+    """A path from the command line would reach the npx call and the file write (Sonar S8705,
+    S8707): the CLI only reads arquitetura/ and writes arquitetura/modelo.json. Its only actions
+    are gerar and conferir."""
+    monkeypatch.setattr(modelo, "exportar", lambda fonte: pytest.fail("the CLI ran an export"))
+    with pytest.raises(SystemExit) as stopped:
+        modelo.main(argv)
     assert stopped.value.code == 2
+
+
+def test_the_cli_help_is_the_first_line_of_the_docstring(capsys):
+    with pytest.raises(SystemExit) as stopped:
+        modelo.main(["--help"])
+    assert stopped.value.code == 0
+    words = " ".join(capsys.readouterr().out.split())  # argparse wraps the text at the terminal width
+    assert " ".join(modelo.__doc__.splitlines()[0].split()) in words
 
 
 @pytest.mark.parametrize(("id_", "top", "hoje"), [
@@ -333,6 +389,7 @@ def test_an_edge_drawn_as_dots_fails_conferir_with_its_view_and_pair(tmp_path, m
 @pytest.mark.parametrize(("raw", "shown"), [
     (_vista("abre", ABRE, LE), "abre"),
     (_vista("abre", ABRE, ("r3", "p", "s", "", None)), "abre"),  # an untitled direct arrow gives no title
+    (_vista(None, ABRE, ("r3", "p", "s.s3", "", None)), ""),  # no label shows the untitled one, hides abre
 ])
 def test_an_edge_showing_one_of_several_joined_titles_is_ambiguous(raw, shown):
     """LikeC4 1.61.1 sometimes shows one joined title and hides the rest, with no '[...]'."""
@@ -347,20 +404,36 @@ def test_an_edge_showing_one_of_several_joined_titles_is_ambiguous(raw, shown):
     _vista("junta", ABRE, ("r3", "p", "s", "junta", None)),  # a direct arrow gives it
     _vista("abre", ABRE, ("r3", "p", "s.s3", "abre", None)),  # no direct arrow, one title for all
     _vista("abre", ABRE),
+    _vista(None, ABRE, ("r3", "p", "s", "", None)),  # an untitled direct arrow, drawn untitled
 ])
 def test_an_edge_that_reads_at_its_word_passes(raw):
     assert modelo.arestas_ambiguas(raw) == []
 
 
-@pytest.mark.parametrize("label", ["lê", "Título da vista"])
-def test_an_edge_joining_kinds_is_ambiguous_even_with_a_title(label):
+@pytest.mark.parametrize(("label", "kind", "drawn"), [
+    ("lê", "leitura", "leitura"), ("Título da vista", "leitura", "leitura"), ("lê", None, "(none)")])
+def test_an_edge_joining_kinds_is_ambiguous_even_with_a_title(label, kind, drawn):
     """A leitura joined with plain arrows comes out leitura, dotted; neither a direct arrow nor a
     view title changes the kind."""
-    raw = _vista(label, ("r3", "p", "s", "lê", None), ("r4", "p", "s.s2", "copia", "leitura"), kind="leitura")
+    raw = _vista(label, ("r3", "p", "s", "lê", None), ("r4", "p", "s.s2", "copia", "leitura"), kind=kind)
     assert modelo.arestas_ambiguas(raw) == [
-        "view index: p -> s joins relations of kinds (none), leitura and is drawn as leitura: "
+        f"view index: p -> s joins relations of kinds (none), leitura and is drawn as {drawn}: "
         "give the arrows behind it one kind, or exclude the odd one from the view "
         "(exclude <child> -> <target>)"]
+
+
+def test_a_deployment_view_edge_reads_the_deployment_relations():
+    raw = _raw()
+    raw["views"]["impl"]["edges"] = [{"id": "d1", "source": "prod.pc.inst", "target": "prod.pc", "label": "[...]",
+                                      "relations": ["2vs8yc"]}]
+    assert modelo.arestas_ambiguas(raw) == [
+        "view impl: prod.pc.inst -> prod.pc is drawn as '[...]': give it one title in the view "
+        "(include prod.pc.inst -> prod.pc with { title '...' })"]
+
+
+@pytest.mark.parametrize("raw", [{}, {"deployments": {}}])
+def test_an_export_without_views_or_relations_has_no_edge_to_check(raw):
+    assert modelo.arestas_ambiguas(raw) == []
 
 
 def test_dynamic_steps_are_not_checked_and_an_unknown_relation_fails_loudly():

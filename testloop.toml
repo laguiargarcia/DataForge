@@ -328,3 +328,18 @@ process_isolation = "forkserver"
 min_score = 0.8626
 # 137 s on the laptop, but 251 s and 326 s in one CI job on main push runs: two jobs (df-7szn).
 shards = 2
+
+[targets."scripts/arquitetura/modelo.py"]
+# The bead hook and the CI checks read arquitetura/modelo.json through it (df-r3kf). Its tests read the
+# committed model, the LikeC4 pins of the README, docs/commands.md and ci.yml (yamlio), relative to the
+# repo; no test runs the real npx (an autouse fixture empties PATH; exportar's test puts a fake
+# alone on it).
+tests = ["tests/test_arquitetura_modelo.py"]
+copy = ["arquitetura/README.md", "arquitetura/modelo.json", "docs/commands.md", ".github/workflows/ci.yml", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
+# 665 mutants, 654 killed on a laptop (16 s). The 11 survivors are Equivalent:
+#   _likec4 check=None / dropped: check=False is subprocess.run's default.
+#   exportar "XXlikec4.jsonXX" / "LIKEC4.JSON": the export's name inside a temporary folder of its own.
+#   texto ensure_ascii=None: json.dumps reads it as False.
+#   load, gerar, conferir and exportar with encoding "UTF-8": the same codec as "utf-8".
+#   sistema split(".") / split(".", 2): [0] is the text before the first dot at any maxsplit.
+min_score = 0.9834
