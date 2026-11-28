@@ -2,6 +2,7 @@
 topic: Execution contract (how a product asks DataForge for a run, follows it, and where a project lives)
 read_when: Changing `dataforge run`, the run history, the run lock or how a workspace path is resolved; building the part of ninho that asks for a job; adding a command a product may call
 related_issues: [df-8x0m.23.2, df-8x0m.23]
+transversal: true
 ---
 
 # Execution contract: the engine's public interface

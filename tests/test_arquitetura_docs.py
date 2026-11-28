@@ -285,7 +285,8 @@ def test_every_doc_front_matter_reads_as_yaml_does():
             continue
         flat = docs.ler_front_matter(doc)
         as_yaml = yaml.safe_load(text.split("\n---\n", 1)[0].removeprefix("---\n"))
-        assert flat == {k: v if isinstance(v, (str, list)) else str(v) for k, v in as_yaml.items()}, doc
+        plain = {k: str(v).lower() if isinstance(v, bool) else v for k, v in as_yaml.items()}  # `transversal: true`
+        assert flat == {k: v if isinstance(v, (str, list)) else str(v) for k, v in plain.items()}, doc
 
 
 C4 = """model {

@@ -1,0 +1,175 @@
+"""docs/INDEX.md, generated (df-8x0m.23.39.2): the doc of every box of the C4 model with its
+read_when, then the transversal docs, then the frozen ADRs.
+
+    python3 scripts/arquitetura/indice_docs.py gerar     # rewrite docs/INDEX.md
+    python3 scripts/arquitetura/indice_docs.py conferir  # exit 1 when it differs, or a doc is left out
+
+The boxes come from arquitetura/modelo.json through docs.docs_por_elemento(): one table per
+system (today's and the target's box of the same piece share a row, so a doc is listed once per
+system), and the people and external systems in a table of their own. A transversal doc is one whose
+front matter says `transversal: true`: it belongs to no box (commands, testing rules, the bead
+check...). docs/adr/ is frozen (df-883u), so its files are listed from their first heading, with no
+front matter. The history files (HISTORIA) are gitignored and exist only in the main checkout: a
+fixed note names them.
+
+`conferir` fails when the committed INDEX is not what `gerar` writes, and names every doc under
+docs/ that is in no part: linked by no box, not `transversal: true`, not an ADR and not history.
+Only the standard library (python3 -S).
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: arquitetura.*
+
+from arquitetura import docs, modelo
+
+REPO = modelo.REPO
+INDICE = "docs/INDEX.md"
+ADR = "docs/adr"
+HISTORIA = ("docs/superpowers", "docs/phases", "docs/gsd-workflow.md", "docs/workbook-handoff.md")
+COMANDO = "python3 scripts/arquitetura/indice_docs.py gerar"
+FORA = "Pessoas e sistemas externos"
+
+
+def _celula(text: str) -> str:
+    return " ".join(str(text).split()).replace("|", "\\|")
+
+
+def _historia(path: str) -> bool:
+    return any(path == h or path.startswith(h + "/") for h in HISTORIA)
+
+
+def _todos(raiz: Path) -> list[str]:
+    """Every doc under docs/ but the INDEX and the history, as repo-relative paths."""
+    out = [f.relative_to(raiz).as_posix() for f in sorted((raiz / "docs").rglob("*.md"))]
+    return [p for p in out if p != INDICE and not _historia(p)]
+
+
+def _front(raiz: Path, path: str) -> dict:
+    try:
+        return docs.ler_front_matter(raiz / path)
+    except (ValueError, OSError):
+        return {}
+
+
+def _chave(eid: str) -> tuple[str, ...]:
+    """The id of an element's system and container, without the Hoje/Alvo suffix."""
+    return tuple(docs._sem_sufixo(s) for s in eid.split(".")[:2])
+
+
+def _secoes(m: dict) -> list[tuple[int, str, list[dict]]]:
+    """(heading level, title, elements): a heading per system, a table per container; the people
+    and external systems last, in a table of their own."""
+    por_id = {e["id"]: e for e in m["elements"]}
+    titulos: dict[tuple[str, ...], str] = {}
+    grupos: dict[tuple[str, ...], list[dict]] = {}
+    for e in sorted(m["elements"], key=lambda e: (not modelo.e_hoje(e["id"]), e["id"])):
+        topo = modelo.sistema(e["id"])
+        if por_id[topo]["kind"] != "sistema":
+            grupos.setdefault((), []).append(e)
+            continue
+        chave = _chave(e["id"])
+        if len(e["id"].split(".")) <= len(chave):  # the system or the container itself names the heading
+            titulos.setdefault(chave, e["title"] or e["id"])
+        grupos.setdefault(chave, []).append(e)
+    out = []
+    for chave in sorted(k for k in grupos if k):
+        if len(chave) == 1:
+            out.append((3, titulos[chave], grupos[chave]))
+        else:
+            if (chave[0],) not in grupos:
+                out.append((3, titulos[(chave[0],)], []))
+            out.append((4, titulos[chave], grupos[chave]))
+    return out + ([(3, FORA, grupos[()])] if () in grupos else [])
+
+
+def _tabela_caixas(elements: list[dict], linked: dict[str, str], raiz: Path) -> list[str]:
+    linhas: dict[str, list[str]] = {}
+    for e in sorted(elements, key=lambda e: docs._padrao(e["id"])):
+        if e["id"] in linked:
+            linhas.setdefault(linked[e["id"]], [])
+            titulo = e["title"] or e["id"]
+            if titulo not in linhas[linked[e["id"]]]:
+                linhas[linked[e["id"]]].append(titulo)
+    out = ["| Doc | Boxes | Read when |", "| --- | --- | --- |"]
+    for path, titulos in linhas.items():
+        fm = _front(raiz, path)
+        status = " (esboço)" if fm.get("status") == "esboço" else ""
+        out.append(f"| {path}{status} | {_celula(', '.join(titulos))} | {_celula(fm.get('read_when', ''))} |")
+    return out
+
+
+def _titulo_adr(raiz: Path, path: str) -> str:
+    for line in (raiz / path).read_text(encoding="utf-8").splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return path
+
+
+def gerar(m: dict, raiz: Path = REPO) -> str:
+    """The text of docs/INDEX.md for the model `m` and the docs under `raiz`."""
+    linked = docs.docs_por_elemento(m)
+    out = [f"<!-- Generated by `{COMANDO}`: do not edit by hand. -->", "", "# INDEX", "",
+           "Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the front matter "
+           "of each doc. A box's doc is the `doc` link of its element; a doc that belongs to no box says "
+           "`transversal: true` in its front matter. How to keep it: docs/documentation.md.", "",
+           "## Boxes of the model", ""]
+    for nivel, titulo, elements in _secoes(m):
+        out += ["#" * nivel + f" {titulo}", ""]
+        out += [*_tabela_caixas(elements, linked, raiz), ""] if elements else []
+    out += ["## Transversal docs", "", "| Doc | Topic | Read when |", "| --- | --- | --- |"]
+    for path in _todos(raiz):
+        fm = _front(raiz, path)
+        if fm.get("transversal") == "true":
+            out.append(f"| {path} | {_celula(fm.get('topic', ''))} | {_celula(fm.get('read_when', ''))} |")
+    out += ["", "## Frozen ADRs", "",
+            "docs/adr/ is frozen (df-883u): 0001-0003 are history; 0004-0006 hold rules in force until "
+            "their content moves to the reference docs (df-cyjt).", "", "| Doc | Title |", "| --- | --- |"]
+    out += [f"| {p} | {_celula(_titulo_adr(raiz, p))} |" for p in _todos(raiz) if p.startswith(ADR + "/")]
+    out += ["", "## History (main checkout only)", "",
+            "Background only, not current instructions: " + ", ".join(f"`{h}`" for h in HISTORIA)
+            + ". They hold real values, so they stay gitignored and exist only in the main checkout.", ""]
+    return "\n".join(out)
+
+
+def fora_do_indice(m: dict, raiz: Path = REPO) -> list[str]:
+    """The docs in no part of the INDEX."""
+    linked = set(docs.docs_por_elemento(m).values())
+    return [p for p in _todos(raiz) if p not in linked and not p.startswith(ADR + "/")
+            and _front(raiz, p).get("transversal") != "true"]
+
+
+def conferir(m: dict, raiz: Path = REPO) -> list[str]:
+    """The problems, one `error:` line each; empty when the INDEX is the generated one."""
+    problems = [f"error: {p} is in no part of the INDEX: link it from a box of arquitetura/ or add "
+                "`transversal: true` to its front matter" for p in fora_do_indice(m, raiz)]
+    indice = raiz / INDICE
+    atual = indice.read_text(encoding="utf-8") if indice.is_file() else None
+    if atual != gerar(m, raiz):
+        problems.append(f"error: {INDICE} is not the generated one: run {COMANDO}")
+    return problems
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("acao", choices=("gerar", "conferir"))
+    acao = parser.parse_args(argv).acao
+    m = modelo.load()
+    if acao == "gerar":
+        (REPO / INDICE).write_text(gerar(m), encoding="utf-8", newline="\n")
+        print(f"wrote {INDICE}")
+        return 0
+    problems = conferir(m)
+    if problems:
+        print("\n".join(problems))
+        return 1
+    print(f"{INDICE} is the generated one and lists every doc")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
