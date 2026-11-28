@@ -22,18 +22,18 @@ model {
     description 'Quatro peças com contratos estreitos; o servidor e o DataForge rodam no PC da casa, o app no celular'
 
     appCelularAlvo = conteiner 'App no celular' {
-      #aFazer
-      technology 'Web app instalada no celular'
-      description 'Cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta (df-8x0m.23.8)'
-    }
-    servidorAlvo = conteiner 'Servidor da casa (ninho) e telas' {
       #emProd
-      description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, desejos, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
+      technology 'Web app instalada no celular'
+      description 'As telas do ninho (ninho/telas), abertas como app na tela de início. A fazer: cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta (df-8x0m.23.8)'
+    }
+    servidorAlvo = conteiner 'Servidor da casa (ninho)' {
+      #emProd
+      description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
       technology 'Python, FastAPI, front web'
     }
     bancoAppAlvo = banco 'Banco do app' {
       #emProd
-      description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod; falta a cópia fora deste disco (df-8x0m.23.9, df-8x0m.19)'
+      description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod; falta a cópia fora deste disco (df-8x0m.23.9, df-8x0m.19). Hoje em dois arquivos SQLite: ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas (df-8x0m.23.14). Onde moram os extratos em PDF: a decidir (df-8x0m.23.35)'
       technology 'SQLite'
     }
     lagoAlvo = banco 'Lago' {
@@ -45,6 +45,11 @@ model {
       #emProd
       description 'Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Paredes no repositório (df-8x0m.23.14) a fazer: pastas, pacotes e regra do gate separados, CI por parte'
       technology 'Python'
+    }
+    historicoAlvo = banco 'Histórico e agendas' {
+      #emProd
+      description 'Escrito só pelo DataForge; o servidor sabe o estado de uma execução por run-state, nunca lê o arquivo'
+      technology 'SQLite (dataforge.db)'
     }
   }
 
@@ -58,6 +63,7 @@ model {
   casaAlvo.servidorAlvo -[leitura]-> casaAlvo.lagoAlvo 'Só leitura, pelas tabelas publicadas'
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
   casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)'
+  casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
   casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada; copia no job backup'
   casaAlvo.dataforgeAlvo -> pluggyAlvo 'Busca dados'
   casaAlvo.dataforgeAlvo -> outrasFontesAlvo 'Busca dados'
@@ -67,6 +73,9 @@ views {
   view alvo-contexto of casaAlvo {
     title 'Alvo v2: contexto'
     include casaAlvo, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, agendadorAlvo
+    include donoAlvo -> casaAlvo with {
+      title 'Usa o app no celular e administra o DataForge'
+    }
     style element.tag = #aFazer {
       color amber
       border dashed
