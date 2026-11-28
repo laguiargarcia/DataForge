@@ -4,6 +4,7 @@ parent's labels. bd is faked, except in the
 end-to-end tests at the bottom (skipped where bd is not installed, as in CI)."""
 
 import importlib.util
+import io
 import json
 import os
 import shlex
@@ -956,3 +957,132 @@ def test_a_word_that_is_not_a_bead_id_never_reaches_bd(bead, monkeypatch, tmp_pa
 @pytest.mark.parametrize("bead", ["df-m60c", "df-ahua.23.4", "df-sess-1a2b3c4d"])
 def test_bead_ids_bd_writes_are_valid(bead):
     assert check.BEAD_ID.match(bead)
+
+
+# --------------------------------------------------------------------------- context at claim (df-8x0m.23.40)
+
+CTX_MODEL = {
+    "elements": [{"id": i, "title": i.upper()} for i in ("a", "a.x", "a.x.sub", "a.y", "b", "c", "d")],
+    "relations": [{"source": "a.x", "target": "b"}, {"source": "c", "target": "a.x"},
+                  {"source": "a.x.sub", "target": "d"}, {"source": "a.y", "target": "c"}],
+}
+CTX_DOCS = {"a.x": "docs/x.md", "a": "docs/a.md", "b": "docs/b.md"}
+CTX_FRONT = {"docs/x.md": {"topic": "Tópico X", "read_when": "ao mexer em X"}, "docs/a.md": {"topic": "A"}}
+
+
+def ctx_event(command, cwd, response=None):
+    return {"hook_event_name": "PostToolUse", "tool_name": "Bash", "cwd": str(cwd),
+            "tool_input": {"command": command},
+            "tool_response": response or {"stdout": "ok", "stderr": "", "interrupted": False}}
+
+
+@pytest.fixture
+def ctx(monkeypatch):
+    monkeypatch.setattr(check, "model_on_main", lambda _repo: CTX_MODEL)
+    monkeypatch.setattr(check.arq_docs, "docs_por_elemento", lambda _m: CTX_DOCS)
+    monkeypatch.setattr(check, "front_on_main", lambda _repo, path: CTX_FRONT.get(path, {}))
+
+    def use(*issues):
+        monkeypatch.setattr(check, "Bd", lambda _cwd: FakeBd(*issues))
+    return use
+
+
+def ctx_text(out):
+    assert out["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+    return out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_neighbours_are_the_box_its_parent_and_its_own_relations():
+    assert check.neighbours(CTX_MODEL, "a.x") == ["a.x", "a", "b", "c"]  # not d: a.x.sub's relation
+    assert check.neighbours(CTX_MODEL, "transversal") == []
+
+
+def test_a_claim_gives_the_docs_of_the_box_and_its_neighbours(ctx, tmp_path):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    text = ctx_text(check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path))
+    assert "- a.x (A.X): docs/x.md · topic: Tópico X · read_when: ao mexer em X" in text
+    assert "- a (A): docs/a.md · topic: A" in text
+    assert "- b (B): docs/b.md" in text
+    assert "- c (C): sem doc" in text
+    assert "d (D)" not in text
+    assert "a.y" not in text
+
+
+def test_the_context_is_capped(ctx, tmp_path, monkeypatch):
+    monkeypatch.setattr(check, "MAX_CONTEXT", 2)
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    text = ctx_text(check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path))
+    assert text.count("\n- ") == 3
+    assert text.endswith("- ... e mais 2")
+
+
+@pytest.mark.parametrize("labels", [["c4:transversal"], [], ["c4:nao.existe"]])
+def test_a_transversal_bead_or_one_without_a_box_gets_nothing(ctx, tmp_path, labels):
+    ctx(issue("df-k", "task", labels))
+    assert check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path) is None
+
+
+@pytest.mark.parametrize("command", ["bd show df-k", "bd update df-k --status open", "ls", "bd close df-k"])
+def test_no_claim_gives_nothing(ctx, tmp_path, command):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    assert check.contexto(ctx_event(command, tmp_path), tmp_path) is None
+
+
+def test_a_failed_or_unknown_bd_gives_nothing(ctx, tmp_path):
+    ctx()  # bd cannot answer
+    assert check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path) is None
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    interrupted = {"stdout": "", "stderr": "", "interrupted": True}
+    assert check.contexto(ctx_event("bd update df-k --claim", tmp_path, interrupted), tmp_path) is None
+
+
+def test_no_model_or_no_docs_module_gives_nothing(ctx, tmp_path, monkeypatch):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    monkeypatch.setattr(check, "arq_docs", None)
+    assert check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path) is None
+
+
+def test_the_front_matter_is_read_from_origin_main(tmp_path):
+    repo = make_repo(tmp_path)
+    write(repo / "docs/x.md", "---\ntopic: X\nread_when: sempre\ncode:\n  - a.py\nstatus: esboço\n---\n# X\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "doc")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert check.front_on_main(repo, "docs/x.md")["topic"] == "X"
+    assert check.front_on_main(repo, "docs/nao.md") == {}
+
+
+def test_the_contexto_mode_fails_open(tmp_path):
+    r = subprocess.run([sys.executable, "-S", str(SCRIPT), "contexto"], input="not json", capture_output=True,
+                       text=True, cwd=tmp_path, env={"PATH": "/nonexistent", "CLAUDE_PROJECT_DIR": str(tmp_path)},
+                       check=False)
+    assert (r.returncode, r.stdout) == (0, "")
+
+
+def test_the_cut_keeps_every_own_box_before_parents_and_far_ends(ctx, tmp_path, monkeypatch):
+    monkeypatch.setattr(check, "MAX_CONTEXT", 3)
+    ctx(issue("df-k", "task", ["c4:a.y", "c4:a.x"]))
+    text = ctx_text(check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path))
+    assert [line.split(" ")[1] for line in text.splitlines()[1:4]] == ["a.x", "a.y", "a"]
+    assert text.endswith("- ... e mais 2")  # b and c, the far ends of both boxes, once each
+
+
+def test_no_model_on_main_gives_nothing(ctx, tmp_path, monkeypatch):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    monkeypatch.setattr(check, "model_on_main", lambda _repo: None)
+    assert check.contexto(ctx_event("bd update df-k --claim", tmp_path), tmp_path) is None
+
+
+def test_a_line_with_two_claims_gives_both(ctx, tmp_path):
+    ctx(issue("df-k", "task", ["c4:a.x"]), issue("df-j", "task", ["c4:b"]))
+    text = ctx_text(check.contexto(ctx_event("bd update df-k --claim && bd update df-j --claim", tmp_path), tmp_path))
+    assert text.index("df-k:") < text.index("df-j:")
+
+
+def test_main_contexto_dispatches_to_the_context(ctx, tmp_path, monkeypatch, capsys):
+    ctx(issue("df-k", "task", ["c4:a.x"]))
+    monkeypatch.setattr(check.sys, "stdin", io.StringIO(
+        json.dumps(ctx_event("bd update df-k --claim", tmp_path))))
+    assert check.main(["contexto"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "docs/x.md" in out["hookSpecificOutput"]["additionalContext"]
