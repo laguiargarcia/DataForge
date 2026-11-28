@@ -27,9 +27,11 @@ absent metadata {}. Lists of records are sorted by "id", tags are sorted, links 
                    last part. links: [{url, title}] (title null when not given)
     relations      [{id, source, target, title, kind, description, technology, tags, metadata, links}]
                    source and target are element ids; kind is null or a relationship kind
-                   ("leitura"). id is "<source> -> <target>: <title>", with " (2)", " (3)" on
-                   repeats: LikeC4's own relation id depends on the position in the file, so
-                   adding one relation would rename every relation after it
+                   ("leitura"). id is "<source> -> <target>: <title>", or "<source> -> <target>"
+                   for an arrow without a title: LikeC4's own relation id depends on the position
+                   in the file, so adding one relation would rename every relation after it. Two
+                   arrows with the same id stop gerar (ValueError): give them distinct titles.
+                   Renaming an arrow changes its id, so a diff sees it removed and added
     views          [{id, type, title, description, tags, links, viewOf, steps}]
                    type is "element", "dynamic" or "deployment"; viewOf is the element of a
                    `view x of y`, else null; steps, for a dynamic view, is [{source, target, title}]
@@ -121,12 +123,11 @@ def _relations(raws) -> list[dict]:
             for r in raws]
     for row in rows:
         row["title"] = row["title"] or ""
-    rows.sort(key=lambda r: json.dumps(r, sort_keys=True, ensure_ascii=False))
-    seen = Counter()
-    for row in rows:
-        base = f"{row['source']} -> {row['target']}: {row['title']}"
-        seen[base] += 1
-        row["id"] = base if seen[base] == 1 else f"{base} ({seen[base]})"
+        row["id"] = f"{row['source']} -> {row['target']}" + (f": {row['title']}" if row["title"] else "")
+    repeated = sorted(rid for rid, n in Counter(r["id"] for r in rows).items() if n > 1)
+    if repeated:
+        raise ValueError(f"two arrows with the same source, target and title: {', '.join(repeated)}; "
+                         "give them distinct titles in the .c4")
     return sorted(rows, key=lambda r: r["id"])
 
 

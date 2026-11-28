@@ -5,6 +5,8 @@ the CI job `arquitetura` runs the real export (`conferir`)."""
 import copy
 import importlib.util
 import json
+import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -42,7 +44,7 @@ def _raw() -> dict:
                         "title": "lê", "source": {"model": "p"}, "target": {"model": "s"}, "kind": "leitura",
                         "id": "10wqd61"},
             "14yrxbb": {"source": {"model": "p"}, "target": {"model": "s.s2"}, "id": "14yrxbb", "title": "usa"},
-            "1exzn7k": {"source": {"model": "p"}, "target": {"model": "s.s2"}, "id": "1exzn7k", "title": "usa"},
+            "1exzn7k": {"source": {"model": "p"}, "target": {"model": "s.s2"}, "id": "1exzn7k"},
         },
         "globals": {"predicates": {}, "dynamicPredicates": {}, "styles": {}},
         "views": {
@@ -91,13 +93,14 @@ def test_no_local_path_reaches_the_file():
 
 def test_relations_get_an_id_from_their_content():
     relations = modelo.normalizar(_raw())["relations"]
-    assert [r["id"] for r in relations] == ["p -> s.s2: usa", "p -> s.s2: usa (2)", "p -> s: lê"]
+    assert [r["id"] for r in relations] == ["p -> s.s2", "p -> s.s2: usa", "p -> s: lê"]
     assert relations[2] == {
         "id": "p -> s: lê", "source": "p", "target": "s", "title": "lê", "kind": "leitura",
         "description": "seta", "technology": "HTTPS", "tags": ["novo"], "metadata": {"bead": "df-1"},
         "links": [{"url": "https://example.com/r", "title": None}],
     }
-    assert relations[0]["kind"] is None
+    assert relations[0]["title"] == ""
+    assert relations[1]["kind"] is None
 
 
 def test_a_new_relation_renames_no_other():
@@ -142,7 +145,7 @@ def test_every_record_has_every_key():
         "r": {"id": "r", "source": {"model": "a"}, "target": {"model": "a"}}}, "views": {
         "v": {"_type": "element", "id": "v"}}})
     assert set(m) == {"likec4", "specification", "elements", "relations", "views", "deployment"}
-    assert m["relations"][0]["id"] == "a -> a: "
+    assert m["relations"][0]["id"] == "a -> a"
     assert m["relations"][0]["title"] == ""
     assert set(m["elements"][0]) == {"id", "kind", "title", "description", "technology", "tags", "metadata", "links"}
     assert m["deployment"] == {"nodes": [], "instances": [], "relations": []}
@@ -193,10 +196,48 @@ def test_the_committed_model_loads_by_default():
     m = modelo.load()
     assert m["likec4"] == modelo.LIKEC4
     assert {"elements", "relations", "views", "deployment", "specification"} <= set(m)
-    assert all(r["source"] in {e["id"] for e in m["elements"]} for r in m["relations"])
+    ids = {e["id"] for e in m["elements"]}
+    assert all(r["source"] in ids for r in m["relations"])
+    assert all(r["target"] in ids for r in m["relations"])
 
 
 def test_the_readme_and_the_ci_job_use_the_same_likec4():
     pin = f"likec4@{modelo.LIKEC4}"
     assert pin in (ROOT / "arquitetura" / "README.md").read_text(encoding="utf-8")
     assert pin in (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+
+def test_two_arrows_with_the_same_title_stop_gerar():
+    """Numbering repeats would let an id collide with a real title, and editing one arrow's tag
+    could swap the numbers: the PR diff would report arrows that did not change."""
+    raw = _raw()
+    raw["relations"]["1exzn7k"]["title"] = "usa"
+    with pytest.raises(ValueError, match=r"p -> s\.s2: usa; give them distinct titles"):
+        modelo.normalizar(raw)
+
+
+FAKE_NPX = """#!/bin/sh
+echo "$3" >> "$NPX_LOG"
+if [ "$3" = validate ]; then exit "$NPX_VALIDATE_EXIT"; fi
+echo '{"elements": {"a": {"id": "a", "kind": "k"}}}' > "$7"
+"""
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the fake npx is a sh script")
+@pytest.mark.parametrize(("validate_exit", "calls"), [(0, ["validate", "export"]), (1, ["validate"])])
+def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_exit, calls):
+    """The export of an invalid model exits 0 and leaves out what it could not read."""
+    npx = tmp_path / "bin" / "npx"
+    npx.parent.mkdir()
+    npx.write_text(FAKE_NPX, encoding="utf-8")
+    npx.chmod(0o755)
+    log = tmp_path / "calls"
+    monkeypatch.setenv("PATH", f"{npx.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("NPX_LOG", str(log))
+    monkeypatch.setenv("NPX_VALIDATE_EXIT", str(validate_exit))
+    if validate_exit:
+        with pytest.raises(SystemExit, match="likec4 validate failed"):
+            modelo.exportar(tmp_path)
+    else:
+        assert modelo.exportar(tmp_path) == {"elements": {"a": {"id": "a", "kind": "k"}}}
+    assert log.read_text(encoding="utf-8").split() == calls
