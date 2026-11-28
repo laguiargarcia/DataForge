@@ -367,7 +367,7 @@ def _source(module: str) -> str:
     return parts[0] if len(parts) > 1 else module
 
 
-# What mutmut 3.8.1 always copies into mutants/ besides the source dir (its also_copy defaults).
+# The dirs among mutmut 3.8.1's also_copy defaults: it always copies them into mutants/.
 MUTMUT_COPIES = ("tests", "test")
 
 
