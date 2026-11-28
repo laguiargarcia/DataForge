@@ -50,13 +50,15 @@ def test_this_repos_gitignore_keeps_out_what_the_guard_blocks(tmp_path):
     """df-azm6: the docs/ lines of the repo's own .gitignore and the docs/ entries of BLOCK_PREFIXES
     are the same paths, so a history path added to one side only fails here; and git does ignore
     each of them, while it lets the reference docs in. The .gitignore is judged in a scratch repo, so
-    the test runs where the tests are not inside a git repo (testloop's copy)."""
-    gitignore = (Path(__file__).resolve().parent.parent / ".gitignore").read_text(encoding="utf-8")
+    the test runs where the tests are not inside a git repo (testloop's copy); the nearest .gitignore
+    above this file is the repo's, or the copy's above mutmut's mutants/."""
+    found = next(p / ".gitignore" for p in Path(__file__).resolve().parents if (p / ".gitignore").is_file())
+    gitignore = found.read_text(encoding="utf-8")
     ignored = {line.strip().lstrip("/") for line in gitignore.splitlines() if line.strip().startswith("/docs/")}
     blocked = {p for p in leakguard_files.BLOCK_PREFIXES if p.startswith("docs/")}
     assert ignored == blocked
     _git("init", "-q", cwd=tmp_path)
-    (tmp_path / ".gitignore").write_text(gitignore, encoding="utf-8")
+    (tmp_path / ".gitignore").write_bytes(gitignore.encode("utf-8"))   # no CRLF on Windows
 
     def is_ignored(rel):
         return subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=tmp_path, check=False).returncode == 0
