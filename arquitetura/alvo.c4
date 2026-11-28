@@ -1,5 +1,4 @@
-// ALVO v2 (ADR 0006). Já em prod (tag emProd): servidor com login por pessoa, lista de compras,
-// run --detach / run-state, rota de leitura. A fazer (aFazer): marcado nos elementos.
+// ALVO v2 (ADR 0006). A tag emProd marca a peça que já roda em prod (o que falta nela está na descrição); aFazer, a que ainda não existe.
 model {
   donoAlvo = pessoa 'Dono da casa' {
     description 'Finanças, lista e agenda; administra o DataForge'
@@ -29,7 +28,7 @@ model {
     servidorAlvo = conteiner 'Servidor da casa (ninho)' {
       #emProd
       description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
-      technology 'Python, FastAPI, front web'
+      technology 'Python, FastAPI'
     }
     bancoAppAlvo = banco 'Banco do app' {
       #emProd

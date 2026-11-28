@@ -14,7 +14,7 @@ arquivos de modelo:
 
 1. A seta vai de quem inicia a ação para quem é chamado (C4), não no sentido do dado (decisão do
    dono, 2026-11-27, df-8x0m.23.33).
-2. `-[leitura]->` marca uma relação só de leitura.
+2. `-[leitura]->` marca uma relação só de leitura; ela aparece pontilhada.
 3. Duas relações no mesmo par viram `[...]` no desenho, então se juntam num rótulo só. Isso vale
    também para pessoa -> sistema nas vistas de contexto: lá o rótulo único é dado na própria vista,
    com `include pessoa -> sistema with { title '...' }`.

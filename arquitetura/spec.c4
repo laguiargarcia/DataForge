@@ -32,6 +32,7 @@ specification {
     color amber
   }
 
-  relationship leitura
-  relationship escrita
+  relationship leitura {
+    line dotted
+  }
 }
