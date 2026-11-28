@@ -337,8 +337,9 @@ def test_an_edge_drawn_as_dots_fails_conferir_with_its_view_and_pair(tmp_path, m
 def test_an_edge_showing_one_of_several_joined_titles_is_ambiguous(raw, shown):
     """LikeC4 1.61.1 sometimes shows one joined title and hides the rest, with no '[...]'."""
     assert modelo.arestas_ambiguas(raw) == [
-        f"view index: p -> s joins 2 relations and shows only {shown!r}: give it a title in the view "
-        "(include p -> s with { title '...' }) or draw an arrow straight between the two"]
+        f"view index: p -> s joins 2 relations and shows only {shown!r}: give it a title of its own in "
+        "the view, none of the joined ones (include p -> s with { title '...' }), or draw an arrow "
+        "straight between the two"]
 
 
 @pytest.mark.parametrize("raw", [
@@ -358,7 +359,8 @@ def test_an_edge_joining_kinds_is_ambiguous_even_with_a_title(label):
     raw = _vista(label, ("r3", "p", "s", "lê", None), ("r4", "p", "s.s2", "copia", "leitura"), kind="leitura")
     assert modelo.arestas_ambiguas(raw) == [
         "view index: p -> s joins relations of kinds (none), leitura and is drawn as leitura: "
-        "give the arrows behind it one kind"]
+        "give the arrows behind it one kind, or exclude the odd one from the view "
+        "(exclude <child> -> <target>)"]
 
 
 def test_dynamic_steps_are_not_checked_and_an_unknown_relation_fails_loudly():

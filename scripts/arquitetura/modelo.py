@@ -162,7 +162,9 @@ def _aresta_ambigua(view: str, edge: dict, rels: dict) -> list[str]:
     """What one edge of an element or deployment view hides from a reader (README rule 3). LikeC4
     joins the relations between a node's descendants into one edge: with distinct titles it shows
     '[...]', or one of them and none of the rest, unless the view gives a title (`with { title }`)
-    or a relation goes straight between the two nodes; with distinct kinds it takes one of them."""
+    or a relation goes straight between the two nodes; with distinct kinds it takes one of them.
+    The export keeps no view rules, so a view title is known only by being none of the joined
+    titles: one equal to a joined title is flagged as if LikeC4 had picked it."""
     try:
         joined = [rels[r] for r in edge.get("relations") or []]
     except KeyError as missing:
@@ -178,11 +180,13 @@ def _aresta_ambigua(view: str, edge: dict, rels: dict) -> list[str]:
         problems.append(f"{where} is drawn as '[...]': give it one title in the view ({fix})")
     elif len(titles) > 1 and label in titles and label not in direct:
         problems.append(f"{where} joins {len(joined)} relations and shows only {label!r}: give it a title "
-                        f"in the view ({fix}) or draw an arrow straight between the two")
+                        f"of its own in the view, none of the joined ones ({fix}), or draw an arrow "
+                        "straight between the two")
     kinds = sorted({r.get("kind") or "(none)" for r in joined})
     if len(kinds) > 1:
         problems.append(f"{where} joins relations of kinds {', '.join(kinds)} and is drawn as "
-                        f"{edge.get('kind') or '(none)'}: give the arrows behind it one kind")
+                        f"{edge.get('kind') or '(none)'}: give the arrows behind it one kind, or exclude the odd one "
+                        f"from the view (exclude <child> -> <target>)")
     return problems
 
 

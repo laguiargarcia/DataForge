@@ -24,8 +24,10 @@ arquivos de modelo:
    mesmo kind, que nem a seta direta nem o título da vista mudam: quando a diferença é de verdade,
    a vista exclui a relação que destoa (`exclude a.filho -> b`). Cobrada: `modelo.py conferir`
    (no CI) sai 1 com a vista e o par de cada aresta que mostra `[...]`, que mostra um só de vários
-   títulos juntados ou que junta kinds diferentes (df-8x0m.23.47.12). Os passos de uma vista
-   dinâmica ficam fora: cada um tem o próprio título.
+   títulos juntados ou que junta kinds diferentes (df-8x0m.23.47.12). O export não guarda as
+   regras da vista, então o título dado pela vista se reconhece por não ser o de nenhuma relação
+   juntada: um título da vista igual a um deles falha como se o LikeC4 o tivesse escolhido; dê um
+   título próprio. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
 
