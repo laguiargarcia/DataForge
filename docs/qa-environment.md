@@ -12,8 +12,8 @@ doc is a durable pointer so sessions don't lose track of it.
 
 ## Location
 
-- Windows: `C:\Users\Lucas\Desktop\projects\DataForge-QA\`
-- WSL:     `/mnt/c/Users/Lucas/Desktop/projects/DataForge-QA/`
+- Windows: `C:\Users\<user>\Desktop\projects\DataForge-QA\`
+- WSL:     `/mnt/c/Users/<user>/Desktop/projects/DataForge-QA/`
 
 Sibling directories under `.../projects/`: `DataForge/` (this dev repo), `DataForge-QA/`
 (this doc), `Old/` (ignore).
@@ -27,7 +27,7 @@ Do not run git operations in it.
 ## Purpose & KEEP-CLEAN rule
 
 - Runs the **production** report workbook (`Relatorio_Financeiro.xlsx`) against a **second
-  Pluggy item** — the **Inter** test bank, separate from the real prod bank — so the report
+  Pluggy item** — the test bank item, separate from the real prod bank — so the report
   can be validated with independent, real bank data. (Despite the workspace's old Show name,
   its `fetch` task is the real `landing/landing2raw.py` + live Pluggy creds in `.env`, **not**
   the synthetic generator.)
@@ -44,7 +44,7 @@ Do not run git operations in it.
 | Role | development | validation |
 | Git | tracked (`main`) | untracked (unzipped copy) |
 | Workbook | `workspaces/GetFinance-Dev/report/resumo.xlsx` (v2, model-free) + `develop.xlsx` (both gone since df-sgyf) | `workspaces/<qa>/report/Relatorio_Financeiro.xlsx` (the shipped prod workbook) |
-| Data source | Dev curated / synthetic demo | real **Inter** Pluggy item |
+| Data source | Dev curated / synthetic demo | the real test bank's Pluggy item |
 | Findings docs | live HERE (`docs/`) | none — kept clean |
 
 At setup (2026-07-01) the QA `workspaces/<qa>/scripts/` were **byte-identical** to the dev
@@ -59,7 +59,7 @@ Nothing has updated them since: the QA copy runs the ETL of July 2026, not the c
   repo; the DEV repo versions **no** `report/` dir — QA carries the shipped workbook.
 - **Bridge CSVs it reads:** `workspaces/<qa>/data/bridge/` — the workbook's Power
   Query resolves them via the `BridgeFolder` cell (`_aux!M1`), pre-pointed at
-  `C:\Users\Lucas\Desktop\projects\DataForge-QA\workspaces\<qa>\data\bridge\`
+  `C:\Users\<user>\Desktop\projects\DataForge-QA\workspaces\<qa>\data\bridge\`
   (trailing backslash required; repoint if the folder moves). Files present:
   - `dim_account.csv`, `dim_calendar.csv`, `dim_counterparty.csv`, `dim_investment.csv`
   - `fact_balance_snapshot.csv`, `fact_fatura_mes.csv`, `fact_investment_position.csv`,

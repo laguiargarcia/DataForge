@@ -22,13 +22,13 @@ hold real values: they stay gitignored and exist only in the main checkout.
 | docs/conventions.md | Project-wide conventions (graph-first exploration, audience principle) | Starting a new task that touches code; when deciding how to explore the codebase; when writing Obsidian-facing notes |
 | docs/documentation.md | Documentation | When writing, naming, or maintaining files under docs/ |
 | docs/getfinance-pluggy-integration.md | GetFinance / Pluggy finance pipeline | When working on the GetFinance ETL or Pluggy integration |
-| docs/gsd-workflow.md | GSD Workflow | When orienting on planning artifacts, phase/plan structure, or session-close protocol |
-| docs/phases/01.5-scheduler.md | Phase 01.5: scheduler | Understanding what was decided/built in phase 01.5-scheduler |
-| docs/phases/1.2-orchestration-api.md | Phase 1.2: orchestration-api | Understanding what was decided/built in phase 1.2-orchestration-api |
-| docs/phases/1.3-desktop-shell.md | Phase 1.3: desktop-shell | Understanding what was decided/built in phase 1.3-desktop-shell |
-| docs/phases/1.4-job-monitoring-ui.md | Phase 1.4: job-monitoring-ui | Understanding what was decided/built in phase 1.4-job-monitoring-ui |
-| docs/phases/cross-platform-compatibility.md | Phase: cross-platform-compatibility | Understanding what was decided/built in phase cross-platform-compatibility |
-| docs/phases/knowledge-sync.md | Phase: knowledge-sync | Understanding what was decided/built in phase knowledge-sync |
+| docs/gsd-workflow.md | GSD Workflow (main checkout only, not versioned) | When orienting on planning artifacts, phase/plan structure, or session-close protocol |
+| docs/phases/01.5-scheduler.md | Phase 01.5: scheduler (main checkout only, not versioned) | Understanding what was decided/built in phase 01.5-scheduler |
+| docs/phases/1.2-orchestration-api.md | Phase 1.2: orchestration-api (main checkout only, not versioned) | Understanding what was decided/built in phase 1.2-orchestration-api |
+| docs/phases/1.3-desktop-shell.md | Phase 1.3: desktop-shell (main checkout only, not versioned) | Understanding what was decided/built in phase 1.3-desktop-shell |
+| docs/phases/1.4-job-monitoring-ui.md | Phase 1.4: job-monitoring-ui (main checkout only, not versioned) | Understanding what was decided/built in phase 1.4-job-monitoring-ui |
+| docs/phases/cross-platform-compatibility.md | Phase: cross-platform-compatibility (main checkout only, not versioned) | Understanding what was decided/built in phase cross-platform-compatibility |
+| docs/phases/knowledge-sync.md | Phase: knowledge-sync (main checkout only, not versioned) | Understanding what was decided/built in phase knowledge-sync |
 | docs/quality-gate.md | Quality gate | When a commit, CI run or Claude Code hook fails with "quality gate"; adding or tuning a lint rule; suppressing a finding |
 | docs/qa-environment.md | QA environment (DataForge-QA) | When working on QA/validation of the GetFinance report workbook (workbook era, not maintained since df-cns), or you need the sibling DataForge-QA folder's location, purpose, workbook, and keep-clean rule |
 | docs/scripts-conventions.md | Workspace Scripts Conventions | When writing workspace-level scripts (functions.py, argparse params, logging) |

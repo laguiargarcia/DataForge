@@ -81,8 +81,8 @@ account contributes nothing downstream).
 Captured live. **Stable** = survives a delete+re-create of the connection (it reflects the
 real-world account); **Churns** = a fresh Pluggy UUID is minted on re-create.
 
-| Field | Example (Itaú checking; made-up values) | Stability | Meaning |
-|-------|-----------------------------------------|-----------|---------|
+| Field | Example (checking account; made-up values) | Stability | Meaning |
+|-------|--------------------------------------------|-----------|---------|
 | `id` | `11111111-…` | **Churns** | Pluggy account UUID |
 | `itemId` | `22222222-…` | **Churns** | Pluggy connection UUID |
 | `type` | `BANK` / `CREDIT` | Stable | top-level kind |
@@ -134,7 +134,7 @@ natural-identity fields stay identical.
 | fallback | `(connector.id, number, owner)` | works when `bankData` is absent |
 
 **The bank code is the institution, for free.** The first `transferNumber` segment is the
-Brazilian COMPE code — verified live: `341`→Itaú, `077`→Inter. Common codes:
+Brazilian COMPE code — verified live on two banks. Common codes:
 
 | COMPE | Bank | COMPE | Bank |
 |------|------|------|------|
@@ -263,7 +263,7 @@ logging rather than silently dropping.
 
 `GET /connectors` lists every institution; `GET /connectors/{id}` for one. `connector.id` is
 stable. **Direct** connectors (scraping/sandbox) — e.g. `MeuPluggy` sandbox = **200**.
-**Open Finance** (regulated) connectors have id **≥ 601** (Itaú OF = 601) and use an OAuth
+**Open Finance** (regulated) connectors have id **≥ 601** and use an OAuth
 redirect flow (create item → open returned URL → user logs in at the bank → callback).
 
 ---
@@ -287,7 +287,7 @@ reconnect re-point convention.
 
 ## References
 
-- Live evidence: account objects of one Itaú item and one Inter item, 2026-06-04.
+- Live evidence: account objects of two items (bank A and bank B), 2026-06-04.
 - Pluggy docs: [Auth](https://docs.pluggy.ai/reference/auth) ·
   [Item](https://docs.pluggy.ai/docs/item) ·
   [Item lifecycle](https://docs.pluggy.ai/docs/item-lifecycle) ·

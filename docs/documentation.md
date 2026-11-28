@@ -18,7 +18,7 @@ All project docs live in `docs/`. Filenames are the index — Claude decides rel
 | `docs/testing.md` | Test setup, patterns, invariants, coverage requirements |
 | `docs/workspace-layout.md` | Disk layout, YAML reference for workspace/job/task definitions |
 | `docs/scripts-conventions.md` | Script patterns, param conventions, logging |
-| `docs/gsd-workflow.md` | GSD phase workflow, planning artifact map, architecture constraints |
+| `docs/gsd-workflow.md` | GSD phase workflow, planning artifact map, architecture constraints (main checkout only, not versioned) |
 | `docs/documentation.md` | This file — how docs are written and maintained |
 
 ## Decisions
@@ -38,7 +38,7 @@ no new ADRs, no edits.
 
 ## How to Update Docs
 
-- Update `docs/gsd-workflow.md` when phase status changes
+- Update `docs/gsd-workflow.md` when phase status changes (main checkout only, not versioned)
 - Update `docs/architecture.md` when a new architectural constraint is locked
 - Update `docs/commands.md` when new CLI subcommands or API endpoints are added
 - After migrating content from CLAUDE.md, verify the source was removed

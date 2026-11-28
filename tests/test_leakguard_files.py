@@ -46,16 +46,26 @@ def test_the_reference_docs_are_read_not_blocked(repo, capsys, rel):
     assert run(capsys, repo(rel, f"x = '{CPF}'\n"))[2] == [f"CPF: {rel}:1 -> '52…' (11 chars)"]
 
 
-@pytest.mark.parametrize(("rel", "ignored"), [("docs/superpowers/plans/p.md", True), ("docs/phases/x.md", True),
-                                               ("docs/gsd-workflow.md", True), ("docs/workbook-handoff.md", True),
-                                               ("docs/commands.md", False), ("docs/subsystems/api.md", False)])
-def test_this_repos_gitignore_keeps_out_what_the_guard_blocks(rel, ignored):
-    """df-azm6: the repo's own .gitignore and BLOCK_PREFIXES agree on docs/: git keeps out the history
-    the guard refuses, and lets the reference docs in."""
-    root = Path(__file__).resolve().parent.parent
-    answer = subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=root, check=False)
-    assert (answer.returncode == 0) is ignored
-    assert rel.startswith(leakguard_files.BLOCK_PREFIXES) is ignored
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _ignored_by_this_repo(rel):
+    return subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=ROOT, check=False).returncode == 0
+
+
+def test_this_repos_gitignore_keeps_out_what_the_guard_blocks():
+    """df-azm6: the docs/ lines of the repo's own .gitignore and the docs/ entries of BLOCK_PREFIXES
+    are the same paths, so a history path added to one side only fails here; and git does ignore
+    each of them, while it lets the reference docs in."""
+    ignored = {line.strip().lstrip("/") for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+               if line.strip().startswith("/docs/")}
+    blocked = {p for p in leakguard_files.BLOCK_PREFIXES if p.startswith("docs/")}
+    assert ignored == blocked
+    for prefix in blocked:
+        assert _ignored_by_this_repo(prefix + "x.md" if prefix.endswith("/") else prefix), prefix
+    for rel in ("docs/commands.md", "docs/subsystems/api.md"):
+        assert not _ignored_by_this_repo(rel), rel
+        assert not rel.startswith(leakguard_files.BLOCK_PREFIXES), rel
 
 
 @pytest.mark.parametrize("rel", ["workspaces/GetFinance/data/raw/x.csv", "workspaces/GetFinance/report/r.txt",
