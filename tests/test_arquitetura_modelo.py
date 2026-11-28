@@ -6,10 +6,13 @@ import copy
 import importlib.util
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
 import pytest
+
+from dataforge import yamlio
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("modelo", ROOT / "scripts" / "arquitetura" / "modelo.py")
@@ -203,10 +206,16 @@ def test_the_committed_model_loads_by_default():
     assert all(r["target"] in ids for r in m["relations"])
 
 
-def test_the_readme_and_the_ci_job_use_the_same_likec4():
-    pin = f"likec4@{modelo.LIKEC4}"
-    assert pin in (ROOT / "arquitetura" / "README.md").read_text(encoding="utf-8")
-    assert pin in (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+def test_the_readme_the_ci_job_and_modelo_use_the_same_likec4():
+    """ci.yml sets the version once, in the job's LIKEC4_VERSION; modelo.py pins it as a constant;
+    every command of the README runs it."""
+    readme = re.findall(r"likec4@\S*", (ROOT / "arquitetura" / "README.md").read_text(encoding="utf-8"))
+    assert readme
+    assert set(readme) == {f"likec4@{modelo.LIKEC4}"}
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert yamlio.load(ci)["jobs"]["arquitetura"]["env"]["LIKEC4_VERSION"] == modelo.LIKEC4
+    assert ci.count(modelo.LIKEC4) == 1
+    assert re.findall(r"likec4@\S*", ci) == ['likec4@$LIKEC4_VERSION"']
 
 
 def test_two_arrows_with_the_same_title_stop_gerar():
@@ -232,16 +241,17 @@ def test_the_cli_shows_a_refused_model_as_a_message(tmp_path, monkeypatch, acao)
 
 
 FAKE_NPX = """#!/bin/sh
-echo "$3" >> "$NPX_LOG"
+echo "$2 $3 $4 $5" >> "$NPX_LOG"
 if [ "$3" = validate ]; then exit "$NPX_VALIDATE_EXIT"; fi
 echo '{"elements": {"a": {"id": "a", "kind": "k"}}}' > "$7"
 """
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the fake npx is a sh script")
-@pytest.mark.parametrize(("validate_exit", "calls"), [(0, ["validate", "export"]), (1, ["validate"])])
+@pytest.mark.parametrize(("validate_exit", "calls"), [(0, 2), (1, 1)])
 def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_exit, calls):
-    """The export of an invalid model exits 0 and leaves out what it could not read."""
+    """The export of an invalid model exits 0 and leaves out what it could not read; a warning
+    fails the validate (df-il2f)."""
     npx = tmp_path / "bin" / "npx"
     npx.parent.mkdir()
     npx.write_text(FAKE_NPX, encoding="utf-8")
@@ -255,7 +265,9 @@ def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_ex
             modelo.exportar(tmp_path)
     else:
         assert modelo.exportar(tmp_path) == {"elements": {"a": {"id": "a", "kind": "k"}}}
-    assert log.read_text(encoding="utf-8").split() == calls
+    pin = f"likec4@{modelo.LIKEC4}"
+    expected = [f"{pin} validate --max-warnings 0", f"{pin} export json --skip-layout"][:calls]
+    assert log.read_text(encoding="utf-8").splitlines() == expected
 
 
 @pytest.mark.parametrize("opcao", ["--fonte", "--saida"])

@@ -18,8 +18,11 @@ from pathlib import Path
 MARKER = "<!-- ci-report -->"
 REPORT_DIR = Path("report")
 ICONS = {"success": "✅", "failure": "❌", "cancelled": "⚠️", "skipped": "⏭️"}
-# The line that states an outcome: the quality gate, the test loop gate, or pytest's summary.
-STATUS = re.compile(r"quality gate:|testloop: |\b\d+ (passed|failed|errors?)\b")
+# likec4 validate's outcome (job arquitetura): a timing line follows it, and the summary starts at
+# its mark, without the log's timestamp and logger.
+VALIDATE = re.compile(r"[✓✗] (?:Valid|Invalid) \(")
+# The line that states an outcome: the quality gate, the test loop gate, pytest's summary, or VALIDATE.
+STATUS = re.compile(rf"quality gate:|testloop: |\b\d+ (passed|failed|errors?)\b|{VALIDATE.pattern}")
 TAIL_LINES = 60
 
 
@@ -35,7 +38,9 @@ def outputs(job: str, jobs: tuple[str, ...] = ()) -> list[Path]:
 def summary(text: str) -> str:
     lines = [line.strip().strip("=").strip() for line in text.splitlines() if line.strip()]
     status = [line for line in lines if STATUS.search(line)]
-    return (status or lines or ["(no output)"])[-1].replace("|", "\\|")
+    line = (status or lines or ["(no output)"])[-1]
+    outcome = VALIDATE.search(line)
+    return line[outcome.start() if outcome else 0:].replace("|", "\\|")
 
 
 def part_name(job: str, path: Path) -> str:

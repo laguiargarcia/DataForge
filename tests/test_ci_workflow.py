@@ -546,6 +546,15 @@ def test_the_checks_cover_the_steps_that_matter():
     assert all(set(needs) <= set(_needs(jobs[name])) for name, needs in SKIPPED_OK.items())
 
 
+def test_the_arquitetura_job_validates_the_c4_folder_and_fails_on_a_warning():
+    """`likec4 validate` of a folder with no .c4, or none at all, exits 0 with 'Valid (0 files)'
+    (df-il2f); the folder is checked here, since a check in the step would also run on the stubs."""
+    run = _step(_jobs(), "arquitetura", "Validate the model")["run"]
+    folder = re.search(r" validate --max-warnings 0 (\S+) 2>&1", run)
+    assert folder, run
+    assert sorted((CI.parents[2] / folder[1]).glob("*.c4"))
+
+
 def _step(jobs: dict, job: str, name: str) -> dict:
     return next(s for s in jobs[job]["steps"] if s.get("name") == name)
 

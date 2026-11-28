@@ -224,21 +224,23 @@ jobs:
         with: { name: report-telas-ninho, path: report/, if-no-files-found: ignore }
   arquitetura:
     # The C4 model in LikeC4 (df-p8ss): a broken .c4 under arquitetura/ fails here instead of going
-    # unseen. LikeC4 runs through npx at the version arquitetura/README.md fixes; nothing is installed.
+    # unseen. LikeC4 runs through npx at LIKEC4_VERSION; nothing is installed. arquitetura/README.md
+    # and LIKEC4 of scripts/arquitetura/modelo.py pin the same version (a test checks the three).
     # Not a required check itself: the required `tests` job needs it.
     runs-on: ubuntu-latest
     permissions: { contents: read }
+    env: { LIKEC4_VERSION: "1.61.1" }
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
-        # likec4 1.61.1 asks for Node >= 22.23 (EBADENGINE below it).
+        # LIKEC4_VERSION asks for Node >= 22.23 (EBADENGINE below it).
         with: { node-version: 26 }
       - name: Validate the model
         shell: bash   # pipefail: the validate exit code survives the tee
         env: { NO_COLOR: "1" }
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
-          npx --yes likec4@1.61.1 validate arquitetura 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura.txt"
+          npx --yes "likec4@$LIKEC4_VERSION" validate --max-warnings 0 arquitetura 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura.txt"
       - name: The committed modelo.json is the export of the .c4
         # df-8x0m.23.43: the checks that read the model read arquitetura/modelo.json; a .c4 changed
         # without `python3 scripts/arquitetura/modelo.py gerar` fails here. Standard library only.

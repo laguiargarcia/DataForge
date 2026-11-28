@@ -28,7 +28,7 @@ arquivos de modelo:
 
 ```bash
 npx likec4@1.61.1 start arquitetura        # prévia no navegador
-npx likec4@1.61.1 validate arquitetura     # checa sintaxe e semântica
+npx likec4@1.61.1 validate --max-warnings 0 arquitetura   # sintaxe e semântica; aviso também falha
 npx likec4@1.61.1 build arquitetura --output-single-file -o /tmp/likec4-out   # HTML único
 ```
 
@@ -44,7 +44,7 @@ falha quando ele não é o export dos `.c4`. Duas setas com a mesma origem, o me
 título (duas sem título também, mesmo com kind ou tags diferentes) param o `gerar` e o CI: dê a elas
 títulos distintos.
 
-Ao trocar a versão do LikeC4, troque aqui, no job do CI e em `LIKEC4` de `modelo.py` (um teste
-confere os três).
+Ao trocar a versão do LikeC4, troque aqui, no `LIKEC4_VERSION` do job do CI e em `LIKEC4` de
+`modelo.py` (um teste confere os três).
 
 Repositório público: sem nomes reais de pessoas ("Dono da casa", "Outra pessoa da casa"), sem dados.
