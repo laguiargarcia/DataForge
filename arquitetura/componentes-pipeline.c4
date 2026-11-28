@@ -1,9 +1,11 @@
 // Componentes do contêiner Pipeline GetFinance no HOJE (df-8x0m.23.47.6): uma camada de
-// workspaces/GetFinance/scripts por componente, as bibliotecas que elas carregam e os atalhos de bin/.
+// workspaces/GetFinance/scripts por componente, as bibliotecas que elas carregam, o reprocess manual e
+// a sobra de bin/.
 //
 // Decisões (as razões estão nas notas do bead):
-// - Cada script é uma task de job (jobs/<job>/job.yaml, campo script) que o DataForge lança como
-//   processo Python. jobs/, connections/ e config/ são YAML e CSV, não código: não são componentes.
+// - Cada script de camada é uma task de job (jobs/<job>/job.yaml, campo script) que o DataForge lança
+//   como processo Python; reprocess.py roda à mão, fora dos jobs, e bin/ é sobra sem uso (df-o0cc).
+//   jobs/, connections/ e config/ são YAML e CSV, não código: não são componentes.
 // - A ordem do DAG (depends_on) e a dependência de dado pelo lago não são setas entre componentes: uma
 //   camada não chama a outra, cada uma lê o que a anterior gravou. Elas aparecem como setas para o lago.
 // - Seta para fora (Pluggy, lago, bancos) sai do componente cuja task faz a ação no seu processo; as
