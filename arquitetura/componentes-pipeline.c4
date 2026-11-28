@@ -286,11 +286,7 @@ model {
       codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
     }
   }
-  casaHoje.ninhoHoje -> casaHoje.pipelineHoje.regrasHoje 'Carrega edicao por import_module (provisório, df-8x0m.23.14)' {
-    metadata {
-      codigo ['ninho/financas/regras.py']
-    }
-  }
+  // O ninho também carrega as regras: a seta sai do componente Finanças dele (componentes-ninho.c4).
 
   // Para fora: Pluggy, lago, bancos.
   // Título igual ao de pipelineHoje -> pluggyHoje em hoje.c4 de propósito: títulos diferentes viram '[...]' em hoje-contexto (df-8x0m.23.47.12).
