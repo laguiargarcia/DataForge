@@ -88,7 +88,7 @@ real-world account); **Churns** = a fresh Pluggy UUID is minted on re-create.
 | `type` | `BANK` / `CREDIT` | Stable | top-level kind |
 | `subtype` | `CHECKING_ACCOUNT` / `CREDIT_CARD` | Stable | (not carried past raw — A17) |
 | `number` | `00012345-6` (bank) / `1234` (card last-4) | **Stable** | account / card number |
-| `name` | `itau` | semi | connector-supplied label |
+| `name` | `bank-a` | semi | connector-supplied label |
 | `marketingName` | `null` | semi | product name |
 | `balance` | `1000.00` | n/a | current balance |
 | `currencyCode` | `BRL` | Stable | |
