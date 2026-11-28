@@ -1,0 +1,280 @@
+// Componentes do app Finanças no HOJE (df-8x0m.23.47.7): o backend (apps/financas/backend) e o front
+// (apps/financas/src), dois contêineres de hoje.c4.
+//
+// Decisões (as razões estão nas notas do bead):
+// - O backend é um componente só: main.py é um arquivo, e o mesmo caminho não pode estar em dois
+//   componentes (regra 5 do checker); separar as rotas por grupo seria descer ao nível 4. Ele lista os
+//   arquivos, não a pasta, porque a pasta já é o codigo do contêiner (hoje.c4).
+// - O front tem um componente por módulo de src/ e um para src/components (as telas). A casca leva o
+//   index.html, que pede o JS e o CSS do build: é dela a seta de baixar o build.
+// - Cada chamada HTTP sai do módulo que faz o fetch (api.ts, edicao.ts); quem só usa o pedir() de
+//   edicao.ts tem a seta de import para ele. O front fala só com a API do DataForge: a rota genérica de
+//   tabelas e o proxy /apps/<ws>/financas/api, que repassa ao backend (seta da API para o backend, em
+//   componentes-dataforge.c4).
+// - Importar dataforge roda dataforge/__init__.py (registra os tipos de task): é efeito do import, não
+//   chamada do backend; está na descrição de Tipos de task, sem seta.
+model {
+  extend casaHoje.financasHoje {
+    rotasFinancasHoje = componente 'Rotas do backend Finanças' {
+      description 'O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge'
+      technology 'Python, FastAPI, polars, pypdf'
+      metadata {
+        codigo [
+          'workspaces/GetFinance/apps/financas/backend/main.py',
+          'workspaces/GetFinance/apps/financas/backend/__init__.py'
+        ]
+      }
+    }
+  }
+
+  extend casaHoje.frontFinancasHoje {
+    cascaFinancasHoje = componente 'Casca do app' {
+      description 'A página (index.html, que carrega o build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report e do banco de edição, e a recarga depois do Aplicar'
+      technology 'React, TypeScript'
+      metadata {
+        codigo [
+          'workspaces/GetFinance/apps/financas/index.html',
+          'workspaces/GetFinance/apps/financas/src/main.tsx',
+          'workspaces/GetFinance/apps/financas/src/App.tsx'
+        ]
+      }
+    }
+    tabelasFinancasHoje = componente 'Leitura de tabelas' {
+      description 'lerTabela: lê uma tabela do curated pela rota genérica de tabelas do DataForge, com o workspace tirado da URL do app'
+      technology 'TypeScript, fetch'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/api.ts']
+      }
+    }
+    clienteBackendFinancasHoje = componente 'Cliente do backend e edição' {
+      description 'pedir: o cliente HTTP do backend do app, relativo à página (api/...), e as chamadas de edição (categorias, regras, correções, explicações), do Aplicar e do andamento de uma execução; os textos do efeito de uma regra e da faixa de pendência'
+      technology 'TypeScript, fetch'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/edicao.ts']
+      }
+    }
+    extratosFinancasHoje = componente 'Extratos' {
+      description 'Envio do PDF do extrato e a lista dos guardados pelo cliente do backend; os textos do envio, do período e do job extrato'
+      technology 'TypeScript'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/extratos.ts']
+      }
+    }
+    conferenciaFinancasHoje = componente 'Conferência' {
+      description 'Funções puras sobre conferencia_saldo e lancamentos_suspeitos: ordena, agrupa e formata; as regras estão no pipeline'
+      technology 'TypeScript'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/conferencia.ts']
+      }
+    }
+    resumoFinancasHoje = componente 'Resumo do mês' {
+      description 'Funções puras: escolhe as linhas do mês nas tabelas do report e formata valores e meses; as regras estão no pipeline'
+      technology 'TypeScript'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/resumo.ts']
+      }
+    }
+    transacoesFinancasHoje = componente 'Transações' {
+      description 'Funções puras da aba Transações: busca, filtros e o estado da correção manual de cada linha'
+      technology 'TypeScript'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/transacoes.ts']
+      }
+    }
+    telasFinancasHoje = componente 'Telas' {
+      description 'Os componentes React das telas: cartões do resumo e do detalhe, Conferência (lê as suas tabelas), Extratos, Categorias, Transações, a faixa de pendência com o Aplicar e a tabela editável'
+      technology 'React, TypeScript, Tailwind'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/src/components']
+      }
+    }
+  }
+
+  // Quem usa o front. Título igual ao de donoHoje -> frontFinancasHoje em hoje.c4.
+  donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje 'Usa o app Finanças no PC (janela Qt ou navegador)'
+
+  // Do front para o DataForge (HTTP).
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Baixa o build (dist) pela rota do app' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/index.html']
+    }
+  }
+  casaHoje.frontFinancasHoje.tabelasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/api.ts']
+    }
+  }
+  casaHoje.frontFinancasHoje.clienteBackendFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Chama o backend pelo proxy /apps/<ws>/financas/api' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/edicao.ts']
+    }
+  }
+
+  // Entre componentes do front: imports.
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje 'Lê as tabelas do report' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/App.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje 'Lê o banco de edição' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/App.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje 'Monta o resumo do mês' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/App.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.telasFinancasHoje 'Mostra as telas' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/App.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje 'A Conferência lê as suas tabelas' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/components/TelaConferencia.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje 'Grava as edições, aplica e acompanha a execução' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/apps/financas/src/components/CartaoIntervalo.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/FaixaPendencia.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/TelaCategorias.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/TelaExtratos.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx'
+      ]
+    }
+  }
+  casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.extratosFinancasHoje 'Envia o PDF e lista os guardados' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/components/TelaExtratos.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.conferenciaFinancasHoje 'Monta a conferência' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/apps/financas/src/components/CartaoConferencia.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/CartaoIntervalo.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/ListaIntervalos.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/ListaSuspeitos.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/SeloEstado.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/TelaConferencia.tsx'
+      ]
+    }
+  }
+  casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje 'Tipos e formato dos valores' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/apps/financas/src/components/CartaoDetalhe.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/ListaCategorias.tsx',
+        'workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx'
+      ]
+    }
+  }
+  casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.transacoesFinancasHoje 'Filtra a lista de transações' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx']
+    }
+  }
+  casaHoje.frontFinancasHoje.conferenciaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje 'Formata os valores' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/conferencia.ts']
+    }
+  }
+  casaHoje.frontFinancasHoje.transacoesFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje 'Tipo da transação e rótulo do mês' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/transacoes.ts']
+    }
+  }
+  casaHoje.frontFinancasHoje.transacoesFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje 'Tipo da correção' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/transacoes.ts']
+    }
+  }
+  casaHoje.frontFinancasHoje.extratosFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje 'Envia e lista pelo pedir()' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/extratos.ts']
+    }
+  }
+  casaHoje.frontFinancasHoje.extratosFinancasHoje -> casaHoje.frontFinancasHoje.transacoesFinancasHoje 'Formata as datas' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/src/extratos.ts']
+    }
+  }
+
+  // Do backend para o DataForge: imports e HTTP.
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.appsHoje 'Importa o middleware do token (app_guard)' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.deltaPoolHoje 'Lê as tabelas Delta pelas threads do delta_pool' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+
+  // Do backend para o pipeline: as regras de scripts/report, por sys.path, e a definição do workspace.
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa edicao e classificacao' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.conferenciasHoje 'Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje.rotasFinancasHoje -[leitura]-> casaHoje.pipelineHoje 'Lê connections.yaml: onde estão o lago, o edicao.db e os extratos' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+
+  // Do backend para os dados.
+  casaHoje.financasHoje.rotasFinancasHoje -[leitura]-> casaHoje.lagoHoje 'Lê o curated e as contas do cleansed' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.edicaoHoje 'Lê e escreve: categorias, regras, correções, explicações' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.extratosHoje 'Grava o PDF enviado; relê os guardados para recusar duplicata e apaga temporários velhos' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+}
+
+views {
+  view hoje-componentes-backend-financas of casaHoje.financasHoje {
+    title 'Hoje: componentes do backend Finanças'
+    description 'O backend também lê o connections.yaml do workspace (onde estão o lago, o edicao.db e os extratos); essa seta, para o contêiner do pipeline, está no modelo e fica fora desta vista, que mostra os componentes do pipeline (df-8x0m.23.47.14)'
+    // Os componentes de fora por nome: no contêiner, as setas do mesmo par se juntam em '[...]'.
+    include *,
+      casaHoje.dataforgeHoje.apiHoje,
+      casaHoje.dataforgeHoje.appsHoje,
+      casaHoje.dataforgeHoje.deltaPoolHoje,
+      casaHoje.pipelineHoje.regrasHoje,
+      casaHoje.pipelineHoje.conferenciasHoje
+    // Só as setas do backend: as que ligam os de fora entre si estão nas vistas deles.
+    exclude
+      casaHoje.dataforgeHoje.* -> casaHoje.dataforgeHoje.*,
+      casaHoje.dataforgeHoje.* -> casaHoje.lagoHoje,
+      casaHoje.pipelineHoje.* -> casaHoje.pipelineHoje.*
+  }
+  view hoje-componentes-front-financas of casaHoje.frontFinancasHoje {
+    title 'Hoje: componentes do front do app Finanças'
+    include *, casaHoje.dataforgeHoje.apiHoje
+  }
+}

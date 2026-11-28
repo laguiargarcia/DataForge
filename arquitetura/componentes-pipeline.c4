@@ -275,18 +275,8 @@ model {
     }
   }
 
-  // Quem de fora carrega as regras.
-  casaHoje.financasHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa edicao e classificacao' {
-    metadata {
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
-  casaHoje.financasHoje -> casaHoje.pipelineHoje.conferenciasHoje 'Importa extrato' {
-    metadata {
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
-  // O ninho também carrega as regras: a seta sai do componente Finanças dele (componentes-ninho.c4).
+  // Quem de fora carrega as regras: o backend Finanças (componentes-app-financas.c4) e o ninho, cuja
+  // seta sai do componente Finanças dele (componentes-ninho.c4).
 
   // Para fora: Pluggy, lago, bancos.
   // Título igual ao de pipelineHoje -> pluggyHoje em hoje.c4 de propósito: títulos diferentes viram '[...]' em hoje-contexto (df-8x0m.23.47.12).
