@@ -234,6 +234,7 @@ def test_ler_front_matter_is_empty_without_one(tmp_path, text):
 
 
 @pytest.mark.parametrize("body", ["topic: x\n", "topic: x\nlist:\n  nested: y\n---\n",
+                                  "l: [a\"b, c]\n---\n", "l: ['a, b]\n---\n", "l: [a,, b]\n---\n",
                                   "topic: a `type: b`\n---\n", "code:\n  - a: b\n---\n", "- item\n---\n",
                                   'topic: "open\n---\n', "topic: 'open\n---\n", "topic: '\n---\n"])
 def test_ler_front_matter_refuses_what_is_not_the_subset(tmp_path, body):
@@ -272,6 +273,18 @@ def test_every_linked_doc_renders_its_front_matter_as_yaml():
         as_yaml = yaml.safe_load(block)
         flat = docs.ler_front_matter(ROOT / path)
         assert {k: as_yaml[k] for k in docs.CHAVES} == {k: flat[k] for k in docs.CHAVES}, path
+
+
+def test_every_doc_front_matter_reads_as_yaml_does():
+    """Every docs/**/*.md that opens with ---, linked or not: the flat reader does not raise and reads
+    the same keys and values as PyYAML."""
+    for doc in sorted((ROOT / "docs").rglob("*.md")):
+        text = doc.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            continue
+        flat = docs.ler_front_matter(doc)
+        as_yaml = yaml.safe_load(text.split("\n---\n", 1)[0].removeprefix("---\n"))
+        assert flat == {k: v if isinstance(v, (str, list)) else str(v) for k, v in as_yaml.items()}, doc
 
 
 C4 = """model {
@@ -354,5 +367,7 @@ def test_esbocar_keeps_an_existing_doc(repo):
 
 def test_the_ci_job_arquitetura_runs_conferir():
     ci = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
-    runs = [step.get("run", "") for step in ci["jobs"]["arquitetura"]["steps"]]
-    assert any("python3 -S scripts/arquitetura/docs.py conferir" in run for run in runs)
+    steps = [s for s in ci["jobs"]["arquitetura"]["steps"]
+             if "python3 -S scripts/arquitetura/docs.py conferir" in s.get("run", "")]
+    assert steps
+    assert all(s.get("shell") == "bash" for s in steps)  # bash: pipefail keeps the exit code through tee

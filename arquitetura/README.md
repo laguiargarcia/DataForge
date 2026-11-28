@@ -233,7 +233,8 @@ dividir um doc: a caixa do hoje e a do alvo da mesma peça, ou um doc de referê
 uma caixa. O doc abre com o front matter de `docs/documentation.md` (topic, read_when, code,
 status), e o `code:` dele cobre o `codigo` de cada elemento que aponta para ele.
 
-Elemento novo: `python3 scripts/arquitetura/docs.py esbocar` escreve o link no `.c4` e um esboço
+Elemento novo: `python3 scripts/arquitetura/modelo.py gerar` (o `esbocar` lê o `modelo.json`), depois
+`python3 scripts/arquitetura/docs.py esbocar`, que escreve o link no `.c4` e um esboço
 `docs/caixas/<id sem Hoje/Alvo>.md` (status `esboço`), só com o que o modelo diz; depois,
 `modelo.py gerar`. Ele não reescreve doc nem link que já existem. Quando o elemento tem doc de
 referência, troque o endereço do link por ele e acrescente o `codigo` ao `code:` do doc.

@@ -132,7 +132,12 @@ def _valor(text: str, where: str):
 
 def _lista(text: str, where: str) -> list[str]:
     inner = text.strip()[1:-1].strip()
-    return [_valor(item, where) for item in _ITENS.findall(inner)] if inner else []
+    if not inner:
+        return []
+    items = _ITENS.findall(inner)
+    if ",".join(items) != inner:  # an unpaired quote or an empty item: not something to split
+        raise ValueError(f"{where}: bad inline list {text.strip()!r}")
+    return [_valor(item, where) for item in items]
 
 
 def ler_front_matter(path: Path | str) -> dict:
