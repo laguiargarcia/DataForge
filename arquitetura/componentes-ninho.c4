@@ -97,7 +97,7 @@ model {
 
   // Para fora: DataForge, regras do workspace, lago, bancos.
   // Títulos iguais aos das setas de ninhoHoje em hoje.c4 quando o componente faz só aquilo (df-8x0m.23.47.12).
-  casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI' {
+  casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje.cliHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI' {
     metadata {
       codigo ['ninho/financas/aplicar.py']
     }

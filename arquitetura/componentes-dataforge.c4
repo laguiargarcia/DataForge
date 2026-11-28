@@ -114,11 +114,7 @@ model {
   }
 
   // De outros contêineres para um componente do DataForge.
-  casaHoje.ninhoHoje -> casaHoje.dataforgeHoje.cliHoje 'Pede o job (run --detach) e acompanha (run-state --wait)' {
-    metadata {
-      codigo ['ninho/financas/aplicar.py']
-    }
-  }
+  // O ninho pede o job pela CLI: a seta sai do componente Finanças dele (componentes-ninho.c4).
   casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
   casaHoje.financasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede e acompanha jobs (HTTP, DATAFORGE_API)' {
     metadata {
