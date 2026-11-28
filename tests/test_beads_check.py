@@ -66,6 +66,24 @@ class FakeBd:
         return self.lint.get(bead, [])
 
 
+# A small architecture model: three levels under casaHoje, one under casaAlvo, two loose boxes.
+MODEL = {"elements": [{"id": i} for i in (
+    "agendadorHoje", "casaAlvo", "casaAlvo.servidorAlvo", "casaHoje", "casaHoje.ninhoHoje",
+    "casaHoje.ninhoHoje.listaHoje", "casaHoje.pipelineHoje", "donoAlvo")], "relations": []}
+BOXES = check.box_ids(MODEL)
+
+
+def refusals(command):
+    """The messages of the line's refuse steps (the parent rule, the shortcuts), without the model."""
+    return [s.message for s in check.read_line(command) if s.kind == "refuse"]
+
+
+def create_gaps(command, monkeypatch, model=MODEL):
+    """Every gap of the line with origin/main's model faked as `model`."""
+    monkeypatch.setattr(check, "model_on_main", lambda _repo: model)
+    return check.check_steps(check.read_line(command), FakeBd(), Path("."))
+
+
 # --------------------------------------------------------------------------- reading the command
 
 
@@ -149,24 +167,24 @@ def test_shortcuts_around_the_check_are_refused(command):
     "bd create 'Mãe' && bd create 'Filha' --parent df-a",
 ])
 def test_a_child_created_with_the_parent_labels_is_refused(command):
-    steps = check.read_line(command)
-    assert [s.kind for s in steps] == ["refuse"]
-    assert "--no-inherit-labels" in steps[0].message
-    assert "df-a" in steps[0].message
+    refused = refusals(command)
+    assert len(refused) == 1
+    assert "--no-inherit-labels" in refused[0]
+    assert "df-a" in refused[0]
 
 
 @pytest.mark.parametrize("command", [
-    "bd create 'Filha' --parent df-a --no-inherit-labels -l vol:1",
-    "bd create 'Filha' --no-inherit-labels --parent=df-a",
-    "bd new 'Filha' --silent --no-inherit-labels --parent df-a",
-    "bd create 'Sem mãe' -l vol:1,inc:1,origem:planejado",
-    "bd create 'Sem mãe' --parent ''",
-    "bd create 'Fala de --parent df-a no título'",
-    "bd create 'Sem mãe' -d 'criada com --parent df-a'",
+    "bd create 'Filha' --parent df-a --no-inherit-labels -l vol:1,c4:transversal",
+    "bd create 'Filha' --no-inherit-labels --parent=df-a -l c4:casaHoje",
+    "bd new 'Filha' --silent --no-inherit-labels --parent df-a --labels c4:transversal",
+    "bd create 'Sem mãe' -l vol:1,inc:1,origem:planejado,c4:casaHoje.ninhoHoje",
+    "bd create 'Sem mãe' --parent '' -l c4:transversal",
+    "bd create 'Fala de --parent df-a no título' -l c4:transversal",
+    "bd create 'Sem mãe' -d 'criada com --parent df-a' -l c4:transversal",
     "bd list --parent df-a",
 ])
-def test_a_create_that_copies_no_labels_passes(command):
-    assert check.read_line(command) == []
+def test_a_create_that_copies_no_labels_passes(command, monkeypatch):
+    assert create_gaps(command, monkeypatch) == []
 
 
 CREATE_FLAGS = st.lists(st.sampled_from([
@@ -180,7 +198,7 @@ def test_a_create_with_a_parent_is_refused_exactly_when_it_inherits(flags, own_l
     groups = [["Filha"], ["--parent", "df-a"], *flags, *([["--no-inherit-labels"]] if own_labels_only else [])]
     rnd.shuffle(groups)
     command = shlex.join(["bd", sub, *(word for group in groups for word in group)])
-    assert [s.kind for s in check.read_line(command)] == ([] if own_labels_only else ["refuse"])
+    assert len(refusals(command)) == (0 if own_labels_only else 1)
 
 
 def test_an_unreadable_line_without_a_close_or_claim_passes():
@@ -195,6 +213,137 @@ def test_an_unreadable_line_without_a_close_or_claim_passes():
 def test_any_quoted_reason_reaches_the_check_unchanged(reason):
     steps = check.read_line(f"bd close df-x --reason {shlex.quote(reason)}")
     assert steps[0].reason == reason
+
+
+# --------------------------------------------------------------------------- creating: the C4 box (df-8x0m.23.36)
+
+
+def test_a_create_without_a_c4_label_is_refused_with_the_boxes(monkeypatch):
+    found = create_gaps("bd create 'Nova' -l vol:1,inc:1", monkeypatch)
+    assert len(found) == 1
+    assert found[0].startswith("[bd create Nova]")
+    for box in ("c4:transversal", "agendadorHoje", "donoAlvo", "casaHoje", "ninhoHoje.{listaHoje}",
+                "pipelineHoje", "casaAlvo", "servidorAlvo"):
+        assert box in found[0]
+    assert "depois do merge" in found[0]
+
+
+def test_the_boxes_are_grouped_by_their_first_segment():
+    assert check.box_listing(BOXES) == [
+        "soltos: agendadorHoje, donoAlvo",
+        "casaAlvo.{servidorAlvo}",
+        "casaHoje.{ninhoHoje.{listaHoje}, pipelineHoje}",
+    ]
+
+
+@pytest.mark.parametrize("labels, named", [
+    ("c4:naoExiste", "`c4:naoExiste`"),
+    ("c4:transversal,c4:casaHoje.nada", "`c4:casaHoje.nada`"),
+    ("c4:", "`c4:`"),
+    ("c4:ninhoHoje", "`c4:ninhoHoje`"),  # an id below the top needs its full path
+])
+def test_a_c4_label_that_is_not_a_box_is_refused_by_name(labels, named, monkeypatch):
+    found = create_gaps(f"bd create Nova -l {labels}", monkeypatch)
+    assert len(found) == 1
+    assert named in found[0]
+    assert "casaHoje" in found[0]
+
+
+@pytest.mark.parametrize("command", [
+    "bd create Nova -l c4:transversal",
+    "bd create Nova -l c4:casaHoje.ninhoHoje.listaHoje",
+    "bd create Nova -l c4:casaHoje,c4:casaAlvo.servidorAlvo",  # a bead that touches two boxes
+    "bd create Nova -l vol:1 -l c4:donoAlvo",
+    "bd create Nova --labels=c4:agendadorHoje",
+    "bd create Nova -l=c4:casaAlvo",
+    "bd create Nova --labels ' c4:casaHoje , vol:1'",
+    "bd new Nova -l c4:transversal",
+    "bd q Nova -l c4:transversal",
+    "bd create Épico -t epic -l c4:casaHoje",
+    "bd create Sessão -t session",
+    "bd create Sessão --type session",
+    "bd q Sessão --type=session -l c4:naoExiste",
+    "bd create --help",
+    "bd update df-x --claim --add-label c4:naoExiste",
+])
+def test_a_create_with_valid_boxes_or_of_a_session_passes(command, monkeypatch):
+    assert create_gaps(command, monkeypatch) == []
+
+
+@pytest.mark.parametrize("command", [
+    "bd q Nova",
+    "bd q Nova -l vol:1",
+    "bd create Épico -t epic",
+    "bd create Nova -t session -t task",  # the last --type is the one bd uses
+    "bd create Nova -l c4:transversal --type=bug -l c4:naoExiste",
+])
+def test_every_spelling_of_a_create_is_checked(command, monkeypatch):
+    assert len(create_gaps(command, monkeypatch)) == 1
+
+
+@pytest.mark.parametrize("command", [
+    "bd create -f plano.md -l c4:transversal",
+    "bd create --file=plano.md",
+    "bd create --graph plano.json",
+])
+def test_a_batch_create_is_refused_one_create_at_a_time(command, monkeypatch):
+    found = create_gaps(command, monkeypatch)
+    assert len(found) == 1
+    assert "um por vez" in found[0]
+
+
+@pytest.mark.parametrize("model", [None, {"elements": []}, {"elements": "x"}, {"other": 1}])
+def test_without_a_readable_model_every_create_passes(model, monkeypatch):
+    assert create_gaps("bd create Nova -l vol:1", monkeypatch, model) == []
+    assert create_gaps("bd create -f plano.md", monkeypatch, model) == []
+
+
+def test_box_ids_keep_only_string_ids_of_elements():
+    model = {"elements": [{"id": "a"}, {"id": 3}, {"title": "no id"}, "x", {"id": ""}, {"id": "a.b"}]}
+    assert check.box_ids(model) == {"a", "a.b"}
+    assert check.box_ids(None) is None
+    assert check.box_ids({"elements": [{"id": 1}]}) is None
+
+
+def test_the_model_is_read_once_and_only_for_a_create(monkeypatch):
+    reads = []
+    monkeypatch.setattr(check, "model_on_main", lambda repo: reads.append(repo) or MODEL)
+    assert check.check_steps(check.read_line("bd update df-x --claim; bd list"), FakeBd(), Path(".")) == []
+    assert reads == []
+    found = check.check_steps(check.read_line("bd create A -l vol:1 && bd create B"), FakeBd(), Path("."))
+    assert [f.split("]")[0] for f in found] == ["[bd create A", "[bd create B"]
+    assert len(reads) == 1
+
+
+def test_the_boxes_come_from_origin_main(tmp_path):
+    repo = make_repo(tmp_path)
+    commit(repo, "arquitetura/modelo.json", json.dumps(MODEL), "Model (df-t)")
+    assert check.check_line("bd create Nova -l vol:1", FakeBd(), repo) == []  # not merged yet: fails open
+    git(repo, "push", "-q", "origin", "main")
+    git(repo, "fetch", "-q", "origin")
+    assert check.check_line("bd create Nova -l c4:casaHoje.pipelineHoje", FakeBd(), repo) == []
+    assert "c4:naoExiste" in check.check_line("bd create Nova -l c4:naoExiste", FakeBd(), repo)[0]
+
+
+LABEL_SPELLINGS = st.sampled_from(["-l", "--labels", "-l=", "--labels="])
+C4_VALUES = st.sampled_from(sorted(BOXES) + ["transversal", "naoExiste", "casaHoje.nada", "", "listaHoje"])
+OTHER_LABELS = st.sampled_from(["vol:1", "inc:2", "origem:planejado", "c4x:casaHoje", "modo"])
+
+
+@given(st.lists(st.tuples(LABEL_SPELLINGS, st.one_of(C4_VALUES.map(lambda v: f"c4:{v}"), OTHER_LABELS)),
+                max_size=5),
+       st.sampled_from([None, "task", "bug", "epic", "session"]), st.sampled_from(["create", "new", "q"]),
+       st.randoms())
+def test_a_create_is_refused_exactly_when_it_lacks_a_valid_box(spelled, kind, sub, rnd):
+    labels = [lab for _, lab in spelled]
+    groups = [[f"{s}{lab}"] if s.endswith("=") else [s, lab] for s, lab in spelled]
+    groups += [["Nova"], *([["-t", kind]] if kind else [])]
+    rnd.shuffle(groups)
+    steps = check.read_line(shlex.join(["bd", sub, *(word for group in groups for word in group)]))
+    assert [s.kind for s in steps] == ["create"]
+    values = [lab[len("c4:"):] for lab in labels if lab.startswith("c4:")]
+    ok = kind == "session" or (values and all(v in BOXES | {"transversal"} for v in values))
+    assert (check.c4_problems(steps[0], BOXES) == []) == bool(ok)
 
 
 # --------------------------------------------------------------------------- the note

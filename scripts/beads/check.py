@@ -3,6 +3,10 @@ labels and the note the measurement needs.
 
 Three bd commands are checked, nothing else:
 
+- `bd create` (`bd new`, `bd q`): needs a `c4:` label, and each `c4:<v>` it carries names an element
+  of the architecture model on origin/main (`arquitetura/modelo.json`, its fqn) or `transversal`; the
+  refusal lists the valid ids. Session beads are free; a batch (`--file`, `--graph`) is refused. A box
+  made on a branch counts only after its merge; no model on origin/main, no check (df-8x0m.23.36).
 - `bd create --parent <id>`: needs `--no-inherit-labels`, so the child carries only the labels its
   creator typed and a missing estimate shows as missing instead of as the parent's (df-081f).
 - `bd update <id> --claim`: the bead needs an acceptance criterion (what `bd lint` asks of its type)
@@ -29,6 +33,7 @@ Usage:
     check.py hook                               PreToolUse hook: the event on stdin, a deny on stdout
     check.py close <id> --reason "..."          by hand, with bd's own arguments; exit 1 lists gaps
     check.py update <id> --claim
+    check.py create "Título" -l c4:<caixa>,...
 
 Fails open: an internal error, a missing bd or an unknown bead lets the command through (bd itself
 complains about the last). The one exception is a `bd close` or claim this script cannot read
@@ -86,8 +91,11 @@ SUBCOMMAND_BOOL_FLAGS = {
                          "--no-history", "--persistent", "--stdin"}),
 }
 SHORT_FLAGS = {"-r": "--reason", "-s": "--status", "-f": "--force"}
-CREATE_SUBCOMMANDS = frozenset({"create", "new"})
-CREATE_SHORT_FLAGS = {"-f": "--file"}  # `-f` is `--force` everywhere else
+CREATE_SUBCOMMANDS = frozenset({"create", "new", "q"})
+CREATE_SHORT_FLAGS = {"-f": "--file", "-l": "--labels", "-t": "--type"}  # `-f` is `--force` everywhere else
+BATCH_FLAGS = ("--file", "--graph")  # beads come from a file: their labels cannot be read here
+C4 = "c4"
+C4_ANYWHERE = "transversal"  # the box of work that is not in one part: how we work, several parts
 LABEL_FLAGS = ("--add-label", "--set-labels")
 LABEL_ADD_WORDS = 3  # `label add <id> <label>`: add, at least one id, the label
 
@@ -145,12 +153,15 @@ def parse_bd(words: list[str]) -> BdCall | None:
 class Step:
     """One thing the line does that this script checks, in order."""
 
-    kind: str  # "claim", "close" or "refuse"
+    kind: str  # "claim", "close", "create" or "refuse"
     bead: str = ""
     reason: str = ""
     message: str = ""
-    labels: frozenset[str] = frozenset()  # added earlier in the same line
+    labels: frozenset[str] = frozenset()  # added earlier in the same line; a create's own labels
     acceptance: bool = False  # an acceptance criterion given earlier in the line, or in the claim
+    title: str = ""  # a create's title
+    issue_type: str = ""  # a create's --type, empty for bd's default
+    batch: bool = False  # a create from a file (--file, --graph)
 
 
 class LineState:
@@ -199,6 +210,13 @@ class LineState:
                         "etiquetas da mãe e a estimativa dela (`vol:`, `inc:`, `origem:`) passa por "
                         "estimativa da filha. Acrescente `--no-inherit-labels` e dê à filha as "
                         "etiquetas dela em `-l`.")
+        if call.has("--help") or call.has("-h"):
+            return  # bd only prints the help
+        labels = frozenset(lab.strip() for v in call.values("--labels") for lab in v.split(",") if lab.strip())
+        types = call.values("--type")
+        title = (call.positionals or call.values("--title") or [""])[0]
+        self.steps.append(Step("create", labels=labels, title=title, issue_type=types[-1].strip() if types else "",
+                               batch=any(call.has(f) for f in BATCH_FLAGS)))
 
     def close(self, call: BdCall) -> None:
         if not call.positionals:
@@ -383,6 +401,58 @@ def claim_problems(issue: dict, lint_missing: list[str] | None, acceptance: bool
             f"`bd update {bead} --acceptance \"...\"` e depois reivindique."]
 
 
+def box_ids(model: dict | None) -> set[str] | None:
+    """The element ids (fqns) of the architecture model; None when it has none to offer."""
+    elements = (model or {}).get("elements")
+    ids = {e["id"] for e in elements if isinstance(e, dict) and isinstance(e.get("id"), str) and e["id"]} \
+        if isinstance(elements, list) else set()
+    return ids or None
+
+
+def _tree(ids) -> str:
+    """The ids as one line, children in braces after their parent: {a, a.b, a.b.c, d} is `a.{b.{c}}, d`."""
+    children: dict[str, list[str]] = {}
+    for i in sorted(ids):
+        head, _, rest = i.partition(".")
+        children.setdefault(head, [])
+        if rest:
+            children[head].append(rest)
+    return ", ".join(head + (f".{{{_tree(rest)}}}" if rest else "") for head, rest in children.items())
+
+
+def box_listing(ids: set[str]) -> list[str]:
+    """The valid ids grouped by first segment: the loose boxes on one line, then each top box with
+    everything below it (`casaHoje.{ninhoHoje.{listaHoje}}`: each level is an id of its own)."""
+    tops = sorted({i.split(".", 1)[0] for i in ids})
+    nested = [t for t in tops if any(i.startswith(t + ".") for i in ids)]
+    loose = [t for t in tops if t not in nested]
+    out = [f"soltos: {', '.join(loose)}"] if loose else []
+    return out + [_tree(i for i in ids if i.split(".", 1)[0] == t) for t in nested]
+
+
+def c4_problems(step: Step, ids: set[str]) -> list[str]:
+    """A create needs at least one `c4:<box>` and every `c4:` it carries names a box of the model
+    or `transversal`; a session bead is free (df-8x0m.23.36)."""
+    if step.issue_type.lower() == "session":
+        return []
+    if step.batch:
+        return [f"`bd create --file`/`--graph` cria em lote e o lote não dá para conferir (cada bead precisa "
+                f"de `{C4}:<caixa>`). Crie um por vez: `bd create \"Título\" -l {C4}:<caixa>,...`."]
+    values = sorted(set(label_values(step.labels, C4)))
+    wrong = [v for v in values if v not in ids and v != C4_ANYWHERE]
+    if values and not wrong:
+        return []
+    what = (f"{', '.join(f'`{C4}:{v}`' for v in wrong)} não é caixa do modelo" if wrong
+            else f"falta `{C4}:` com a caixa do modelo C4 que o bead toca")
+    return [f"{what}. Valores: `{C4}:{C4_ANYWHERE}` (modo de trabalho, várias partes) ou o id completo de uma "
+            f"caixa de arquitetura/modelo.json do origin/main, de qualquer nível (`a.{{b.{{c}}}}` dá `{C4}:a`, "
+            f"`{C4}:a.b` e `{C4}:a.b.c`); o trabalho sobre o que roda hoje aponta uma caixa ...Hoje, o que "
+            f"constrói o alvo uma ...Alvo (docs/bead-check.md):\n  "
+            + "\n  ".join(box_listing(ids))
+            + "\n  Uma caixa criada no seu branch só vale depois do merge: até lá use a mãe dela ou "
+            f"`{C4}:{C4_ANYWHERE}`."]
+
+
 # --------------------------------------------------------------------------- bd and git
 
 
@@ -511,9 +581,17 @@ def check_line(command: str, bd: Bd, repo: Path) -> list[str]:
 def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
     """Every gap of these steps, each prefixed with the command and bead it belongs to."""
     out = []
+    boxes: list[set[str] | None] = []  # the model's ids, read at the first create of the line
     for step in steps:
         if step.kind == "refuse":
             out.append(step.message)
+            continue
+        if step.kind == "create":
+            if not boxes:
+                boxes.append(box_ids(model_on_main(repo)))
+            if boxes[0] is not None:  # no model on origin/main: the rule does not run
+                what = f"bd create {step.title}".rstrip()
+                out += [f"[{what}] {f}" for f in c4_problems(step, boxes[0])]
             continue
         issue = bd.show(step.bead)
         if issue is None:
