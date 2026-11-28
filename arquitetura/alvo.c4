@@ -32,6 +32,7 @@ model {
       description 'As telas do ninho (ninho/telas), abertas como app na tela de início. Muda: cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta'
       metadata {
         bead 'df-8x0m.23.8'
+        codigo ['ninho/telas', 'ninho/identidade']
       }
     }
     servidorAlvo = conteiner 'Servidor da casa (ninho)' {
@@ -40,6 +41,7 @@ model {
       technology 'Python, FastAPI'
       metadata {
         bead ['df-8x0m.23.19', 'df-8x0m.23.21']
+        codigo ['ninho']
       }
     }
     bancoAppAlvo = banco 'Banco do app' {
@@ -64,6 +66,16 @@ model {
       technology 'Python'
       metadata {
         bead ['df-8x0m.23.3', 'df-8x0m.23.14']
+        codigo ['dataforge']
+      }
+    }
+    pipelineAlvo = conteiner 'Pipeline do módulo finanças' {
+      #muda
+      description 'As tasks dos jobs (finance_daily, extrato, reclassificar, backup), cada uma um processo lançado pelo DataForge, e o pacote de regras de edição e classificação, que o servidor também importa. Único escritor do lago. Muda: sai de workspaces/GetFinance para ninho/financas, e as regras viram um pacote importável no lugar de scripts/report carregado por sys.path'
+      technology 'Python, polars, deltalake; um processo por task, lançado pelo DataForge'
+      metadata {
+        bead 'df-8x0m.23.14'
+        codigo ['workspaces/GetFinance']
       }
     }
     historicoAlvo = banco 'Histórico e agendas' {
@@ -72,10 +84,20 @@ model {
     }
     financasAlvo = conteiner 'Backend GetFinance' {
       #sai
-      description 'O backend do app Finanças do PC, iniciado pelo DataForge, que hoje também escreve no banco de edições. Sai: as telas passam para o módulo finanças do servidor e as regras para um pacote importável'
-      technology 'Python'
+      description 'O backend do app Finanças do PC, iniciado pelo DataForge: segundo escritor das edições, lê o lago direto e importa internos do DataForge e as regras do pipeline. Sai: o que ele faz passa para o módulo finanças do servidor (df-8x0m.23.19), e o DataForge deixa de hospedar apps (df-8x0m.23.3)'
+      technology 'Python, FastAPI'
       metadata {
-        bead 'df-8x0m.23.3'
+        bead ['df-8x0m.23.3', 'df-8x0m.23.19']
+        codigo ['workspaces/GetFinance/apps/financas/backend']
+      }
+    }
+    frontFinancasAlvo = conteiner 'Front do app Finanças' {
+      #sai
+      description 'As telas do app Finanças no PC: tabelas, edição de categorias, regras e correções, conferência e extratos. Sai: as telas passam para a tela de finanças do app no celular (df-8x0m.23.19), e o DataForge deixa de servir o build e a rota de tabelas (df-8x0m.23.3)'
+      technology 'React, TypeScript; na janela Qt do DataForge ou no navegador do PC'
+      metadata {
+        bead ['df-8x0m.23.19', 'df-8x0m.23.3']
+        codigo ['workspaces/GetFinance/apps/financas']
       }
     }
   }
@@ -98,13 +120,21 @@ model {
       bead 'df-8x0m.23.8'
     }
   }
-  donoAlvo -> casaAlvo.dataforgeAlvo 'Tela de admin' {
+  donoAlvo -> casaAlvo.dataforgeAlvo 'Administra pela tela de admin e pela CLI' {
     #muda
     metadata {
       bead 'df-8x0m.23.3'
     }
   }
+  donoAlvo -> casaAlvo.servidorAlvo 'Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)'
+  donoAlvo -> casaAlvo.frontFinancasAlvo 'Usa o app Finanças no PC (janela Qt ou navegador)' {
+    #sai
+    metadata {
+      bead 'df-8x0m.23.19'
+    }
+  }
   agendadorAlvo -> casaAlvo.dataforgeAlvo 'dataforge scheduled-run'
+  casaAlvo.dataforgeAlvo -> agendadorAlvo 'Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)'
 
   casaAlvo.servidorAlvo -> casaAlvo.bancoAppAlvo 'Lê e escreve (único escritor)' {
     #muda
@@ -119,19 +149,37 @@ model {
     }
   }
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
-  casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)' {
-    #muda
+  casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
+  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job'
+  casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.lagoAlvo 'Serve o curated pela rota genérica' {
+    #sai
     metadata {
       bead 'df-8x0m.23.3'
     }
   }
-  casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
-  casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada; copia no job backup'
-  casaAlvo.dataforgeAlvo -> pluggyAlvo 'Busca dados'
-  casaAlvo.dataforgeAlvo -> outrasFontesAlvo 'Busca dados' {
+  casaAlvo.pipelineAlvo -> casaAlvo.lagoAlvo 'Grava raw, cleansed e publicado (único escritor); o job backup copia o raw' {
+    #muda
+    metadata {
+      bead ['df-8x0m.23.45', 'df-8x0m.23.10']
+    }
+  }
+  casaAlvo.pipelineAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada (abrir_leitura); o job backup copia' {
+    #muda
+    metadata {
+      bead 'df-8x0m.23.14'
+    }
+  }
+  casaAlvo.pipelineAlvo -> pluggyAlvo 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)'
+  casaAlvo.pipelineAlvo -> outrasFontesAlvo 'Busca dados' {
     #novo
     metadata {
       bead 'df-8x0m.23.10'
+    }
+  }
+  casaAlvo.frontFinancasAlvo -> casaAlvo.dataforgeAlvo 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api' {
+    #sai
+    metadata {
+      bead ['df-8x0m.23.19', 'df-8x0m.23.3']
     }
   }
   casaAlvo.dataforgeAlvo -> casaAlvo.financasAlvo 'Inicia e para o backend; repassa as chamadas do app Finanças' {
@@ -158,8 +206,14 @@ model {
       bead 'df-8x0m.23.3'
     }
   }
-  casaAlvo.servidorAlvo -> casaAlvo.financasAlvo 'Importa o código das regras de edição (edicao.py) do workspace (provisório)' {
+  casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo 'Importa edicao, extrato e classificacao dos scripts (scripts/report)' {
     #sai
+    metadata {
+      bead 'df-8x0m.23.3'
+    }
+  }
+  casaAlvo.servidorAlvo -> casaAlvo.pipelineAlvo 'Importa o pacote de regras de edição e classificação' {
+    #muda
     metadata {
       bead 'df-8x0m.23.14'
     }
@@ -217,6 +271,11 @@ views {
       color red
       border dotted
     }
+    // A cópia do backup e a conferência das publicadas são leitura; junto das gravações, deixariam
+    // pontilhada a seta pipeline -> lago, cujo título já diz que o job backup copia o raw
+    // (componentes-alvo.c4; df-8x0m.23.47.12).
+    exclude casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.lagoAlvo
+    exclude casaAlvo.pipelineAlvo.publicadasAlvo -> casaAlvo.lagoAlvo
   }
 }
 

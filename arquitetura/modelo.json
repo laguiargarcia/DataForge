@@ -41,13 +41,123 @@
       "kind": "conteiner",
       "links": [],
       "metadata": {
-        "bead": "df-8x0m.23.8"
+        "bead": "df-8x0m.23.8",
+        "codigo": [
+          "ninho/telas",
+          "ninho/identidade"
+        ]
       },
       "tags": [
         "muda"
       ],
       "technology": "Web app instalada no celular",
       "title": "App no celular"
+    },
+    {
+      "description": "Os eventos comuns aos dois: ver e criar; no molde da tela da lista",
+      "id": "casaAlvo.appCelularAlvo.agendaTelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "tags": [
+        "novo"
+      ],
+      "technology": "React, TypeScript",
+      "title": "Tela da agenda"
+    },
+    {
+      "description": "A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair",
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/index.html",
+          "ninho/telas/public",
+          "ninho/telas/src/main.tsx",
+          "ninho/telas/src/index.css",
+          "ninho/telas/src/App.tsx",
+          "ninho/telas/src/Entrar.tsx",
+          "ninho/telas/src/eu.ts"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Casca"
+    },
+    {
+      "description": "O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade",
+      "id": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/pedido.ts",
+          "ninho/telas/src/dados.ts",
+          "ninho/telas/src/Logo.tsx"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Comum às telas"
+    },
+    {
+      "description": "Guarda no aparelho o que as telas mostram e a fila das mudanças feitas sem rede, e envia a fila ao servidor quando a rede volta (a última escrita vence, por item). A lista e a agenda com certeza; o que mais entra (as edições de finanças, a sessão sem rede) decide df-8x0m.23.8; o aplicar exige rede",
+      "id": "casaAlvo.appCelularAlvo.copiaLocalAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.8"
+      },
+      "tags": [
+        "novo"
+      ],
+      "technology": "TypeScript",
+      "title": "Cópia local e fila"
+    },
+    {
+      "description": "Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros",
+      "id": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/desejos"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela dos desejos"
+    },
+    {
+      "description": "As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar). Muda: passa a ter o que o app Finanças do PC tem, na ordem que o dono escolher (df-8x0m.23.19)",
+      "id": "casaAlvo.appCelularAlvo.financasTelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.19",
+        "codigo": "ninho/telas/src/financas"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "React, TypeScript",
+      "title": "Tela de finanças"
+    },
+    {
+      "description": "Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer. Muda: sem rede, mostra a cópia local e põe as mudanças na fila (df-8x0m.23.8)",
+      "id": "casaAlvo.appCelularAlvo.listaTelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.8",
+        "codigo": "ninho/telas/src/lista"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "React, TypeScript",
+      "title": "Tela da lista de compras"
     },
     {
       "description": "O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod. Muda: hoje são dois arquivos SQLite, ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas; falta a cópia fora deste disco; onde moram os extratos em PDF está a decidir",
@@ -77,7 +187,8 @@
         "bead": [
           "df-8x0m.23.3",
           "df-8x0m.23.14"
-        ]
+        ],
+        "codigo": "dataforge"
       },
       "tags": [
         "muda"
@@ -86,18 +197,305 @@
       "title": "DataForge (orquestrador)"
     },
     {
-      "description": "O backend do app Finanças do PC, iniciado pelo DataForge, que hoje também escreve no banco de edições. Sai: as telas passam para o módulo finanças do servidor e as regras para um pacote importável",
-      "id": "casaAlvo.financasAlvo",
-      "kind": "conteiner",
+      "description": "O registro de cada trigger como tarefa no agendador do sistema, num módulo próprio que a CLI e a API usam; hoje são funções privadas de dataforge/cli.py, que a API importa (df-2kia)",
+      "id": "casaAlvo.dataforgeAlvo.agendamentoAlvo",
+      "kind": "componente",
       "links": [],
       "metadata": {
-        "bead": "df-8x0m.23.3"
+        "bead": "df-2kia"
+      },
+      "tags": [
+        "novo"
+      ],
+      "technology": "Python",
+      "title": "Agendamento"
+    },
+    {
+      "description": "O servidor FastAPI: workspaces, jobs, execuções, triggers, deploy, presença e o stream de eventos. Muda: serve só a administração, sem a rota genérica de tabelas e sem os apps; o que ela serve e quando existe, a decidir em df-8x0m.23.3",
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, FastAPI",
+      "title": "API de admin"
+    },
+    {
+      "description": "Acha os apps dos workspaces (app.yaml, dist), inicia e para o backend de cada um num processo uvicorn com um token, o middleware que o backend usa para recusar o que não veio do DataForge, o atalho do Windows e as rotas que servem o build e repassam ao backend (api/routers/apps.py). Sai: o DataForge não hospeda app (ADR 0006)",
+      "id": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": [
+          "dataforge/apps.py",
+          "dataforge/app_backends.py",
+          "dataforge/app_backend_host.py",
+          "dataforge/app_guard.py",
+          "dataforge/shortcut.py",
+          "dataforge/api/routers/apps.py"
+        ]
       },
       "tags": [
         "sai"
       ],
+      "technology": "Python, uvicorn",
+      "title": "Hospedagem de apps"
+    },
+    {
+      "description": "O comando dataforge (Typer). A interface pública que o produto usa: run --detach e run-state --wait; scheduled-run, que o agendador do sistema chama; register-triggers; e os comandos de administração. Muda: acha o workspace pelo registro de pastas (df-7cyk); o registro no agendador vai para o Agendamento (df-2kia); saem os comandos que servem um app (app, o atalho), e o resto a decidir em df-8x0m.23.3",
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-7cyk",
+          "df-2kia",
+          "df-8x0m.23.3"
+        ],
+        "codigo": [
+          "dataforge/cli.py",
+          "dataforge/__main__.py"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, Typer",
+      "title": "CLI (interface pública)"
+    },
+    {
+      "description": "Caminhos, URLs de banco, porta da API e hosts permitidos, entre Windows e Linux; lê DATAFORGE_HOME. Muda: a pasta de um workspace vem do registro de pastas, com workspaces/<nome> como padrão (df-7cyk)",
+      "id": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-7cyk",
+        "codigo": "dataforge/compat.py"
+      },
+      "tags": [
+        "muda"
+      ],
       "technology": "Python",
+      "title": "Compat"
+    },
+    {
+      "description": "Os modelos (job, task, trigger, conexão), a leitura e a escrita dos YAML do workspace, o YAML do pacote e o cron entre UTC e a hora local",
+      "id": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/models.py",
+          "dataforge/parser.py",
+          "dataforge/yamlio.py",
+          "dataforge/cron.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, pydantic, PyYAML",
+      "title": "Definição do workspace"
+    },
+    {
+      "description": "As leituras Delta de um processo longo em threads que vivem com ele (falha nativa no Windows, df-5lk8). Sai com os dois que a usam, a rota genérica de tabelas e o backend do app; o servidor do ninho lê o lago com o seu próprio pool (ninho/financas/leitura.py)",
+      "id": "casaAlvo.dataforgeAlvo.deltaPoolAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/delta_pool.py"
+      },
+      "tags": [
+        "sai"
+      ],
+      "technology": "Python, polars, deltalake",
+      "title": "Leituras Delta"
+    },
+    {
+      "description": "Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só. Muda: candidato a sair ou congelar, a decidir em df-8x0m.23.3",
+      "id": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/deploy"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python",
+      "title": "Deploy"
+    },
+    {
+      "description": "A janela admin com os painéis (jobs, editor de job, agenda, deploy), cliente HTTP da API local, e hoje também a janela de um app (dataforge app). Muda: fica a tela de admin, que tem de bater com o que roda atrás dela; sai a janela do app; quanto da GUI Qt fica, ou se pausa, a decidir em df-8x0m.23.3",
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/gui"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, PySide6",
+      "title": "Tela de admin"
+    },
+    {
+      "description": "As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu",
+      "id": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/db.py",
+          "dataforge/liveness.py",
+          "dataforge/orphans.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, SQLAlchemy",
+      "title": "Histórico de execuções"
+    },
+    {
+      "description": "Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas. Muda: o registro das janelas existe pela janela do app; o que fica, a decidir em df-8x0m.23.3",
+      "id": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": [
+          "dataforge/instance.py",
+          "dataforge/presence.py"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, httpx",
+      "title": "Instância e presença"
+    },
+    {
+      "description": "Roda um job: DAG das tasks, condições, tentativas, trava por workspace; o pedido de run destacado e o estado de um run (run --detach, run-state). Muda: com o workspace ocupado, o pedido hoje sempre espera na fila; qual pedido é recusado e qual espera decide df-8x0m.23.15",
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.15",
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/dag.py",
+          "dataforge/conditions.py",
+          "dataforge/runlock.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python",
+      "title": "Motor de execução"
+    },
+    {
+      "description": "/api/workspaces/<ws>/tables/<tabela>: entrega uma tabela inteira do curated pelo nome, para as telas do app Finanças. Sai: o servidor lê as tabelas publicadas por rotas de domínio (df-8x0m.23.45), e o DataForge não serve dado de produto (ADR 0006)",
+      "id": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api/routers/tables.py"
+      },
+      "tags": [
+        "sai"
+      ],
+      "technology": "Python, FastAPI, polars",
+      "title": "Rota genérica de tabelas"
+    },
+    {
+      "description": "O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia. Muda: hoje fica ligado também por causa do app; se fica e quando, a decidir em df-8x0m.23.3",
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": [
+          "dataforge/gui/background.py",
+          "dataforge/gui/daemon.py"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, PySide6, uvicorn",
+      "title": "Segundo plano (API e bandeja)"
+    },
+    {
+      "description": "O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive",
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks",
+          "dataforge/__init__.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "Tipos de task"
+    },
+    {
+      "description": "Plugin do pytest que os testes do motor e os de um workspace carregam; não roda em prod",
+      "id": "casaAlvo.dataforgeAlvo.testesAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/testing.py"
+      },
+      "tags": [],
+      "technology": "Python, pytest, Hypothesis",
+      "title": "Plugin de testes"
+    },
+    {
+      "description": "O backend do app Finanças do PC, iniciado pelo DataForge: segundo escritor das edições, lê o lago direto e importa internos do DataForge e as regras do pipeline. Sai: o que ele faz passa para o módulo finanças do servidor (df-8x0m.23.19), e o DataForge deixa de hospedar apps (df-8x0m.23.3)",
+      "id": "casaAlvo.financasAlvo",
+      "kind": "conteiner",
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend"
+      },
+      "tags": [
+        "sai"
+      ],
+      "technology": "Python, FastAPI",
       "title": "Backend GetFinance"
+    },
+    {
+      "description": "As telas do app Finanças no PC: tabelas, edição de categorias, regras e correções, conferência e extratos. Sai: as telas passam para a tela de finanças do app no celular (df-8x0m.23.19), e o DataForge deixa de servir o build e a rota de tabelas (df-8x0m.23.3)",
+      "id": "casaAlvo.frontFinancasAlvo",
+      "kind": "conteiner",
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.3"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas"
+      },
+      "tags": [
+        "sai"
+      ],
+      "technology": "React, TypeScript; na janela Qt do DataForge ou no navegador do PC",
+      "title": "Front do app Finanças"
     },
     {
       "description": "Escrito só pelo DataForge; o servidor sabe o estado de uma execução por run-state, nunca lê o arquivo",
@@ -124,6 +522,210 @@
       "title": "Lago"
     },
     {
+      "description": "As tasks dos jobs (finance_daily, extrato, reclassificar, backup), cada uma um processo lançado pelo DataForge, e o pacote de regras de edição e classificação, que o servidor também importa. Único escritor do lago. Muda: sai de workspaces/GetFinance para ninho/financas, e as regras viram um pacote importável no lugar de scripts/report carregado por sys.path",
+      "id": "casaAlvo.pipelineAlvo",
+      "kind": "conteiner",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": "workspaces/GetFinance"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, polars, deltalake; um processo por task, lançado pelo DataForge",
+      "title": "Pipeline do módulo finanças"
+    },
+    {
+      "description": "Um JSON por validação com os achados suspeitos (só ids e datas), regravado a cada rodada",
+      "id": "casaAlvo.pipelineAlvo.achadosAlvo",
+      "kind": "banco",
+      "links": [],
+      "metadata": {},
+      "tags": [],
+      "technology": "Pasta de JSON (data/validation)",
+      "title": "Achados das validações"
+    },
+    {
+      "description": "Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos",
+      "id": "casaAlvo.pipelineAlvo.backupDadosAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/backup"
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "backup"
+    },
+    {
+      "description": "Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-o0cc",
+      "id": "casaAlvo.pipelineAlvo.binAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-o0cc",
+        "codigo": "workspaces/GetFinance/bin"
+      },
+      "tags": [
+        "sai"
+      ],
+      "technology": "Bash, PowerShell",
+      "title": "bin"
+    },
+    {
+      "description": "Tasks das dimensões e fatos do curated (contas, calendário, investimentos, saldos, faturas, contrapartes) e das conferências (saldo, fatura, lançamentos suspeitos, extrato e veredito); contas e investimentos usam o config/",
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/cleansed2curated"
+      },
+      "tags": [],
+      "technology": "Python, polars, deltalake, pypdf",
+      "title": "cleansed2curated"
+    },
+    {
+      "description": "Funções puras de scripts/report que as tasks de conferência carregam: leitura do texto do extrato do banco, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato",
+      "id": "casaAlvo.pipelineAlvo.conferenciasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/extrato.py",
+          "workspaces/GetFinance/scripts/report/conferencia_fatura.py",
+          "workspaces/GetFinance/scripts/report/conferencia_saldo.py",
+          "workspaces/GetFinance/scripts/report/lancamentos_suspeitos.py",
+          "workspaces/GetFinance/scripts/report/veredito_extrato.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, polars",
+      "title": "Regras de conferência e extrato"
+    },
+    {
+      "description": "Biblioteca que toda task carrega por exec: cliente HTTP do Pluggy (com o .env), conexões do connections.yaml, leitura e gravação do raw (parquet) e do Delta, regras de validação e o subprocesso do reprocess",
+      "id": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/functions"
+      },
+      "tags": [],
+      "technology": "Python, requests, polars, deltalake",
+      "title": "functions"
+    },
+    {
+      "description": "Task fetch do finance_daily: busca contas, transações, faturas e investimentos no Pluggy e grava a partição do dia no raw. Muda: o raw só cresce (hoje cada busca regrava a partição do dia) e uma segunda fonte entra pelo mesmo lugar (df-8x0m.23.10)",
+      "id": "casaAlvo.pipelineAlvo.landingAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.10",
+        "codigo": "workspaces/GetFinance/scripts/landing"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python",
+      "title": "landing"
+    },
+    {
+      "description": "A lista das tabelas que o pipeline publica para o servidor, com o esquema declarado no módulo finanças, e a task que, ao fim de cada job que escreve uma delas, compara as tabelas com o esquema e falha a rodada quando diferem",
+      "id": "casaAlvo.pipelineAlvo.publicadasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.45"
+      },
+      "tags": [
+        "novo"
+      ],
+      "technology": "Python",
+      "title": "Tabelas publicadas"
+    },
+    {
+      "description": "Tasks transform*: limpam e deduplicam o raw de contas, faturas, investimentos e transações para o cleansed; o mapa de estabelecimentos vem de config/",
+      "id": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/raw2cleansed"
+      },
+      "tags": [],
+      "technology": "Python, polars, deltalake",
+      "title": "raw2cleansed"
+    },
+    {
+      "description": "edicao (abre o edicao.db e lê e grava categorias, regras, correções e explicações) e classificacao (classifica pela regra); módulos soltos que o backend Finanças e o ninho também carregam por sys.path. Muda: viram um pacote importável do módulo finanças, que o pipeline e o servidor importam, sem sys.path (df-8x0m.23.14)",
+      "id": "casaAlvo.pipelineAlvo.regrasAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/edicao.py",
+          "workspaces/GetFinance/scripts/report/classificacao.py"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, SQLite",
+      "title": "Regras de edição e classificação"
+    },
+    {
+      "description": "Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao, que preenche categorias e regras do edicao.db a partir do config/edicao quando estão vazias, só no finance_demo (não na prod); com as funções do relatório (cartao_listas, report_lib, saude). Muda: a semente das edições sai do pipeline, que só lê o banco do app (df-8x0m.23.14)",
+      "id": "casaAlvo.pipelineAlvo.reportAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": "workspaces/GetFinance/scripts/report"
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, polars, deltalake",
+      "title": "report"
+    },
+    {
+      "description": "Script manual, fora dos jobs: apaga uma tabela do cleansed e roda de novo a transformação dela sobre todo o raw",
+      "id": "casaAlvo.pipelineAlvo.reprocessAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/reprocess.py"
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "reprocess"
+    },
+    {
+      "description": "Task fetch do finance_demo, que roda só no dev e no CI, nunca na prod: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial",
+      "id": "casaAlvo.pipelineAlvo.syntheticAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/synthetic"
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "synthetic"
+    },
+    {
+      "description": "Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e sai 1 quando há algum: a rodada fica failed com os dados gravados (o alert_warnings, que os citaria, está inativo)",
+      "id": "casaAlvo.pipelineAlvo.validationAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/validation"
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "validation"
+    },
+    {
       "description": "Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda. Nunca roda pipeline nem escreve no lago. Muda: o módulo finanças faz o que o app Finanças do PC faz hoje; a agenda entra",
       "id": "casaAlvo.servidorAlvo",
       "kind": "conteiner",
@@ -132,13 +734,102 @@
         "bead": [
           "df-8x0m.23.19",
           "df-8x0m.23.21"
-        ]
+        ],
+        "codigo": "ninho"
       },
       "tags": [
         "muda"
       ],
       "technology": "Python, FastAPI",
       "title": "Servidor da casa (ninho)"
+    },
+    {
+      "description": "Rotas /api/agenda e os eventos comuns aos dois, em tabelas do banco do app com o prefixo do módulo, no molde da lista; dentro do app, sem Google",
+      "id": "casaAlvo.servidorAlvo.agendaAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "tags": [
+        "novo"
+      ],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Agenda"
+    },
+    {
+      "description": "Rotas /api/desejos e as regras dos desejos, das anotações (um endereço http ou https inteiro é link) e do presente surpresa, que o dono do desejo nunca vê, nas tabelas desejos_* do ninho.db, criadas no primeiro uso",
+      "id": "casaAlvo.servidorAlvo.desejosAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Lista de desejos"
+    },
+    {
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14); a regra do que cada pessoa vê (df-8x0m.23.6)",
+      "id": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.45",
+          "df-8x0m.23.14",
+          "df-8x0m.23.6"
+        ],
+        "codigo": [
+          "ninho/financas",
+          "ninho/banco.py"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "Python, polars, deltalake, SQLite",
+      "title": "Finanças"
+    },
+    {
+      "description": "Rotas /api/lista e as regras dos itens (texto, comprado, quem adicionou) na tabela lista_itens do ninho.db, criada no primeiro uso",
+      "id": "casaAlvo.servidorAlvo.listaAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Lista de compras"
+    },
+    {
+      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO",
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/__init__.py",
+          "ninho/servidor"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Núcleo do servidor"
+    },
+    {
+      "description": "python -m ninho pessoas criar, senha, modulos, sair e listar, rodado no PC do servidor: a senha só é pedida no terminal, duas vezes; abre o ninho.db direto (--banco ou NINHO_BANCO), sem passar pelo servidor",
+      "id": "casaAlvo.servidorAlvo.pessoasCliAlvo",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "tags": [],
+      "technology": "Python, argparse",
+      "title": "CLI de pessoas"
     },
     {
       "description": "Tudo roda no PC da casa, em prod nativa no Windows; a rede privada é a Tailscale",
@@ -998,6 +1689,18 @@
   "relations": [
     {
       "description": null,
+      "id": "agendadorAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: dataforge scheduled-run",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "agendadorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "dataforge scheduled-run"
+    },
+    {
+      "description": null,
       "id": "agendadorAlvo -> casaAlvo.dataforgeAlvo: dataforge scheduled-run",
       "kind": null,
       "links": [],
@@ -1050,15 +1753,329 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.bancoAppAlvo: Lê as edições como entrada; copia no job backup",
-      "kind": "leitura",
+      "id": "casaAlvo.appCelularAlvo.agendaTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor, lê e relê os eventos, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "source": "casaAlvo.appCelularAlvo.agendaTelasAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os eventos, mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.agendaTelasAlvo -> casaAlvo.appCelularAlvo.copiaLocalAlvo: Lê a cópia local e enfileira as mudanças sem rede",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.8"
+      },
+      "source": "casaAlvo.appCelularAlvo.agendaTelasAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.appCelularAlvo.copiaLocalAlvo",
+      "technology": null,
+      "title": "Lê a cópia local e enfileira as mudanças sem rede"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.agendaTelasAlvo -> casaAlvo.servidorAlvo.agendaAlvo: Lê e cria eventos (/api/agenda); sem rede, pela fila",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "source": "casaAlvo.appCelularAlvo.agendaTelasAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.servidorAlvo.agendaAlvo",
+      "technology": null,
+      "title": "Lê e cria eventos (/api/agenda); sem rede, pela fila"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.agendaTelasAlvo: Monta a tela da agenda",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.appCelularAlvo.agendaTelasAlvo",
+      "technology": null,
+      "title": "Monta a tela da agenda"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/App.tsx",
+          "ninho/telas/src/eu.ts",
+          "ninho/telas/src/Entrar.tsx"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "technology": null,
+      "title": "Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.desejosTelasAlvo: Monta a tela dos desejos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+      "technology": null,
+      "title": "Monta a tela dos desejos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.financasTelasAlvo: Monta a tela de finanças",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.financasTelasAlvo",
+      "technology": null,
+      "title": "Monta a tela de finanças"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.listaTelasAlvo: Monta a tela da lista",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.listaTelasAlvo",
+      "technology": null,
+      "title": "Monta a tela da lista"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/index.html",
+          "ninho/telas/src/eu.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Envia a fila pelo pedido ao servidor quando a rede volta",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.8"
+      },
+      "source": "casaAlvo.appCelularAlvo.copiaLocalAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "technology": null,
+      "title": "Envia a fila pelo pedido ao servidor quando a rede volta"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.desejosTelasAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo: Usa o tipo de quem entrou",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/desejos/Desejos.tsx"
+      },
+      "source": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "technology": null,
+      "title": "Usa o tipo de quem entrou"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.desejosTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/desejos/Desejos.tsx"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.desejosTelasAlvo -> casaAlvo.servidorAlvo.desejosAlvo: Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.desejosAlvo",
+      "technology": null,
+      "title": "Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.desejosTelasAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Lê as pessoas da casa (/api/pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Lê as pessoas da casa (/api/pessoas)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor e trata a recusa do servidor, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/financas/api.ts",
+          "ninho/telas/src/financas/aplicar.ts",
+          "ninho/telas/src/financas/Financas.tsx"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.financasTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "technology": null,
+      "title": "Pede ao servidor e trata a recusa do servidor, mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.19",
+        "codigo": [
+          "ninho/telas/src/financas/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.financasTelasAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.listaTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/lista/api.ts",
+          "ninho/telas/src/lista/Lista.tsx"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.listaTelasAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.listaTelasAlvo -> casaAlvo.appCelularAlvo.copiaLocalAlvo: Lê a cópia local e enfileira as mudanças sem rede",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.8"
+      },
+      "source": "casaAlvo.appCelularAlvo.listaTelasAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.appCelularAlvo.copiaLocalAlvo",
+      "technology": null,
+      "title": "Lê a cópia local e enfileira as mudanças sem rede"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.appCelularAlvo.listaTelasAlvo -> casaAlvo.servidorAlvo.listaAlvo: Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista); sem rede, pela fila",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.8",
+        "codigo": [
+          "ninho/telas/src/lista/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaAlvo.appCelularAlvo.listaTelasAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.servidorAlvo.listaAlvo",
+      "technology": null,
+      "title": "Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista); sem rede, pela fila"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo -> agendadorAlvo: Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)",
+      "kind": null,
       "links": [],
       "metadata": {},
       "source": "casaAlvo.dataforgeAlvo",
       "tags": [],
-      "target": "casaAlvo.bancoAppAlvo",
+      "target": "agendadorAlvo",
       "technology": null,
-      "title": "Lê as edições como entrada; copia no job backup"
+      "title": "Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)"
     },
     {
       "description": null,
@@ -1090,47 +2107,1314 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo: Lê e escreve (único escritor)",
-      "kind": null,
+      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo: Serve o curated pela rota genérica",
+      "kind": "leitura",
       "links": [],
       "metadata": {
         "bead": "df-8x0m.23.3"
       },
       "source": "casaAlvo.dataforgeAlvo",
       "tags": [
-        "muda"
+        "sai"
       ],
       "target": "casaAlvo.lagoAlvo",
       "technology": null,
-      "title": "Lê e escreve (único escritor)"
+      "title": "Serve o curated pela rota genérica"
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> outrasFontesAlvo: Busca dados",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "bead": "df-8x0m.23.10"
-      },
-      "source": "casaAlvo.dataforgeAlvo",
-      "tags": [
-        "novo"
-      ],
-      "target": "outrasFontesAlvo",
-      "technology": null,
-      "title": "Busca dados"
-    },
-    {
-      "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> pluggyAlvo: Busca dados",
+      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
       "kind": null,
       "links": [],
       "metadata": {},
       "source": "casaAlvo.dataforgeAlvo",
       "tags": [],
-      "target": "pluggyAlvo",
+      "target": "casaAlvo.pipelineAlvo",
       "technology": null,
-      "title": "Busca dados"
+      "title": "Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.agendamentoAlvo -> agendadorAlvo: Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-2kia"
+      },
+      "source": "casaAlvo.dataforgeAlvo.agendamentoAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "agendadorAlvo",
+      "technology": null,
+      "title": "Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.agendamentoAlvo: Registra e remove o trigger que a rota grava",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-2kia"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.agendamentoAlvo",
+      "technology": null,
+      "title": "Registra e remove o trigger que a rota grava"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.appsAlvo: Acha os apps e inicia os backends ao subir; inclui as rotas dos apps",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api/__init__.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "technology": null,
+      "title": "Acha os apps e inicia os backends ao subir; inclui as rotas dos apps"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Registra o trigger no agendador pela função da CLI",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-2kia",
+        "codigo": "dataforge/api/routers/triggers.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Registra o trigger no agendador pela função da CLI"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Caminhos, banco e hosts permitidos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Caminhos, banco e hosts permitidos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: Lê e grava jobs e triggers",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/triggers.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "Lê e grava jobs e triggers"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.deployAlvo: Plano, aplicação e rollback pelo serviço",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/deploy.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "technology": null,
+      "title": "Plano, aplicação e rollback pelo serviço"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo: Usa as tabelas e corrige órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/executions.py",
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "technology": null,
+      "title": "Usa as tabelas e corrige órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo: O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/instance.py",
+          "dataforge/api/routers/jobs.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "technology": null,
+      "title": "O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.motorAlvo: Roda o job pedido pela rota",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/jobs.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "technology": null,
+      "title": "Roda o job pedido pela rota"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.rotaTabelasAlvo: Inclui a rota de tabelas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api/__init__.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
+      "technology": null,
+      "title": "Inclui a rota de tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.historicoAlvo: Lê o histórico; grava os runs que inicia",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/executions.py",
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.historicoAlvo",
+      "technology": null,
+      "title": "Lê o histórico; grava os runs que inicia"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.appsAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Pasta dos apps e porta da API",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": [
+          "dataforge/apps.py",
+          "dataforge/app_backends.py",
+          "dataforge/api/routers/apps.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Pasta dos apps e porta da API"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.appsAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: Lê app.yaml pelo yamlio",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/apps.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "Lê app.yaml pelo yamlio"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.appsAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo: Para o backend quando a janela do app fecha (presença)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/app_backends.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "technology": null,
+      "title": "Para o backend quando a janela do app fecha (presença)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.appsAlvo -> casaAlvo.financasAlvo: Inicia e para o backend (processo uvicorn com token); repassa /apps/<ws>/financas/api com o token",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": [
+          "dataforge/app_backends.py",
+          "dataforge/app_backend_host.py",
+          "dataforge/api/routers/apps.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.financasAlvo",
+      "technology": null,
+      "title": "Inicia e para o backend (processo uvicorn com token); repassa /apps/<ws>/financas/api com o token"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.appsAlvo -> casaAlvo.frontFinancasAlvo: Lê app.yaml e acha o build (dist)",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/apps.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.frontFinancasAlvo",
+      "technology": null,
+      "title": "Lê app.yaml e acha o build (dist)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> agendadorAlvo: Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-2kia",
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "agendadorAlvo",
+      "technology": null,
+      "title": "Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.agendamentoAlvo: Registra e remove cada trigger (register-triggers)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-2kia"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.agendamentoAlvo",
+      "technology": null,
+      "title": "Registra e remove cada trigger (register-triggers)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.apiAlvo: Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "technology": null,
+      "title": "Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.appsAlvo: Acha os apps e cria o atalho",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "technology": null,
+      "title": "Acha os apps e cria o atalho"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Caminhos, banco e porta",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Caminhos, banco e porta"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: Carrega workspace, jobs, triggers e conexões; converte o cron",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "Carrega workspace, jobs, triggers e conexões; converte o cron"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.deployAlvo: Monta o subcomando deploy",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "technology": null,
+      "title": "Monta o subcomando deploy"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.guiAlvo: Abre a janela admin e a janela do app",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "technology": null,
+      "title": "Abre a janela admin e a janela do app"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo: Usa as tabelas e corrige órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "technology": null,
+      "title": "Usa as tabelas e corrige órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo: Acha ou inicia o DataForge da porta",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "technology": null,
+      "title": "Acha ou inicia o DataForge da porta"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.motorAlvo: Roda o job, pede o run destacado, lê o estado",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "technology": null,
+      "title": "Roda o job, pede o run destacado, lê o estado"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.segundoPlanoAlvo: Roda o segundo plano (background)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "technology": null,
+      "title": "Roda o segundo plano (background)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.historicoAlvo: Lê e grava runs, tasks e agendas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "tags": [],
+      "target": "casaAlvo.historicoAlvo",
+      "technology": null,
+      "title": "Lê e grava runs, tasks e agendas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.definicaoAlvo -> casaAlvo.pipelineAlvo: Lê e escreve a definição do workspace (jobs, triggers, conexões)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/parser.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo",
+      "technology": null,
+      "title": "Lê e escreve a definição do workspace (jobs, triggers, conexões)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.dataforgeAlvo.apiAlvo: Reconcilia os triggers do destino pela API (deploy na CLI)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/deploy/cli.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "technology": null,
+      "title": "Reconcilia os triggers do destino pela API (deploy na CLI)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Pasta do workspace e porta da API",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/deploy/cli.py",
+          "dataforge/deploy/service.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Pasta do workspace e porta da API"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: YAML pelo yamlio",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/deploy/apply.py",
+          "dataforge/deploy/pairing.py",
+          "dataforge/deploy/plan.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "YAML pelo yamlio"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.pipelineAlvo: Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/deploy/apply.py",
+          "dataforge/deploy/rollback.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo",
+      "technology": null,
+      "title": "Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.apiAlvo: Os painéis, a presença e a janela do app chamam a API local",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/main_window.py",
+          "dataforge/gui/panels/jobs.py",
+          "dataforge/gui/panels/job_editor.py",
+          "dataforge/gui/panels/scheduler.py",
+          "dataforge/gui/panels/deploy.py",
+          "dataforge/gui/presence_client.py",
+          "dataforge/gui/app_window.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "technology": null,
+      "title": "Os painéis, a presença e a janela do app chamam a API local"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.appsAlvo: Acha o app da janela",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/gui/app_window.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "technology": null,
+      "title": "Acha o app da janela"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Porta da API e pasta do perfil web",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/app_window.py",
+          "dataforge/gui/main_window.py",
+          "dataforge/gui/panels"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Porta da API e pasta do perfil web"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: Converte o cron na agenda",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/panels/scheduler.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "Converte o cron na agenda"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.deployAlvo: Tipos do plano no painel de deploy",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/panels/deploy.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.deployAlvo",
+      "technology": null,
+      "title": "Tipos do plano no painel de deploy"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo: Hora UTC da próxima execução na agenda",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/panels/scheduler.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "technology": null,
+      "title": "Hora UTC da próxima execução na agenda"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo: Acha ou inicia o servidor; batimento de presença",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/__init__.py",
+          "dataforge/gui/app_window.py",
+          "dataforge/gui/presence_client.py",
+          "dataforge/gui/server_lost_banner.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "technology": null,
+      "title": "Acha ou inicia o servidor; batimento de presença"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.historicoRunsAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Workspaces e URLs dos bancos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/orphans.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Workspaces e URLs dos bancos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.historicoRunsAlvo -> casaAlvo.historicoAlvo: Cria o esquema; corrige runs órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/db.py",
+          "dataforge/orphans.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "tags": [],
+      "target": "casaAlvo.historicoAlvo",
+      "technology": null,
+      "title": "Cria o esquema; corrige runs órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.apiAlvo: Pergunta quem tem a porta (GET /health)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "technology": null,
+      "title": "Pergunta quem tem a porta (GET /health)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Inicia o segundo plano destacado (dataforge background)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Inicia o segundo plano destacado (dataforge background)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Porta, home e pasta de logs",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Porta, home e pasta de logs"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.motorAlvo: Trava de arquivo (runlock) ao iniciar o segundo plano",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "technology": null,
+      "title": "Trava de arquivo (runlock) ao iniciar o segundo plano"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Lança o run pedido destacado (dataforge run-requested)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/run_request.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Lança o run pedido destacado (dataforge run-requested)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Banco, logs e caminho da trava",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/run_request.py",
+          "dataforge/runlock.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Banco, logs e caminho da trava"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: Modelos de job e task; carrega o job pedido",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/dag.py",
+          "dataforge/conditions.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "Modelos de job e task; carrega o job pedido"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo: Tabelas, dono da linha e correção de órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "technology": null,
+      "title": "Tabelas, dono da linha e correção de órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo: Usa o lançador de processo destacado",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/run_request.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "technology": null,
+      "title": "Usa o lançador de processo destacado"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.tasksAlvo: Acha o handler de cada task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/engine.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "technology": null,
+      "title": "Acha o handler de cada task"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.historicoAlvo: Grava cada run e cada task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "tags": [],
+      "target": "casaAlvo.historicoAlvo",
+      "technology": null,
+      "title": "Grava cada run e cada task"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Pasta do workspace e do curated",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api/routers/tables.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Pasta do workspace e do curated"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo -> casaAlvo.dataforgeAlvo.deltaPoolAlvo: Lê o curated nas threads do pool",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api/routers/tables.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.deltaPoolAlvo",
+      "technology": null,
+      "title": "Lê o curated nas threads do pool"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo -> casaAlvo.lagoAlvo: Serve o curated pela rota genérica",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/api/routers/tables.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Serve o curated pela rota genérica"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.apiAlvo: Hospeda a API numa thread (uvicorn dataforge.api:app)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/daemon.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "technology": null,
+      "title": "Hospeda a API numa thread (uvicorn dataforge.api:app)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.appsAlvo: Para os backends ao sair",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3",
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "technology": null,
+      "title": "Para os backends ao sair"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Abre a janela admin destacada (dataforge gui)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Abre a janela admin destacada (dataforge gui)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: Porta da API e pasta de logs",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/background.py",
+          "dataforge/gui/daemon.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "Porta da API e pasta de logs"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.guiAlvo: Guarda do coletor e ícone da bandeja",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "technology": null,
+      "title": "Guarda do coletor e ícone da bandeja"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo: Usa o lançador de processo destacado, a regra de saída e o registro das janelas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.instanciaAlvo",
+      "technology": null,
+      "title": "Usa o lançador de processo destacado, a regra de saída e o registro das janelas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: URL do banco global",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks/message/handler.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "URL do banco global"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo: Modelos de job e task; carrega o job filho",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks"
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.definicaoAlvo",
+      "technology": null,
+      "title": "Modelos de job e task; carrega o job filho"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo: Tabelas do histórico",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "dataforge/tasks/error_handler.py",
+          "dataforge/tasks/message/handler.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "technology": null,
+      "title": "Tabelas do histórico"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.motorAlvo: A task job roda outro job",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks/job_handler.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.motorAlvo",
+      "technology": null,
+      "title": "A task job roda outro job"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.historicoAlvo: Grava a linha da task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "dataforge/tasks/error_handler.py",
+          "dataforge/tasks/message/handler.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.historicoAlvo",
+      "technology": null,
+      "title": "Grava a linha da task"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.backupDadosAlvo: Lança a task backup",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/backup/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.backupDadosAlvo",
+      "technology": null,
+      "title": "Lança a task backup"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.cleansed2curatedAlvo: Lança as tasks das dimensões, fatos e conferências",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml",
+          "workspaces/GetFinance/jobs/reclassificar/job.yaml",
+          "workspaces/GetFinance/jobs/extrato/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "technology": null,
+      "title": "Lança as tasks das dimensões, fatos e conferências"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.landingAlvo: Lança a task fetch (finance_daily)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.landingAlvo",
+      "technology": null,
+      "title": "Lança a task fetch (finance_daily)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.publicadasAlvo: Lança a conferência ao fim de cada job que escreve uma tabela publicada",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.45"
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.pipelineAlvo.publicadasAlvo",
+      "technology": null,
+      "title": "Lança a conferência ao fim de cada job que escreve uma tabela publicada"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.raw2cleansedAlvo: Lança as tasks transform*",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "technology": null,
+      "title": "Lança as tasks transform*"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.reportAlvo: Lança as tasks classify e report (a semente, só no finance_demo)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml",
+          "workspaces/GetFinance/jobs/reclassificar/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.reportAlvo",
+      "technology": null,
+      "title": "Lança as tasks classify e report (a semente, só no finance_demo)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.syntheticAlvo: Lança a task fetch do finance_demo (só dev e CI)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.syntheticAlvo",
+      "technology": null,
+      "title": "Lança a task fetch do finance_demo (só dev e CI)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.validationAlvo: Lança a task data_warnings",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "workspaces/GetFinance/jobs/finance_daily/job.yaml",
+          "workspaces/GetFinance/jobs/finance_demo/job.yaml"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.validationAlvo",
+      "technology": null,
+      "title": "Lança a task data_warnings"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo: Lança o script de cada task python como processo, com o .env do job",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks/python_handler.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo",
+      "technology": null,
+      "title": "Lança o script de cada task python como processo, com o .env do job"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.testesAlvo -> casaAlvo.dataforgeAlvo.compatAlvo: URL do banco",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/testing.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.testesAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "technology": null,
+      "title": "URL do banco"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.testesAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo: Banco de teste com o esquema",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/testing.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.testesAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.historicoRunsAlvo",
+      "technology": null,
+      "title": "Banco de teste com o esquema"
     },
     {
       "description": null,
@@ -1147,6 +3431,86 @@
       "target": "casaAlvo.bancoAppAlvo",
       "technology": null,
       "title": "Lê e escreve as edições (segundo escritor)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.dataforgeAlvo.apiAlvo: Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "technology": null,
+      "title": "Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.dataforgeAlvo.appsAlvo: Importa o middleware do token (app_guard)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "technology": null,
+      "title": "Importa o middleware do token (app_guard)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.dataforgeAlvo.deltaPoolAlvo: Lê as tabelas Delta pelas threads do delta_pool",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.deltaPoolAlvo",
+      "technology": null,
+      "title": "Lê as tabelas Delta pelas threads do delta_pool"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.dataforgeAlvo.tasksAlvo: Importa o pacote dataforge: o __init__ registra os tipos de task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.tasksAlvo",
+      "technology": null,
+      "title": "Importa o pacote dataforge: o __init__ registra os tipos de task"
     },
     {
       "description": null,
@@ -1182,6 +3546,691 @@
     },
     {
       "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo.conferenciasAlvo: Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.pipelineAlvo.conferenciasAlvo",
+      "technology": null,
+      "title": "Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa edicao e classificacao",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.19"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.pipelineAlvo.regrasAlvo",
+      "technology": null,
+      "title": "Importa edicao e classificacao"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo: Importa edicao, extrato e classificacao dos scripts (scripts/report)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.pipelineAlvo",
+      "technology": null,
+      "title": "Importa edicao, extrato e classificacao dos scripts (scripts/report)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.frontFinancasAlvo -> casaAlvo.dataforgeAlvo.appsAlvo: Baixa o build (dist) e chama o backend pelo proxy /apps/<ws>/financas/api",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.3"
+        ],
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/dist/index.html",
+          "workspaces/GetFinance/apps/financas/src/edicao.ts"
+        ]
+      },
+      "source": "casaAlvo.frontFinancasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.appsAlvo",
+      "technology": null,
+      "title": "Baixa o build (dist) e chama o backend pelo proxy /apps/<ws>/financas/api"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.frontFinancasAlvo -> casaAlvo.dataforgeAlvo.rotaTabelasAlvo: Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.3"
+        ],
+        "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
+      },
+      "source": "casaAlvo.frontFinancasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
+      "technology": null,
+      "title": "Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.frontFinancasAlvo -> casaAlvo.dataforgeAlvo: Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.3"
+        ]
+      },
+      "source": "casaAlvo.frontFinancasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo",
+      "technology": null,
+      "title": "Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo -> casaAlvo.bancoAppAlvo: Lê as edições como entrada (abrir_leitura); o job backup copia",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14"
+      },
+      "source": "casaAlvo.pipelineAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê as edições como entrada (abrir_leitura); o job backup copia"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo -> casaAlvo.lagoAlvo: Grava raw, cleansed e publicado (único escritor); o job backup copia o raw",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.45",
+          "df-8x0m.23.10"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Grava raw, cleansed e publicado (único escritor); o job backup copia o raw"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo -> outrasFontesAlvo: Busca dados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.10"
+      },
+      "source": "casaAlvo.pipelineAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "outrasFontesAlvo",
+      "technology": null,
+      "title": "Busca dados"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo -> pluggyAlvo: Busca contas, transações, faturas e investimentos (task fetch do finance_daily)",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "casaAlvo.pipelineAlvo",
+      "tags": [],
+      "target": "pluggyAlvo",
+      "technology": null,
+      "title": "Busca contas, transações, faturas e investimentos (task fetch do finance_daily)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.bancoAppAlvo: Copia pela API de backup do SQLite",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": "workspaces/GetFinance/scripts/backup/backup_dados.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.backupDadosAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Copia pela API de backup do SQLite"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.lagoAlvo: Copia o raw",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/backup/backup_dados.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.backupDadosAlvo",
+      "tags": [],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Copia o raw"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: conexões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/backup/backup_dados.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.backupDadosAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: conexões"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.binAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Sobra sem uso (df-o0cc): dataforge jobs run finance_daily",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-o0cc",
+        "codigo": [
+          "workspaces/GetFinance/bin/run.sh",
+          "workspaces/GetFinance/bin/run.ps1"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.binAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Sobra sem uso (df-o0cc): dataforge jobs run finance_daily"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.bancoAppAlvo: Lê as explicações (conferência de saldo)",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê as explicações (conferência de saldo)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.lagoAlvo: Lê raw, cleansed e curated, grava o curated (Delta)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/cleansed2curated"
+      },
+      "source": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "tags": [],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Lê raw, cleansed e curated, grava o curated (Delta)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.achadosAlvo: Grava os achados (validate)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/cleansed2curated"
+      },
+      "source": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.achadosAlvo",
+      "technology": null,
+      "title": "Grava os achados (validate)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.conferenciasAlvo: Importa extrato e as conferências",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_fatura.py",
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py",
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_extrato.py",
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_lancamentos_suspeitos.py",
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_veredito_suspeitos.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.conferenciasAlvo",
+      "technology": null,
+      "title": "Importa extrato e as conferências"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: leitura do raw, Delta, validação",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/cleansed2curated"
+      },
+      "source": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: leitura do raw, Delta, validação"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa classificacao e edicao",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated.py",
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.cleansed2curatedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.regrasAlvo",
+      "technology": null,
+      "title": "Importa classificacao e edicao"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.conferenciasAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa classificacao",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/conferencia_saldo.py",
+          "workspaces/GetFinance/scripts/report/lancamentos_suspeitos.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.conferenciasAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.regrasAlvo",
+      "technology": null,
+      "title": "Importa classificacao"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.landingAlvo -> casaAlvo.lagoAlvo: Grava a partição do dia no raw (parquet), que passa a só crescer",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.10",
+        "codigo": "workspaces/GetFinance/scripts/landing/landing2raw.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.landingAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Grava a partição do dia no raw (parquet), que passa a só crescer"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.landingAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: cliente Pluggy, gravação do raw",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/landing/landing2raw.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.landingAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: cliente Pluggy, gravação do raw"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.landingAlvo -> outrasFontesAlvo: Busca dados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.10"
+      },
+      "source": "casaAlvo.pipelineAlvo.landingAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "outrasFontesAlvo",
+      "technology": null,
+      "title": "Busca dados"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.landingAlvo -> pluggyAlvo: Busca contas, transações, faturas e investimentos (task fetch do finance_daily)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/landing/landing2raw.py",
+          "workspaces/GetFinance/scripts/functions/functions.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.landingAlvo",
+      "tags": [],
+      "target": "pluggyAlvo",
+      "technology": null,
+      "title": "Busca contas, transações, faturas e investimentos (task fetch do finance_daily)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.publicadasAlvo -> casaAlvo.lagoAlvo: Compara as tabelas publicadas com o esquema declarado",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.45"
+      },
+      "source": "casaAlvo.pipelineAlvo.publicadasAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Compara as tabelas publicadas com o esquema declarado"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.lagoAlvo: Lê o raw (parquet) e o cleansed, grava o cleansed (Delta)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/raw2cleansed"
+      },
+      "source": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "tags": [],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Lê o raw (parquet) e o cleansed, grava o cleansed (Delta)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.pipelineAlvo.achadosAlvo: Grava os achados (validate)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/raw2cleansed"
+      },
+      "source": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.achadosAlvo",
+      "technology": null,
+      "title": "Grava os achados (validate)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.pipelineAlvo.conferenciasAlvo: Importa conferencia_fatura",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/raw2cleansed/raw2cleansed.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.conferenciasAlvo",
+      "technology": null,
+      "title": "Importa conferencia_fatura"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: leitura do raw, Delta, validação",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/raw2cleansed"
+      },
+      "source": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: leitura do raw, Delta, validação"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.bancoAppAlvo: Lê categorias, regras e correções (classify); a semente das edições sai do pipeline",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/classify.py",
+          "workspaces/GetFinance/scripts/report/carga_inicial_edicao.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.reportAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê categorias, regras e correções (classify); a semente das edições sai do pipeline"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.lagoAlvo: Lê e regrava o curated (Delta)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/classify.py",
+          "workspaces/GetFinance/scripts/report/report_curated.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.reportAlvo",
+      "tags": [],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Lê e regrava o curated (Delta)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.pipelineAlvo.achadosAlvo: Grava os achados (validate)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/report/classify.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.reportAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.achadosAlvo",
+      "technology": null,
+      "title": "Grava os achados (validate)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: Delta, validação, conexões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/classify.py",
+          "workspaces/GetFinance/scripts/report/report_curated.py",
+          "workspaces/GetFinance/scripts/report/carga_inicial_edicao.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.reportAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: Delta, validação, conexões"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa classificacao e edicao",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/report/classify.py",
+          "workspaces/GetFinance/scripts/report/carga_inicial_edicao.py",
+          "workspaces/GetFinance/scripts/report/report_lib.py",
+          "workspaces/GetFinance/scripts/report/cartao_listas.py",
+          "workspaces/GetFinance/scripts/report/saude.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.reportAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.regrasAlvo",
+      "technology": null,
+      "title": "Importa classificacao e edicao"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reprocessAlvo -> casaAlvo.lagoAlvo: Conta e apaga a tabela do cleansed (Delta)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/reprocess.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.reprocessAlvo",
+      "tags": [],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Conta e apaga a tabela do cleansed (Delta)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reprocessAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: Delta e o subprocesso da transformação",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/reprocess.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.reprocessAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: Delta e o subprocesso da transformação"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.reprocessAlvo -> casaAlvo.pipelineAlvo.raw2cleansedAlvo: Roda a transformação como processo Python (run_transform_subprocess)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/reprocess.py",
+          "workspaces/GetFinance/scripts/functions/functions.py"
+        ]
+      },
+      "source": "casaAlvo.pipelineAlvo.reprocessAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.raw2cleansedAlvo",
+      "technology": null,
+      "title": "Roda a transformação como processo Python (run_transform_subprocess)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.syntheticAlvo -> casaAlvo.lagoAlvo: Grava o raw sintético (parquet; finance_demo, só dev e CI)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.syntheticAlvo",
+      "tags": [],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Grava o raw sintético (parquet; finance_demo, só dev e CI)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.syntheticAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: gravação do raw",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.syntheticAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: gravação do raw"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.validationAlvo -> casaAlvo.pipelineAlvo.achadosAlvo: Lê os achados (read_findings)",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/validation/data_warnings.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.validationAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.achadosAlvo",
+      "technology": null,
+      "title": "Lê os achados (read_findings)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.pipelineAlvo.validationAlvo -> casaAlvo.pipelineAlvo.functionsAlvo: Carrega por exec: leitura dos achados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/validation/data_warnings.py"
+      },
+      "source": "casaAlvo.pipelineAlvo.validationAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.functionsAlvo",
+      "technology": null,
+      "title": "Carrega por exec: leitura dos achados"
+    },
+    {
+      "description": null,
       "id": "casaAlvo.servidorAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve (único escritor)",
       "kind": null,
       "links": [],
@@ -1210,22 +4259,6 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo -> casaAlvo.financasAlvo: Importa o código das regras de edição (edicao.py) do workspace (provisório)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "bead": "df-8x0m.23.14"
-      },
-      "source": "casaAlvo.servidorAlvo",
-      "tags": [
-        "sai"
-      ],
-      "target": "casaAlvo.financasAlvo",
-      "technology": null,
-      "title": "Importa o código das regras de edição (edicao.py) do workspace (provisório)"
-    },
-    {
-      "description": null,
       "id": "casaAlvo.servidorAlvo -> casaAlvo.lagoAlvo: Só leitura, pelas tabelas publicadas",
       "kind": "leitura",
       "links": [],
@@ -1239,6 +4272,299 @@
       "target": "casaAlvo.lagoAlvo",
       "technology": null,
       "title": "Só leitura, pelas tabelas publicadas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo -> casaAlvo.pipelineAlvo: Importa o pacote de regras de edição e classificação",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14"
+      },
+      "source": "casaAlvo.servidorAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.pipelineAlvo",
+      "technology": null,
+      "title": "Importa o pacote de regras de edição e classificação"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.agendaAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve os eventos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "source": "casaAlvo.servidorAlvo.agendaAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê e escreve os eventos"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.agendaAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Pede a pessoa da sessão e a conexão do banco do app (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "source": "casaAlvo.servidorAlvo.agendaAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Pede a pessoa da sessão e a conexão do banco do app (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.desejosAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve os desejos, as anotações e os presentes",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos/desejos.py"
+      },
+      "source": "casaAlvo.servidorAlvo.desejosAlvo",
+      "tags": [],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê e escreve os desejos, as anotações e os presentes"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.desejosAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos/rotas.py"
+      },
+      "source": "casaAlvo.servidorAlvo.desejosAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve as edições (único escritor); hoje só as correções",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.14"
+        ],
+        "codigo": [
+          "ninho/financas/edicoes.py",
+          "ninho/banco.py"
+        ]
+      },
+      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê e escreve as edições (único escritor); hoje só as correções"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Pede o job e acompanha pela interface pública (run --detach / run-state --wait)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/financas/aplicar.py"
+      },
+      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Pede o job e acompanha pela interface pública (run --detach / run-state --wait)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.lagoAlvo: Só leitura, pelas tabelas publicadas",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.45",
+        "codigo": "ninho/financas/leitura.py"
+      },
+      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Só leitura, pelas tabelas publicadas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa o pacote de regras de edição e classificação",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": "ninho/financas/regras.py"
+      },
+      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.pipelineAlvo.regrasAlvo",
+      "technology": null,
+      "title": "Importa o pacote de regras de edição e classificação"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.listaAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve os itens da lista",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista/itens.py"
+      },
+      "source": "casaAlvo.servidorAlvo.listaAlvo",
+      "tags": [],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê e escreve os itens da lista"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.listaAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Pede a pessoa da sessão e a conexão do ninho.db (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista/rotas.py"
+      },
+      "source": "casaAlvo.servidorAlvo.listaAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Pede a pessoa da sessão e a conexão do ninho.db (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.appCelularAlvo: Lê o build (ninho/telas/dist) e o entrega em /",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "tags": [],
+      "target": "casaAlvo.appCelularAlvo",
+      "technology": null,
+      "title": "Lê o build (ninho/telas/dist) e o entrega em /"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve pessoas e sessões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/servidor/banco.py",
+          "ninho/servidor/pessoas.py",
+          "ninho/servidor/sessoes.py"
+        ]
+      },
+      "source": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "tags": [],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê e escreve pessoas e sessões"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.agendaAlvo: Inclui o router /api/agenda (só para quem tem o módulo agenda)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.21"
+      },
+      "source": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "tags": [
+        "novo"
+      ],
+      "target": "casaAlvo.servidorAlvo.agendaAlvo",
+      "technology": null,
+      "title": "Inclui o router /api/agenda (só para quem tem o módulo agenda)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.desejosAlvo: Inclui o router /api/desejos (só para quem tem o módulo desejos)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.desejosAlvo",
+      "technology": null,
+      "title": "Inclui o router /api/desejos (só para quem tem o módulo desejos)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo: Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "technology": null,
+      "title": "Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.listaAlvo: Inclui o router /api/lista (só para quem tem o módulo lista)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.listaAlvo",
+      "technology": null,
+      "title": "Inclui o router /api/lista (só para quem tem o módulo lista)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.pessoasCliAlvo -> casaAlvo.bancoAppAlvo: Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "casaAlvo.servidorAlvo.pessoasCliAlvo",
+      "tags": [],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.servidorAlvo.pessoasCliAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "casaAlvo.servidorAlvo.pessoasCliAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.nucleoAlvo",
+      "technology": null,
+      "title": "Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)"
     },
     {
       "description": null,
@@ -4153,6 +7479,22 @@
     },
     {
       "description": null,
+      "id": "donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo: Usa",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.19"
+      },
+      "source": "donoAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "technology": null,
+      "title": "Usa"
+    },
+    {
+      "description": null,
       "id": "donoAlvo -> casaAlvo.appCelularAlvo: Usa",
       "kind": null,
       "links": [],
@@ -4169,7 +7511,53 @@
     },
     {
       "description": null,
-      "id": "donoAlvo -> casaAlvo.dataforgeAlvo: Tela de admin",
+      "id": "donoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Administra pela CLI",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "donoAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.cliAlvo",
+      "technology": null,
+      "title": "Administra pela CLI"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.dataforgeAlvo.guiAlvo: Administra pela tela de admin",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "donoAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.dataforgeAlvo.guiAlvo",
+      "technology": null,
+      "title": "Administra pela tela de admin"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.dataforgeAlvo.segundoPlanoAlvo: Abre a janela admin e encerra o DataForge pela bandeja",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "donoAlvo",
+      "tags": [],
+      "target": "casaAlvo.dataforgeAlvo.segundoPlanoAlvo",
+      "technology": null,
+      "title": "Abre a janela admin e encerra o DataForge pela bandeja"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.dataforgeAlvo: Administra pela tela de admin e pela CLI",
       "kind": null,
       "links": [],
       "metadata": {
@@ -4181,7 +7569,63 @@
       ],
       "target": "casaAlvo.dataforgeAlvo",
       "technology": null,
-      "title": "Tela de admin"
+      "title": "Administra pela tela de admin e pela CLI"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.frontFinancasAlvo: Usa o app Finanças no PC (janela Qt ou navegador)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.19"
+      },
+      "source": "donoAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.frontFinancasAlvo",
+      "technology": null,
+      "title": "Usa o app Finanças no PC (janela Qt ou navegador)"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.pipelineAlvo.reprocessAlvo: Roda à mão para refazer tabelas do cleansed (scripts/reprocess.py)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/reprocess.py"
+      },
+      "source": "donoAlvo",
+      "tags": [],
+      "target": "casaAlvo.pipelineAlvo.reprocessAlvo",
+      "technology": null,
+      "title": "Roda à mão para refazer tabelas do cleansed (scripts/reprocess.py)"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.servidorAlvo.pessoasCliAlvo: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "donoAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo.pessoasCliAlvo",
+      "technology": null,
+      "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
+    },
+    {
+      "description": null,
+      "id": "donoAlvo -> casaAlvo.servidorAlvo: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "donoAlvo",
+      "tags": [],
+      "target": "casaAlvo.servidorAlvo",
+      "technology": null,
+      "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
     },
     {
       "description": null,
@@ -4325,6 +7769,22 @@
     },
     {
       "description": null,
+      "id": "outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo: Usa",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.6"
+      },
+      "source": "outraAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "technology": null,
+      "title": "Usa"
+    },
+    {
+      "description": null,
       "id": "outraAlvo -> casaAlvo.appCelularAlvo: Usa",
       "kind": null,
       "links": [],
@@ -4386,6 +7846,46 @@
     ]
   },
   "views": [
+    {
+      "description": null,
+      "id": "alvo-componentes-app-celular",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Alvo v2: componentes do app no celular",
+      "type": "element",
+      "viewOf": "casaAlvo.appCelularAlvo"
+    },
+    {
+      "description": "Quase todo componente usa o Compat (caminhos, banco, porta); essas setas estão no modelo e ficam fora desta vista",
+      "id": "alvo-componentes-dataforge",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Alvo v2: componentes do DataForge",
+      "type": "element",
+      "viewOf": "casaAlvo.dataforgeAlvo"
+    },
+    {
+      "description": null,
+      "id": "alvo-componentes-pipeline",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Alvo v2: componentes do pipeline do módulo finanças",
+      "type": "element",
+      "viewOf": "casaAlvo.pipelineAlvo"
+    },
+    {
+      "description": null,
+      "id": "alvo-componentes-servidor",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Alvo v2: componentes do servidor da casa",
+      "type": "element",
+      "viewOf": "casaAlvo.servidorAlvo"
+    },
     {
       "description": null,
       "id": "alvo-conteineres",
