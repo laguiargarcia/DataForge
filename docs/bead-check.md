@@ -1,17 +1,18 @@
 ---
-topic: Bead check (a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, and no architecture mark left on the bead)
-read_when: A "Conferência do bead" refusal on bd create --parent, bd update --claim or bd close; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead
-related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37]
+topic: Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, and no architecture mark left on the bead)
+read_when: A "Conferência do bead" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead
+related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37, df-8x0m.23.36]
 ---
 
 # Bead check
 
-`scripts/beads/check.py` (tests: `tests/test_beads_check.py`) checks three bd commands before they
-run, from a PreToolUse hook on Bash. Every other command passes in ~30 ms, untouched. Design:
+`scripts/beads/check.py` (tests: `tests/test_beads_check.py`) checks bd's create, claim and close before
+they run, from a PreToolUse hook on Bash. Every other command passes in ~30 ms, untouched. Design:
 `~/claudemain/docs/superpowers/specs/2026-11-16-fechamento-do-bead-design.md`.
 
 | Command | Needs | Applies to |
 | --- | --- | --- |
+| `bd create` (or `bd new`, `bd q`) | at least one `c4:<box>`, and every `c4:` a box of `arquitetura/modelo.json` on `origin/main` or `transversal`; one bead at a time (`--file`/`--graph` refused) | every create but of a session bead; nothing when `origin/main` has no readable model |
 | `bd create --parent <id>` (or `bd new`) | `--no-inherit-labels` | every create with a parent |
 | `bd update <id> --claim` | an acceptance criterion (the criteria `bd lint <id>` asks of the type; `--acceptance` in the same command counts) | beads created on or after the cutoff; not session beads |
 | | the estimate: `vol:` and `inc:`, each 1 to 3 (`--add-label` in the same command counts) | beads created on or after the cutoff; not session beads or epics |
@@ -22,6 +23,27 @@ run, from a PreToolUse hook on Bash. Every other command passes in ~30 ms, untou
 | | the note: `Conferi:`, `Não conferi:`, `Assumi:` in the reason, each with text | beads created on or after the cutoff |
 | claim and close | at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:`, `inc-real:` | every bead; not session beads at claim |
 | `bd close <id>` | no `#novo`/`#muda`/`#sai` mark of `arquitetura/modelo.json` on `origin/main` still names the bead | every bead, `descartado:`/`duplicado:` closes too |
+
+**Every bead points at a C4 box (df-8x0m.23.36):** the architecture model
+(`arquitetura/*.c4`, exported to `arquitetura/modelo.json`; `arquitetura/README.md`) is the map of the
+system, and each bead says where on it the work lands, so the drawing can show the open beads and the
+bugs (`camada:`, `erro:`) of each box. `bd create` without a `c4:` label, or with a `c4:` that is not
+an element id, is refused with the valid ids, grouped by first segment (`casaHoje.{ninhoHoje.{listaHoje}}`:
+each level is an id of its own, `casaHoje`, `casaHoje.ninhoHoje`, `casaHoje.ninhoHoje.listaHoje`).
+Which box: work on what runs today (a fix, a test, a refactor of existing code) points at a box of
+`hoje.c4` (ids ending in `Hoje`); work that builds the target points at a box of `alvo.c4` (ids
+ending in `Alvo`). Take the smallest box that holds the whole change; a bead that touches two boxes
+carries two `c4:` labels; how we work (hooks, rules, docs of the process) and work spread over the
+whole system is `c4:transversal`. Labels go in the create itself (`-l`, `--labels`, repeated or with
+commas); a session bead is free. A batch create (`--file`, `--graph`) is refused: its beads' labels
+are in a file the hook does not read, so create them one at a time.
+
+The ids come from `origin/main:arquitetura/modelo.json` (`model_on_main`), not from the checkout: the
+hook runs the main checkout's `check.py`, whose tree only moves on Lucas's pull, while `origin/main`
+moves with any `git fetch`. So a box created on your own branch only counts after it merges: until
+then, use its parent box or `c4:transversal`. With no `modelo.json` on `origin/main`, or one that is
+not a JSON object with element ids, the rule does not run (fail open). The main checkout's
+`check.py` itself only gets this rule at the pull after the merge.
 
 **One value per label (df-b89w):** `bd create --parent` copies the parent's labels to the child, so a
 child given its own estimate ends with two (`vol:1` and `vol:2`), and the claudemain measurement
@@ -76,6 +98,7 @@ claim the script cannot read (unbalanced quotes).
 ```bash
 python3 scripts/beads/check.py close df-x --reason "Conferi: ... Não conferi: ... Assumi: ..."
 python3 scripts/beads/check.py update df-x --claim
+python3 scripts/beads/check.py create "Título" -l vol:1,inc:1,c4:casaHoje.ninhoHoje
 ```
 
 Same arguments as bd. Exit 1 lists the gaps, 0 prints `ok`. Read-only (`bd --readonly`).
