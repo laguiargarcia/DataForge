@@ -296,6 +296,7 @@ def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
     return [problem for (a, b), rels in sorted(pairs.items())
             for problem in _par_regra5(view, (a, b), rels, labels.get((a, b)), componentes)]
 
+
 def arestas_ambiguas(raw: dict) -> list[str]:
     """Every edge of a `likec4 export json` view that a reader cannot take at its word: drawn as
     '[...]', showing one of several joined titles or none of them, joining relations of different

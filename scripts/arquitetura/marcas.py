@@ -165,6 +165,7 @@ def _twin_problems(model: dict) -> list[str]:
             and {r.get("source"), r.get("target")} & componentes
             for p in _twin_problem(r, hoje, today)]
 
+
 def problems(model: dict) -> list[str]:
     """What CI checks: each mark has exactly one tag and well-formed bead ids, only the target
     carries marks, and every unmarked component arrow of the target mirrors one of today."""
