@@ -1,14 +1,15 @@
 # Arquitetura (C4 em LikeC4)
 
 Desenhos C4 do sistema, em texto, versionados aqui. Fonte do conteúdo: a ADR 0006 e os contratos de
-`docs/architecture-v2/` (locais, fora do git), o código citado e os beads. Cinco vistas, em dois
-arquivos de modelo:
+`docs/architecture-v2/` (locais, fora do git), o código citado e os beads. As vistas de entrada
+(as de componentes estão abaixo):
 
 | Vista | Arquivo | O que mostra |
 | --- | --- | --- |
 | `hoje-contexto`, `hoje-conteineres` | `hoje.c4` | O que roda em prod hoje. Muda quando a prod muda. |
 | `alvo-contexto`, `alvo-conteineres` | `alvo.c4` | O alvo v2 (quatro peças). As marcas `novo`, `muda` e `sai` dizem o que difere de hoje (abaixo). |
 | `index` | `alvo.c4` | Só os dois sistemas, hoje e alvo, como entrada. |
+| `fluxo-*` | `fluxos.c4` | Os fluxos principais de hoje, passo a passo, cada um ligado ao seu teste de ponta a ponta (abaixo). |
 
 ## Regras do desenho
 
@@ -135,6 +136,42 @@ importação dinâmica, subprocesso que pode rodar Python, o DataForge ou um she
 `.sh`/`.ps1` que chama `dataforge` ou `python`, import de arquivo de código sem dono. A docstring
 diz como resolve imports Python e TS. O job `arquitetura` do CI roda o script depois do `conferir`,
 com o Python do `.python-version`.
+
+## Fluxos (vistas dinâmicas, df-8x0m.23.41)
+
+`fluxos.c4` desenha os fluxos principais de hoje passo a passo, uma `dynamic view` por fluxo, e só
+os que já têm teste de ponta a ponta: entrar no ninho, lista de compras, desejos, corrigir a
+categoria no celular e aplicar, o resumo do mês e a regra com correção no app Finanças.
+
+Que teste ganha vista: uma vista por fluxo principal, isto é, um caminho que uma pessoa (ou o
+agendador) percorre de ponta a ponta e que passa por um caminho diferente de contêineres ou
+componentes, ligada ao teste e2e que percorre o caminho feliz dele. Variantes e casos de borda do
+mesmo fluxo (senha errada, sem rede, releitura que falha, título longo, barra estreita) não ganham
+vista: passam pelos mesmos passos. Um teste e2e cujo caminho usa um elemento que o modelo de hoje
+não tem (o alerta por e-mail, sem SMTP desenhado) ou que não é fluxo de uma pessoa (dados
+corrompidos no pipeline) também fica sem vista. Cada vista diz qual teste a exercita com um link:
+
+```
+dynamic view fluxo-lista {
+  link ../ninho/telas/e2e/tela.spec.ts 'e2e: na Lista, adiciona um item, recarrega, marca como comprado e limpa os comprados'
+  ...
+}
+```
+
+O endereço é o arquivo do teste, relativo a `arquitetura/` (onde ficam todos os `.c4`, por isso o
+`../`); o título é `e2e: ` e o nome exato do teste. Link e não `metadata`, porque o LikeC4 1.61.1
+recusa `metadata` numa vista; o nome vai no título porque o endereço de um link não aceita espaço.
+Mais de um link `e2e:` na mesma vista vale: cada um é conferido.
+
+`python3 scripts/arquitetura/fluxos.py` (no CI, depois do `componentes.py`) falha numa vista
+dinâmica sem link `e2e:`, com endereço fora da forma `../<caminho do repositório>`, com um arquivo
+que não é teste de ponta a ponta (sem pasta `e2e/` no caminho e sem nome `*_e2e.py`), que não
+existe, ou que não declara o teste do título (`def test_...` no Python, `test('...')` no
+Playwright; o título de um `test.describe` não é teste). Falha também numa vista sem passos ou com
+um passo que sai do modelo de hoje: o teste roda o código de hoje. Renomeou um teste e2e ligado a
+um fluxo, troque o título do link no mesmo PR. Os passos não precisam ser setas do modelo: um passo
+diz o que acontece naquele ponto do fluxo; as setas estáticas continuam nas outras vistas. Blocos
+`parallel` viram passos simples no `modelo.json`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
