@@ -50,7 +50,8 @@ API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do c
    seta direta entre os dois nós (sem marca, `gray`) ou, sem seta direta, uma dada pela vista. As
    regras de tag da vista, na ordem `novo`, `muda`, `sai`, dão à aresta a cor da última marca que
    alguma juntada tem; o export não guarda as regras, então a cor dada pela vista se reconhece por
-   não ser essa. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
+   não ser essa. A cor de cada marca vem da tag em `spec.c4`, que tem de ser a mesma das regras de
+   tag das vistas. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
 5. No hoje, um par de nós da vista `hoje-conteineres` (contêiner, banco, pessoa ou sistema de fora)

@@ -5,8 +5,9 @@ Python instead of running LikeC4: the hook cannot run npx on every `bd create`. 
 `arquitetura` runs `conferir`, so the committed file is always the export of the committed .c4.
 
     python3 scripts/arquitetura/modelo.py gerar      # rewrite arquitetura/modelo.json from the .c4
-    python3 scripts/arquitetura/modelo.py conferir   # exit 1 when it is stale (with a diff) or
-                                                     # a view edge is ambiguous (arestas_ambiguas)
+    python3 scripts/arquitetura/modelo.py conferir   # exit 1 when it is stale (with a diff), a
+                                                     # view edge is ambiguous (arestas_ambiguas) or
+                                                     # hoje-conteineres breaks README rule 5 (regra5)
 
 The command line takes no paths: it always reads arquitetura/ and writes arquitetura/modelo.json
 (FONTE and SAIDA), so no argument reaches the npx call or a file write. The functions take other
@@ -21,6 +22,9 @@ API, for the other scripts (put scripts/ on sys.path, as scripts/beads/check.py 
     modelo.HOJE, modelo.ALVO     # "Hoje", "Alvo": the top-level id suffix of today's and the target model
     modelo.sistema(id)           # the top-level segment of an element id ("casaAlvo.servidorAlvo" -> "casaAlvo")
     modelo.e_hoje(id)            # whether that segment ends in HOJE: the element is today's model
+    modelo.MARCAS                # "novo", "muda", "sai": the target's marks, in the views' tag-rule order
+    modelo.marca(relation)       # the mark of a relation of the export, None when it has none
+    modelo.regra5(raw)           # README rule 5 on the view hoje-conteineres of a `likec4 export json`
 
 Layout of the dict. Every key is always present; an absent text is null, an absent list [] and
 absent metadata {}. Lists of records are sorted by "id", tags are sorted, links keep source order.
@@ -79,6 +83,7 @@ HOJE, ALVO = "Hoje", "Alvo"
 # an unmarked relation (LikeC4's default).
 MARCAS = ("novo", "muda", "sai")
 SEM_MARCA = "gray"
+COMPONENTE = "componente"  # the element kind of spec.c4 for a component (README, component rules)
 
 
 def sistema(id_) -> str:
@@ -172,7 +177,9 @@ def _aresta_ambigua(view: str, edge: dict, rels: dict, cores: dict | None = None
     '[...]', or one of them and none of the rest, unless the view gives a title (`with { title }`)
     or a relation goes straight between the two nodes; with distinct kinds it takes one of them.
     The export keeps no view rules, so a view title is known only by being none of the joined
-    titles: one equal to a joined title is flagged as if LikeC4 had picked it."""
+    titles: one equal to a joined title is flagged as if LikeC4 had picked it. With no label over
+    several titles the edge comes out untitled and hides them (df-w7nk). Relations of different
+    marks also need the right colour (_cor_ambigua, df-8x0m.23.47.17)."""
     try:
         joined = [rels[r] for r in edge.get("relations") or []]
     except KeyError as missing:
@@ -256,11 +263,20 @@ def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
         if a and b and a != b:
             pairs.setdefault((a, b), []).append(r)
     labels = {(e["source"], e["target"]): e.get("label") or "" for e in vista.get("edges") or []}
+    componentes = [e["id"] for e in (raw.get("elements") or {}).values() if e.get("kind") == COMPONENTE]
+
+    def tem_componentes(n: str) -> bool:
+        return any(c.startswith(n + ".") for c in componentes)
+
     problems = []
     for (a, b), rels in sorted(pairs.items()):
         direct = [r for r in rels if (_ref(r["source"]), _ref(r["target"])) == (a, b)]
         inner = [r for r in rels if r not in direct]
-        if direct and len(inner) == 1:
+        if direct and not inner and (tem_componentes(a) or tem_componentes(b)):
+            problems.append(f"view {view}: {a} -> {b} has a direct arrow and no component arrow, though "
+                            f"{a if tem_componentes(a) else b} has components: draw the arrow from or to the "
+                            "component that does it (README rule 5)")
+        elif direct and len(inner) == 1:
             problems.append(f"view {view}: {a} -> {b} has a direct arrow over one component arrow "
                             f"({inner[0].get('title') or ''!r}): remove the direct arrow, the view shows that one's "
                             "title (README rule 5)")
@@ -273,8 +289,11 @@ def regra5(raw: dict, view: str = "hoje-conteineres") -> list[str]:
 
 def arestas_ambiguas(raw: dict) -> list[str]:
     """Every edge of a `likec4 export json` view that a reader cannot take at its word: drawn as
-    '[...]', showing one of several joined titles, or joining relations of different kinds. The
-    steps of a dynamic view are drawn one by one, with their own titles: not checked."""
+    '[...]', showing one of several joined titles or none of them, joining relations of different
+    kinds, or joining different marks with a colour that is neither the direct arrow's nor the
+    view's. A mark's colour is its tag colour in spec.c4, which must be the one the views' tag
+    rules give. The steps of a dynamic view are drawn one by one, with their own titles: not
+    checked."""
     rels = raw.get("relations", {}) | raw.get("deployments", {}).get("relations", {})
     cores = {tag: spec["color"] for tag, spec in (raw.get("specification", {}).get("tags") or {}).items()
              if tag in MARCAS and (spec or {}).get("color")}
@@ -319,8 +338,8 @@ def gerar(fonte: Path = FONTE, saida: Path = SAIDA) -> None:
 
 
 def conferir(fonte: Path = FONTE, saida: Path = SAIDA) -> list[str]:
-    """The problems of the .c4, one line each: every ambiguous view edge (`arestas_ambiguas`), then,
-    when the committed file is stale, a line saying so and the diff to the export. Empty when fine."""
+    """The problems of the .c4, one line each: every ambiguous view edge (`arestas_ambiguas`), every
+    pair of hoje-conteineres against README rule 5 (`regra5`), then, when the committed file is stale, a line saying so and the diff to the export. Empty when fine."""
     raw = exportar(fonte)
     novo = texto(normalizar(raw))
     velho = saida.read_text(encoding="utf-8") if saida.exists() else ""

@@ -312,9 +312,8 @@ def test_every_unmarked_target_component_arrow_mirrors_one_of_today():
     ({"metadata": {"codigo": ["b.py"]}},
      "seta sem marca com codigo diferente do da seta de hoje casaHoje.dfHoje.apiHoje -> casaHoje.dfHoje.motorHoje: "
      "usa; ponha a marca da mudança ou copie o codigo de hoje"),
-    ({"target": "casaAlvo.novoAlvo"}, "seta sem marca sem par no hoje (casaHoje.dfHoje.apiHoje -> None com o "
-                                      "mesmo título); ponha a marca da mudança ou copie o título e o codigo da "
-                                      "seta de hoje"),
+    ({"target": "casaAlvo.novoAlvo"}, "seta sem marca e casaAlvo.novoAlvo sem gêmeo único no hoje (o id com "
+                                      "Hoje no lugar de Alvo, ou GEMEOS); ponha a marca da mudança"),
 ])
 def test_an_unmarked_target_component_arrow_out_of_step_with_today_fails(change, problem):
     broken = json.loads(json.dumps(ESPELHO))

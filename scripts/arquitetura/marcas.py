@@ -12,7 +12,9 @@ Two halves, because CI has no bd (beads are local):
   instance of such an element (df-8x0m.23.46, df-8x0m.23.48; the export keeps no source file, so
   the suffix says the model: modelo.e_hoje), and when a top-level element ends in neither `Hoje`
   nor `Alvo`. Deployment nodes and deployment relations stay outside this rule: their ids are
-  deployment ids, with no model suffix.
+  deployment ids, with no model suffix. And when an unmarked component arrow of the target (an
+  end is a component) has no twin in today's model: the arrow between the today twins of its ends
+  (last segment with Hoje for Alvo, or GEMEOS), with the same title and codigo (df-8x0m.23.47.20).
 - `marcas.py --bd` (local, with bd): also fails when a marked bead is closed or does
   not exist. The close hook (scripts/beads/check.py) refuses `bd close` of a bead origin/main still
   marks, with `marked_beads`.
@@ -141,9 +143,13 @@ def _twin_problems(model: dict) -> list[str]:
                 or not {source, target} & componentes:
             continue
         twin = (_gemeo(source, hoje), _gemeo(target, hoje), r.get("title") or "")
+        sem = [end for end, t in zip((source, target), twin[:2], strict=True) if t is None]
         codigo = (r.get("metadata") or {}).get("codigo")
         match = today.get(twin) if None not in twin else None
-        if match is None:
+        if sem:
+            found.append(f"{r.get('id')}: seta sem marca e {', '.join(sem)} sem gêmeo único no hoje (o id com "
+                         "Hoje no lugar de Alvo, ou GEMEOS); ponha a marca da mudança")
+        elif match is None:
             found.append(f"{r.get('id')}: seta sem marca sem par no hoje ({twin[0]} -> {twin[1]} com o mesmo "
                          "título); ponha a marca da mudança ou copie o título e o codigo da seta de hoje")
         elif (match.get("metadata") or {}).get("codigo") != codigo:

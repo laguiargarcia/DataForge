@@ -555,3 +555,13 @@ def test_an_edge_with_no_title_over_a_titled_relation_names_what_it_hides():
         "view index: p -> s joins 3 relations and comes out with no title, hiding 'abre', 'lê': give it a "
         "title of its own in the view (include p -> s with { title '...' }), or draw an arrow straight "
         "between the two"]
+
+
+@pytest.mark.parametrize(("end", "named"), [("p.x", "p"), ("s.y", "s")])
+def test_rule_5_refuses_a_direct_arrow_alone_when_an_end_has_components(end, named):
+    """A container with components does nothing itself: the arrow goes from or to its component."""
+    raw = _conteineres(RESUMO, label="resume")
+    raw["elements"][end] = {"id": end, "kind": "componente", "title": end}
+    assert modelo.regra5(raw) == [
+        f"view hoje-conteineres: p -> s has a direct arrow and no component arrow, though {named} has "
+        "components: draw the arrow from or to the component that does it (README rule 5)"]
