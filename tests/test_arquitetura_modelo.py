@@ -289,3 +289,12 @@ def test_the_cli_takes_no_path(opcao):
     with pytest.raises(SystemExit) as stopped:
         modelo.main(["conferir", opcao, "x"])
     assert stopped.value.code == 2
+
+
+@pytest.mark.parametrize(("id_", "top", "hoje"), [
+    ("casaHoje", "casaHoje", True), ("casaHoje.servidor.banco", "casaHoje", True),
+    ("casaHoje.appAlvo", "casaHoje", True), ("casaAlvo.velhoHoje", "casaAlvo", False),
+    ("pluggyAlvo", "pluggyAlvo", False), ("casa", "casa", False), ("casaHojeX.a", "casaHojeX", False)])
+def test_the_model_of_an_id_is_its_top_segments_suffix(id_, top, hoje):
+    assert modelo.sistema(id_) == top
+    assert modelo.e_hoje(id_) is hoje
