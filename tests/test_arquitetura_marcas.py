@@ -126,6 +126,7 @@ def test_a_top_level_element_named_neither_today_nor_target_fails(top):
     assert repr(top) in found[0]
     assert "Hoje" in found[0]
     assert "Alvo" in found[0]
+    assert "(hoje.c4)" not in found[0]  # the files that extend casaHoje are today's model too
 
 
 def test_the_suffix_counts_only_on_the_top_level_segment():
@@ -134,6 +135,31 @@ def test_the_suffix_counts_only_on_the_top_level_segment():
     found = marcas.problems(model([element("casaHoje"), element("casaHoje.appAlvo", ["muda"], {"bead": "df-a"})]))
     assert len(found) == 1
     assert "casaHoje.appAlvo" in found[0]
+
+
+def instance(element_, tags=(), metadata=None, id_="prod.servidor"):
+    return {"id": id_, "element": element_, "title": id_, "tags": list(tags), "metadata": metadata or {}}
+
+
+@pytest.mark.parametrize("tag", marcas.TAGS)
+@pytest.mark.parametrize("element_", ["casaHoje", "casaHoje.servidorHoje", "pluggyHoje.api"])
+def test_a_marked_deployment_instance_of_a_today_element_fails(tag, element_):
+    found = marcas.problems({"deployment": {"instances": [instance(element_, [tag], {"bead": "df-a"})]}})
+    assert len(found) == 1
+    assert "prod.servidor" in found[0]
+    assert "hoje" in found[0]
+
+
+def test_a_marked_deployment_instance_of_a_target_element_passes():
+    deployed = {"instances": [instance("casaAlvo.servidorAlvo", ["novo"], {"bead": "df-a"})]}
+    assert marcas.problems({"deployment": deployed}) == []
+
+
+def test_deployment_nodes_and_relations_stay_outside_the_today_rule():
+    """Their ids are deployment ids, not model ids: no suffix tells the model."""
+    node = {"id": "pcHoje", "kind": "maquina", "tags": ["novo"], "metadata": {"bead": "df-a"}}
+    arrow = relation("pcHoje.a", "pcHoje.b", ["muda"], {"bead": "df-a"})
+    assert marcas.problems({"deployment": {"nodes": [node], "relations": [arrow]}}) == []
 
 
 TOPS = st.from_regex(r"[a-z][a-zA-Z]{0,8}(Hoje|Alvo)?", fullmatch=True)

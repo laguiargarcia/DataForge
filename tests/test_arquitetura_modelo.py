@@ -216,19 +216,19 @@ def test_gerar_writes_what_load_reads_and_conferir_sees_a_stale_file(tmp_path, m
     assert modelo.conferir(tmp_path, saida) == []
     capsys.readouterr()
     assert modelo.main(["conferir"]) == 0
-    assert capsys.readouterr().out == f"{saida} is the export of {tmp_path}\n"
+    assert capsys.readouterr().out == f"{saida} is the export of {tmp_path}, and every view edge reads at its word\n"
     raw["elements"]["s"]["title"] = "Sistema novo"
-    diff = modelo.conferir(tmp_path, saida)
-    assert diff[:2] == [f"--- {saida}", "+++ export of the .c4"]
-    assert '-      "title": "Sistema"' in diff
-    assert '+      "title": "Sistema novo"' in diff
+    problems = modelo.conferir(tmp_path, saida)
+    assert problems[:3] == [f"{saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it",
+                            f"--- {saida}", "+++ export of the .c4"]
+    assert '-      "title": "Sistema"' in problems
+    assert '+      "title": "Sistema novo"' in problems
     assert modelo.main(["conferir"]) == 1
-    assert capsys.readouterr().out == (
-        f"{saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it\n" + "\n".join(diff) + "\n")
+    assert capsys.readouterr().out == "\n".join(problems) + "\n"
     saida.unlink()
-    diff = modelo.conferir(tmp_path, saida)
-    assert diff[:3] == [f"--- {saida}", "+++ export of the .c4", f"@@ -0,0 +1,{len(diff) - 3} @@"]
-    assert all(line.startswith("+") for line in diff[3:])
+    problems = modelo.conferir(tmp_path, saida)
+    assert problems[1:4] == [f"--- {saida}", "+++ export of the .c4", f"@@ -0,0 +1,{len(problems) - 4} @@"]
+    assert all(line.startswith("+") for line in problems[4:])
     assert modelo.main(["conferir"]) == 1
 
 
@@ -346,3 +346,100 @@ def test_the_cli_help_is_the_first_line_of_the_docstring(capsys):
     assert stopped.value.code == 0
     words = " ".join(capsys.readouterr().out.split())  # argparse wraps the text at the terminal width
     assert " ".join(modelo.__doc__.splitlines()[0].split()) in words
+
+
+@pytest.mark.parametrize(("id_", "top", "hoje"), [
+    ("casaHoje", "casaHoje", True), ("casaHoje.servidor.banco", "casaHoje", True),
+    ("casaHoje.appAlvo", "casaHoje", True), ("casaAlvo.velhoHoje", "casaAlvo", False),
+    ("pluggyAlvo", "pluggyAlvo", False), ("casa", "casa", False), ("casaHojeX.a", "casaHojeX", False)])
+def test_the_model_of_an_id_is_its_top_segments_suffix(id_, top, hoje):
+    assert modelo.sistema(id_) == top
+    assert modelo.e_hoje(id_) is hoje
+
+
+def _vista(label, *relations, source="p", target="s", kind=None) -> dict:
+    """_raw() whose element view `index` draws one edge `source -> target` over `relations`, each
+    (id, source, target, title, kind); the export gives an edge the kind of one of its relations."""
+    raw = _raw()
+    for rid, src, tgt, title, rkind in relations:
+        raw["relations"][rid] = {"id": rid, "source": {"model": src}, "target": {"model": tgt}, "title": title,
+                                 "kind": rkind}
+    raw["views"]["index"]["edges"] = [{"id": "e1", "source": source, "target": target, "label": label,
+                                       "kind": kind, "relations": [r[0] for r in relations]}]
+    return raw
+
+
+ABRE = ("r1", "p", "s.s2", "abre", None)
+LE = ("r2", "p", "s.s2", "lê", None)
+
+
+def test_an_edge_drawn_as_dots_fails_conferir_with_its_view_and_pair(tmp_path, monkeypatch, capsys):
+    """Rule 3 of arquitetura/README.md: '[...]' tells the reader nothing (df-8x0m.23.47.12)."""
+    raw = _vista("[...]", ABRE, LE)
+    monkeypatch.setattr(modelo, "exportar", lambda fonte: raw)
+    saida = tmp_path / "modelo.json"
+    saida.write_text(modelo.texto(modelo.normalizar(raw)), encoding="utf-8")
+    monkeypatch.setattr(modelo, "SAIDA", saida)
+    assert modelo.main(["conferir"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "view index: p -> s is drawn as '[...]': give it one title in the view "
+        "(include p -> s with { title '...' })"]
+
+
+@pytest.mark.parametrize(("raw", "shown"), [
+    (_vista("abre", ABRE, LE), "abre"),
+    (_vista("abre", ABRE, ("r3", "p", "s", "", None)), "abre"),  # an untitled direct arrow gives no title
+    (_vista(None, ABRE, ("r3", "p", "s.s3", "", None)), ""),  # no label shows the untitled one, hides abre
+])
+def test_an_edge_showing_one_of_several_joined_titles_is_ambiguous(raw, shown):
+    """LikeC4 1.61.1 sometimes shows one joined title and hides the rest, with no '[...]'."""
+    assert modelo.arestas_ambiguas(raw) == [
+        f"view index: p -> s joins 2 relations and shows only {shown!r}: give it a title of its own in "
+        "the view, none of the joined ones (include p -> s with { title '...' }), or draw an arrow "
+        "straight between the two"]
+
+
+@pytest.mark.parametrize("raw", [
+    _vista("Título da vista", ABRE, LE),  # the view gives the title (`with { title }`)
+    _vista("junta", ABRE, ("r3", "p", "s", "junta", None)),  # a direct arrow gives it
+    _vista("abre", ABRE, ("r3", "p", "s.s3", "abre", None)),  # no direct arrow, one title for all
+    _vista("abre", ABRE),
+    _vista(None, ABRE, ("r3", "p", "s", "", None)),  # an untitled direct arrow, drawn untitled
+])
+def test_an_edge_that_reads_at_its_word_passes(raw):
+    assert modelo.arestas_ambiguas(raw) == []
+
+
+@pytest.mark.parametrize(("label", "kind", "drawn"), [
+    ("lê", "leitura", "leitura"), ("Título da vista", "leitura", "leitura"), ("lê", None, "(none)")])
+def test_an_edge_joining_kinds_is_ambiguous_even_with_a_title(label, kind, drawn):
+    """A leitura joined with plain arrows comes out leitura, dotted; neither a direct arrow nor a
+    view title changes the kind."""
+    raw = _vista(label, ("r3", "p", "s", "lê", None), ("r4", "p", "s.s2", "copia", "leitura"), kind=kind)
+    assert modelo.arestas_ambiguas(raw) == [
+        f"view index: p -> s joins relations of kinds (none), leitura and is drawn as {drawn}: "
+        "give the arrows behind it one kind, or exclude the odd one from the view "
+        "(exclude <child> -> <target>)"]
+
+
+def test_a_deployment_view_edge_reads_the_deployment_relations():
+    raw = _raw()
+    raw["views"]["impl"]["edges"] = [{"id": "d1", "source": "prod.pc.inst", "target": "prod.pc", "label": "[...]",
+                                      "relations": ["2vs8yc"]}]
+    assert modelo.arestas_ambiguas(raw) == [
+        "view impl: prod.pc.inst -> prod.pc is drawn as '[...]': give it one title in the view "
+        "(include prod.pc.inst -> prod.pc with { title '...' })"]
+
+
+@pytest.mark.parametrize("raw", [{}, {"deployments": {}}])
+def test_an_export_without_views_or_relations_has_no_edge_to_check(raw):
+    assert modelo.arestas_ambiguas(raw) == []
+
+
+def test_dynamic_steps_are_not_checked_and_an_unknown_relation_fails_loudly():
+    raw = _raw()
+    raw["views"]["fluxo"]["edges"][0]["label"] = "[...]"
+    assert modelo.arestas_ambiguas(raw) == []
+    raw["views"]["index"]["edges"][0]["relations"] = ["nenhuma"]
+    with pytest.raises(ValueError, match="view index: edge e1 names an unknown relation 'nenhuma'"):
+        modelo.arestas_ambiguas(raw)

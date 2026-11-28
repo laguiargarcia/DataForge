@@ -1,4 +1,4 @@
-"""The component model (C4 level 3) of arquitetura/*.c4 checked against the code (df-8x0m.23.47.2).
+"""The component model (C4 level 3) of arquitetura/*.c4 checked against the code (df-8x0m.23.47.2, .9).
 
     uv run --no-project python scripts/arquitetura/componentes.py   # exit 1 with one `error:` line per problem
 
@@ -18,8 +18,8 @@ the repo, a file or a folder. LikeC4 exports a list of one item as a string; bot
 The model holds two drawings, the hoje and the alvo. The system of an element is the first part of
 its id (casaHoje, casaAlvo, donoHoje); the hoje is every system whose name ends in "Hoje" (mother
 constraint 2 of df-8x0m.23.47). Rules (2) to (5) are per system, so the same path in a box of the
-hoje and in one of the alvo is no conflict. Rules (3) and (4) run on the hoje only: the alvo draws
-code that does not exist yet.
+hoje and in one of the alvo is no conflict. Rules (3), (4), (7) and (8) run on the hoje only: the
+alvo draws code that does not exist yet.
 
 (1) Every codigo path, of any element, arrow or deployment item, in any system, is in normal form
     (relative, '/' between parts, no '.', '..' or empty part) and is a tracked file or a folder
@@ -35,10 +35,21 @@ code that does not exist yet.
     and a pair where neither owner is a componente (an import between two containers without
     components). When components are added to a container later, the arrows that enter it point
     at the container: this rule asks for them to be pointed at the component that owns the file.
+    One error per line and pair: a line that imports two files of one owner (or a module and the
+    __init__.py of its package, below) asks for one arrow.
 (4) An owner that is not a componente but has a componente inside it (a container with
     components) owns no code file: one of its components (or of a nested container) does.
 (5) One path in the codigo of two elements of the same system is an error: the owner would be
     ambiguous.
+(6) Every codigo path of a componente, hoje or alvo, is inside (equal to or under) a codigo path of
+    its nearest ancestor by id that has codigo; a componente with codigo and no such ancestor is an
+    error. Without it a component could take the files of another container and pass rule (4).
+(7) An import that asks for an arrow in rule (3), when the arrow is there, has the importing file
+    in the codigo of an arrow of that pair (any of them, if several titles share it), as the file or
+    a folder above it. One error per file and pair, at its first import. A codigo path of an arrow
+    that holds no import is not checked: it may hold the HTTP or CLI call of the same arrow.
+(8) Every componente of the hoje has codigo (mother constraint 4): one without it owns no file, so
+    rules (3), (4) and (6) cannot see it.
 
 Code files: suffixes .py .ts .tsx .js .jsx .mjs .cjs .sh .ps1. Out of scope, so they need no owner,
 their imports are not read and an import of them is not checked: anything under a folder named
@@ -56,6 +67,13 @@ statically when it is built from Path(__file__) with .parent, .parents[n], .reso
 any other entry is a warning. `import a.b.c` leads to a/b/c.py or a/b/c/__init__.py; `from a.b
 import n` to a/b/n when it is a module, else to a/b; a relative import resolves from the file's own
 package. A name no base resolves (yaml, polars) is not code of the repo.
+
+An import also imports, before the module, the __init__.py of each package between the base it
+resolved from and the module (`from dataforge import delta_pool` runs dataforge/__init__.py first):
+each one counts as an import of that line, checked as in (3) and (7) (df-8x0m.23.47.9). Python runs
+that code in the importing process, so the dependency is real. Not counted: the packages that hold
+the importing file, which ran before the importing file itself, and the packages above the base
+(with app/b on sys.path, `import y` is the top-level y). An exec of a file runs that file alone.
 
 Loads: exec(<path expression above>.read_text(...)) (the workspace scripts' functions.py) and
 importlib.import_module("<literal name>") that resolves are imports, checked as in (3). Any other
@@ -89,6 +107,7 @@ import posixpath
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -98,11 +117,11 @@ from arquitetura import modelo
 
 REPO = Path(__file__).resolve().parents[2]
 COMPONENTE = "componente"
-HOJE = "Hoje"
+INIT = "__init__.py"  # a package's own module
 CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".ps1")
 TS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 OUT_FOLDERS = frozenset({"dist", "node_modules", "tests", "test", "__tests__", "e2e"})
-OUT_NAME = re.compile(r"^(test_.*\.py|.*_test\.py|conftest\.py|.*\.(test|spec)\..*|.*\.config\.(ts|js|mjs|cjs))$")
+OUT_CONFIGS = (".config.ts", ".config.js", ".config.mjs", ".config.cjs")
 SUBPROCESS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
 ASYNCIO = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
 ALWAYS = frozenset({"system", "popen"})  # os.system and os.popen run a shell command line
@@ -112,15 +131,29 @@ DYNAMIC = frozenset({"__import__", "spec_from_file_location", "run_path", "run_m
 SHELLS = frozenset({"sh", "bash", "cmd", "powershell", "pwsh"})  # a program that runs any other one
 SNIPPET = 120
 POSICAO = re.compile(r"^([^:]+):(?:(\d+):)?")
+# import/export ... from '...' is read in steps, each pattern linear: the keyword, then the run of
+# characters an import clause is made of, which must end in `from` and spaces, then the quoted
+# specifier right after the run (TS_FROM_* and _ts_from).
+TS_FROM_KEYWORD = re.compile(r"\b(?:import|export)\s")
+TS_FROM_CLAUSE = re.compile(r"[\w\s{},*$]*")
+TS_FROM_WORD = re.compile(r"\bfrom")
+TS_SPECIFIER = re.compile(r"""(['"])([^'"\n]+)\1""")
 TS_IMPORTS = (
-    re.compile(r"""\b(?:import|export)\s+[\w\s{},*$]*?\bfrom\s*(['"])([^'"\n]+)\1"""),
     re.compile(r"""\bimport\s*(['"])([^'"\n]+)\1"""),
     re.compile(r"""\bimport\s*\(\s*(['"])([^'"\n]+)\1\s*\)"""),
 )
 TS_DYNAMIC = re.compile(r"\bimport\s*\(")
 # A string (kept) or a comment (replaced by its newlines), so a quote inside a comment, or '//' in a
-# string, does not throw the patterns off.
-TS_TOKENS = re.compile(r"""('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(//[^\n]*|/\*.*?\*/)""", re.DOTALL)
+# string, does not throw the patterns off. TS_TOKEN_START finds where the next one may start, and
+# the pattern of that start reads it whole.
+TS_TOKEN_START = re.compile(r"""['"`]|//|/\*""")
+TS_TOKEN = {
+    "'": re.compile(r"'(?:\\.|[^'\\\n])*'", re.DOTALL),
+    '"': re.compile(r'"(?:\\.|[^"\\\n])*"', re.DOTALL),
+    "`": re.compile(r"`(?:\\.|[^`\\])*`", re.DOTALL),
+    "//": re.compile(r"//[^\n]*"),
+    "/*": re.compile(r"/\*.*?\*/", re.DOTALL),
+}
 
 
 @dataclass
@@ -128,7 +161,9 @@ class Resultado:
     erros: list[str] = field(default_factory=list)
     avisos: list[str] = field(default_factory=list)
     donos: dict[str, str] = field(default_factory=dict)  # code file of the hoje -> its owner
-    imports: list[tuple[str, int, str]] = field(default_factory=list)  # (file, line, imported file)
+    # (file, line, imported file, None) or, for a package's __init__.py the import runs first,
+    # (file, line, that __init__.py, the imported file)
+    imports: list[tuple[str, int, str, str | None]] = field(default_factory=list)
 
 
 @dataclass
@@ -162,14 +197,21 @@ def codigo(item: dict) -> list:
     return [valor] if isinstance(valor, str) else list(valor)
 
 
-def sistema(id_: str) -> str:
-    return id_.split(".")[0]
+def _fora(nome: str) -> bool:
+    """A test or a tooling config, by its file name."""
+    return ((nome.startswith("test_") and nome.endswith(".py")) or nome.endswith("_test.py")
+            or nome == "conftest.py" or ".test." in nome or ".spec." in nome or nome.endswith(OUT_CONFIGS))
 
 
 def e_codigo(arquivo: str) -> bool:
     partes = arquivo.split("/")
     return (arquivo.endswith(CODE_SUFFIXES) and not OUT_FOLDERS.intersection(partes[:-1])
-            and not OUT_NAME.match(partes[-1]))
+            and not _fora(partes[-1]))
+
+
+def _dentro(caminho: str, pasta: str) -> bool:
+    """`caminho` is the path `pasta` or lies under it."""
+    return caminho == pasta or caminho.startswith(pasta + "/")
 
 
 def _normal(caminho: str) -> str | None:
@@ -207,22 +249,54 @@ def checar_repetidos(elementos: list[dict]) -> list[str]:
     por_caminho: dict[tuple[str, str], set[str]] = {}
     for elemento in elementos:
         for caminho in codigo(elemento):
-            por_caminho.setdefault((sistema(elemento["id"]), caminho), set()).add(elemento["id"])
+            por_caminho.setdefault((modelo.sistema(elemento["id"]), caminho), set()).add(elemento["id"])
     return [f"{caminho!r} is in the codigo of {' and '.join(sorted(ids))}: give it one owner"
             for (_, caminho), ids in sorted(por_caminho.items()) if len(ids) > 1]
 
 
 def donos_do_hoje(elementos: list[dict], repo: Repo) -> dict[str, str]:
     """Rule (2): each code file of the hoje -> the element of longest codigo path that holds it."""
-    caminhos = sorted((c, e["id"]) for e in elementos if sistema(e["id"]).endswith(HOJE) for c in codigo(e))
+    caminhos = sorted((c, e["id"]) for e in elementos if modelo.e_hoje(e["id"]) for c in codigo(e))
     donos = {}
     for arquivo in sorted(repo.arquivos):
         if not e_codigo(arquivo):
             continue
-        achados = [(len(c), dono) for c, dono in caminhos if arquivo == c or arquivo.startswith(c + "/")]
+        achados = [(len(c), dono) for c, dono in caminhos if _dentro(arquivo, c)]
         if achados:
             donos[arquivo] = min(achados, key=lambda achado: (-achado[0], achado[1]))[1]
     return donos
+
+
+def _ancestral_com_codigo(id_: str, por_id: dict[str, list]) -> str | None:
+    """The nearest ancestor of `id_`, by id, that has codigo."""
+    partes = id_.split(".")
+    return next((pai for fim in range(len(partes) - 1, 0, -1)
+                 if por_id.get(pai := ".".join(partes[:fim]))), None)
+
+
+def checar_dentro(elementos: list[dict]) -> list[str]:
+    """Rule (6)."""
+    por_id = {e["id"]: codigo(e) for e in elementos}
+    erros = []
+    for elemento in elementos:
+        caminhos = codigo(elemento)
+        if elemento["kind"] != COMPONENTE or not caminhos:
+            continue
+        pai = _ancestral_com_codigo(elemento["id"], por_id)
+        if pai is None:
+            erros.append(f"{elemento['id']}: has codigo but none of its ancestors has codigo, "
+                         "so its code lies in no container")
+            continue
+        erros += [f"{elemento['id']}: codigo {caminho!r} is not inside the codigo of its ancestor {pai} "
+                  f"({', '.join(map(repr, por_id[pai]))})"
+                  for caminho in caminhos if not any(_dentro(caminho, p) for p in por_id[pai])]
+    return erros
+
+
+def checar_sem_codigo(elementos: list[dict]) -> list[str]:
+    """Rule (8)."""
+    return [f"{e['id']}: a componente of the hoje without codigo: give it the paths of its code"
+            for e in elementos if e["kind"] == COMPONENTE and modelo.e_hoje(e["id"]) and not codigo(e)]
 
 
 def checar_componentes(donos: dict[str, str], elementos: list[dict]) -> list[str]:
@@ -238,19 +312,46 @@ def _parente(a: str, b: str) -> bool:
     return a.startswith(b + ".") or b.startswith(a + ".")
 
 
+def _par(resultado: Resultado, tipos: dict[str, str], arquivo: str, linha: int, alvo: str) -> tuple[str, str] | None:
+    """(source, target) of the arrow rule (3) asks for an import, or None; an import of a code file
+    no element owns is a warning."""
+    de, para = resultado.donos[arquivo], resultado.donos.get(alvo)
+    if para is None and e_codigo(alvo):
+        resultado.avisos.append(f"{arquivo}:{linha}: imports {alvo}, which no element owns")
+    if para is None or de == para or _parente(de, para) or COMPONENTE not in (tipos.get(de), tipos.get(para)):
+        return None
+    return de, para
+
+
+def _falta(par: tuple[str, str] | None, setas: dict[tuple[str, str], set[str]], arquivo: str,
+           linha: int) -> tuple[str, int] | None:
+    """What the model lacks for an import in `arquivo` at `linha` that asks for the arrow `par`:
+    ("seta", linha), ("codigo", 0) when no arrow of the pair lists the file, or None."""
+    if par is None:
+        return None
+    if par not in setas:
+        return "seta", linha
+    return None if any(_dentro(arquivo, c) for c in setas[par]) else ("codigo", 0)
+
+
 def checar_setas(resultado: Resultado, elementos: list[dict], relacoes: list[dict]) -> list[str]:
-    """Rule (3); an import of a code file no element owns is a warning."""
+    """Rules (3) and (7)."""
     tipos = {e["id"]: e["kind"] for e in elementos}
-    setas = {(r["source"], r["target"]) for r in relacoes}
-    erros = []
-    for arquivo, linha, alvo in resultado.imports:
-        de, para = resultado.donos[arquivo], resultado.donos.get(alvo)
-        if para is None and e_codigo(alvo):
-            resultado.avisos.append(f"{arquivo}:{linha}: imports {alvo}, which no element owns")
-        if para is None or de == para or _parente(de, para) or COMPONENTE not in (tipos.get(de), tipos.get(para)):
+    setas: dict[tuple[str, str], set[str]] = {}
+    for relacao in relacoes:
+        setas.setdefault((relacao["source"], relacao["target"]), set()).update(codigo(relacao))
+    erros, vistos = [], set()
+    # in file and line order, the imported module before the packages it runs: one error per line
+    # and pair for a missing arrow, one per file and pair for a missing codigo
+    for arquivo, linha, alvo, modulo_ in sorted(resultado.imports, key=lambda i: (i[0], i[1], i[3] is not None, i[2])):
+        par = _par(resultado, tipos, arquivo, linha, alvo)
+        falta = _falta(par, setas, arquivo, linha)
+        if falta is None or (arquivo, par, falta) in vistos:
             continue
-        if (de, para) not in setas:
-            erros.append(f"{arquivo}:{linha}: imports {alvo}, so the model needs an arrow {de} -> {para}")
+        vistos.add((arquivo, par, falta))
+        texto = f"{arquivo}:{linha}: imports {alvo if modulo_ is None else f'{modulo_}, whose package runs {alvo}'}"
+        erros.append(f"{texto}, so the model needs an arrow {par[0]} -> {par[1]}" if falta[0] == "seta"
+                     else f"{texto}, so the codigo of an arrow {par[0]} -> {par[1]} must list {arquivo}")
     return erros
 
 
@@ -281,17 +382,30 @@ def _caminho(no: ast.expr, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, 
     if isinstance(no, ast.Attribute) and no.attr == "parent":
         base = _caminho(no.value, arquivo, nomes)
         return base[:-1] if base else None
-    if (isinstance(no, ast.Subscript) and isinstance(no.value, ast.Attribute) and no.value.attr == "parents"
-            and isinstance(no.slice, ast.Constant) and isinstance(no.slice.value, int)):
-        base = _caminho(no.value.value, arquivo, nomes)
-        fim = len(base) - 1 - no.slice.value if base is not None else -1
-        return base[:fim] if fim >= 0 else None
-    if (isinstance(no, ast.BinOp) and isinstance(no.op, ast.Div) and isinstance(no.right, ast.Constant)
-            and isinstance(no.right.value, str)):
-        base = _caminho(no.left, arquivo, nomes)
-        junto = _normal(_juntar(*base, no.right.value)) if base is not None else None
-        return tuple(junto.split("/")) if junto else None
+    if isinstance(no, ast.Subscript):
+        return _caminho_parents(no, arquivo, nomes)
+    if isinstance(no, ast.BinOp):
+        return _caminho_barra(no, arquivo, nomes)
     return None
+
+
+def _caminho_parents(no: ast.Subscript, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """x.parents[n] is x without its last n + 1 parts."""
+    if not (isinstance(no.value, ast.Attribute) and no.value.attr == "parents"
+            and isinstance(no.slice, ast.Constant) and isinstance(no.slice.value, int)):
+        return None
+    base = _caminho(no.value.value, arquivo, nomes)
+    fim = len(base) - 1 - no.slice.value if base is not None else -1
+    return base[:fim] if fim >= 0 else None
+
+
+def _caminho_barra(no: ast.BinOp, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """x / "literal" is x joined with the literal, in normal form."""
+    if not (isinstance(no.op, ast.Div) and isinstance(no.right, ast.Constant) and isinstance(no.right.value, str)):
+        return None
+    base = _caminho(no.left, arquivo, nomes)
+    junto = _normal(_juntar(*base, no.right.value)) if base is not None else None
+    return tuple(junto.split("/")) if junto else None
 
 
 def _caminho_chamada(no: ast.Call, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
@@ -344,15 +458,20 @@ class _Leitor:
         alvo = _juntar(base, *partes)
         if not alvo:
             return None
-        for candidato in (alvo + ".py", _juntar(alvo, "__init__.py")):
+        for candidato in (alvo + ".py", _juntar(alvo, INIT)):
             if candidato in self.repo.arquivos:
                 return candidato
         return None
 
-    def import_(self, partes: list[str]) -> str | None:
-        return next((achado for base in self.bases if (achado := self.modulo(base, partes))), None)
+    def achar(self, base: str, partes: list[str]) -> tuple[str, str] | None:
+        """(base, file) of the module `partes` under `base`, or None."""
+        achado = self.modulo(base, partes)
+        return (base, achado) if achado else None
 
-    def from_(self, no: ast.ImportFrom, nome: str) -> str | None:
+    def import_(self, partes: list[str]) -> tuple[str, str] | None:
+        return next((achado for base in self.bases if (achado := self.achar(base, partes))), None)
+
+    def from_(self, no: ast.ImportFrom, nome: str) -> tuple[str, str] | None:
         partes = no.module.split(".") if no.module else []
         bases = self.bases
         if no.level:
@@ -361,15 +480,32 @@ class _Leitor:
                 return None
             bases = ["/".join(pacote[:len(pacote) - (no.level - 1)])]
         for base in bases:
-            achado = (self.modulo(base, [*partes, nome]) if nome != "*" else None) or self.modulo(base, partes)
+            achado = (self.achar(base, [*partes, nome]) if nome != "*" else None) or self.achar(base, partes)
             if achado:
                 return achado
         return None
 
-    def ligar(self, linha: int, alvo: str | None) -> None:
-        if alvo is not None and (linha, alvo) not in self.lidos:
-            self.lidos.add((linha, alvo))
-            self.resultado.imports.append((self.arquivo, linha, alvo))
+    def ligar(self, linha: int, achado: tuple[str, str] | None) -> None:
+        """An import of the file found from its base, and of each package __init__.py it runs first."""
+        if achado is None:
+            return
+        base, alvo = achado
+        for pacote, modulo_ in [(alvo, None), *((p, alvo) for p in self.pacotes(base, alvo))]:
+            if (linha, pacote) not in self.lidos:
+                self.lidos.add((linha, pacote))
+                self.resultado.imports.append((self.arquivo, linha, pacote, modulo_))
+
+    def pacotes(self, base: str, alvo: str) -> list[str]:
+        """The __init__.py of each package between `base` and `alvo`, which Python runs before `alvo`;
+        not those of the importing file's own packages, which ran before the importing file. When
+        `alvo` is a package's own __init__.py it comes back too, and `ligar` drops it as read."""
+        pacotes, pasta = [], posixpath.dirname(alvo)
+        while pasta and pasta != base:
+            inicio = _juntar(pasta, INIT)
+            if inicio in self.repo.arquivos and not self.arquivo.startswith(pasta + "/"):
+                pacotes.append(inicio)
+            pasta = posixpath.dirname(pasta)
+        return pacotes
 
     def avisar(self, no: ast.AST, texto: str) -> None:
         self.resultado.avisos.append(f"{self.arquivo}:{no.lineno}: {texto}: {_trecho(self.fonte, no)}")
@@ -398,81 +534,138 @@ class _Leitor:
     def bases_de(self, chamadas: list[ast.Call], partes: tuple[str, ...], nomes: dict) -> list[str]:
         """The folders imports resolve from, in order (see the module docstring)."""
         inseridos, anexados = [], []
-        for no in chamadas:
-            if (isinstance(no.func, ast.Attribute) and no.func.attr in ("insert", "append")
-                    and isinstance(no.func.value, ast.Attribute) and no.func.value.attr == "path"
-                    and isinstance(no.func.value.value, ast.Name) and no.func.value.value.id == "sys"):
-                base = _caminho(no.args[-1], partes, nomes) if no.args else None
-                if base is None:
-                    self.avisar(no, "sys.path entry not resolved, imports through it are not checked")
-                else:
-                    (inseridos if no.func.attr == "insert" else anexados).append("/".join(base))
+        for no in filter(_sys_path, chamadas):
+            base = _caminho(no.args[-1], partes, nomes) if no.args else None
+            if base is None:
+                self.avisar(no, "sys.path entry not resolved, imports through it are not checked")
+            else:
+                (inseridos if no.func.attr == "insert" else anexados).append("/".join(base))
         pasta = "/".join(partes[:-1])
-        proprio = [] if _juntar(pasta, "__init__.py") in self.repo.arquivos else [pasta]
+        proprio = [] if _juntar(pasta, INIT) in self.repo.arquivos else [pasta]
         return [*reversed(inseridos), *proprio, "", *anexados]
 
     def chamada(self, no: ast.Call, partes: tuple[str, ...], nomes: dict) -> None:
         nome = _nome(no.func)
         primeiro = no.args[0] if no.args else None
         if nome == "exec" and isinstance(no.func, ast.Name):
-            lido = (_caminho(primeiro.func.value, partes, nomes)
-                    if isinstance(primeiro, ast.Call) and isinstance(primeiro.func, ast.Attribute)
-                    and primeiro.func.attr == "read_text" else None)
+            lido = _lido(primeiro, partes, nomes)
             alvo = "/".join(lido) if lido else None
-            self.carga(no, alvo if alvo in self.repo.arquivos else None)
+            # exec runs that file alone: no package is imported
+            self.carga(no, (posixpath.dirname(alvo), alvo) if alvo in self.repo.arquivos else None)
         elif nome == "import_module":
-            literal = (primeiro.value if isinstance(primeiro, ast.Constant) and isinstance(primeiro.value, str)
-                       and not primeiro.value.startswith(".") else None)
+            literal = _modulo_literal(primeiro)
             self.carga(no, self.import_(literal.split(".")) if literal else None)
         elif nome in DYNAMIC:
             self.carga(no, None)
         else:
             self.processo(no)
 
-    def carga(self, no: ast.Call, alvo: str | None) -> None:
-        if alvo is None:
+    def carga(self, no: ast.Call, achado: tuple[str, str] | None) -> None:
+        if achado is None:
             self.avisar(no, "dynamic load, not checked")
         else:
-            self.ligar(no.lineno, alvo)
+            self.ligar(no.lineno, achado)
 
     def processo(self, no: ast.Call) -> None:
         """A call that starts a process is silent only when its program is a literal that is neither
         python, dataforge nor a shell."""
-        modulos, funcoes = self.processos
-        if isinstance(no.func, ast.Attribute) and isinstance(no.func.value, ast.Name) and no.func.value.id in modulos:
-            modulo, nome = modulos[no.func.value.id], no.func.attr
-        elif isinstance(no.func, ast.Name) and no.func.id in funcoes:
-            modulo, nome = funcoes[no.func.id]
-        else:
+        chamado = self.chamado(no)
+        if chamado is None:
             return
+        modulo, nome = chamado
         if modulo == "os" and nome in ALWAYS:
             self.avisar(no, "subprocess, not checked")
             return
-        lancador = ((modulo == "subprocess" and nome in SUBPROCESS) or (modulo == "asyncio" and nome in ASYNCIO)
-                    or (modulo == "os" and nome.startswith(("exec", "spawn"))))
-        if not lancador:
+        if not _lancador(modulo, nome):
             return
-        posicao = 1 if nome.startswith("spawn") else 0  # os.spawn*(mode, path, ...)
-        comando = no.args[posicao] if len(no.args) > posicao else None
-        if isinstance(comando, (ast.List, ast.Tuple)) and comando.elts:
-            comando = comando.elts[0]
-        texto = comando.value.lower() if isinstance(comando, ast.Constant) and isinstance(comando.value, str) else None
+        texto = _programa(no, nome)
         programa = posixpath.basename(texto.split()[0]).removesuffix(".exe") if texto and texto.split() else None
         if programa is None or programa in SHELLS or re.search(r"python|dataforge", texto):
             self.avisar(no, "subprocess, not checked")
+
+    def chamado(self, no: ast.Call) -> tuple[str, str] | None:
+        """(module, function) of a call to a function of subprocess, os or asyncio, or None."""
+        modulos, funcoes = self.processos
+        if isinstance(no.func, ast.Attribute) and isinstance(no.func.value, ast.Name) and no.func.value.id in modulos:
+            return modulos[no.func.value.id], no.func.attr
+        if isinstance(no.func, ast.Name) and no.func.id in funcoes:
+            return funcoes[no.func.id]
+        return None
+
+
+def _sys_path(no: ast.Call) -> bool:
+    """A call sys.path.insert(...) or sys.path.append(...)."""
+    return (isinstance(no.func, ast.Attribute) and no.func.attr in ("insert", "append")
+            and isinstance(no.func.value, ast.Attribute) and no.func.value.attr == "path"
+            and isinstance(no.func.value.value, ast.Name) and no.func.value.value.id == "sys")
+
+
+def _lido(primeiro: ast.expr | None, partes: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """The path of the x in exec(x.read_text(...)), or None."""
+    if isinstance(primeiro, ast.Call) and isinstance(primeiro.func, ast.Attribute) and primeiro.func.attr == "read_text":
+        return _caminho(primeiro.func.value, partes, nomes)
+    return None
+
+
+def _modulo_literal(primeiro: ast.expr | None) -> str | None:
+    """The module name of import_module("<literal>"), unless relative."""
+    if isinstance(primeiro, ast.Constant) and isinstance(primeiro.value, str) and not primeiro.value.startswith("."):
+        return primeiro.value
+    return None
+
+
+def _lancador(modulo: str, nome: str) -> bool:
+    """A function that starts a process (os.system and os.popen apart)."""
+    return ((modulo == "subprocess" and nome in SUBPROCESS) or (modulo == "asyncio" and nome in ASYNCIO)
+            or (modulo == "os" and nome.startswith(("exec", "spawn"))))
+
+
+def _programa(no: ast.Call, nome: str) -> str | None:
+    """The program of a process call, lowercased, when it is a string literal (or the first item of a
+    list or tuple of them)."""
+    posicao = 1 if nome.startswith("spawn") else 0  # os.spawn*(mode, path, ...)
+    comando = no.args[posicao] if len(no.args) > posicao else None
+    if isinstance(comando, (ast.List, ast.Tuple)) and comando.elts:
+        comando = comando.elts[0]
+    return comando.value.lower() if isinstance(comando, ast.Constant) and isinstance(comando.value, str) else None
 
 
 # TS and JS
 
 
 def _sem_comentarios(fonte: str) -> str:
-    return TS_TOKENS.sub(lambda m: m[1] if m[1] is not None else "\n" * m[2].count("\n"), fonte)
+    """The source with each comment replaced by its newlines; a string, even one holding '//', is kept."""
+    partes, copiado, pos = [], 0, 0
+    while inicio := TS_TOKEN_START.search(fonte, pos):
+        token = TS_TOKEN[inicio[0]].match(fonte, inicio.start())
+        if token is None:  # an unclosed string or comment: go on from the next character
+            pos = inicio.start() + 1
+            continue
+        if inicio[0].startswith("/"):
+            partes += [fonte[copiado:token.start()], "\n" * token[0].count("\n")]
+            copiado = token.end()
+        pos = token.end()
+    return "".join([*partes, fonte[copiado:]])
+
+
+def _ts_from(fonte: str) -> Iterator[tuple[int, str]]:
+    """(start, specifier) of each import/export ... from '...', left to right and not overlapping."""
+    fim = 0
+    for chave in TS_FROM_KEYWORD.finditer(fonte):
+        if chave.start() < fim:
+            continue
+        clausula = TS_FROM_CLAUSE.match(fonte, chave.end())
+        palavra = chave.end() + len(clausula[0].rstrip()) - len("from")
+        especificador = TS_SPECIFIER.match(fonte, clausula.end())
+        if palavra >= chave.end() and TS_FROM_WORD.match(fonte, palavra) and especificador:
+            fim = especificador.end()
+            yield chave.start(), especificador[2]
 
 
 def _ts(repo: Repo, arquivo: str, fonte: str, resultado: Resultado) -> None:
     fonte = _sem_comentarios(fonte)
-    achados = sorted({(m.start(), m.group(2)) for padrao in TS_IMPORTS for m in padrao.finditer(fonte)})
-    literais = {m.start() for m in TS_IMPORTS[2].finditer(fonte)}
+    achados = sorted({*_ts_from(fonte), *((m.start(), m[2]) for padrao in TS_IMPORTS for m in padrao.finditer(fonte))})
+    literais = {m.start() for m in TS_IMPORTS[1].finditer(fonte)}
     for m in TS_DYNAMIC.finditer(fonte):
         if m.start() not in literais:
             linha = fonte.count("\n", 0, m.start()) + 1
@@ -490,7 +683,7 @@ def _ts(repo: Repo, arquivo: str, fonte: str, resultado: Resultado) -> None:
             resultado.avisos.append(f"{arquivo}:{linha}: relative import not resolved to a tracked file: "
                                     f"{especificador!r}")
         else:
-            resultado.imports.append((arquivo, linha, alvo))
+            resultado.imports.append((arquivo, linha, alvo, None))
 
 
 def _shell(arquivo: str, dados: bytes, resultado: Resultado) -> None:
@@ -534,7 +727,8 @@ def conferir(modelo_: dict, raiz: Path, arquivos) -> Resultado:
     resultado = Resultado(donos=donos_do_hoje(elementos, repo))
     ler_imports(repo, resultado)
     por_arquivo = resultado.erros + checar_setas(resultado, elementos, modelo_.get("relations") or [])
-    resultado.erros = (checar_caminhos(modelo_, repo) + checar_repetidos(elementos)
+    resultado.erros = (checar_caminhos(modelo_, repo) + checar_repetidos(elementos) + checar_dentro(elementos)
+                       + checar_sem_codigo(elementos)
                        + checar_componentes(resultado.donos, elementos) + sorted(por_arquivo, key=_posicao))
     resultado.avisos.sort(key=_posicao)
     return resultado

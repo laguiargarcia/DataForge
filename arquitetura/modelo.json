@@ -183,6 +183,207 @@
       "title": "DataForge"
     },
     {
+      "description": "O servidor FastAPI: workspaces, jobs, execuções, triggers, deploy, tabelas do curated, presença e o stream de eventos; serve o build dos apps e repassa as chamadas ao backend deles",
+      "id": "casaHoje.dataforgeHoje.apiHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI",
+      "title": "API HTTP"
+    },
+    {
+      "description": "Acha os apps dos workspaces (app.yaml, dist), inicia e para o backend de cada um num processo uvicorn com um token, o middleware que o backend usa para recusar o que não veio do DataForge e o atalho do Windows",
+      "id": "casaHoje.dataforgeHoje.appsHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/apps.py",
+          "dataforge/app_backends.py",
+          "dataforge/app_backend_host.py",
+          "dataforge/app_guard.py",
+          "dataforge/shortcut.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, uvicorn",
+      "title": "Hospedagem de apps"
+    },
+    {
+      "description": "O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, app (o que o atalho roda), stop, deploy, register-triggers, entre outros (jobs, execucoes, validate, init, schedule-sync); registra cada trigger no agendador do sistema",
+      "id": "casaHoje.dataforgeHoje.cliHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/cli.py",
+          "dataforge/__main__.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, Typer",
+      "title": "CLI"
+    },
+    {
+      "description": "Caminhos, URLs de banco, porta da API e hosts permitidos, entre Windows e Linux; lê DATAFORGE_HOME",
+      "id": "casaHoje.dataforgeHoje.compatHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/compat.py"
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "Compat"
+    },
+    {
+      "description": "Os modelos (job, task, trigger, conexão), a leitura e a escrita dos YAML do workspace, o YAML do pacote e o cron entre UTC e a hora local",
+      "id": "casaHoje.dataforgeHoje.definicaoHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/models.py",
+          "dataforge/parser.py",
+          "dataforge/yamlio.py",
+          "dataforge/cron.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, pydantic, PyYAML",
+      "title": "Definição do workspace"
+    },
+    {
+      "description": "As leituras Delta de um processo longo em threads que vivem com ele (falha nativa no Windows, df-5lk8)",
+      "id": "casaHoje.dataforgeHoje.deltaPoolHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/delta_pool.py"
+      },
+      "tags": [],
+      "technology": "Python, polars, deltalake",
+      "title": "Leituras Delta"
+    },
+    {
+      "description": "Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só",
+      "id": "casaHoje.dataforgeHoje.deployHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/deploy"
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "Deploy"
+    },
+    {
+      "description": "A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (dataforge gui ou dataforge app, que acham ou iniciam o segundo plano); cliente HTTP da API local",
+      "id": "casaHoje.dataforgeHoje.guiHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui"
+      },
+      "tags": [],
+      "technology": "Python, PySide6",
+      "title": "GUI admin e janela do app"
+    },
+    {
+      "description": "As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu",
+      "id": "casaHoje.dataforgeHoje.historicoHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/db.py",
+          "dataforge/liveness.py",
+          "dataforge/orphans.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, SQLAlchemy",
+      "title": "Histórico de execuções"
+    },
+    {
+      "description": "Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas",
+      "id": "casaHoje.dataforgeHoje.instanciaHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/instance.py",
+          "dataforge/presence.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, httpx",
+      "title": "Instância e presença"
+    },
+    {
+      "description": "Roda um job: DAG das tasks, condições, tentativas, trava por workspace; o pedido de run destacado e o estado de um run (run --detach, run-state)",
+      "id": "casaHoje.dataforgeHoje.motorHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/dag.py",
+          "dataforge/conditions.py",
+          "dataforge/runlock.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "Motor de execução"
+    },
+    {
+      "description": "O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia",
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/background.py",
+          "dataforge/gui/daemon.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, PySide6, uvicorn",
+      "title": "Segundo plano (API e bandeja)"
+    },
+    {
+      "description": "O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive",
+      "id": "casaHoje.dataforgeHoje.tasksHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks",
+          "dataforge/__init__.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python",
+      "title": "Tipos de task"
+    },
+    {
+      "description": "Plugin do pytest que os testes do motor e os de um workspace carregam; não roda em prod",
+      "id": "casaHoje.dataforgeHoje.testesHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/testing.py"
+      },
+      "tags": [],
+      "technology": "Python, pytest, Hypothesis",
+      "title": "Plugin de testes"
+    },
+    {
       "description": "Histórico de execuções: o global (runs dos jobs) e um por workspace (cada task)",
       "id": "casaHoje.dbDataforgeHoje",
       "kind": "banco",
@@ -225,6 +426,21 @@
       "title": "Backend GetFinance"
     },
     {
+      "description": "O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge; acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace",
+      "id": "casaHoje.financasHoje.rotasFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/backend/main.py",
+          "workspaces/GetFinance/apps/financas/backend/__init__.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, polars, pypdf, httpx, PyYAML",
+      "title": "Rotas do backend Finanças"
+    },
+    {
       "description": "As telas do app Finanças: tabelas, edição de categorias, regras e correções, conferência e extratos",
       "id": "casaHoje.frontFinancasHoje",
       "kind": "conteiner",
@@ -235,6 +451,106 @@
       "tags": [],
       "technology": "React, TypeScript; na janela Qt do DataForge ou no navegador do PC",
       "title": "Front do app Finanças"
+    },
+    {
+      "description": "A página (index.html, de que o vite faz a do build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report, das transações classificadas e do banco de edição, e a recarga depois do Aplicar",
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/index.html",
+          "workspaces/GetFinance/apps/financas/src/main.tsx",
+          "workspaces/GetFinance/apps/financas/src/App.tsx"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Casca do app"
+    },
+    {
+      "description": "pedir: o cliente HTTP do backend do app, relativo à página (api/...), e as chamadas de edição (categorias, regras, correções, explicações), do Aplicar e do andamento de uma execução; os textos do efeito de uma regra e da faixa de pendência",
+      "id": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/edicao.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript, fetch",
+      "title": "Cliente do backend e edição"
+    },
+    {
+      "description": "Funções puras sobre conferencia_saldo e lancamentos_suspeitos: ordena, agrupa e formata; as regras estão no pipeline",
+      "id": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/conferencia.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Conferência"
+    },
+    {
+      "description": "Envio do PDF do extrato e a lista dos guardados pelo cliente do backend; os textos do envio, do período e do job extrato",
+      "id": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Extratos"
+    },
+    {
+      "description": "Funções puras: escolhe as linhas do mês nas tabelas do report e as transações de cada categoria, e formata valores e meses; as regras estão no pipeline",
+      "id": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/resumo.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Resumo do mês"
+    },
+    {
+      "description": "lerTabela: lê uma tabela do curated pela rota genérica de tabelas do DataForge, com o workspace tirado da URL do app",
+      "id": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript, fetch",
+      "title": "Leitura de tabelas"
+    },
+    {
+      "description": "Os componentes React das telas: cartões do resumo e do detalhe, Conferência (lê as suas tabelas), Extratos, Categorias, Transações, a faixa de pendência com o Aplicar e a tabela editável",
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components"
+      },
+      "tags": [],
+      "technology": "React, TypeScript, Tailwind",
+      "title": "Telas"
+    },
+    {
+      "description": "Funções puras da aba Transações: busca, filtros e o estado da correção manual de cada linha",
+      "id": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/transacoes.ts"
+      },
+      "tags": [],
+      "technology": "TypeScript",
+      "title": "Transações"
     },
     {
       "description": "raw, cleansed e curated do GetFinance",
@@ -257,6 +573,72 @@
       "tags": [],
       "technology": "Python, FastAPI",
       "title": "Servidor ninho"
+    },
+    {
+      "description": "Rotas /api/desejos e as regras dos desejos, das anotações (um endereço http ou https inteiro é link) e do presente surpresa, que o dono do desejo nunca vê, nas tabelas desejos_* do ninho.db, criadas no primeiro uso",
+      "id": "casaHoje.ninhoHoje.desejosHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Lista de desejos"
+    },
+    {
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica",
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/financas",
+          "ninho/banco.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, polars, deltalake, SQLite",
+      "title": "Finanças"
+    },
+    {
+      "description": "Rotas /api/lista e as regras dos itens (texto, comprado, quem adicionou) na tabela lista_itens do ninho.db, criada no primeiro uso",
+      "id": "casaHoje.ninhoHoje.listaHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Lista de compras"
+    },
+    {
+      "description": "python -m ninho pessoas criar, senha, modulos, sair e listar, rodado no PC do servidor: a senha só é pedida no terminal, duas vezes; abre o ninho.db direto (--banco ou NINHO_BANCO), sem passar pelo servidor",
+      "id": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "tags": [],
+      "technology": "Python, argparse",
+      "title": "CLI de pessoas"
+    },
+    {
+      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO",
+      "id": "casaHoje.ninhoHoje.servidorHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/__init__.py",
+          "ninho/servidor"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Núcleo do servidor"
     },
     {
       "description": "As tasks dos jobs (finance_daily, extrato, reclassificar, backup) e a biblioteca de regras em scripts/report (edicao, classificacao, extrato), que o backend e o ninho importam",
@@ -449,6 +831,78 @@
       "title": "Telas do ninho"
     },
     {
+      "description": "A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair",
+      "id": "casaHoje.telasNinhoHoje.cascaHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/index.html",
+          "ninho/telas/public",
+          "ninho/telas/src/main.tsx",
+          "ninho/telas/src/index.css",
+          "ninho/telas/src/App.tsx",
+          "ninho/telas/src/Entrar.tsx",
+          "ninho/telas/src/eu.ts"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Casca"
+    },
+    {
+      "description": "O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade",
+      "id": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/pedido.ts",
+          "ninho/telas/src/dados.ts",
+          "ninho/telas/src/Logo.tsx"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Comum às telas"
+    },
+    {
+      "description": "Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros",
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/desejos"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela dos desejos"
+    },
+    {
+      "description": "As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)",
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/financas"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela de finanças"
+    },
+    {
+      "description": "Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer",
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/lista"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela da lista de compras"
+    },
+    {
       "description": "Finanças, lista e agenda; administra o DataForge",
       "id": "donoAlvo",
       "kind": "pessoa",
@@ -534,6 +988,18 @@
       "source": "agendadorAlvo",
       "tags": [],
       "target": "casaAlvo.dataforgeAlvo",
+      "technology": null,
+      "title": "dataforge scheduled-run"
+    },
+    {
+      "description": null,
+      "id": "agendadorHoje -> casaHoje.dataforgeHoje.cliHoje: dataforge scheduled-run",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "agendadorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
       "technology": null,
       "title": "dataforge scheduled-run"
     },
@@ -807,7 +1273,1012 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.backupDadosHoje: Lança a task backup",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "casaHoje.dataforgeHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje",
+      "technology": null,
+      "title": "Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.appsHoje: Acha os apps, inicia o backend e põe o token",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/apps.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Acha os apps, inicia o backend e põe o token"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.cliHoje: Registra o trigger no agendador pela função da CLI",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/triggers.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Registra o trigger no agendador pela função da CLI"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.compatHoje: Caminhos, banco e hosts permitidos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Caminhos, banco e hosts permitidos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.definicaoHoje: Lê e grava jobs e triggers",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/triggers.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "Lê e grava jobs e triggers"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.deltaPoolHoje: Lê o curated nas threads do pool",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/tables.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.deltaPoolHoje",
+      "technology": null,
+      "title": "Lê o curated nas threads do pool"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.deployHoje: Plano, aplicação e rollback pelo serviço",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/deploy.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.deployHoje",
+      "technology": null,
+      "title": "Plano, aplicação e rollback pelo serviço"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.historicoHoje: Usa as tabelas e corrige órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/executions.py",
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.historicoHoje",
+      "technology": null,
+      "title": "Usa as tabelas e corrige órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.instanciaHoje: O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/instance.py",
+          "dataforge/api/routers/jobs.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.motorHoje: Roda o job pedido pela rota",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/jobs.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.motorHoje",
+      "technology": null,
+      "title": "Roda o job pedido pela rota"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dbDataforgeHoje: Lê o histórico; grava os runs que inicia",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/executions.py",
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.dbDataforgeHoje",
+      "technology": null,
+      "title": "Lê o histórico; grava os runs que inicia"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje.rotasFinancasHoje: Repassa /apps/<ws>/financas/api com o token",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/apps.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.financasHoje.rotasFinancasHoje",
+      "technology": null,
+      "title": "Repassa /apps/<ws>/financas/api com o token"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.lagoHoje: Serve o curated pela rota genérica",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/tables.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.lagoHoje",
+      "technology": null,
+      "title": "Serve o curated pela rota genérica"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.dataforgeHoje.compatHoje: Pasta dos apps e porta da API",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/apps.py",
+          "dataforge/app_backends.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.appsHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Pasta dos apps e porta da API"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.dataforgeHoje.definicaoHoje: Lê app.yaml pelo yamlio",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/apps.py"
+      },
+      "source": "casaHoje.dataforgeHoje.appsHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "Lê app.yaml pelo yamlio"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.dataforgeHoje.instanciaHoje: Para o backend quando a janela do app fecha (presença)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/app_backends.py"
+      },
+      "source": "casaHoje.dataforgeHoje.appsHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "Para o backend quando a janela do app fecha (presença)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.financasHoje.rotasFinancasHoje: Inicia e para o backend (processo uvicorn com token)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/app_backends.py",
+          "dataforge/app_backend_host.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.appsHoje",
+      "tags": [],
+      "target": "casaHoje.financasHoje.rotasFinancasHoje",
+      "technology": null,
+      "title": "Inicia e para o backend (processo uvicorn com token)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.appsHoje -> casaHoje.frontFinancasHoje: Lê app.yaml e acha o build (dist)",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/apps.py"
+      },
+      "source": "casaHoje.dataforgeHoje.appsHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje",
+      "technology": null,
+      "title": "Lê app.yaml e acha o build (dist)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> agendadorHoje: Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "agendadorHoje",
+      "technology": null,
+      "title": "Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.apiHoje: Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.appsHoje: Acha os apps e cria o atalho",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Acha os apps e cria o atalho"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.compatHoje: Caminhos, banco e porta",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Caminhos, banco e porta"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.definicaoHoje: Carrega workspace, jobs, triggers e conexões; converte o cron",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "Carrega workspace, jobs, triggers e conexões; converte o cron"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.deployHoje: Monta o subcomando deploy",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.deployHoje",
+      "technology": null,
+      "title": "Monta o subcomando deploy"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.guiHoje: Abre a janela admin e a janela do app",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.guiHoje",
+      "technology": null,
+      "title": "Abre a janela admin e a janela do app"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.historicoHoje: Usa as tabelas e corrige órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.historicoHoje",
+      "technology": null,
+      "title": "Usa as tabelas e corrige órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.instanciaHoje: Acha ou inicia o DataForge da porta",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "Acha ou inicia o DataForge da porta"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.motorHoje: Roda o job, pede o run destacado, lê o estado",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.motorHoje",
+      "technology": null,
+      "title": "Roda o job, pede o run destacado, lê o estado"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje: Roda o segundo plano (background)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "technology": null,
+      "title": "Roda o segundo plano (background)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dbDataforgeHoje: Lê e grava runs, tasks e agendas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dbDataforgeHoje",
+      "technology": null,
+      "title": "Lê e grava runs, tasks e agendas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.definicaoHoje -> casaHoje.pipelineHoje: Lê e escreve a definição do workspace (jobs, triggers, conexões)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/parser.py"
+      },
+      "source": "casaHoje.dataforgeHoje.definicaoHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje",
+      "technology": null,
+      "title": "Lê e escreve a definição do workspace (jobs, triggers, conexões)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.apiHoje: Reconcilia os triggers do destino pela API (deploy na CLI)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/deploy/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.deployHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Reconcilia os triggers do destino pela API (deploy na CLI)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.compatHoje: Pasta do workspace e porta da API",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/deploy/cli.py",
+          "dataforge/deploy/service.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.deployHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Pasta do workspace e porta da API"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.definicaoHoje: YAML pelo yamlio",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/deploy/apply.py",
+          "dataforge/deploy/pairing.py",
+          "dataforge/deploy/plan.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.deployHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "YAML pelo yamlio"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje: Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/deploy/apply.py",
+          "dataforge/deploy/rollback.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.deployHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje",
+      "technology": null,
+      "title": "Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.apiHoje: Os painéis, a presença e a janela do app chamam a API local",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/main_window.py",
+          "dataforge/gui/panels/jobs.py",
+          "dataforge/gui/panels/job_editor.py",
+          "dataforge/gui/panels/scheduler.py",
+          "dataforge/gui/panels/deploy.py",
+          "dataforge/gui/presence_client.py",
+          "dataforge/gui/app_window.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Os painéis, a presença e a janela do app chamam a API local"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.appsHoje: Acha o app da janela",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/app_window.py"
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Acha o app da janela"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.compatHoje: Porta da API e pasta do perfil web",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/app_window.py",
+          "dataforge/gui/main_window.py",
+          "dataforge/gui/panels"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Porta da API e pasta do perfil web"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.definicaoHoje: Converte o cron na agenda",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/panels/scheduler.py"
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "Converte o cron na agenda"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.deployHoje: Tipos do plano no painel de deploy",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/panels/deploy.py"
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.deployHoje",
+      "technology": null,
+      "title": "Tipos do plano no painel de deploy"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.historicoHoje: Hora UTC da próxima execução na agenda",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/panels/scheduler.py"
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.historicoHoje",
+      "technology": null,
+      "title": "Hora UTC da próxima execução na agenda"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.instanciaHoje: Acha ou inicia o servidor; batimento de presença",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/__init__.py",
+          "dataforge/gui/app_window.py",
+          "dataforge/gui/presence_client.py",
+          "dataforge/gui/server_lost_banner.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.guiHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "Acha ou inicia o servidor; batimento de presença"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.historicoHoje -> casaHoje.dataforgeHoje.compatHoje: Workspaces e URLs dos bancos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/orphans.py"
+      },
+      "source": "casaHoje.dataforgeHoje.historicoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Workspaces e URLs dos bancos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.historicoHoje -> casaHoje.dbDataforgeHoje: Cria o esquema; corrige runs órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/db.py",
+          "dataforge/orphans.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.historicoHoje",
+      "tags": [],
+      "target": "casaHoje.dbDataforgeHoje",
+      "technology": null,
+      "title": "Cria o esquema; corrige runs órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.apiHoje: Pergunta quem tem a porta (GET /health)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaHoje.dataforgeHoje.instanciaHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Pergunta quem tem a porta (GET /health)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.cliHoje: Inicia o segundo plano destacado (dataforge background)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaHoje.dataforgeHoje.instanciaHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Inicia o segundo plano destacado (dataforge background)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.compatHoje: Porta, home e pasta de logs",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaHoje.dataforgeHoje.instanciaHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Porta, home e pasta de logs"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.motorHoje: Trava de arquivo (runlock) ao iniciar o segundo plano",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/instance.py"
+      },
+      "source": "casaHoje.dataforgeHoje.instanciaHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.motorHoje",
+      "technology": null,
+      "title": "Trava de arquivo (runlock) ao iniciar o segundo plano"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.cliHoje: Lança o run pedido destacado (dataforge run-requested)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/run_request.py"
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Lança o run pedido destacado (dataforge run-requested)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.compatHoje: Banco, logs e caminho da trava",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/run_request.py",
+          "dataforge/runlock.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Banco, logs e caminho da trava"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.definicaoHoje: Modelos de job e task; carrega o job pedido",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/dag.py",
+          "dataforge/conditions.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "Modelos de job e task; carrega o job pedido"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.historicoHoje: Tabelas, dono da linha e correção de órfãos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.historicoHoje",
+      "technology": null,
+      "title": "Tabelas, dono da linha e correção de órfãos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.instanciaHoje: Usa o lançador de processo destacado",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/run_request.py"
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "Usa o lançador de processo destacado"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.tasksHoje: Acha o handler de cada task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/engine.py"
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.tasksHoje",
+      "technology": null,
+      "title": "Acha o handler de cada task"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dbDataforgeHoje: Grava cada run e cada task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/engine.py",
+          "dataforge/run_request.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dbDataforgeHoje",
+      "technology": null,
+      "title": "Grava cada run e cada task"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.apiHoje: Hospeda a API numa thread (uvicorn dataforge.api:app)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/daemon.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Hospeda a API numa thread (uvicorn dataforge.api:app)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.appsHoje: Para os backends ao sair",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Para os backends ao sair"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.cliHoje: Abre a janela admin destacada (dataforge gui)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Abre a janela admin destacada (dataforge gui)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.compatHoje: Porta da API e pasta de logs",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/background.py",
+          "dataforge/gui/daemon.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Porta da API e pasta de logs"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.guiHoje: Guarda do coletor e ícone da bandeja",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.guiHoje",
+      "technology": null,
+      "title": "Guarda do coletor e ícone da bandeja"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.instanciaHoje: Usa o lançador de processo destacado, a regra de saída e o registro das janelas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "Usa o lançador de processo destacado, a regra de saída e o registro das janelas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.compatHoje: URL do banco global",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks/message/handler.py"
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "URL do banco global"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.definicaoHoje: Modelos de job e task; carrega o job filho",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks"
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.definicaoHoje",
+      "technology": null,
+      "title": "Modelos de job e task; carrega o job filho"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.historicoHoje: Tabelas do histórico",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "dataforge/tasks/error_handler.py",
+          "dataforge/tasks/message/handler.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.historicoHoje",
+      "technology": null,
+      "title": "Tabelas do histórico"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.motorHoje: A task job roda outro job",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/tasks/job_handler.py"
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.motorHoje",
+      "technology": null,
+      "title": "A task job roda outro job"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dbDataforgeHoje: Grava a linha da task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/tasks/python_handler.py",
+          "dataforge/tasks/error_handler.py",
+          "dataforge/tasks/message/handler.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
+      "tags": [],
+      "target": "casaHoje.dbDataforgeHoje",
+      "technology": null,
+      "title": "Grava a linha da task"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.backupDadosHoje: Lança a task backup",
       "kind": null,
       "links": [],
       "metadata": {
@@ -816,7 +2287,7 @@
           "workspaces/GetFinance/jobs/backup/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.backupDadosHoje",
       "technology": null,
@@ -824,7 +2295,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje: Lança as tasks das dimensões, fatos e conferências",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.cleansed2curatedHoje: Lança as tasks das dimensões, fatos e conferências",
       "kind": null,
       "links": [],
       "metadata": {
@@ -836,7 +2307,7 @@
           "workspaces/GetFinance/jobs/extrato/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.cleansed2curatedHoje",
       "technology": null,
@@ -844,7 +2315,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.landingHoje: Lança a task fetch (finance_daily)",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.landingHoje: Lança a task fetch (finance_daily)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -853,7 +2324,7 @@
           "workspaces/GetFinance/jobs/finance_daily/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.landingHoje",
       "technology": null,
@@ -861,7 +2332,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.raw2cleansedHoje: Lança as tasks transform*",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.raw2cleansedHoje: Lança as tasks transform*",
       "kind": null,
       "links": [],
       "metadata": {
@@ -871,7 +2342,7 @@
           "workspaces/GetFinance/jobs/finance_demo/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.raw2cleansedHoje",
       "technology": null,
@@ -879,7 +2350,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje: Lança as tasks classify e report (a semente, só no finance_demo)",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.reportHoje: Lança as tasks classify e report (a semente, só no finance_demo)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -890,7 +2361,7 @@
           "workspaces/GetFinance/jobs/reclassificar/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.reportHoje",
       "technology": null,
@@ -898,7 +2369,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje: Lança a task fetch do finance_demo (só dev e CI)",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.syntheticHoje: Lança a task fetch do finance_demo (só dev e CI)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -907,7 +2378,7 @@
           "workspaces/GetFinance/jobs/finance_demo/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.syntheticHoje",
       "technology": null,
@@ -915,7 +2386,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.validationHoje: Lança a task data_warnings",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.validationHoje: Lança a task data_warnings",
       "kind": null,
       "links": [],
       "metadata": {
@@ -925,7 +2396,7 @@
           "workspaces/GetFinance/jobs/finance_demo/job.yaml"
         ]
       },
-      "source": "casaHoje.dataforgeHoje",
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.validationHoje",
       "technology": null,
@@ -933,15 +2404,45 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
+      "id": "casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje: Lança o script de cada task python como processo, com o .env do job",
       "kind": null,
       "links": [],
-      "metadata": {},
-      "source": "casaHoje.dataforgeHoje",
+      "metadata": {
+        "codigo": "dataforge/tasks/python_handler.py"
+      },
+      "source": "casaHoje.dataforgeHoje.tasksHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
+      "title": "Lança o script de cada task python como processo, com o .env do job"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.testesHoje -> casaHoje.dataforgeHoje.compatHoje: URL do banco",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/testing.py"
+      },
+      "source": "casaHoje.dataforgeHoje.testesHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "URL do banco"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.testesHoje -> casaHoje.dataforgeHoje.historicoHoje: Banco de teste com o esquema",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/testing.py"
+      },
+      "source": "casaHoje.dataforgeHoje.testesHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.historicoHoje",
+      "technology": null,
+      "title": "Banco de teste com o esquema"
     },
     {
       "description": null,
@@ -993,34 +2494,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje.conferenciasHoje: Importa extrato",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.conferenciasHoje",
-      "technology": null,
-      "title": "Importa extrato"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje.regrasHoje: Importa edicao e classificacao",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.regrasHoje",
-      "technology": null,
-      "title": "Importa edicao e classificacao"
-    },
-    {
-      "description": null,
       "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje: Importa edicao, extrato e classificacao dos scripts (scripts/report)",
       "kind": null,
       "links": [],
@@ -1033,6 +2506,132 @@
     },
     {
       "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Pede os jobs reclassificar e extrato e acompanha a execução (HTTP, DATAFORGE_API)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.appsHoje: Importa o middleware do token (app_guard)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Importa o middleware do token (app_guard)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.deltaPoolHoje: Lê as tabelas Delta pelas threads do delta_pool",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.deltaPoolHoje",
+      "technology": null,
+      "title": "Lê as tabelas Delta pelas threads do delta_pool"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.tasksHoje: Importa o pacote dataforge: o __init__ registra os tipos de task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.tasksHoje",
+      "technology": null,
+      "title": "Importa o pacote dataforge: o __init__ registra os tipos de task"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.edicaoHoje: Lê e escreve: categorias, regras, correções, explicações",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.edicaoHoje",
+      "technology": null,
+      "title": "Lê e escreve: categorias, regras, correções, explicações"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.extratosHoje: Grava o PDF enviado; relê os guardados para recusar duplicata e apaga temporários velhos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.extratosHoje",
+      "technology": null,
+      "title": "Grava o PDF enviado; relê os guardados para recusar duplicata e apaga temporários velhos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.lagoHoje: Lê o curated e as contas do cleansed",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.lagoHoje",
+      "technology": null,
+      "title": "Lê o curated e as contas do cleansed"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.conferenciasHoje: Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.conferenciasHoje",
+      "technology": null,
+      "title": "Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.regrasHoje: Importa edicao e classificacao",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.regrasHoje",
+      "technology": null,
+      "title": "Importa edicao e classificacao"
+    },
+    {
+      "description": null,
       "id": "casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje: Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api",
       "kind": null,
       "links": [],
@@ -1042,6 +2641,275 @@
       "target": "casaHoje.dataforgeHoje",
       "technology": null,
       "title": "Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Pede o JS e o CSS do build (dist/assets) pela rota do app",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/dist/index.html"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Pede o JS e o CSS do build (dist/assets) pela rota do app"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Lê o banco de edição",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Lê o banco de edição"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Monta o resumo do mês",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Monta o resumo do mês"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje: Lê as tabelas do report e as transações classificadas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "technology": null,
+      "title": "Lê as tabelas do report e as transações classificadas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.telasFinancasHoje: Mostra as telas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/App.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "technology": null,
+      "title": "Mostra as telas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Chama o backend pelo proxy /apps/<ws>/financas/api",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/edicao.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Chama o backend pelo proxy /apps/<ws>/financas/api"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Formata os valores",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/conferencia.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Formata os valores"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.extratosFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Envia e lista pelo pedir()",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Envia e lista pelo pedir()"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.extratosFinancasHoje -> casaHoje.frontFinancasHoje.transacoesFinancasHoje: Formata as datas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "technology": null,
+      "title": "Formata as datas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.tabelasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Grava as edições, aplica e acompanha a execução",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/src/components/CartaoIntervalo.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/FaixaPendencia.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaCategorias.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaExtratos.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx"
+        ]
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Grava as edições, aplica e acompanha a execução"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.conferenciaFinancasHoje: Monta a conferência",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/src/components/CartaoConferencia.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/CartaoIntervalo.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/ListaIntervalos.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/ListaSuspeitos.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/SeloEstado.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaConferencia.tsx"
+        ]
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.conferenciaFinancasHoje",
+      "technology": null,
+      "title": "Monta a conferência"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.extratosFinancasHoje: Envia o PDF e lista os guardados",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components/TelaExtratos.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.extratosFinancasHoje",
+      "technology": null,
+      "title": "Envia o PDF e lista os guardados"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Tipos e formato dos valores",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/apps/financas/src/components/CartaoDetalhe.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/ListaCategorias.tsx",
+          "workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx"
+        ]
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Tipos e formato dos valores"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje: A Conferência lê as suas tabelas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components/TelaConferencia.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+      "technology": null,
+      "title": "A Conferência lê as suas tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.transacoesFinancasHoje: Filtra a lista de transações",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/components/TelaTransacoes.tsx"
+      },
+      "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "technology": null,
+      "title": "Filtra a lista de transações"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.transacoesFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje: Tipo da correção",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/transacoes.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+      "technology": null,
+      "title": "Tipo da correção"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.frontFinancasHoje.transacoesFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje: Tipo da transação e rótulo do mês",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/src/transacoes.ts"
+      },
+      "source": "casaHoje.frontFinancasHoje.transacoesFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+      "technology": null,
+      "title": "Tipo da transação e rótulo do mês"
     },
     {
       "description": null,
@@ -1093,20 +2961,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.pipelineHoje.regrasHoje: Carrega edicao por import_module (provisório, df-8x0m.23.14)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "ninho/financas/regras.py"
-      },
-      "source": "casaHoje.ninhoHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.regrasHoje",
-      "technology": null,
-      "title": "Carrega edicao por import_module (provisório, df-8x0m.23.14)"
-    },
-    {
-      "description": null,
       "id": "casaHoje.ninhoHoje -> casaHoje.pipelineHoje: Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)",
       "kind": null,
       "links": [],
@@ -1116,6 +2970,227 @@
       "target": "casaHoje.pipelineHoje",
       "technology": null,
       "title": "Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.desejosHoje -> casaHoje.bancoNinhoHoje: Lê e escreve os desejos, as anotações e os presentes",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos/desejos.py"
+      },
+      "source": "casaHoje.ninhoHoje.desejosHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Lê e escreve os desejos, as anotações e os presentes"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.desejosHoje -> casaHoje.ninhoHoje.servidorHoje: Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos/rotas.py"
+      },
+      "source": "casaHoje.ninhoHoje.desejosHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje.cliHoje: Pede o job (run --detach) e acompanha (run-state --wait) pela CLI",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/financas/aplicar.py"
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Pede o job (run --detach) e acompanha (run-state --wait) pela CLI"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.edicaoHoje: Lê e escreve: correções",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/financas/edicoes.py",
+          "ninho/banco.py"
+        ]
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.edicaoHoje",
+      "technology": null,
+      "title": "Lê e escreve: correções"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.lagoHoje: Lê tabelas",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/financas/leitura.py"
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.lagoHoje",
+      "technology": null,
+      "title": "Lê tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.regrasHoje: Carrega edicao (que importa classificacao) do scripts/report do workspace e abre o edicao.db e lê e grava as correções por ele (provisório, df-8x0m.23.14)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/financas/regras.py",
+          "ninho/banco.py",
+          "ninho/financas/edicoes.py"
+        ]
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.regrasHoje",
+      "technology": null,
+      "title": "Carrega edicao (que importa classificacao) do scripts/report do workspace e abre o edicao.db e lê e grava as correções por ele (provisório, df-8x0m.23.14)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.listaHoje -> casaHoje.bancoNinhoHoje: Lê e escreve os itens da lista",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista/itens.py"
+      },
+      "source": "casaHoje.ninhoHoje.listaHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Lê e escreve os itens da lista"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.listaHoje -> casaHoje.ninhoHoje.servidorHoje: Pede a pessoa da sessão e a conexão do ninho.db (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista/rotas.py"
+      },
+      "source": "casaHoje.ninhoHoje.listaHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Pede a pessoa da sessão e a conexão do ninho.db (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.pessoasCliHoje -> casaHoje.bancoNinhoHoje: Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.pessoasCliHoje -> casaHoje.ninhoHoje.servidorHoje: Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.bancoNinhoHoje: Lê e escreve pessoas e sessões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/servidor/banco.py",
+          "ninho/servidor/pessoas.py",
+          "ninho/servidor/sessoes.py"
+        ]
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Lê e escreve pessoas e sessões"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.desejosHoje: Inclui o router /api/desejos (só para quem tem o módulo desejos)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.desejosHoje",
+      "technology": null,
+      "title": "Inclui o router /api/desejos (só para quem tem o módulo desejos)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje: Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "technology": null,
+      "title": "Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.listaHoje: Inclui o router /api/lista (só para quem tem o módulo lista)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.listaHoje",
+      "technology": null,
+      "title": "Inclui o router /api/lista (só para quem tem o módulo lista)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.telasNinhoHoje: Lê o build (ninho/telas/dist) e o entrega em /",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje",
+      "technology": null,
+      "title": "Lê o build (ninho/telas/dist) e o entrega em /"
     },
     {
       "description": null,
@@ -1275,7 +3350,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje: Sobra sem uso (df-o0cc): dataforge jobs run finance_daily",
+      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje.cliHoje: Sobra sem uso (df-o0cc): dataforge jobs run finance_daily",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1286,7 +3361,7 @@
       },
       "source": "casaHoje.pipelineHoje.binHoje",
       "tags": [],
-      "target": "casaHoje.dataforgeHoje",
+      "target": "casaHoje.dataforgeHoje.cliHoje",
       "technology": null,
       "title": "Sobra sem uso (df-o0cc): dataforge jobs run finance_daily"
     },
@@ -1716,6 +3791,218 @@
     },
     {
       "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje: Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/index.html",
+          "ninho/telas/src/eu.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/App.tsx",
+          "ninho/telas/src/eu.ts",
+          "ninho/telas/src/Entrar.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.desejosTelasHoje: Monta a tela dos desejos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "technology": null,
+      "title": "Monta a tela dos desejos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.financasTelasHoje: Monta a tela de finanças",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "technology": null,
+      "title": "Monta a tela de finanças"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.listaTelasHoje: Monta a tela da lista",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "technology": null,
+      "title": "Monta a tela da lista"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje: Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.desejosHoje",
+      "technology": null,
+      "title": "Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.servidorHoje: Lê as pessoas da casa (/api/pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Lê as pessoas da casa (/api/pessoas)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa o tipo de quem entrou",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/desejos/Desejos.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.cascaHoje",
+      "technology": null,
+      "title": "Usa o tipo de quem entrou"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/desejos/Desejos.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje: Lê as transações do mês e as edições, corrige e desfaz, pede o aplicar e o acompanha (/api/financas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/financas/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Lê as transações do mês e as edições, corrige e desfaz, pede o aplicar e o acompanha (/api/financas)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor e trata a recusa do servidor, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/financas/api.ts",
+          "ninho/telas/src/financas/aplicar.ts",
+          "ninho/telas/src/financas/Financas.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor e trata a recusa do servidor, mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.ninhoHoje.listaHoje: Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/lista/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.listaHoje",
+      "technology": null,
+      "title": "Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/lista/api.ts",
+          "ninho/telas/src/lista/Lista.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo"
+    },
+    {
+      "description": null,
       "id": "donoAlvo -> casaAlvo.appCelularAlvo: Usa",
       "kind": null,
       "links": [],
@@ -1748,6 +4035,44 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.dataforgeHoje.cliHoje: Abre o app pelo atalho (dataforge app) e administra pela CLI",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Abre o app pelo atalho (dataforge app) e administra pela CLI"
+    },
+    {
+      "description": null,
+      "id": "donoHoje -> casaHoje.dataforgeHoje.guiHoje: Usa a janela do app e administra pela janela admin",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.guiHoje",
+      "technology": null,
+      "title": "Usa a janela do app e administra pela janela admin"
+    },
+    {
+      "description": null,
+      "id": "donoHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje: Abre a janela admin e encerra o DataForge pela bandeja",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "technology": null,
+      "title": "Abre a janela admin e encerra o DataForge pela bandeja"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.dataforgeHoje: Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)",
       "kind": null,
       "links": [],
@@ -1760,6 +4085,18 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje: Usa o app Finanças no PC (janela Qt ou navegador)",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+      "technology": null,
+      "title": "Usa o app Finanças no PC (janela Qt ou navegador)"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.frontFinancasHoje: Usa o app Finanças no PC (janela Qt ou navegador)",
       "kind": null,
       "links": [],
@@ -1769,6 +4106,20 @@
       "target": "casaHoje.frontFinancasHoje",
       "technology": null,
       "title": "Usa o app Finanças no PC (janela Qt ou navegador)"
+    },
+    {
+      "description": null,
+      "id": "donoHoje -> casaHoje.ninhoHoje.pessoasCliHoje: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "technology": null,
+      "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
     },
     {
       "description": null,
@@ -1798,6 +4149,20 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa a lista, os desejos e as correções pelo celular",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/index.html"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.cascaHoje",
+      "technology": null,
+      "title": "Usa a lista, os desejos e as correções pelo celular"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.telasNinhoHoje: Usa a lista, os desejos e as correções pelo celular",
       "kind": null,
       "links": [],
@@ -1823,6 +4188,20 @@
       "target": "casaAlvo.appCelularAlvo",
       "technology": null,
       "title": "Usa"
+    },
+    {
+      "description": null,
+      "id": "outraHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa a lista e os desejos pelo celular",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/index.html"
+      },
+      "source": "outraHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.cascaHoje",
+      "technology": null,
+      "title": "Usa a lista e os desejos pelo celular"
     },
     {
       "description": null,
@@ -1879,6 +4258,46 @@
     },
     {
       "description": null,
+      "id": "hoje-componentes-app-financas-backend",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do backend Finanças",
+      "type": "element",
+      "viewOf": "casaHoje.financasHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-app-financas-front",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do front do app Finanças",
+      "type": "element",
+      "viewOf": "casaHoje.frontFinancasHoje"
+    },
+    {
+      "description": "Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista",
+      "id": "hoje-componentes-dataforge",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do DataForge",
+      "type": "element",
+      "viewOf": "casaHoje.dataforgeHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-ninho",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do servidor ninho",
+      "type": "element",
+      "viewOf": "casaHoje.ninhoHoje"
+    },
+    {
+      "description": null,
       "id": "hoje-componentes-pipeline",
       "links": [],
       "steps": [],
@@ -1886,6 +4305,16 @@
       "title": "Hoje: componentes do pipeline GetFinance",
       "type": "element",
       "viewOf": "casaHoje.pipelineHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-telas",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes das telas do ninho",
+      "type": "element",
+      "viewOf": "casaHoje.telasNinhoHoje"
     },
     {
       "description": null,

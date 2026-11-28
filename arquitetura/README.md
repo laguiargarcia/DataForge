@@ -15,9 +15,19 @@ arquivos de modelo:
 1. A seta vai de quem inicia a ação para quem é chamado (C4), não no sentido do dado (decisão do
    dono, 2026-11-27, df-8x0m.23.33).
 2. `-[leitura]->` marca uma relação só de leitura; ela aparece pontilhada.
-3. Duas relações no mesmo par viram `[...]` no desenho, então se juntam num rótulo só. Isso vale
-   também para pessoa -> sistema nas vistas de contexto: lá o rótulo único é dado na própria vista,
-   com `include pessoa -> sistema with { title '...' }`.
+3. Cada aresta de vista se lê pelo que mostra. A vista junta numa aresta só as relações entre os
+   descendentes de dois nós; com títulos diferentes ela sai `[...]`, ou com um dos títulos e sem os
+   outros, e com kinds diferentes sai com um deles (a `leitura` junto de setas comuns deixa a
+   aresta pontilhada). Por isso as relações juntadas têm todas o mesmo título, ou o título vem de
+   uma seta direta entre os dois nós, ou da própria vista
+   (`include pessoa -> sistema with { title '...' }`, como nas vistas de contexto); e têm todas o
+   mesmo kind, que nem a seta direta nem o título da vista mudam: quando a diferença é de verdade,
+   a vista exclui a relação que destoa (`exclude a.filho -> b`). Cobrada: `modelo.py conferir`
+   (no CI) sai 1 com a vista e o par de cada aresta que mostra `[...]`, que mostra um só de vários
+   títulos juntados ou que junta kinds diferentes (df-8x0m.23.47.12). O export não guarda as
+   regras da vista, então o título dado pela vista se reconhece por não ser o de nenhuma relação
+   juntada: um título da vista igual a um deles falha como se o LikeC4 o tivesse escolhido; dê um
+   título próprio. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
 
@@ -53,9 +63,12 @@ bd:
   malformado ou com duas das três marcas, e num `bead` sem marca. Falha também numa marca no modelo
   de hoje (df-8x0m.23.46): todo elemento de topo tem id terminado em `Hoje` (o que descreve hoje, em
   `hoje.c4` ou em qualquer arquivo que estende seus elementos) ou em `Alvo`; um elemento marcado sob
-  um topo `...Hoje`, ou uma seta marcada com uma ponta lá, falha, e um elemento de topo com outro
-  sufixo também. O export do LikeC4 não diz de que arquivo vem cada item, por isso o sufixo; só o
-  segmento de topo conta (`casaAlvo.velhoHoje` é do alvo).
+  um topo `...Hoje`, uma seta marcada com uma ponta lá, ou uma instância de deployment marcada de
+  um elemento de lá, falha, e um elemento de topo com outro sufixo também. O export do LikeC4 não
+  diz de que arquivo vem cada item, por isso o sufixo; só o segmento de topo conta
+  (`casaAlvo.velhoHoje` é do alvo). A regra mora em `scripts/arquitetura/modelo.py` (`sistema`,
+  `e_hoje`), a mesma que `componentes.py` usa. Os nós e as setas de deployment ficam fora dela: o
+  id deles é do deployment, sem o sufixo de um modelo.
 - `bd close <id>` (hook `scripts/beads/check.py`): recusa fechar um bead que o
   `arquitetura/modelo.json` do origin/main ainda marca. Para conferir tudo de uma vez, com bd:
   `python3 scripts/arquitetura/marcas.py --bd`.
@@ -95,14 +108,33 @@ da docstring dele:
 4. Num contêiner com pelo menos um componente, nenhum arquivo de código tem o contêiner como dono
    direto: um componente dele (ou um contêiner aninhado por caminho) é o dono.
 5. O mesmo caminho em dois elementos do mesmo sistema é erro (dono ambíguo).
+6. O `codigo` de um componente fica dentro do `codigo` do ancestral mais próximo que tem `codigo`
+   (o contêiner, ou o componente pai); componente com `codigo` sem ancestral com `codigo` é erro.
+   Sem isso, um componente do DataForge poderia tomar arquivos de `ninho/` e passar na regra 4.
+7. A seta que a regra 3 pede leva em `metadata codigo` cada arquivo que faz o import, ele mesmo ou
+   uma pasta acima dele, em qualquer das setas do par (duas setas no mesmo par, com títulos
+   distintos, valem juntas). Um caminho da seta que não faz import não é cobrado: pode ser o
+   arquivo da chamada HTTP ou de CLI da mesma seta.
+8. Todo componente do hoje tem `codigo`: sem ele o componente não é dono de nenhum arquivo, e as
+   regras 3, 4 e 6 não o enxergam.
+
+O import de um módulo roda antes o `__init__.py` de cada pacote acima dele, e isso conta como import
+para as regras 3 e 7 (df-8x0m.23.47.9): `from dataforge import delta_pool` roda
+`dataforge/__init__.py`, que registra os tipos de task, então quem importa precisa de seta para o
+dono desse `__init__.py`. Conta porque o código roda de fato no processo de quem importa; avisar
+deixaria a dependência fora do desenho, e não contar esconderia o caso que motivou a regra. Não
+contam os pacotes que contêm o próprio arquivo que importa (rodaram antes dele) nem os pacotes acima
+da base do import (com `app/b` no `sys.path`, `import y` é o `y` de topo). `exec` de um arquivo roda
+só aquele arquivo.
 
 Hoje e alvo são dois desenhos no mesmo `modelo.json`: 2 a 5 valem por sistema (primeira parte do
-id), e 3 e 4 só no hoje (sistema terminado em `Hoje`), porque o alvo desenha código que ainda não
-existe. O script sai 1 com uma linha `error:` por problema. Saem como `warning:`, sem falhar, a
-lista que o contestador confere à mão: importação dinâmica, subprocesso que pode rodar Python, o
-DataForge ou um shell, linha de `.sh`/`.ps1` que chama `dataforge` ou `python`, import de arquivo de
-código sem dono. A docstring diz como resolve imports Python e TS. O job `arquitetura` do CI roda o
-script depois do `conferir`, com o Python do `.python-version`.
+id), 6 vale nos dois, e 3, 4, 7 e 8 só no hoje (sistema terminado em `Hoje`), porque o alvo desenha
+código que ainda não existe. O script sai 1 com uma linha `error:` por problema (na regra 3, uma por
+linha e par de donos). Saem como `warning:`, sem falhar, a lista que o contestador confere à mão:
+importação dinâmica, subprocesso que pode rodar Python, o DataForge ou um shell, linha de
+`.sh`/`.ps1` que chama `dataforge` ou `python`, import de arquivo de código sem dono. A docstring
+diz como resolve imports Python e TS. O job `arquitetura` do CI roda o script depois do `conferir`,
+com o Python do `.python-version`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
