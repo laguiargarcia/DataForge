@@ -126,7 +126,7 @@ model {
 
   // Quem usa: cada pessoa abre a página (index.html), e a casca mostra só as telas dos módulos
   // dela. As setas de donoHoje e de outraHoje são as únicas dos seus pares: o título de cada uma é o
-  // rótulo da vista de contêineres (README, regra 5).
+  // rótulo da vista de contêineres (README, Regras do desenho, 5).
   donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista, os desejos e as correções pelo celular' {
     metadata {
       codigo ['ninho/telas/index.html']

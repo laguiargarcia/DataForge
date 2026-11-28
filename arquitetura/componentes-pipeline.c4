@@ -302,7 +302,7 @@ model {
   // seta sai do componente Finanças dele (componentes-ninho.c4).
 
   // Para fora: Pluggy, lago, bancos.
-  // Seta única do par pipeline -> Pluggy: o título dela é o rótulo das vistas de contexto e de contêineres (README, regra 5).
+  // Seta única do par pipeline -> Pluggy: o título dela é o rótulo das vistas de contexto e de contêineres (README, Regras do desenho, 5).
   casaHoje.pipelineHoje.landingHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py', 'workspaces/GetFinance/scripts/functions/functions.py']
