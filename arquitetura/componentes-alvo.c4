@@ -270,6 +270,15 @@ model {
   }
 
   extend casaAlvo.pipelineAlvo {
+    arquivosWorkspaceAlvo = banco 'Arquivos do workspace: workspace.yaml, jobs, conexões e config' {
+      #muda
+      description 'Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). Muda: vai para ninho/financas com o módulo; o DataForge acha a pasta pelo registro, df-7cyk'
+      technology 'YAML e CSV'
+      metadata {
+        bead 'df-8x0m.23.14'
+        codigo ['workspaces/GetFinance/workspace.yaml', 'workspaces/GetFinance/jobs', 'workspaces/GetFinance/connections', 'workspaces/GetFinance/config']
+      }
+    }
     backupDadosAlvo = componente 'backup' {
       #muda
       description 'Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos. Muda: a cópia vai para fora deste disco, a decidir em df-8x0m.23.9'
@@ -430,7 +439,7 @@ model {
       codigo ['dataforge/cli.py']
     }
   }
-  casaAlvo.dataforgeAlvo.definicaoAlvo -> casaAlvo.pipelineAlvo 'Lê e escreve a definição do workspace (jobs, triggers, conexões)' {
+  casaAlvo.dataforgeAlvo.definicaoAlvo -> casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo 'Lê workspace.yaml e conexões; lê e escreve jobs e triggers' {
     metadata {
       codigo ['dataforge/parser.py']
     }
@@ -990,6 +999,8 @@ views {
     include casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo with {
       color gray
     }
+    // A Definição lê e escreve os arquivos do workspace, um elemento do pipeline.
+    include casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo
   }
   view alvo-componentes-servidor of casaAlvo.servidorAlvo {
     title 'Alvo v2: componentes do servidor da casa'
@@ -1078,6 +1089,7 @@ views {
     include *
     // As regras de tag trazem as tasks do DataForge para a vista: as setas de lançar cada task saem delas.
     include casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.*
+    include casaAlvo.dataforgeAlvo.definicaoAlvo -> casaAlvo.pipelineAlvo.*
     include casaAlvo.pipelineAlvo.* -> * where tag is #novo with {
       color green
     }

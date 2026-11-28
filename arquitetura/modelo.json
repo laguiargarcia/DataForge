@@ -534,6 +534,26 @@
       "title": "Pipeline do módulo finanças"
     },
     {
+      "description": "Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). Muda: vai para ninho/financas com o módulo; o DataForge acha a pasta pelo registro, df-7cyk",
+      "id": "casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo",
+      "kind": "banco",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14",
+        "codigo": [
+          "workspaces/GetFinance/workspace.yaml",
+          "workspaces/GetFinance/jobs",
+          "workspaces/GetFinance/connections",
+          "workspaces/GetFinance/config"
+        ]
+      },
+      "tags": [
+        "muda"
+      ],
+      "technology": "YAML e CSV",
+      "title": "Arquivos do workspace: workspace.yaml, jobs, conexões e config"
+    },
+    {
       "description": "Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos. Muda: a cópia vai para fora deste disco, a decidir em df-8x0m.23.9",
       "id": "casaAlvo.pipelineAlvo.backupDadosAlvo",
       "kind": "componente",
@@ -2061,7 +2081,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
+      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -2069,7 +2089,7 @@
       "tags": [],
       "target": "casaAlvo.pipelineAlvo",
       "technology": null,
-      "title": "Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
+      "title": "Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job"
     },
     {
       "description": null,
@@ -2374,7 +2394,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo.definicaoAlvo -> casaAlvo.pipelineAlvo: Lê e escreve a definição do workspace (jobs, triggers, conexões)",
+      "id": "casaAlvo.dataforgeAlvo.definicaoAlvo -> casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo: Lê workspace.yaml e conexões; lê e escreve jobs e triggers",
       "kind": null,
       "links": [],
       "metadata": {
@@ -2382,9 +2402,9 @@
       },
       "source": "casaAlvo.dataforgeAlvo.definicaoAlvo",
       "tags": [],
-      "target": "casaAlvo.pipelineAlvo",
+      "target": "casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo",
       "technology": null,
-      "title": "Lê e escreve a definição do workspace (jobs, triggers, conexões)"
+      "title": "Lê workspace.yaml e conexões; lê e escreve jobs e triggers"
     },
     {
       "description": null,
@@ -2878,7 +2898,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo: Importa edicao, extrato e classificacao dos scripts (scripts/report)",
+      "id": "casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo: Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml",
       "kind": null,
       "links": [],
       "metadata": {
@@ -2890,7 +2910,7 @@
       ],
       "target": "casaAlvo.pipelineAlvo",
       "technology": null,
-      "title": "Importa edicao, extrato e classificacao dos scripts (scripts/report)"
+      "title": "Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml"
     },
     {
       "description": null,

@@ -150,7 +150,7 @@ model {
   }
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
   casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
-  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job'
+  casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo 'Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job'
   casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.lagoAlvo 'Serve o curated pela rota genérica' {
     #sai
     metadata {
@@ -206,7 +206,7 @@ model {
       bead 'df-8x0m.23.3'
     }
   }
-  casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo 'Importa edicao, extrato e classificacao dos scripts (scripts/report)' {
+  casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo 'Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml' {
     #sai
     metadata {
       bead 'df-8x0m.23.3'
