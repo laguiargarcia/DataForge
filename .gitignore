@@ -112,3 +112,4 @@ workspaces/GetFinance/docs/workbook.md
 # Ship the ninho screen's built front too: the ninho server hands it out (df-8x0m.23.13.5).
 !ninho/telas/dist/
 !ninho/telas/dist/**
+arquitetura/dist/

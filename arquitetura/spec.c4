@@ -1,0 +1,34 @@
+specification {
+  element pessoa {
+    notation "Pessoa"
+    style {
+      shape person
+      color muted
+    }
+  }
+  element sistemaExterno {
+    notation "Sistema externo"
+    style {
+      color secondary
+    }
+  }
+  element sistema {
+    notation "Sistema"
+  }
+  element conteiner {
+    notation "Contêiner"
+  }
+  element banco {
+    notation "Banco ou armazenamento"
+    style {
+      shape storage
+    }
+  }
+
+  tag emProd
+  tag aFazer
+  tag aDecidir
+
+  relationship leitura
+  relationship escrita
+}
