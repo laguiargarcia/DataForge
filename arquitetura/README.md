@@ -63,8 +63,10 @@ API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do c
    fica velho quando ela muda. Mudou, acrescentou ou tirou uma seta de componente entre contêineres,
    confira o resumo do par (ou crie ou apague a seta direta). O alvo guarda as suas setas de
    contêiner: nele o nível de contêiner é o próprio plano, e as marcas `novo`, `muda` e `sai` moram ali.
-   Cobrada: `modelo.py conferir` sai 1 com uma seta direta sobre uma seta de componente só, e com um
-   par de várias sem seta direta cuja aresta mostra o título de uma delas (df-8x0m.23.47.21).
+   Cobrada: `modelo.py conferir` sai 1 com uma seta direta sobre uma seta de componente só, com uma
+   seta direta sem seta de componente quando uma das pontas tem componentes (a seta vai do componente
+   que age, ou para ele), e com um par de várias sem seta direta cuja aresta mostra o título de uma
+   delas (df-8x0m.23.47.21).
 
 ## Marcas do alvo (df-8x0m.23.37)
 

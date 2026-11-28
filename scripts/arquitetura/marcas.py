@@ -37,7 +37,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: arquit
 from arquitetura import modelo
 
 TAGS = modelo.MARCAS
-COMPONENTE = "componente"
 # Target ids (last segment) whose today twin is not the id with Hoje in place of Alvo (README,
 # component rules): two component ids already taken by a target container or database, the re-cut
 # of the API, and the target's containers and database that today has under another name.
@@ -128,7 +127,7 @@ def _twin_problems(model: dict) -> list[str]:
     and codigo (df-8x0m.23.47.20). Container arrows stay out: today keeps a container arrow only as
     the summary of several component arrows (README rule 5), the target keeps its own as the plan."""
     elements = model.get("elements") or ()
-    componentes = {e.get("id") for e in elements if e.get("kind") == COMPONENTE}
+    componentes = {e.get("id") for e in elements if e.get("kind") == modelo.COMPONENTE}
     leaves: dict[str, list[str]] = {}
     for e in elements:
         if modelo.e_hoje(e.get("id")):

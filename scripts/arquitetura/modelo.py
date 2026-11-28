@@ -339,7 +339,8 @@ def gerar(fonte: Path = FONTE, saida: Path = SAIDA) -> None:
 
 def conferir(fonte: Path = FONTE, saida: Path = SAIDA) -> list[str]:
     """The problems of the .c4, one line each: every ambiguous view edge (`arestas_ambiguas`), every
-    pair of hoje-conteineres against README rule 5 (`regra5`), then, when the committed file is stale, a line saying so and the diff to the export. Empty when fine."""
+    pair of hoje-conteineres against README rule 5 (`regra5`), then, when the committed file is
+    stale, a line saying so and the diff to the export. Empty when fine."""
     raw = exportar(fonte)
     novo = texto(normalizar(raw))
     velho = saida.read_text(encoding="utf-8") if saida.exists() else ""
