@@ -546,12 +546,29 @@ def check(paths: list[str], base_ref: str | None, full: bool, stage: bool = Fals
     if rises:
         _report_rises(rises, findings)
     raised = bool(base_ref) and _baseline_raised(base_ref)
+    parados = _stale_docs()
     if rises or raised:
         why = [f"{len(rises)} file/rule counts above the baseline"] * bool(rises) + ["baseline raised"] * raised
         print(f"\nquality gate: failed ({', '.join(why)})")
         return 1
-    print(f"quality gate: ok ({sum(sum(c.values()) for c in current.values())} findings, none new)")
+    print(f"quality gate: ok ({sum(sum(c.values()) for c in current.values())} findings, none new{parados})")
     return 0
+
+
+def _stale_docs() -> str:
+    """Print the stale-doc report (warnings only); the suffix for the final line. Never raises."""
+    try:
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
+        import docs_parados  # noqa: PLC0415 -- inside the try so an error of the warning never breaks the gate
+
+        lines = docs_parados.relatorio(ROOT)
+    except Exception as error:  # noqa: BLE001 -- the warning is advisory so any failure is printed and not raised
+        print(f"docs: stale-doc check failed: {error}")
+        return ""
+    print("\n".join(lines))
+    n = sum(line.startswith("warning:") for line in lines)
+    return f"; {n} stale doc{'s' * (n != 1)}"
 
 
 def update(allow_increase: bool) -> int:
