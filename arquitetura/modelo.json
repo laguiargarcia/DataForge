@@ -3390,7 +3390,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Pede o job e acompanha pela interface pública (run --detach / run-state --wait)",
+      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Pede o job (run --detach) e acompanha (run-state --wait) pela CLI",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3400,7 +3400,7 @@
       "tags": [],
       "target": "casaAlvo.dataforgeAlvo.cliAlvo",
       "technology": null,
-      "title": "Pede o job e acompanha pela interface pública (run --detach / run-state --wait)"
+      "title": "Pede o job (run --detach) e acompanha (run-state --wait) pela CLI"
     },
     {
       "description": null,

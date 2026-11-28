@@ -576,7 +576,7 @@ model {
       codigo ['ninho/desejos/rotas.py']
     }
   }
-  casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)' {
+  casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI' {
     metadata {
       codigo ['ninho/financas/aplicar.py']
     }
