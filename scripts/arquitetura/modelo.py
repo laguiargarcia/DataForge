@@ -7,8 +7,9 @@ Python instead of running LikeC4: the hook cannot run npx on every `bd create`. 
     python3 scripts/arquitetura/modelo.py gerar      # rewrite arquitetura/modelo.json from the .c4
     python3 scripts/arquitetura/modelo.py conferir   # exit 1, with a diff, when it is stale
 
-Both take --fonte (the LikeC4 folder, default arquitetura/) and --saida (default
-arquitetura/modelo.json). Only the standard library; LikeC4 runs through npx at LIKEC4 (the same
+The command line takes no paths: it always reads arquitetura/ and writes arquitetura/modelo.json
+(FONTE and SAIDA), so no argument reaches the npx call or a file write. The functions take other
+paths, for the tests. Only the standard library; LikeC4 runs through npx at LIKEC4 (the same
 version as arquitetura/README.md and the CI job).
 
 API, for the other scripts (put scripts/ on sys.path, as scripts/beads/check.py does):
@@ -188,21 +189,19 @@ def conferir(fonte: Path = FONTE, saida: Path = SAIDA) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("acao", choices=("gerar", "conferir"))
-    parser.add_argument("--fonte", type=Path, default=FONTE)
-    parser.add_argument("--saida", type=Path, default=SAIDA)
-    args = parser.parse_args(argv)
+    acao = parser.parse_args(argv).acao
     try:
-        if args.acao == "gerar":
-            gerar(args.fonte, args.saida)
+        if acao == "gerar":
+            gerar(FONTE, SAIDA)
             return 0
-        diff = conferir(args.fonte, args.saida)
+        diff = conferir(FONTE, SAIDA)
     except ValueError as error:  # a model normalizar refuses: the message, not a traceback, in CI
         raise SystemExit(str(error)) from error
     if diff:
-        print(f"{args.saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it")
+        print(f"{SAIDA} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it")
         print("\n".join(diff))
         return 1
-    print(f"{args.saida} is the export of {args.fonte}")
+    print(f"{SAIDA} is the export of {FONTE}")
     return 0
 
 

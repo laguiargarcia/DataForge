@@ -179,17 +179,19 @@ def test_gerar_writes_what_load_reads_and_conferir_sees_a_stale_file(tmp_path, m
     raw = _raw()
     monkeypatch.setattr(modelo, "exportar", lambda fonte: copy.deepcopy(raw))
     saida = tmp_path / "modelo.json"
+    monkeypatch.setattr(modelo, "FONTE", tmp_path)
+    monkeypatch.setattr(modelo, "SAIDA", saida)
     modelo.gerar(tmp_path, saida)
     assert modelo.load(saida) == json.loads(modelo.texto(modelo.normalizar(raw)))
     assert modelo.conferir(tmp_path, saida) == []
-    assert modelo.main(["conferir", "--fonte", str(tmp_path), "--saida", str(saida)]) == 0
+    assert modelo.main(["conferir"]) == 0
     raw["elements"]["s"]["title"] = "Sistema novo"
     diff = modelo.conferir(tmp_path, saida)
     assert '-      "title": "Sistema"' in diff
     assert '+      "title": "Sistema novo"' in diff
-    assert modelo.main(["conferir", "--fonte", str(tmp_path), "--saida", str(saida)]) == 1
+    assert modelo.main(["conferir"]) == 1
     saida.unlink()
-    assert modelo.main(["conferir", "--fonte", str(tmp_path), "--saida", str(saida)]) == 1
+    assert modelo.main(["conferir"]) == 1
 
 
 def test_the_committed_model_loads_by_default():
@@ -222,8 +224,9 @@ def test_the_cli_shows_a_refused_model_as_a_message(tmp_path, monkeypatch, acao)
     raw["relations"]["1exzn7k"]["title"] = "usa"
     monkeypatch.setattr(modelo, "exportar", lambda fonte: raw)
     saida = tmp_path / "modelo.json"
+    monkeypatch.setattr(modelo, "SAIDA", saida)
     with pytest.raises(SystemExit, match="give them distinct titles") as stopped:
-        modelo.main([acao, "--fonte", str(tmp_path), "--saida", str(saida)])
+        modelo.main([acao])
     assert isinstance(stopped.value.code, str)
     assert not saida.exists()
 
@@ -253,3 +256,12 @@ def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_ex
     else:
         assert modelo.exportar(tmp_path) == {"elements": {"a": {"id": "a", "kind": "k"}}}
     assert log.read_text(encoding="utf-8").split() == calls
+
+
+@pytest.mark.parametrize("opcao", ["--fonte", "--saida"])
+def test_the_cli_takes_no_path(opcao):
+    """A path from the command line would reach the npx call and the file write (Sonar S8705,
+    S8707): the CLI only reads arquitetura/ and writes arquitetura/modelo.json."""
+    with pytest.raises(SystemExit) as stopped:
+        modelo.main(["conferir", opcao, "x"])
+    assert stopped.value.code == 2
