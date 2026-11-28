@@ -58,7 +58,6 @@ model {
   donoHoje -> casaHoje.ninhoHoje 'Usa a lista, os desejos e as correções pelo celular (HTTPS pela Tailscale)'
   outraHoje -> casaHoje.ninhoHoje 'Usa a lista e os desejos pelo celular (HTTPS pela Tailscale)'
   agendadorHoje -> casaHoje.dataforgeHoje 'dataforge scheduled-run'
-  agendadorHoje -> casaHoje.ninhoHoje 'Seta de teste descartável (df-8x0m.23.38)'
   casaHoje.dataforgeHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
