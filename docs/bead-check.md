@@ -153,15 +153,18 @@ for a command without `bd`, ~1 s for a checked close (one `bd show`, one more pe
 
 ## Contexto no claim (df-8x0m.23.40)
 
-`check.py contexto` is a PostToolUse hook on Bash, so it only sees a command that ran. After a
-`bd update <id> --claim` it hands the session, as `additionalContext`, one line per box: for each
-`c4:` box of the bead, the box itself, its parent and the far end of every relation whose source or
-target is the box (the relations of its descendants are left out: a container's would list half
-the model), without repeats, at most 12 lines plus `... e mais N`. The order is fixed: the bead's own boxes, then their parents, then the far ends sorted by id, so the cut drops the far ends whose ids sort last. Each line: id, title, the doc
-path (`docs_por_elemento` of `scripts/arquitetura/docs.py`) and the `topic` / `read_when` of its
-front matter. The model and the doc text come from origin/main (`git show`), like the create check.
-A `c4:transversal` bead, a bead without a `c4:` box, an interrupted command, an unknown bead, a
-missing model or a missing `docs.py` give nothing. It never blocks: any error exits 0 silently. A line whose claim failed but that still exits 0 (`bd update x --claim; true`) gets the context too: the hook sees only the line's exit.
+`check.py contexto` is a PostToolUse hook on Bash, so it only sees a command that ran. After a `bd
+update <id> --claim` it hands the session, as `additionalContext`, one line per box: for each `c4:`
+box of the bead, the box itself, its parent and the far end of every relation whose source or target
+is the box (the relations of its descendants are left out: a container's would list half the model),
+without repeats, at most 12 lines plus `... e mais N`. The order is fixed: the bead's own boxes,
+then their parents, then the far ends sorted by id, so the cut drops the far ends whose ids sort
+last. Each line: id, title, the doc path (`docs_por_elemento` of `scripts/arquitetura/docs.py`) and
+the `topic` / `read_when` of its front matter. The model and the doc text come from origin/main
+(`git show`), like the create check. A `c4:transversal` bead, a bead without a `c4:` box, an
+interrupted command, an unknown bead, a missing model or a missing `docs.py` give nothing. It never
+blocks: any error exits 0 silently. A line whose claim failed but that still exits 0 (`bd update x
+--claim; true`) gets the context too: the hook sees only the line's exit.
 
 In `.claude/settings.json`, under `hooks.PostToolUse`:
 

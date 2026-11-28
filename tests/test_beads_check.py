@@ -4,6 +4,7 @@ parent's labels. bd is faked, except in the
 end-to-end tests at the bottom (skipped where bd is not installed, as in CI)."""
 
 import importlib.util
+import io
 import json
 import os
 import shlex
@@ -1080,7 +1081,7 @@ def test_a_line_with_two_claims_gives_both(ctx, tmp_path):
 
 def test_main_contexto_dispatches_to_the_context(ctx, tmp_path, monkeypatch, capsys):
     ctx(issue("df-k", "task", ["c4:a.x"]))
-    monkeypatch.setattr(check.sys, "stdin", __import__("io").StringIO(
+    monkeypatch.setattr(check.sys, "stdin", io.StringIO(
         json.dumps(ctx_event("bd update df-k --claim", tmp_path))))
     assert check.main(["contexto"]) == 0
     out = json.loads(capsys.readouterr().out)
