@@ -2476,6 +2476,20 @@
     },
     {
       "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.tasksHoje: Importa o pacote dataforge: o __init__ registra os tipos de task",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.tasksHoje",
+      "technology": null,
+      "title": "Importa o pacote dataforge: o __init__ registra os tipos de task"
+    },
+    {
+      "description": null,
       "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.edicaoHoje: Lê e escreve: categorias, regras, correções, explicações",
       "kind": null,
       "links": [],

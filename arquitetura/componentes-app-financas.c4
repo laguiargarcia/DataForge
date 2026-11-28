@@ -12,8 +12,8 @@
 //   edicao.ts tem a seta de import para ele. O front fala só com a API do DataForge: a rota genérica de
 //   tabelas e o proxy /apps/<ws>/financas/api, que repassa ao backend (seta da API para o backend, em
 //   componentes-dataforge.c4).
-// - Importar dataforge roda dataforge/__init__.py (registra os tipos de task): é efeito do import, não
-//   chamada do backend; está na descrição de Tipos de task, sem seta.
+// - Importar dataforge.delta_pool e dataforge.app_guard roda antes dataforge/__init__.py, que registra
+//   os tipos de task: esse efeito do import tem seta própria, para Tipos de task.
 // - A leitura do connections.yaml pelo backend está na descrição dele e ganha seta em df-8x0m.23.47.14,
 //   que dá um elemento à definição do workspace.
 model {
@@ -223,6 +223,11 @@ model {
       codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
     }
   }
+  casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.tasksHoje 'Importa o pacote dataforge: o __init__ registra os tipos de task' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
 
   // Do backend para o pipeline: as regras de scripts/report, por sys.path.
   casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa edicao e classificacao' {
@@ -262,6 +267,7 @@ views {
       casaHoje.dataforgeHoje.apiHoje,
       casaHoje.dataforgeHoje.appsHoje,
       casaHoje.dataforgeHoje.deltaPoolHoje,
+      casaHoje.dataforgeHoje.tasksHoje,
       casaHoje.pipelineHoje.regrasHoje,
       casaHoje.pipelineHoje.conferenciasHoje
     // Só as setas do backend: as que ligam os de fora entre si estão nas vistas deles.
