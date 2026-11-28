@@ -59,7 +59,7 @@ model {
       }
     }
     bancoNinhoHoje = banco 'ninho.db' {
-      description 'Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)'
+      description 'Pessoas, sessões, lista de compras e desejos (fora do repositório; cópia semanal no job backup)'
       technology 'SQLite'
     }
     edicaoHoje = banco 'edicao.db' {
@@ -87,23 +87,23 @@ model {
   // Seta de contêiner só onde mais de uma seta de componente liga os dois (contando as que a vista
   // exclui): ela é o resumo que hoje-conteineres mostra. Com uma só, o rótulo é o título dela
   // (README, regra 5; df-8x0m.23.47.13).
-  donoHoje -> casaHoje.dataforgeHoje 'Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)'
+  donoHoje -> casaHoje.dataforgeHoje 'Abre o app pelo atalho e administra o DataForge (GUI Qt, bandeja, CLI)'
 
   casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
   casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê o workspace.yaml e as conexões, lista e confere os scripts e edita jobs e triggers; lança cada task como processo Python, com o .env do job'
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)'
   casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
 
   casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP'
   casaHoje.financasHoje -> casaHoje.pipelineHoje 'Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml'
 
   casaHoje.pipelineHoje -> casaHoje.lagoHoje 'Grava raw, cleansed e curated; o job backup copia o raw'
-  casaHoje.pipelineHoje -[leitura]-> casaHoje.edicaoHoje 'Lê (abrir_leitura); o job backup copia'
+  casaHoje.pipelineHoje -[leitura]-> casaHoje.edicaoHoje 'Lê categorias, regras, correções e explicações; o job backup copia'
   casaHoje.pipelineHoje -[leitura]-> casaHoje.extratosHoje 'O job extrato relê; o job backup copia'
 
-  casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista, desejos'
+  casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, sessões, lista, desejos'
   casaHoje.ninhoHoje -> casaHoje.pipelineHoje 'Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14); lê o connections.yaml e confere o workspace.yaml'
 }
 
