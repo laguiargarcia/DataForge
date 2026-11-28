@@ -269,7 +269,8 @@ def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_ex
     npx.write_text(FAKE_NPX, encoding="utf-8")
     npx.chmod(0o755)
     log = tmp_path / "calls"
-    monkeypatch.setenv("PATH", f"{npx.parent}{os.pathsep}{os.environ['PATH']}")
+    # Replaces PATH: under WSL the inherited one reaches the Windows npx (bd memory wsl-which-acha-windows).
+    monkeypatch.setenv("PATH", os.pathsep.join([str(npx.parent), "/usr/bin", "/bin"]))
     monkeypatch.setenv("NPX_LOG", str(log))
     monkeypatch.setenv("NPX_VALIDATE_EXIT", str(validate_exit))
     if validate_exit:
