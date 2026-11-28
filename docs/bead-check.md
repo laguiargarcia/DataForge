@@ -23,7 +23,7 @@ they run, from a PreToolUse hook on Bash. Every other command passes in ~30 ms, 
 | | the note: `Conferi:`, `Não conferi:`, `Assumi:` in the reason, each with text | beads created on or after the cutoff |
 | claim and close | at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:`, `inc-real:` | every bead; not session beads at claim |
 | `bd close <id>` | no `#novo`/`#muda`/`#sai` mark of `arquitetura/modelo.json` on `origin/main` still names the bead | every bead, `descartado:`/`duplicado:` closes too |
-| `bd close <id> --reason "..."` | `Servido pela prod:` with text in the reason (the command used and its status) | a bead with a `c4:` box tagged `servidoPelaProd` on `origin/main`, or a child of one; beads created on or after the cutoff |
+| `bd close <id> --reason "..."` | `Servido pela prod:` with text in the reason (the command used and its status) | a bead whose `c4:` box is tagged `servidoPelaProd` on `origin/main`, sits under a tagged element, or (below the top level) holds one; beads created on or after the cutoff; not decisions, nor beads whose changes are all under `arquitetura/` |
 
 **Every bead points at a C4 box (df-8x0m.23.36):** the architecture model
 (`arquitetura/*.c4`, exported to `arquitetura/modelo.json`; `arquitetura/README.md`) is the map of the
@@ -86,17 +86,31 @@ CI job `arquitetura` checks only the marks' format (`scripts/arquitetura/marcas.
 
 **Served by prod (df-8x0m.23.42):** what a screen or the API reads is done only after the prod
 server on Windows served it (CLAUDE.md, df-p0pu): dev, CI and reviewers run on Linux, and prod's
-Windows Python lacks things Linux has. The elements that a screen or the API reads and that run on
-Windows carry the tag `servidoPelaProd` in `arquitetura/*.c4` (`arquitetura/README.md`). At `bd close`
-the hook reads `origin/main:arquitetura/modelo.json` and, when a `c4:` label of the bead is a tagged
-element or a descendant of one (`c4:casaHoje.ninhoHoje.listaHoje` under `casaHoje.ninhoHoje`), asks
-for `Servido pela prod:` in the `--reason`, followed by text up to the next mark of the note: the
-command used and the status, e.g. `Servido pela prod: Invoke-WebRequest .../tables/<table> 200`, or
-the screen opened in the app. The refusal gives the `Invoke-WebRequest` command of CLAUDE.md and the
-app shortcut. A mark in the reason, not a label, because it carries the proof. Passes: the
-exemptions above (epics, sessions, `descartado:`/`duplicado:`, the escape hatch), beads created
-before the cutoff, and beads with no tagged box (`c4:transversal` included). With no readable
-model, or no element tagged, nothing is checked (fail open).
+Windows Python lacks things Linux has. The smallest elements that a screen or the API reads and that
+run on Windows carry the tag `servidoPelaProd` in `arquitetura/*.c4` (`arquitetura/README.md`): the
+components that serve or read (the DataForge API, the ninho routes, the Finanças backend routes), the
+front components that call a server, and the data stores a screen shows. At `bd close` the hook reads
+`origin/main:arquitetura/modelo.json` and asks for `Servido pela prod:` in the `--reason` when a
+`c4:` label of the bead is covered: the box is tagged, sits under a tagged element
+(`c4:casaHoje.ninhoHoje.listaHoje.x` under `listaHoje`), or holds one (`c4:casaHoje.ninhoHoje`, the
+container of the tagged `listaHoje`). A top box (`c4:casaHoje`, `c4:casaAlvo`) does not reach down,
+or every bead on the whole system would be asked.
+
+What counts: any `Servido pela prod:` (any case, any spacing) followed by text, up to the next mark
+of the note or of this rule. Write the command used and the status, e.g. `Servido pela prod:
+Invoke-WebRequest .../tables/<table> 200`, or the screen opened in the app; the hook only sees that
+there is text, so the honesty of the text is yours. A mark right after `não` (`Não servido pela prod:
+falta o deploy`) is not one. The refusal gives how to check: the `Invoke-WebRequest` command of
+CLAUDE.md on the DataForge port 8000 and the app shortcut, and for the ninho (port 8100, behind the
+login) opening the screen on the phone or the PC, or the route with a session (`docs/commands.md`).
+
+A mark in the reason, not a label, because it carries the proof. Passes: the exemptions above
+(epics, sessions, `descartado:`/`duplicado:`, the escape hatch), decisions (they serve nothing),
+beads created before the cutoff, beads with no covered box (`c4:transversal` included), and a bead
+whose changed files (its commits, found by its id, plus its worktree's diff, as for `furo-de:`) are
+all under `arquitetura/`: a change to the drawing only. No changed files found is not that: a bead
+without commits of its own is still asked. With no readable model, or no element tagged, nothing is
+checked (fail open). One `git show` per command line serves this check, the marks and `bd create`.
 
 **Cutoff:** `CUTOFF` in the script, 2026-11-16. Older beads are held only to the rules that predate
 it (real difficulty, origem, camada, erro), and their claims are not checked.

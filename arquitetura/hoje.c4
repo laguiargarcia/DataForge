@@ -17,7 +17,6 @@ model {
     description 'Tudo roda no PC da casa, em prod nativa no Windows; a rede privada é a Tailscale'
 
     dataforgeHoje = conteiner 'DataForge' {
-      #servidoPelaProd
       description 'Motor, CLI, API e GUI Qt; serve o build do app Finanças, inicia o backend e repassa as chamadas a ele com o token. Processos do mesmo código: segundo plano (API e bandeja), GUI admin, janela do app, CLI e o run destacado (run --detach)'
       technology 'Python, FastAPI, PySide6'
       metadata {
@@ -32,7 +31,6 @@ model {
       }
     }
     financasHoje = conteiner 'Backend GetFinance' {
-      #servidoPelaProd
       description 'Processo do backend do app Finanças; importa internos do DataForge, que por sua vez o inicia e lhe repassa as chamadas: acoplamento nos dois sentidos, dor do ADR 0006'
       technology 'Python, FastAPI'
       metadata {
@@ -47,7 +45,6 @@ model {
       }
     }
     ninhoHoje = conteiner 'Servidor ninho' {
-      #servidoPelaProd
       description 'Login por pessoa, lista de compras, lista de desejos e correção de categorias, em paralelo ao app Finanças; a CLI de pessoas (python -m ninho pessoas) abre o ninho.db direto'
       technology 'Python, FastAPI'
       metadata {

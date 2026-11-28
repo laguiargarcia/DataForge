@@ -20,9 +20,10 @@ Three bd commands are checked, nothing else:
   files the bug changed. And, for any bead, no mark of the architecture target on origin/main
   (`arquitetura/modelo.json`) may still name it: the mark goes, or moves to the bead that carries
   the change on, in a PR merged before the close (df-8x0m.23.37; no modelo.json, no check).
-  A bead whose `c4:` box, or an ancestor of it, is tagged `servidoPelaProd` in that model (a screen
-  or the API reads it and it runs on Windows) needs `Servido pela prod:` with text in the reason:
-  the command used and its status (CLAUDE.md, df-p0pu; df-8x0m.23.42).
+  A bead whose `c4:` box, an ancestor of it or (below the top level) a descendant of it is tagged
+  `servidoPelaProd` in that model (a screen or the API reads it and it runs on Windows) needs
+  `Servido pela prod:` with text in the reason: the command used and its status (CLAUDE.md,
+  df-p0pu; df-8x0m.23.42). Decisions and beads whose changes are all under arquitetura/ pass.
 
 Passes untouched: session beads and epics at close, a reason starting with `descartado:` or
 `duplicado:`, a bead labelled `fechamento:dispensado` (the escape hatch, counted by the
@@ -103,6 +104,9 @@ C4 = "c4"
 C4_ANYWHERE = "transversal"  # the box of work that is not in one part: how we work, several parts
 SERVED_TAG = "servidoPelaProd"  # arquitetura/spec.c4: a screen or the API reads it, and it runs on Windows
 SERVED_MARK = re.compile(r"\bservido\s+pela\s+prod\s*:", re.IGNORECASE)
+NEGATED = re.compile(r"\bn[ãa]o\s*$", re.IGNORECASE)  # "Não servido pela prod:" is not the mark
+NO_PROD_TYPES = frozenset({"decision"})  # a decision serves nothing
+DESIGN_ONLY = "arquitetura/"  # a bead that changed only the drawing serves nothing either
 PROD_CHECK = ("powershell.exe -NoProfile -Command \"(Invoke-WebRequest -UseBasicParsing "
               "'http://127.0.0.1:8000/api/workspaces/<ws>/tables/<tabela>').StatusCode\"")
 LABEL_FLAGS = ("--add-label", "--set-labels")
@@ -476,39 +480,59 @@ def served_boxes(model: dict | None) -> set[str]:
             and isinstance(e.get("tags"), list) and SERVED_TAG in e["tags"]} if isinstance(elements, list) else set()
 
 
+def served_hits(labels, served: set[str]) -> list[str]:
+    """The `c4:` values a tagged element covers: the box itself, an ancestor of it, or, below the top
+    level, a descendant of it (a container label covers its tagged components; a top box such as
+    `casaHoje` does not, or every bead on the whole system would be asked)."""
+    def covered(v: str) -> bool:
+        return any(v == t or v.startswith(t + ".") or ("." in v and t.startswith(v + ".")) for t in served)
+    return sorted(v for v in set(label_values(labels, C4)) if covered(v))
+
+
 def served_proof(reason: str) -> bool | None:
-    """None without `Servido pela prod:` in the reason; else whether text follows it, up to the next
-    mark of the closing note or the end."""
-    mark = SERVED_MARK.search(reason)
-    if mark is None:
+    """None without a `Servido pela prod:` mark in the reason; else whether any mark is followed by
+    text, up to the next mark (this one or one of the closing note) or the end. A mark right after
+    `não` is not one."""
+    marks = [m for m in SERVED_MARK.finditer(reason) if not NEGATED.search(reason[:m.start()])]
+    if not marks:
         return None
-    after = reason[mark.end():]
-    nxt = NOTE_MARK.search(after)
-    return bool(re.search(r"\w", after[:nxt.start()] if nxt else after))
+    for mark in marks:
+        after = reason[mark.end():]
+        stops = [m.start() for m in (NOTE_MARK.search(after), SERVED_MARK.search(after)) if m]
+        if re.search(r"\w", after[:min(stops)] if stops else after):
+            return True
+    return False
 
 
-def prod_problems(model: dict | None, issue: dict, reason: str, extra_labels=()) -> list[str]:
-    """A close of a bead whose `c4:` box, or an ancestor of it, is tagged `servidoPelaProd` needs
-    `Servido pela prod:` with text in the reason: what a screen or the API reads is done only after
-    the prod server on Windows served it (CLAUDE.md, df-p0pu; df-8x0m.23.42). No model, no check."""
+def prod_problems(model: dict | None, issue: dict, reason: str, extra_labels, changed) -> list[str]:
+    """A close of a bead whose `c4:` box is covered by an element tagged `servidoPelaProd`
+    (`served_hits`) needs `Servido pela prod:` with text in the reason: what a screen or the API
+    reads is done only after the prod server on Windows served it (CLAUDE.md, df-p0pu;
+    df-8x0m.23.42). A decision passes, and so does a bead whose changed files (`changed(bead)`) are
+    all under arquitetura/: none means no evidence, not a drawing-only bead. No model, no check."""
     labels = set(issue.get("labels") or ()) | set(extra_labels)
-    if close_exempt(issue, labels, reason) or str(issue.get("created_at") or "")[:10] < CUTOFF:
+    if (close_exempt(issue, labels, reason) or issue.get("issue_type") in NO_PROD_TYPES
+            or str(issue.get("created_at") or "")[:10] < CUTOFF):
         return []
-    served = served_boxes(model)
-    hits = sorted(v for v in set(label_values(labels, C4))
-                  if any(v == s or v.startswith(s + ".") for s in served))
+    hits = served_hits(labels, served_boxes(model))
     proof = served_proof(reason)
     if not hits or proof:
+        return []
+    files = changed(issue["id"])
+    if files and all(f.startswith(DESIGN_ONLY) for f in files):
         return []
     boxes = ", ".join(f"`{C4}:{v}`" for v in hits)
     what = ("`Servido pela prod:` sem texto no `--reason`" if proof is False
             else "falta `Servido pela prod:` no `--reason`")
-    return [f"{what}. {boxes} é caixa que uma tela ou a API leem e que roda na prod do Windows (tag "
-            f"`{SERVED_TAG}` no arquitetura/modelo.json do origin/main): só está pronto depois que o "
-            "servidor da prod serviu (CLAUDE.md, df-p0pu). Depois do run na prod, peça pela rota cada "
-            f"tabela que a tela lê e espere 200: `{PROD_CHECK}` (o servidor de pé: abra o app pelo atalho "
-            "\"Finanças (GetFinance)\" da área de trabalho, ou `dataforge serve` do `.venv-prod`), ou abra a "
-            "tela no app. Escreva no `--reason` `Servido pela prod:` com o comando e o status (ex.: "
+    return [f"{what}. {boxes} {'tocam' if len(hits) > 1 else 'toca'} o que uma tela ou a API leem e roda na prod do Windows (a caixa, uma "
+            f"mãe ou uma filha dela tem a tag `{SERVED_TAG}` no arquitetura/modelo.json do origin/main): só "
+            "está pronto depois que o servidor da prod serviu (CLAUDE.md, df-p0pu). Depois do run na prod, "
+            "confira o que a tela lê e espere 200. DataForge e app Finanças (porta 8000): "
+            f"`{PROD_CHECK}` para cada tabela que a tela lê (o servidor de pé: abra o app pelo atalho "
+            "\"Finanças (GetFinance)\" da área de trabalho, ou `dataforge serve` do `.venv-prod`), ou abra "
+            "a tela no app. ninho (porta 8100, atrás do login): abra a tela no celular ou no navegador do "
+            "PC, ou peça a rota com uma sessão (`POST /api/entrar`, depois `/api/...` com o cookie; "
+            "docs/commands.md). Escreva no `--reason` `Servido pela prod:` com o que rodou e o status (ex.: "
             "`Servido pela prod: Invoke-WebRequest .../tables/<tabela> 200`)."]
 
 
@@ -617,9 +641,9 @@ def model_on_main(repo: Path) -> dict | None:
     return model if isinstance(model, dict) else None
 
 
-def mark_problems(repo: Path, bead: str) -> list[str]:
-    """The marks of the architecture target on origin/main that still name this bead."""
-    model = model_on_main(repo)
+def mark_problems(model: dict | None, bead: str) -> list[str]:
+    """The marks of the architecture target in `model` (origin/main's, `model_on_main`) that still
+    name this bead."""
     where = marked_beads(model).get(bead) if model is not None else None
     if not where:
         return []
@@ -647,6 +671,14 @@ def create_problems(step: Step, boxes: Callable[[], set[str] | None]) -> list[st
     return [f"[{what}] {f}" for f in c4_problems(step, ids)]
 
 
+def close_gaps(issue: dict, step: Step, bd: Bd, repo: Path, model: dict | None) -> list[str]:
+    """The gaps of one close: labels and note, marks of the target still on the bead, the prod check."""
+    found = close_problems(issue, step.reason, step.labels, bd.exists, lambda b: furo_candidates(repo, b))
+    if WAIVER not in {*(issue.get("labels") or ()), *step.labels}:
+        found += mark_problems(model, step.bead)
+    return found + prod_problems(model, issue, step.reason, step.labels, lambda b: changed_files(repo, b))
+
+
 def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
     """Every gap of these steps, each prefixed with the command and bead it belongs to."""
     out = []
@@ -665,11 +697,7 @@ def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
             found = claim_problems(issue, bd.lint_missing(step.bead), step.acceptance, step.labels)
             what = f"bd update {step.bead} --claim"
         else:
-            found = close_problems(issue, step.reason, step.labels, bd.exists,
-                                   lambda b: furo_candidates(repo, b))
-            if WAIVER not in {*(issue.get("labels") or ()), *step.labels}:
-                found += mark_problems(repo, step.bead)
-            found += prod_problems(model(), issue, step.reason, step.labels)
+            found = close_gaps(issue, step, bd, repo, model())
             what = f"bd close {step.bead}"
         out += [f"[{what}] {f}" for f in found]
     return out

@@ -204,7 +204,7 @@
         "title": "PC da casa"
       },
       {
-        "description": "Linux no mesmo PC: o clone do repositório no disco ext4, um worktree por bead com o próprio venv, os testes locais e o job finance_demo em dados sintéticos. Lê os dados reais só para a guarda de vazamento; não escreve na prod",
+        "description": "Linux no mesmo PC: o clone do repositório no disco ext4, um worktree por bead com o próprio venv, os testes locais e o job finance_demo em dados sintéticos. Lê os dados reais da prod só em leitura, nos testes e na guarda de vazamento; daqui uma sessão pode rodar um job da prod, que roda no Windows com o venv de prod (df-9m6m); fora isso a prod só muda pelo deploy",
         "id": "pcCasa.dev",
         "kind": "wsl",
         "links": [],
@@ -335,7 +335,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript",
       "title": "Casca"
@@ -352,7 +353,9 @@
           "ninho/telas/src/Logo.tsx"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Comum às telas"
     },
@@ -365,7 +368,8 @@
         "bead": "df-8x0m.23.8"
       },
       "tags": [
-        "novo"
+        "novo",
+        "servidoPelaProd"
       ],
       "technology": "TypeScript",
       "title": "Cópia local e fila"
@@ -445,8 +449,7 @@
         "codigo": "dataforge"
       },
       "tags": [
-        "muda",
-        "servidoPelaProd"
+        "muda"
       ],
       "technology": "Python",
       "title": "DataForge (orquestrador)"
@@ -475,7 +478,8 @@
         "codigo": "dataforge/api"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI",
       "title": "API de admin"
@@ -497,7 +501,8 @@
         ]
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, uvicorn",
       "title": "Hospedagem de apps"
@@ -534,7 +539,8 @@
         "codigo": "dataforge/compat.py"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python",
       "title": "Compat"
@@ -566,7 +572,8 @@
         "codigo": "dataforge/delta_pool.py"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, polars, deltalake",
       "title": "Leituras Delta"
@@ -596,7 +603,8 @@
         "codigo": "dataforge/gui"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, PySide6",
       "title": "Tela de admin"
@@ -613,7 +621,9 @@
           "dataforge/orphans.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, SQLAlchemy",
       "title": "Histórico de execuções"
     },
@@ -630,7 +640,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, httpx",
       "title": "Instância e presença"
@@ -666,7 +677,8 @@
         "codigo": "dataforge/api/routers/tables.py"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI, polars",
       "title": "Rota genérica de tabelas"
@@ -684,7 +696,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, PySide6, uvicorn",
       "title": "Segundo plano (API e bandeja)"
@@ -739,7 +752,8 @@
         "codigo": "workspaces/GetFinance/apps/financas"
       },
       "tags": [
-        "sai"
+        "sai",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript; na janela Qt do DataForge ou no navegador do PC",
       "title": "Front do app Finanças"
@@ -931,8 +945,7 @@
         "codigo": "ninho"
       },
       "tags": [
-        "muda",
-        "servidoPelaProd"
+        "muda"
       ],
       "technology": "Python, FastAPI",
       "title": "Servidor da casa (ninho)"
@@ -946,7 +959,8 @@
         "bead": "df-8x0m.23.21"
       },
       "tags": [
-        "novo"
+        "novo",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Agenda"
@@ -959,7 +973,9 @@
       "metadata": {
         "codigo": "ninho/desejos"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de desejos"
     },
@@ -982,7 +998,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, polars, deltalake, SQLite",
       "title": "Finanças"
@@ -995,7 +1012,9 @@
       "metadata": {
         "codigo": "ninho/lista"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de compras"
     },
@@ -1016,7 +1035,8 @@
         ]
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Núcleo do servidor"
@@ -1073,9 +1093,7 @@
       "metadata": {
         "codigo": "dataforge"
       },
-      "tags": [
-        "servidoPelaProd"
-      ],
+      "tags": [],
       "technology": "Python, FastAPI, PySide6",
       "title": "DataForge"
     },
@@ -1087,7 +1105,9 @@
       "metadata": {
         "codigo": "dataforge/api"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI",
       "title": "API HTTP"
     },
@@ -1105,7 +1125,9 @@
           "dataforge/shortcut.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, uvicorn",
       "title": "Hospedagem de apps"
     },
@@ -1132,7 +1154,9 @@
       "metadata": {
         "codigo": "dataforge/compat.py"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python",
       "title": "Compat"
     },
@@ -1161,7 +1185,9 @@
       "metadata": {
         "codigo": "dataforge/delta_pool.py"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, polars, deltalake",
       "title": "Leituras Delta"
     },
@@ -1185,7 +1211,9 @@
       "metadata": {
         "codigo": "dataforge/gui"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, PySide6",
       "title": "GUI admin e janela do app"
     },
@@ -1201,7 +1229,9 @@
           "dataforge/orphans.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, SQLAlchemy",
       "title": "Histórico de execuções"
     },
@@ -1216,7 +1246,9 @@
           "dataforge/presence.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, httpx",
       "title": "Instância e presença"
     },
@@ -1249,7 +1281,9 @@
           "dataforge/gui/daemon.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, PySide6, uvicorn",
       "title": "Segundo plano (API e bandeja)"
     },
@@ -1324,9 +1358,7 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/backend"
       },
-      "tags": [
-        "servidoPelaProd"
-      ],
+      "tags": [],
       "technology": "Python, FastAPI",
       "title": "Backend GetFinance"
     },
@@ -1341,7 +1373,9 @@
           "workspaces/GetFinance/apps/financas/backend/__init__.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, polars, pypdf, httpx, PyYAML",
       "title": "Rotas do backend Finanças"
     },
@@ -1381,7 +1415,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/edicao.ts"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "TypeScript, fetch",
       "title": "Cliente do backend e edição"
     },
@@ -1405,7 +1441,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/extratos.ts"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "TypeScript",
       "title": "Extratos"
     },
@@ -1429,7 +1467,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/api.ts"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "TypeScript, fetch",
       "title": "Leitura de tabelas"
     },
@@ -1477,9 +1517,7 @@
       "metadata": {
         "codigo": "ninho"
       },
-      "tags": [
-        "servidoPelaProd"
-      ],
+      "tags": [],
       "technology": "Python, FastAPI",
       "title": "Servidor ninho"
     },
@@ -1491,7 +1529,9 @@
       "metadata": {
         "codigo": "ninho/desejos"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de desejos"
     },
@@ -1506,7 +1546,9 @@
           "ninho/banco.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, polars, deltalake, SQLite",
       "title": "Finanças"
     },
@@ -1518,7 +1560,9 @@
       "metadata": {
         "codigo": "ninho/lista"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Lista de compras"
     },
@@ -1545,7 +1589,9 @@
           "ninho/servidor"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "Python, FastAPI, SQLite",
       "title": "Núcleo do servidor"
     },
@@ -1776,7 +1822,9 @@
           "ninho/telas/src/eu.ts"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Casca"
     },
@@ -1792,7 +1840,9 @@
           "ninho/telas/src/Logo.tsx"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Comum às telas"
     },

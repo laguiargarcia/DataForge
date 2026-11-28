@@ -23,7 +23,7 @@ deployment {
     }
 
     dev = wsl 'Dev: WSL' {
-      description 'Linux no mesmo PC: o clone do repositório no disco ext4, um worktree por bead com o próprio venv, os testes locais e o job finance_demo em dados sintéticos. Lê os dados reais só para a guarda de vazamento; não escreve na prod'
+      description 'Linux no mesmo PC: o clone do repositório no disco ext4, um worktree por bead com o próprio venv, os testes locais e o job finance_demo em dados sintéticos. Lê os dados reais da prod só em leitura, nos testes e na guarda de vazamento; daqui uma sessão pode rodar um job da prod, que roda no Windows com o venv de prod (df-9m6m); fora isso a prod só muda pelo deploy'
       technology 'Ubuntu no WSL, Python do uv'
 
       devDataforge = instanceOf casaHoje.dataforgeHoje

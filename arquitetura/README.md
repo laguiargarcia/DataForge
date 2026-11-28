@@ -16,12 +16,16 @@ de modelo:
 
 ## Servido pela prod (df-8x0m.23.42)
 
-A tag `#servidoPelaProd` vai nos elementos (não nas instâncias de implantação) que uma tela ou a API
-leem e que rodam na prod do Windows, no hoje e no alvo. Fechar um bead com `c4:` de um elemento
-marcado, ou de um descendente dele, pede `Servido pela prod:` com o comando e o status no `--reason`
-(hook `scripts/beads/check.py`, `docs/bead-check.md`; regra df-p0pu do CLAUDE.md). Quem cria ou muda
-um elemento que uma tela ou a API leem e roda no Windows põe a tag; ela vem junto das outras, no
-começo do corpo (`#muda #servidoPelaProd`).
+A tag `#servidoPelaProd` vai nos menores elementos (não nas instâncias de implantação) que uma tela
+ou a API leem e que rodam na prod do Windows, no hoje e no alvo: os componentes que servem ou leem
+(API do DataForge, rotas do ninho e do backend Finanças), os componentes de front que chamam um
+servidor e os bancos que uma tela mostra; não os contêineres inteiros, para que um bead da CLI ou do
+motor não seja cobrado. Fechar um bead com `c4:` de um elemento marcado, de um descendente dele, ou de
+um contêiner que tem um marcado dentro (o topo, `casaHoje`/`casaAlvo`, não desce) pede
+`Servido pela prod:` com o comando e o status no `--reason` (hook `scripts/beads/check.py`,
+`docs/bead-check.md`; regra df-p0pu do CLAUDE.md). Quem cria ou muda um elemento que uma tela ou a
+API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do corpo
+(`#muda #servidoPelaProd`).
 
 ## Regras do desenho
 

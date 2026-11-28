@@ -19,6 +19,7 @@
 model {
   extend casaHoje.financasHoje {
     rotasFinancasHoje = componente 'Rotas do backend Finanças' {
+      #servidoPelaProd
       description 'O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge; acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace'
       technology 'Python, FastAPI, polars, pypdf, httpx, PyYAML'
       metadata {
@@ -43,6 +44,7 @@ model {
       }
     }
     tabelasFinancasHoje = componente 'Leitura de tabelas' {
+      #servidoPelaProd
       description 'lerTabela: lê uma tabela do curated pela rota genérica de tabelas do DataForge, com o workspace tirado da URL do app'
       technology 'TypeScript, fetch'
       metadata {
@@ -50,6 +52,7 @@ model {
       }
     }
     clienteBackendFinancasHoje = componente 'Cliente do backend e edição' {
+      #servidoPelaProd
       description 'pedir: o cliente HTTP do backend do app, relativo à página (api/...), e as chamadas de edição (categorias, regras, correções, explicações), do Aplicar e do andamento de uma execução; os textos do efeito de uma regra e da faixa de pendência'
       technology 'TypeScript, fetch'
       metadata {
@@ -57,6 +60,7 @@ model {
       }
     }
     extratosFinancasHoje = componente 'Extratos' {
+      #servidoPelaProd
       description 'Envio do PDF do extrato e a lista dos guardados pelo cliente do backend; os textos do envio, do período e do job extrato'
       technology 'TypeScript'
       metadata {

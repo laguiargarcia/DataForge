@@ -36,7 +36,7 @@ model {
       }
     }
     servidorAlvo = conteiner 'Servidor da casa (ninho)' {
-      #muda #servidoPelaProd
+      #muda
       description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda. Nunca roda pipeline nem escreve no lago. Muda: o módulo finanças faz o que o app Finanças do PC faz hoje; a agenda entra'
       technology 'Python, FastAPI'
       metadata {
@@ -61,7 +61,7 @@ model {
       }
     }
     dataforgeAlvo = conteiner 'DataForge (orquestrador)' {
-      #muda #servidoPelaProd
+      #muda
       description 'Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Muda: sai o que não é orquestrador (hospedeiro de apps, rota genérica de tabelas); paredes no repositório: pastas, pacotes e regra do gate separados, CI por parte'
       technology 'Python'
       metadata {
@@ -93,7 +93,7 @@ model {
       }
     }
     frontFinancasAlvo = conteiner 'Front do app Finanças' {
-      #sai
+      #sai #servidoPelaProd
       description 'As telas do app Finanças no PC: tabelas, edição de categorias, regras e correções, conferência e extratos. Sai: as telas passam para a tela de finanças do app no celular (df-8x0m.23.19), e o DataForge deixa de servir o build e a rota de tabelas (df-8x0m.23.3)'
       technology 'React, TypeScript; na janela Qt do DataForge ou no navegador do PC'
       metadata {
