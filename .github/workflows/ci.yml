@@ -753,17 +753,35 @@ jobs:
     # mutation-ok: it writes the mutation gate's report (df-n8ac.32).
     needs: [leak-scan, quality, tests, tests-getfinance, app-financas, telas-ninho, arquitetura, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, mutation-ok, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
+    # The only job with a write token: it also posts the drawing diff (df-8x0m.23.38), not a job of its own.
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
       - uses: actions/checkout@v7
+        # Depth 2: HEAD is the merge of the PR into the base branch, and its first parent that base.
+        with: { fetch-depth: 2 }
       - uses: actions/download-artifact@v8
         continue-on-error: true   # a job that died before writing anything leaves no artifact
         with: { pattern: report-*, path: report, merge-multiple: true }
+      - name: Diff the drawing against the base
+        # What the PR changes in arquitetura/modelo.json (scripts/arquitetura/diff.py), as Markdown;
+        # empty when nothing. The base's model goes on stdin, and none there (a base without the file)
+        # is everything new. A missing first parent fails here, not as a drawing all new. No value of
+        # the event reaches a command.
+        id: desenho
+        shell: bash   # pipefail: a failed git show fails the step instead of reading as no base
+        run: |
+          mkdir -p report
+          git rev-parse --verify --quiet 'HEAD^1' > /dev/null
+          if git cat-file -e 'HEAD^1:arquitetura/modelo.json' 2> /dev/null; then git show 'HEAD^1:arquitetura/modelo.json'; fi | python3 scripts/arquitetura/diff.py > report/desenho.md
       - name: Comment the CI report on the PR
+        # Also when the drawing diff failed: the CI report still goes out, the drawing comment stays as it was.
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           RESULTS: ${{ toJSON(needs) }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DESENHO: ${{ steps.desenho.outcome }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
         run: python3 scripts/ci_report.py

@@ -44,6 +44,11 @@ falha quando ele não é o export dos `.c4`. Duas setas com a mesma origem, o me
 título (duas sem título também, mesmo com kind ou tags diferentes) param o `gerar` e o CI: dê a elas
 títulos distintos.
 
+Um PR que muda o `modelo.json` ganha um comentário do CI (job `report`) com o que mudou no desenho:
+elementos, setas e vistas novos, removidos ou alterados (`scripts/arquitetura/diff.py`). O comentário
+é editado a cada push e apagado quando o PR deixa de mudar o desenho. Para ver o mesmo texto antes do
+PR: `git show origin/main:arquitetura/modelo.json | python3 scripts/arquitetura/diff.py`.
+
 Ao trocar a versão do LikeC4, troque aqui, no `LIKEC4_VERSION` do job do CI e em `LIKEC4` de
 `modelo.py` (um teste confere os três).
 
