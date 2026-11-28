@@ -102,16 +102,16 @@ model {
     }
   }
 
-  donoAlvo -> casaAlvo.appCelularAlvo 'Usa' {
+  donoAlvo -> casaAlvo.appCelularAlvo 'Usa a lista, os desejos, as finanças e a agenda pelo celular' {
     #muda
     metadata {
-      bead 'df-8x0m.23.19'
+      bead ['df-8x0m.23.19', 'df-8x0m.23.21']
     }
   }
-  outraAlvo -> casaAlvo.appCelularAlvo 'Usa' {
+  outraAlvo -> casaAlvo.appCelularAlvo 'Usa a lista, os desejos e a agenda pelo celular' {
     #muda
     metadata {
-      bead 'df-8x0m.23.6'
+      bead ['df-8x0m.23.21', 'df-8x0m.23.6']
     }
   }
   casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo 'Lê e envia a fila de mudanças (HTTPS pela Tailscale)' {
@@ -224,9 +224,6 @@ views {
   view alvo-contexto of casaAlvo {
     title 'Alvo v2: contexto'
     include casaAlvo, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, agendadorAlvo
-    include donoAlvo -> casaAlvo with {
-      title 'Usa o app no celular e administra o DataForge'
-    }
     include * -> * where tag is #novo with {
       color green
     }
@@ -246,6 +243,15 @@ views {
     style element.tag = #sai {
       color red
       border dotted
+    }
+    // Depois das regras de tag: uma aresta que junta setas de marcas diferentes pegaria a cor de uma
+    // delas. Cada uma leva a cor da seta daquele nível (componentes-alvo.c4, cabeçalho).
+    include donoAlvo -> casaAlvo with {
+      title 'Usa o app no celular; administra o DataForge e o ninho no PC; o app Finanças do PC sai'
+      color amber
+    }
+    include casaAlvo -> agendadorAlvo with {
+      color gray
     }
   }
   view alvo-conteineres of casaAlvo {
@@ -276,6 +282,14 @@ views {
     // (componentes-alvo.c4; df-8x0m.23.47.12).
     exclude casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.lagoAlvo
     exclude casaAlvo.pipelineAlvo.publicadasAlvo -> casaAlvo.lagoAlvo
+    // Depois das regras de tag: as setas de contêiner sem marca levam a cor de sem marca, não a de
+    // uma seta de componente marcada juntada nelas (componentes-alvo.c4, cabeçalho).
+    include casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo with {
+      color gray
+    }
+    include casaAlvo.dataforgeAlvo -> agendadorAlvo with {
+      color gray
+    }
   }
 }
 
