@@ -1,5 +1,5 @@
 """scripts/arquitetura/modelo.py: arquitetura/modelo.json, the small sorted JSON of the LikeC4 model
-(df-8x0m.23.43). The raw dicts below have the shapes `likec4@1.61.1 export json --skip-layout` gives;
+(df-8x0m.23.43). The raw dicts below have the shapes `likec4 export json --skip-layout` gives (at LIKEC4);
 the CI job `arquitetura` runs the real export (`conferir`)."""
 
 import copy
@@ -206,21 +206,28 @@ def test_the_committed_model_loads_by_default():
     assert all(r["target"] in ids for r in m["relations"])
 
 
-def test_the_readme_the_ci_job_and_modelo_use_the_same_likec4():
+def test_the_readme_docs_commands_the_ci_job_and_modelo_use_the_same_likec4():
     """ci.yml sets the version once, in the job's LIKEC4_VERSION; modelo.py pins it as a constant;
-    every command of the README and of docs/commands.md runs it, and their validate is CI's."""
+    every command of arquitetura/README.md and docs/commands.md runs it, and their validate takes
+    the arguments the CI step runs."""
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    job = yamlio.load(ci)["jobs"]["arquitetura"]
+    assert job["env"]["LIKEC4_VERSION"] == modelo.LIKEC4
+    assert ci.count(modelo.LIKEC4) == 1
+    assert re.findall(r"likec4@\S*", ci, re.IGNORECASE) == ['likec4@$LIKEC4_VERSION"']
+    (step,) = [s for s in job["steps"] if s.get("name") == "Validate the model"]
+    (ci_args,) = re.findall(r'likec4@\$LIKEC4_VERSION"?\s+(.*?)\s+2>&1', step["run"])
+    assert ci_args.split()[0] == "validate"
     for doc in (ROOT / "arquitetura" / "README.md", ROOT / "docs" / "commands.md"):
         text = doc.read_text(encoding="utf-8")
-        pins = re.findall(r"likec4@\S*", text)
+        pins = re.findall(r"likec4@\S*", text, re.IGNORECASE)
         assert pins, doc
         assert set(pins) == {f"likec4@{modelo.LIKEC4}"}, doc
-        validates = re.findall(r"likec4@\S+ validate[^\n#]*", text)
+        validates = re.findall(r"likec4(@\S+)?\s+(validate[^\n#]*)", text, re.IGNORECASE)
         assert validates, doc
-        assert {v.split(" ", 1)[1].strip() for v in validates} == {"validate --max-warnings 0 arquitetura"}, doc
-    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert yamlio.load(ci)["jobs"]["arquitetura"]["env"]["LIKEC4_VERSION"] == modelo.LIKEC4
-    assert ci.count(modelo.LIKEC4) == 1
-    assert re.findall(r"likec4@\S*", ci) == ['likec4@$LIKEC4_VERSION"']
+        for pin, args in validates:
+            assert pin == f"@{modelo.LIKEC4}", (doc, pin, args)
+            assert args.split() == ci_args.split(), (doc, args)
 
 
 def test_two_arrows_with_the_same_title_stop_gerar():

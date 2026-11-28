@@ -224,8 +224,9 @@ jobs:
         with: { name: report-telas-ninho, path: report/, if-no-files-found: ignore }
   arquitetura:
     # The C4 model in LikeC4 (df-p8ss): a broken .c4 under arquitetura/ fails here instead of going
-    # unseen. LikeC4 runs through npx at LIKEC4_VERSION; nothing is installed. arquitetura/README.md
-    # and LIKEC4 of scripts/arquitetura/modelo.py pin the same version (a test checks the three).
+    # unseen. LikeC4 runs through npx at LIKEC4_VERSION; nothing is installed. arquitetura/README.md,
+    # docs/commands.md and LIKEC4 of scripts/arquitetura/modelo.py pin the same version (a test
+    # checks the four).
     # Not a required check itself: the required `tests` job needs it.
     runs-on: ubuntu-latest
     permissions: { contents: read }
