@@ -25,9 +25,15 @@ specification {
     }
   }
 
-  tag emProd
-  tag aFazer
-  tag aDecidir
+  tag emProd {
+    color green
+  }
+  tag aFazer {
+    color amber
+  }
+  tag aDecidir {
+    color red
+  }
 
   relationship leitura
   relationship escrita

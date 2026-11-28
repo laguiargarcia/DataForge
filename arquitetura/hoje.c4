@@ -1,7 +1,7 @@
-// Estado de HOJE (prod). Muda quando a prod muda.
+// Estado de HOJE: tudo aqui roda em prod. Muda quando a prod muda.
 model {
   donoHoje = pessoa 'Dono da casa' {
-    description 'Usa o app Finanças no PC e no celular'
+    description 'Usa o app Finanças numa janela no PC e o app do ninho (lista, correções) no celular'
   }
   outraHoje = pessoa 'Outra pessoa da casa' {
     description 'Usa a lista de compras pelo celular'
@@ -10,74 +10,72 @@ model {
     description 'Provedor de dados bancários'
   }
   tailscaleHoje = sistemaExterno 'Tailscale' {
-    description 'Rede privada que leva o celular até o PC'
+    description 'Rede privada; aponta só para o servidor ninho (porta 8100)'
   }
   agendadorHoje = sistemaExterno 'Agendador do Windows' {
-    description 'Dispara o job diário e o backup'
+    description 'Dispara o job diário e o backup (dataforge scheduled-run)'
   }
 
   casaHoje = sistema 'Casa (PC com Windows)' {
-    #emProd
     description 'Tudo roda neste PC, em prod nativa no Windows'
 
     dataforgeHoje = conteiner 'DataForge' {
-      #emProd
-      description 'Motor, API, GUI e servidor do app Finanças; hospeda e guarda o app com token'
+      description 'Motor, CLI, API, GUI Qt e servidor do app Finanças; hospeda e guarda o app com token'
       technology 'Python, FastAPI, PySide6'
     }
     financasHoje = conteiner 'Backend GetFinance' {
-      #emProd
       description 'Regras de negócio em scripts; importa internos do DataForge'
       technology 'Python'
     }
     ninhoHoje = conteiner 'Servidor ninho e telas' {
-      #emProd
-      description 'Esqueleto em paralelo: lista de compras, login por pessoa, tela de finanças parcial'
+      description 'Login por pessoa, lista de compras e correção de categorias, em paralelo ao app Finanças'
       technology 'Python, FastAPI, front web'
     }
-    bancoNinhoHoje = banco 'Banco do ninho' {
-      #emProd
-      description 'Pessoas e lista de compras (ninho.db, fora do repositório, sem backup ainda)'
+    bancoNinhoHoje = banco 'ninho.db' {
+      description 'Pessoas e lista de compras (fora do repositório, sem backup ainda)'
+      technology 'SQLite'
+    }
+    edicaoHoje = banco 'edicao.db' {
+      description 'Edições de finanças (data/ do workspace). Três escritores: ninho, backend Finanças e a semente carga_inicial_edicao do pipeline'
       technology 'SQLite'
     }
     lagoHoje = banco 'Lago de dados' {
-      #emProd
       description 'raw, cleansed e curated do GetFinance'
       technology 'Delta Lake'
     }
     dbDataforgeHoje = banco 'dataforge.db' {
-      #emProd
       description 'Histórico de execuções'
       technology 'SQLite'
     }
   }
 
-  donoHoje -> casaHoje.dataforgeHoje 'Abre o app Finanças'
+  donoHoje -> casaHoje.dataforgeHoje 'Abre o app Finanças (janela Qt ou navegador, no PC)'
   donoHoje -> tailscaleHoje 'Celular'
   outraHoje -> tailscaleHoje 'Celular'
   tailscaleHoje -> casaHoje.ninhoHoje 'HTTPS na rede privada'
-  tailscaleHoje -> casaHoje.dataforgeHoje 'HTTPS na rede privada'
-  agendadorHoje -> casaHoje.dataforgeHoje 'dataforge run'
+  agendadorHoje -> casaHoje.dataforgeHoje 'dataforge scheduled-run'
   casaHoje.dataforgeHoje -> pluggyHoje 'Busca transações (pelo job)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend'
   casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos (acoplamento)'
-  casaHoje.dataforgeHoje -[escrita]-> casaHoje.lagoHoje 'Grava'
-  casaHoje.dataforgeHoje -[leitura]-> casaHoje.lagoHoje 'Serve as tabelas pela rota genérica'
+  casaHoje.financasHoje -[leitura]-> casaHoje.lagoHoje 'Lê direto'
+  casaHoje.financasHoje -> casaHoje.edicaoHoje 'Lê e escreve'
+  casaHoje.dataforgeHoje -> casaHoje.lagoHoje 'Grava; serve as tabelas pela rota genérica'
+  casaHoje.dataforgeHoje -> casaHoje.edicaoHoje 'O pipeline lê e semeia (carga_inicial_edicao)'
   casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Histórico'
   casaHoje.ninhoHoje -[leitura]-> casaHoje.lagoHoje 'Lê tabelas'
-  casaHoje.ninhoHoje -[escrita]-> casaHoje.bancoNinhoHoje 'Pessoas, lista, edições'
+  casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista'
+  casaHoje.ninhoHoje -> casaHoje.edicaoHoje 'Lê e escreve: correções'
+  casaHoje.ninhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI'
 }
 
 views {
   view hoje-contexto of casaHoje {
     title 'Hoje: contexto'
-    include *
-    include donoHoje, outraHoje, pluggyHoje, tailscaleHoje, agendadorHoje
+    include casaHoje, donoHoje, outraHoje, pluggyHoje, tailscaleHoje, agendadorHoje
   }
   view hoje-conteineres of casaHoje {
     title 'Hoje: contêineres'
-    include casaHoje.*
-    include donoHoje, outraHoje, pluggyHoje, tailscaleHoje, agendadorHoje
+    include casaHoje.*, donoHoje, outraHoje, pluggyHoje, tailscaleHoje, agendadorHoje
   }
 }

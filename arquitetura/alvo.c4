@@ -1,7 +1,8 @@
-// ALVO v2 (ADR 0006). Nada disto está pronto; o que já existe em prod está em hoje.c4.
+// ALVO v2 (ADR 0006). Já em prod (tag emProd): servidor com login por pessoa, lista de compras,
+// run --detach / run-state, rota de leitura. A fazer (aFazer) ou a decidir (aDecidir): marcado nos elementos.
 model {
   donoAlvo = pessoa 'Dono da casa' {
-    description 'Finanças, lista e agenda'
+    description 'Finanças, lista e agenda; administra o DataForge'
   }
   outraAlvo = pessoa 'Outra pessoa da casa' {
     description 'Vê o que é compartilhado e o que é dela'
@@ -17,46 +18,49 @@ model {
     description 'Rede privada até o celular'
   }
   agendadorAlvo = sistemaExterno 'Agendador do Windows' {
-    description 'Dispara os jobs'
+    description 'Dispara os jobs (dataforge scheduled-run)'
   }
 
   casaAlvo = sistema 'Casa (PC com Windows)' {
     description 'Quatro peças com contratos estreitos'
 
+    appCelularAlvo = conteiner 'App no celular' {
+      #aFazer
+      description 'Cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta (df-8x0m.23.8)'
+    }
     servidorAlvo = conteiner 'Servidor da casa (ninho) e telas' {
-      description 'Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, agenda. Nunca roda pipeline nem escreve no lago'
+      #emProd
+      description 'Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
       technology 'Python, FastAPI, front web'
     }
     bancoAppAlvo = banco 'Banco do app' {
-      description 'O que a pessoa digitou: usuários, lista, agenda, edições. Não se reconstrói: precisa de backup real'
+      #emProd
+      description 'O que a pessoa digitou: usuários, lista, agenda, edições. Não se reconstrói: precisa de backup real (a fazer)'
       technology 'SQLite'
     }
     lagoAlvo = banco 'Lago' {
+      #emProd
       description 'raw (só cresce), cleansed e publicado. Só o pipeline escreve'
       technology 'Delta Lake'
     }
     dataforgeAlvo = conteiner 'DataForge (orquestrador)' {
-      description 'Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário'
+      #emProd
+      description 'Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Paredes no repositório (df-8x0m.23.14) a fazer: pastas, pacotes e regra do gate separados, CI por parte'
       technology 'Python'
-    }
-    consultaAlvo = conteiner 'Consulta de estado de execução' {
-      #aDecidir
-      description 'Como o servidor acompanha uma execução que pediu (df-8x0m.23.17)'
     }
   }
 
-  donoAlvo -> tailscaleAlvo 'Celular e navegador do PC'
+  donoAlvo -> tailscaleAlvo 'Celular'
   outraAlvo -> tailscaleAlvo 'Celular'
-  tailscaleAlvo -> casaAlvo.servidorAlvo 'HTTPS na rede privada'
-  agendadorAlvo -> casaAlvo.dataforgeAlvo 'dataforge run'
+  tailscaleAlvo -> casaAlvo.appCelularAlvo 'Rede privada'
+  casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo 'Lê e envia a fila de mudanças (HTTPS)'
+  donoAlvo -> casaAlvo.dataforgeAlvo 'Tela de admin'
+  agendadorAlvo -> casaAlvo.dataforgeAlvo 'dataforge scheduled-run'
 
-  casaAlvo.servidorAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê'
-  casaAlvo.servidorAlvo -[escrita]-> casaAlvo.bancoAppAlvo 'Único escritor'
+  casaAlvo.servidorAlvo -> casaAlvo.bancoAppAlvo 'Lê e escreve (único escritor)'
   casaAlvo.servidorAlvo -[leitura]-> casaAlvo.lagoAlvo 'Só leitura, pelas tabelas publicadas'
-  casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede "rode o job X" pela interface pública (CLI)'
-  casaAlvo.servidorAlvo -> casaAlvo.consultaAlvo 'Acompanha a execução'
-  casaAlvo.consultaAlvo -> casaAlvo.dataforgeAlvo 'Lê o histórico'
-  casaAlvo.dataforgeAlvo -[escrita]-> casaAlvo.lagoAlvo 'Único escritor'
+  casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
+  casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)'
   casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada'
   casaAlvo.dataforgeAlvo -> pluggyAlvo 'Busca dados'
   casaAlvo.dataforgeAlvo -> outrasFontesAlvo 'Busca dados'
@@ -65,12 +69,39 @@ model {
 views {
   view alvo-contexto of casaAlvo {
     title 'Alvo v2: contexto'
-    include *
-    include donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, tailscaleAlvo, agendadorAlvo
+    include casaAlvo, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, tailscaleAlvo, agendadorAlvo
+    style element.tag = #aFazer {
+      color amber
+      border dashed
+    }
+    style element.tag = #aDecidir {
+      color red
+      border dotted
+    }
+    style element.tag = #emProd {
+      color green
+    }
   }
   view alvo-conteineres of casaAlvo {
     title 'Alvo v2: contêineres'
-    include casaAlvo.*
-    include donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, tailscaleAlvo, agendadorAlvo
+    include casaAlvo.*, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, tailscaleAlvo, agendadorAlvo
+    style element.tag = #aFazer {
+      color amber
+      border dashed
+    }
+    style element.tag = #aDecidir {
+      color red
+      border dotted
+    }
+    style element.tag = #emProd {
+      color green
+    }
+  }
+}
+
+views {
+  view index {
+    title 'Índice'
+    include casaHoje, casaAlvo
   }
 }
