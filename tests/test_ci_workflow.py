@@ -5,6 +5,7 @@ them. A job outside that reach goes red while auto-merge carries the PR in anywa
 orders and windows-smoke failed unnoticed. A required job that runs `if: always()` passes even when
 a job it needs failed, unless its steps read that need's result.
 """
+import json
 import re
 import shutil
 import stat
@@ -203,6 +204,9 @@ CONTINUE_OK = {
 NEEDS_STEP_IFS = (None, "always()")
 # The status functions of an `if:`: a step whose earlier steps passed, and a job whose need failed.
 RUNNING = {"always": True, "cancelled": False, "success": True, "failure": False}
+# A step after a failed one, and any step of a cancelled run.
+STEP_FAILED = {"always": True, "cancelled": False, "success": False, "failure": True}
+CANCELLED = {"always": True, "cancelled": True, "success": False, "failure": False}
 NEED_FAILED = {"always": True, "cancelled": False, "success": False, "failure": True}
 EVENTS = ("pull_request", "push")
 TOKEN = re.compile(r"\s*(?:'((?:[^']|'')*)'|(&&|\|\||==|!=|!|\(|\))|([A-Za-z_][\w.-]*))")
@@ -515,6 +519,111 @@ def _unread_needs_checks(jobs: dict) -> list[str]:
     return problems
 
 
+DRAWING_STEP = "Diff the drawing against the base"
+COMMENT_STEP = "Comment the CI report on the PR"
+# What the drawing step runs, copied into a throwaway repo: diff.py imports modelo from scripts/.
+DRAWING_SCRIPTS = ("__init__.py", "modelo.py", "diff.py")
+needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="builds a throwaway git repo")
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "init.defaultBranch=main",
+                    *args], cwd=repo, check=True, capture_output=True)
+
+
+def _drawing_run(job: dict, step: dict, base: str | None, pr: str, parent: bool = True) -> tuple[int, str | None]:
+    """Run the drawing step in a throwaway repo checked out as the report job's is: HEAD the merge of
+    a PR whose arquitetura/modelo.json is `pr` into a base whose is `base` (None: no file), or, without
+    `parent`, one commit alone. The exit code and report/desenho.md (None when not written)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Path(tmp)
+        scripts = repo / "scripts" / "arquitetura"
+        scripts.mkdir(parents=True)
+        for name in DRAWING_SCRIPTS:
+            shutil.copy(CI.parents[2] / "scripts" / "arquitetura" / name, scripts / name)
+        (repo / "arquitetura").mkdir()
+        model = repo / "arquitetura" / "modelo.json"
+        _git(repo, "init", "-q")
+        if parent:
+            if base is not None:
+                model.write_text(base, encoding="utf-8")
+            _git(repo, "add", "-A")
+            _git(repo, "commit", "-qm", "base")
+            _git(repo, "checkout", "-qb", "pr")
+        model.write_text(pr, encoding="utf-8")
+        (repo / "pr.txt").write_text("pr", encoding="utf-8")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-qm", "pr")
+        if parent:
+            _git(repo, "checkout", "-q", "main")
+            _git(repo, "merge", "-q", "--no-ff", "-m", "merge", "pr")
+        script = repo.parent / f"{repo.name}-step.sh"
+        script.write_text(step["run"], encoding="utf-8")
+        try:
+            code = subprocess.run([*_shell(job, step), str(script)], cwd=repo, capture_output=True, check=False).returncode
+        finally:
+            script.unlink()
+        out = repo / "report" / "desenho.md"
+        return code, out.read_text(encoding="utf-8") if out.exists() else None
+
+
+def _drawing_checks(jobs: dict) -> list[str]:
+    """The report job's drawing diff (df-8x0m.23.38): run on a merge whose base lacks one arrow of the
+    real model, on an unchanged one, on a base without the model, on a checkout without the first
+    parent and on a PR model that is not JSON; the comment step runs after it whatever it did, with
+    its outcome; and no other job holds a write token."""
+    job = jobs["report"]
+    step = _step(jobs, "report", DRAWING_STEP)
+    if _shell(job, step) != SHELLS["bash"]:
+        return [f"{_label('report', step)} runs without pipefail"]
+    real = json.loads((CI.parents[2] / "arquitetura" / "modelo.json").read_text(encoding="utf-8"))
+    pr = json.dumps(real)
+    fewer = json.loads(pr)
+    arrow = fewer["relations"].pop()
+    problems = []
+    code, out = _drawing_run(job, step, json.dumps(fewer), pr)
+    if code != 0 or out is None or f"**Arrows**: 1 new\n- ➕ `{arrow['id']}`" not in out:
+        problems.append(f"an added arrow: exit {code}, {out!r}")
+    if _drawing_run(job, step, pr, pr) != (0, ""):
+        problems.append("an unchanged drawing writes a comment or fails")
+    code, out = _drawing_run(job, step, None, pr)
+    if code != 0 or "everything is new" not in (out or ""):
+        problems.append(f"a base without the model: exit {code}, {out!r}")
+    if _drawing_run(job, step, None, pr, parent=False)[0] == 0:
+        problems.append("a checkout without the base commit passes as a drawing all new")
+    if _drawing_run(job, step, pr, "{not json")[0] == 0:
+        problems.append("a failed diff passes")
+    depth = next(s for s in job["steps"] if str(s.get("uses", "")).startswith("actions/checkout")).get("with", {}).get("fetch-depth")
+    if not isinstance(depth, int) or depth < 2:
+        problems.append(f"report checks out at depth {depth!r}: no base commit")
+    comment = _step(jobs, "report", COMMENT_STEP)
+    if _why_skipped(comment.get("if"), {}, STEP_FAILED) or not _why_skipped(comment.get("if"), {}, CANCELLED):
+        problems.append(f"the comment step's if: {comment.get('if')!r} skips it after a failed diff or runs it on a cancelled run")
+    if comment.get("env", {}).get("DESENHO") != f"${{{{ steps.{step.get('id')}.outcome }}}}":
+        problems.append("the comment step does not get the drawing step's outcome")
+    return problems
+
+
+def _write_tokens(workflow: dict) -> list[str]:
+    """Where the workflow grants a write token: "workflow" for its top-level permissions, else the jobs.
+    A job without permissions gets the top level's, or the repo's default (read-only, set on GitHub)."""
+    tops = ["workflow"] if "write" in str(workflow.get("permissions", "")) else []
+    return tops + sorted(name for name, job in workflow["jobs"].items() if "write" in str(job.get("permissions", "")))
+
+
+@pytest.mark.parametrize(("inject", "expected"), [
+    (lambda w: None, ["report"]),
+    (lambda w: w.update(permissions={"pull-requests": "write"}), ["workflow", "report"]),
+    (lambda w: w.update(permissions="write-all"), ["workflow", "report"]),
+    (lambda w: w["jobs"]["arquitetura"].update(permissions={"pull-requests": "write"}), ["arquitetura", "report"]),
+], ids=["as-is", "top-level", "top-level-write-all", "another-job"])
+def test_only_the_report_job_holds_a_write_token(inject, expected):
+    """It posts the CI report and the drawing diff (df-8x0m.23.38): a second job with a write token is more surface."""
+    workflow = yamlio.load(CI.read_text(encoding="utf-8"))
+    inject(workflow)
+    assert _write_tokens(workflow) == expected
+
+
 CHECKS = [
     pytest.param(_needs_checks, marks=needs_bash, id="needs"),
     pytest.param(_command_checks, marks=needs_bash, id="commands"),
@@ -523,6 +632,7 @@ CHECKS = [
     pytest.param(_work_checks, id="step-if"),
     pytest.param(_job_if_checks, id="job-if"),
     pytest.param(_unread_needs_checks, id="unread-needs"),
+    pytest.param(_drawing_checks, marks=[needs_bash, needs_git], id="drawing"),
 ]
 
 
@@ -651,12 +761,20 @@ LOOPHOLES = [
     ("sonar-scan-if-false", _work_checks, _set("sonar", "SonarQube Cloud scan", {"if": False})),
     ("sonar-scan-without-a-token", _work_checks, _set("sonar", "SonarQube Cloud scan", {"if": "env.SONAR_TOKEN == ''"})),
     ("sonar-scan-not-on-a-pr", _work_checks, _set("sonar", "SonarQube Cloud scan", {"if": "github.event_name != 'pull_request'"})),
+    # df-8x0m.23.38: the drawing diff of the report job.
+    ("drawing-without-the-parent-check", _drawing_checks, _replace("report", DRAWING_STEP, "git rev-parse --verify --quiet 'HEAD^1' > /dev/null\n", "")),
+    ("drawing-swallows-a-failure", _drawing_checks, _replace("report", DRAWING_STEP, "> report/desenho.md", "> report/desenho.md || true")),
+    ("drawing-without-pipefail", _drawing_checks, _set("report", DRAWING_STEP, {"shell": None})),
+    ("drawing-at-depth-1", _drawing_checks, lambda jobs: jobs["report"]["steps"][0].pop("with")),
+    ("drawing-comment-skipped-after-a-failed-diff", _drawing_checks, _set("report", COMMENT_STEP, {"if": None})),
+    ("drawing-outcome-not-passed", _drawing_checks, lambda jobs: _step(jobs, "report", COMMENT_STEP)["env"].pop("DESENHO")),
+    ("drawing-comment-on-a-cancelled-run", _drawing_checks, _set("report", COMMENT_STEP, {"if": "always()"})),
 ]
 
 
 @pytest.mark.parametrize(
     ("check", "inject"),
-    [pytest.param(check, inject, id=name, marks=[needs_bash] if check in (_needs_checks, _command_checks) else [])
+    [pytest.param(check, inject, id=name, marks=[needs_bash, needs_git] if check in (_needs_checks, _command_checks, _drawing_checks) else [])
      for name, check, inject in LOOPHOLES],
 )
 def test_the_checks_catch_each_loophole(check, inject):
