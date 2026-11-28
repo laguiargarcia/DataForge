@@ -472,7 +472,7 @@
       "title": "Lista de desejos"
     },
     {
-      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge o job reclassificar que as aplica",
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica",
       "id": "casaHoje.ninhoHoje.financasNinhoHoje",
       "kind": "componente",
       "links": [],
@@ -2680,6 +2680,20 @@
     },
     {
       "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.telasNinhoHoje: Lê o build (ninho/telas/dist) e o entrega em /",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje",
+      "technology": null,
+      "title": "Lê o build (ninho/telas/dist) e o entrega em /"
+    },
+    {
+      "description": null,
       "id": "casaHoje.pipelineHoje -> casaHoje.backupHoje: Grava o zip semanal (job backup)",
       "kind": null,
       "links": [],
@@ -3262,6 +3276,23 @@
       "target": "casaHoje.pipelineHoje.functionsHoje",
       "technology": null,
       "title": "Carrega por exec: leitura dos achados"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje.servidorHoje: Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/pedido.ts",
+          "ninho/telas/src/eu.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)"
     },
     {
       "description": null,

@@ -47,7 +47,7 @@ model {
       }
     }
     financasNinhoHoje = componente 'Finanças' {
-      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge o job reclassificar que as aplica'
+      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica'
       technology 'Python, polars, deltalake, SQLite'
       metadata {
         codigo ['ninho/financas', 'ninho/banco.py']
@@ -94,8 +94,20 @@ model {
       codigo ['ninho/__main__.py']
     }
   }
+  // Título igual ao de telasNinhoHoje -> ninhoHoje em hoje.c4. Uma seta só, para o núcleo: /api/lista e
+  // /api/desejos entram pelos routers que o núcleo inclui.
+  casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje.servidorHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)' {
+    metadata {
+      codigo ['ninho/telas/src/pedido.ts', 'ninho/telas/src/eu.ts']
+    }
+  }
 
-  // Para fora: DataForge, regras do workspace, lago, bancos.
+  // Para fora: telas, DataForge, regras do workspace, lago, bancos.
+  casaHoje.ninhoHoje.servidorHoje -[leitura]-> casaHoje.telasNinhoHoje 'Lê o build (ninho/telas/dist) e o entrega em /' {
+    metadata {
+      codigo ['ninho/servidor/app.py']
+    }
+  }
   // Títulos iguais aos das setas de ninhoHoje em hoje.c4 quando o componente faz só aquilo (df-8x0m.23.47.12).
   casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje.cliHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI' {
     metadata {
@@ -145,6 +157,8 @@ views {
     include *
     // Mostra a seta da carga das regras no componente que ela atinge, não no contêiner do pipeline.
     include casaHoje.pipelineHoje.regrasHoje
+    // Mostra a seta do aplicar na CLI do DataForge, não no contêiner do DataForge.
+    include casaHoje.dataforgeHoje.cliHoje
     include casaHoje.telasNinhoHoje
   }
 }
