@@ -94,8 +94,7 @@ def test_a_missing_section_counts_as_empty():
 def test_a_marked_element_of_today_fails(tag, fqn):
     found = marcas.problems(model([element("casaHoje"), element(fqn, [tag], {"bead": "df-a"})]))
     assert len(found) == 1
-    assert fqn in found[0]
-    assert "hoje" in found[0]
+    assert found[0].startswith(f"{fqn}: #{tag} no modelo de hoje")
 
 
 @pytest.mark.parametrize("tag", marcas.TAGS)
@@ -104,8 +103,7 @@ def test_a_marked_element_of_today_fails(tag, fqn):
 def test_a_marked_relation_with_an_end_in_today_fails(tag, source, target):
     found = marcas.problems(model(relations=[relation(source, target, [tag], {"bead": "df-a"})]))
     assert len(found) == 1
-    assert f"{source} -> {target}: usa" in found[0]
-    assert "hoje" in found[0]
+    assert found[0].startswith(f"{source} -> {target}: usa: #{tag} no modelo de hoje")
 
 
 def test_a_marked_item_of_today_without_a_bead_names_both_problems():
