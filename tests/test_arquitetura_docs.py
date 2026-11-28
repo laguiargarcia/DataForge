@@ -3,6 +3,7 @@ and has a front matter (topic, read_when, code, status), whose code: covers the 
 (df-8x0m.23.39.1). `esbocar` links and sketches the elements without a doc."""
 
 import copy
+import shutil
 import json
 import subprocess
 import sys
@@ -51,6 +52,19 @@ def test_conferir_command_exits_0_on_the_committed_model():
     run = subprocess.run([sys.executable, "-S", str(ROOT / "scripts/arquitetura/docs.py"), "conferir"],
                          capture_output=True, text=True, check=False)
     assert run.returncode == 0, run.stdout + run.stderr
+
+
+def test_conferir_command_exits_1_naming_the_element_on_a_failing_model(tmp_path):
+    """The CLI on a copy of the scripts whose model has an element without a doc link."""
+    shutil.copytree(ROOT / "scripts" / "arquitetura", tmp_path / "scripts" / "arquitetura",
+                    ignore=shutil.ignore_patterns("__pycache__"))
+    (tmp_path / "arquitetura").mkdir()
+    (tmp_path / "arquitetura" / "modelo.json").write_text(json.dumps(_model(_element("casaHoje.semDocHoje"))),
+                                                          encoding="utf-8")
+    run = subprocess.run([sys.executable, "-S", str(tmp_path / "scripts/arquitetura/docs.py"), "conferir"],
+                         capture_output=True, text=True, check=False)
+    assert run.returncode == 1, run.stdout + run.stderr
+    assert "error: casaHoje.semDocHoje has no doc link" in run.stdout
 
 
 def test_every_element_of_the_committed_model_has_a_doc():
@@ -105,6 +119,15 @@ def test_a_front_matter_without_a_key_fails(repo, drop, message):
     (repo / "docs" / "engine.md").write_text(text, encoding="utf-8")
     problems = docs.conferir(_ok_model(), repo)
     assert problems == [f"error: casaAlvo.motorAlvo, casaHoje.motorHoje: the front matter of docs/engine.md {message}"]
+
+
+@pytest.mark.parametrize("bad", ["/etc/passwd", "../fora.py", "pkg/../../fora.py", ""])
+def test_a_code_path_outside_the_repo_or_empty_fails(repo, bad):
+    (repo / "docs" / "engine.md").write_text(FM.replace("  - pkg/engine.py\n", f"  - pkg/engine.py\n  - {bad}\n"),
+                                            encoding="utf-8")
+    problems = docs.conferir(_ok_model(), repo)
+    assert problems == [f"error: casaAlvo.motorAlvo, casaHoje.motorHoje: code: of docs/engine.md names {bad!r}, "
+                        "not a path inside the repo"]
 
 
 def test_a_front_matter_without_code_fails(repo):
@@ -184,6 +207,9 @@ def test_ler_front_matter_reads_the_flat_subset(tmp_path):
 topic: "Arquivos: o \"workspace\""
 read_when: 'it''s here'
 related_issues: [df-1, df-2]
+quoted: ["a, b", 'c, d', e]
+plain: valor # a comment
+hash: a#b
 empty: []
 code:
 - a/b.py
@@ -196,6 +222,7 @@ status: esboço
 """, encoding="utf-8")
     assert docs.ler_front_matter(doc) == {"topic": 'Arquivos: o "workspace"', "read_when": "it's here",
                                           "related_issues": ["df-1", "df-2"], "empty": [],
+                                          "quoted": ["a, b", "c, d", "e"], "plain": "valor", "hash": "a#b",
                                           "code": ["a/b.py", "c d"], "status": "esboço"}
 
 
@@ -206,7 +233,8 @@ def test_ler_front_matter_is_empty_without_one(tmp_path, text):
     assert docs.ler_front_matter(doc) == {}
 
 
-@pytest.mark.parametrize("body", ["topic: x\n", "topic: x\nlist:\n  nested: y\n---\n", "- item\n---\n",
+@pytest.mark.parametrize("body", ["topic: x\n", "topic: x\nlist:\n  nested: y\n---\n",
+                                  "topic: a `type: b`\n---\n", "code:\n  - a: b\n---\n", "- item\n---\n",
                                   'topic: "open\n---\n', "topic: 'open\n---\n", "topic: '\n---\n"])
 def test_ler_front_matter_refuses_what_is_not_the_subset(tmp_path, body):
     doc = tmp_path / "x.md"
@@ -298,6 +326,15 @@ def test_esbocar_links_and_sketches_and_is_idempotent(repo):
     assert again[1:] == ["casaHoje: already linked in x.c4; run python3 scripts/arquitetura/modelo.py gerar",
                          "casaHoje.motorHoje: already linked in x.c4; run python3 scripts/arquitetura/modelo.py gerar"]
     assert {p: p.read_bytes() for p in repo.rglob("*") if p.is_file()} == snapshot
+
+
+def test_c4_mudou_only_for_a_new_link_or_a_hand_edit(repo):
+    m = _esbocar_repo(repo)
+    assert docs.c4_mudou(docs.esbocar(m, repo, repo / "arquitetura"))
+    second = docs.esbocar(m, repo, repo / "arquitetura")
+    assert not docs.c4_mudou([msg for msg in second if "add `link" not in msg])
+    assert docs.c4_mudou(second)  # the element whose definition is not found still needs a hand edit
+    assert not docs.c4_mudou(["docs/caixas/x.md: sketch written for x"])
 
 
 def test_esbocar_sketches_pass_conferir(repo):

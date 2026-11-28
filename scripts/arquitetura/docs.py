@@ -78,6 +78,7 @@ STATUS = ("esboço", "pronto")
 CHAVES = ("topic", "read_when", "code", "status")
 _LINHA = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
 _ITEM = re.compile(r"\s*-\s+(.*)")
+_ITENS = re.compile(r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^,"'])+""")  # inline list items, commas in quotes kept
 _PLANO = re.compile(r"[\w./-]+")
 _ASPAS = re.compile(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"")
 _LINK = re.compile(rf"\s*link\s+\S+\s+'{TITULO}'\s*")
@@ -123,12 +124,15 @@ def _valor(text: str, where: str):
         if text == "'" or not text.endswith("'"):
             raise ValueError(f"{where}: bad single-quoted string {text!r}")
         return text[1:-1].replace("''", "'")
+    text = re.split(r"\s+#", text, maxsplit=1)[0].rstrip()  # YAML drops a trailing ` # comment`
+    if ": " in text or text.endswith(":"):
+        raise ValueError(f"{where}: a plain value with ': ' is not valid YAML, quote it: {text!r}")
     return text
 
 
 def _lista(text: str, where: str) -> list[str]:
     inner = text.strip()[1:-1].strip()
-    return [_valor(item, where) for item in inner.split(",")] if inner else []
+    return [_valor(item, where) for item in _ITENS.findall(inner)] if inner else []
 
 
 def ler_front_matter(path: Path | str) -> dict:
@@ -194,8 +198,10 @@ def _problemas_doc(path: str, ids: list[str], por_id: dict, raiz: Path) -> list[
     if fm.get("status") not in STATUS:
         problems.append(f"error: {quem}: the front matter of {path} has status {fm.get('status', '(none)')}, "
                         f"not one of {', '.join(STATUS)}")
+    ruins = [c for c in code if not c.strip() or Path(c).is_absolute() or ".." in Path(c).parts]
+    problems += [f"error: {quem}: code: of {path} names {c!r}, not a path inside the repo" for c in ruins]
     problems += [f"error: {quem}: code: of {path} names {c}, which does not exist"
-                 for c in code if not (raiz / c).exists()]
+                 for c in code if c not in ruins and not (raiz / c).exists()]
     problems += [f"error: {eid}: code: of {path} does not cover its codigo path {p}"
                  for eid in ids for p in _codigo(por_id[eid]) if not _cobre(code, p)]
     return problems
@@ -326,6 +332,11 @@ def esbocar(m: dict, raiz: Path = REPO, fonte: Path = FONTE) -> list[str]:
     return messages
 
 
+def c4_mudou(messages: list[str]) -> bool:
+    """Whether the `esbocar` messages say a .c4 changed or needs a hand edit."""
+    return any(": linked " in msg or ": add `link" in msg for msg in messages)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("acao", choices=("conferir", "esbocar"))
@@ -334,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
     if acao == "esbocar":
         messages = esbocar(m)
         print("\n".join(messages) if messages else "every element links a doc that exists")
-        if any(" linked " in msg or "add `link" in msg for msg in messages):
+        if c4_mudou(messages):
             print("the .c4 changed: run python3 scripts/arquitetura/modelo.py gerar, then conferir")
         return 0
     problems = conferir(m)
