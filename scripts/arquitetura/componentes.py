@@ -117,6 +117,7 @@ from arquitetura import modelo
 
 REPO = Path(__file__).resolve().parents[2]
 COMPONENTE = "componente"
+INIT = "__init__.py"  # a package's own module
 CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".ps1")
 TS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 OUT_FOLDERS = frozenset({"dist", "node_modules", "tests", "test", "__tests__", "e2e"})
@@ -457,7 +458,7 @@ class _Leitor:
         alvo = _juntar(base, *partes)
         if not alvo:
             return None
-        for candidato in (alvo + ".py", _juntar(alvo, "__init__.py")):
+        for candidato in (alvo + ".py", _juntar(alvo, INIT)):
             if candidato in self.repo.arquivos:
                 return candidato
         return None
@@ -500,7 +501,7 @@ class _Leitor:
         `alvo` is a package's own __init__.py it comes back too, and `ligar` drops it as read."""
         pacotes, pasta = [], posixpath.dirname(alvo)
         while pasta and pasta != base:
-            inicio = _juntar(pasta, "__init__.py")
+            inicio = _juntar(pasta, INIT)
             if inicio in self.repo.arquivos and not self.arquivo.startswith(pasta + "/"):
                 pacotes.append(inicio)
             pasta = posixpath.dirname(pasta)
@@ -540,7 +541,7 @@ class _Leitor:
             else:
                 (inseridos if no.func.attr == "insert" else anexados).append("/".join(base))
         pasta = "/".join(partes[:-1])
-        proprio = [] if _juntar(pasta, "__init__.py") in self.repo.arquivos else [pasta]
+        proprio = [] if _juntar(pasta, INIT) in self.repo.arquivos else [pasta]
         return [*reversed(inseridos), *proprio, "", *anexados]
 
     def chamada(self, no: ast.Call, partes: tuple[str, ...], nomes: dict) -> None:
