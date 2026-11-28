@@ -851,7 +851,7 @@
       "title": "Casca"
     },
     {
-      "description": "O pedido ao servidor (pedir: o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo (useDados, da lista e dos desejos) e o Logo, que importa o logo-ninho.svg de ninho/identidade",
+      "description": "O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade",
       "id": "casaHoje.telasNinhoHoje.comumTelasHoje",
       "kind": "componente",
       "links": [],

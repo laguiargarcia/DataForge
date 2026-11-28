@@ -24,7 +24,7 @@ model {
       }
     }
     comumTelasHoje = componente 'Comum às telas' {
-      description 'O pedido ao servidor (pedir: o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo (useDados, da lista e dos desejos) e o Logo, que importa o logo-ninho.svg de ninho/identidade'
+      description 'O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade'
       technology 'React, TypeScript'
       metadata {
         codigo ['ninho/telas/src/pedido.ts', 'ninho/telas/src/dados.ts', 'ninho/telas/src/Logo.tsx']
@@ -122,8 +122,9 @@ model {
     }
   }
 
-  // Quem usa: cada pessoa abre a página (index.html), e a casca mostra só as telas dos módulos dela. Títulos iguais
-  // aos das setas de donoHoje e outraHoje para telasNinhoHoje em hoje.c4 (df-8x0m.23.47.12).
+  // Quem usa: cada pessoa abre a página (index.html), e a casca mostra só as telas dos módulos
+  // dela. Títulos iguais aos das setas de donoHoje e outraHoje para telasNinhoHoje em hoje.c4
+  // (df-8x0m.23.47.12).
   donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista, os desejos e as correções pelo celular' {
     metadata {
       codigo ['ninho/telas/index.html']
