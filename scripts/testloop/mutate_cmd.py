@@ -343,14 +343,17 @@ def _run(cmd: list[str], cwd: Path, env: dict, deadline: float) -> tuple[int, st
         return proc.returncode, out.read()
 
 
+def _copy_paths(config: Config, module: str) -> set[str]:
+    """The files a target's `copy` globs reach, relative to the repo (and to the copy)."""
+    return {
+        p.relative_to(config.repo).as_posix()
+        for pattern in config.targets.get(module, {}).get("copy", [])
+        for p in config.repo.glob(pattern) if p.is_file()
+    }
+
+
 def _copy_files(config: Config, module: str, tests: list[str], dest: Path) -> None:
-    target = config.targets.get(module, {})
-    rels = {module, *tests}
-    for pattern in target.get("copy", []):
-        rels.update(
-            p.relative_to(config.repo).as_posix()
-            for p in config.repo.glob(pattern) if p.is_file()
-        )
+    rels = {module, *tests, *_copy_paths(config, module)}
     for rel in sorted(rels):
         src = config.repo / rel
         if "__pycache__" in src.parts or not src.is_file():
@@ -359,10 +362,26 @@ def _copy_files(config: Config, module: str, tests: list[str], dest: Path) -> No
         shutil.copy2(src, dest / rel)
 
 
+def _source(module: str) -> str:
+    parts = Path(module).parts
+    return parts[0] if len(parts) > 1 else module
+
+
+# The dirs among mutmut 3.8.1's also_copy defaults: it always copies them into mutants/.
+MUTMUT_COPIES = ("tests", "test")
+
+
+def _also_copy(config: Config, module: str) -> list[str]:
+    """The top-level entries of the copy that hold a `copy` file mutmut would not bring to mutants/,
+    where it runs the tests (df-hlks). Top-level because mutmut copies a listed file without making
+    its parent dirs, and a dir with copytree; the copy holds only what _copy_files put there."""
+    tops = {Path(rel).parts[0] for rel in _copy_paths(config, module)}
+    return sorted(tops - {_source(module), *MUTMUT_COPIES})
+
+
 def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path) -> str:
     """Write mutmut's config into the copy and return its text."""
-    parts = Path(module).parts
-    source = parts[0] if len(parts) > 1 else module
+    source = _source(module)
     lines = [
         "[tool.mutmut]",
         f"source_paths = {json.dumps([source])}",
@@ -370,6 +389,9 @@ def _write_tool_config(config: Config, module: str, tests: list[str], dest: Path
         f"pytest_add_cli_args = {json.dumps(pytest_args(config, module))}",
         f"pytest_add_cli_args_test_selection = {json.dumps(tests)}",
     ]
+    also_copy = _also_copy(config, module)
+    if also_copy:   # none: the text, so the cache key, stays as before df-hlks
+        lines.append(f"also_copy = {json.dumps(also_copy)}")
     # mutmut's default ("fork") runs the clean suite in its main process, then forks each mutant from
     # it: a thread pool a test started there (polars, in the leak guard's tests) is gone in the child,
     # which waits for it until the timeout (df-kmx0). A target whose tests do that sets
