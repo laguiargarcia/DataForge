@@ -21,7 +21,7 @@ model {
       technology 'Python, FastAPI, PySide6'
     }
     financasHoje = conteiner 'Backend GetFinance' {
-      description 'Processo do backend do app Finanças (apps/financas/backend) e as regras de negócio nos scripts do workspace (scripts/report/edicao.py etc.), que o pipeline, o backend e o ninho carregam; importa internos do DataForge'
+      description 'Processo do backend do app Finanças (apps/financas/backend) e as regras de negócio nos scripts do workspace (scripts/report/edicao.py etc.), que o pipeline, o backend e o ninho carregam; importa internos do DataForge, que por sua vez o inicia e lhe repassa as chamadas: acoplamento nos dois sentidos, dor do ADR 0006'
       technology 'Python'
     }
     ninhoHoje = conteiner 'Servidor ninho e telas' {
@@ -57,14 +57,14 @@ model {
   casaHoje.dataforgeHoje -> pluggyHoje 'Busca transações (pelo job)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
-  casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos do DataForge (delta_pool, app_guard) e pede e acompanha os jobs reclassificar e extrato pela API HTTP; acoplamento nos dois sentidos, dor do ADR 0006'
+  casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP'
   casaHoje.financasHoje -[leitura]-> casaHoje.lagoHoje 'Lê direto'
   casaHoje.financasHoje -> casaHoje.edicaoHoje 'Lê e escreve: categorias, regras, correções, explicações'
   casaHoje.financasHoje -> casaHoje.extratosHoje 'Grava o PDF enviado'
   casaHoje.dataforgeHoje -> casaHoje.lagoHoje 'Grava; serve as tabelas pela rota genérica; o job backup copia o raw'
-  casaHoje.dataforgeHoje -> casaHoje.edicaoHoje 'O pipeline lê (abrir_leitura); o job backup copia'
+  casaHoje.dataforgeHoje -[leitura]-> casaHoje.edicaoHoje 'O pipeline lê (abrir_leitura); o job backup copia'
   casaHoje.dataforgeHoje -[leitura]-> casaHoje.extratosHoje 'O job extrato relê; o job backup copia'
-  casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Histórico'
+  casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
   casaHoje.dataforgeHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia no job backup (semanal)'
   casaHoje.ninhoHoje -[leitura]-> casaHoje.lagoHoje 'Lê tabelas'
   casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista, desejos'
