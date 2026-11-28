@@ -290,6 +290,10 @@ views {
     include casaAlvo.dataforgeAlvo -> agendadorAlvo with {
       color gray
     }
+    // Depois do include acima, que traria de volta todas as setas do par: a leitura dos arquivos do
+    // workspace pelo Compat, junto das setas comuns, deixaria pontilhada a seta dataforge -> pipeline,
+    // cujo título já diz que o DataForge lê o workspace.yaml (como em hoje.c4).
+    exclude casaAlvo.dataforgeAlvo.compatAlvo -> casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo
   }
 }
 

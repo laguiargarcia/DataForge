@@ -539,7 +539,10 @@
       "kind": "banco",
       "links": [],
       "metadata": {
-        "bead": "df-8x0m.23.14",
+        "bead": [
+          "df-8x0m.23.14",
+          "df-7cyk"
+        ],
         "codigo": [
           "workspaces/GetFinance/workspace.yaml",
           "workspaces/GetFinance/jobs",
@@ -705,7 +708,7 @@
       "title": "Lista de desejos"
     },
     {
-      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); com o registro de pastas do DataForge (df-7cyk), pede o job pelo nome e deixa de pôr o DATAFORGE_HOME dois níveis acima do workspace; a regra do que cada pessoa vê (df-8x0m.23.6)",
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); com o registro de pastas do DataForge (df-7cyk), pede o job pelo nome e deixa de pôr o DATAFORGE_HOME dois níveis acima do workspace; hoje acha o edicao.db pelo connections.yaml do workspace; muda com df-8x0m.23.14; a regra do que cada pessoa vê (df-8x0m.23.6)",
       "id": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "kind": "componente",
       "links": [],
@@ -741,7 +744,7 @@
       "title": "Lista de compras"
     },
     {
-      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21); o NINHO_WORKSPACE, hoje a pasta do workspace GetFinance, muda quando o workspace vai para ninho/financas (df-8x0m.23.14)",
+      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21); o NINHO_WORKSPACE, hoje a pasta do workspace GetFinance (hoje confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace), muda quando o workspace vai para ninho/financas (df-8x0m.23.14)",
       "id": "casaAlvo.servidorAlvo.nucleoAlvo",
       "kind": "componente",
       "links": [],
@@ -2391,6 +2394,23 @@
       "target": "casaAlvo.historicoAlvo",
       "technology": null,
       "title": "Lê e grava runs, tasks e agendas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.compatAlvo -> casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo: Acha a pasta pelo registro (padrão workspaces/<nome>) e confere o workspace.yaml",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-7cyk",
+        "codigo": "dataforge/compat.py"
+      },
+      "source": "casaAlvo.dataforgeAlvo.compatAlvo",
+      "tags": [
+        "muda"
+      ],
+      "target": "casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo",
+      "technology": null,
+      "title": "Acha a pasta pelo registro (padrão workspaces/<nome>) e confere o workspace.yaml"
     },
     {
       "description": null,
