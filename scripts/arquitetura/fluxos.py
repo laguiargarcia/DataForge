@@ -23,11 +23,13 @@ Fails, one `error:` line per problem, when a dynamic view:
    Playwright spec a `test('...')` call (`test.only`, `.skip`, `.fixme`, `.fail`, `.slow` too;
    a `test.describe` title is not a test, nor a test( in a comment, in a string or after a dot);
    a comment or a string that never closes runs to the end of the text (a quote, to the end of
-   the line). There is no JS parser, and each limit fails closed (a test is missed, never one
-   invented): a regex literal with a quote in it reads as a string start, one with `//` in it
-   (/https?:\/\//) as a comment to the end of the line; the unescape only drops the backslash
-   (and a backslash-newline), so a `ç` in a name reads as `u00e7`, not `ç`: write the
-   character itself in a name that a flow links;
+   the line). There is no JS parser, so the reader has limits. Most only miss a test: a regex
+   literal with `//` in it (/https?:\/\//) reads as a comment to the end of the line, and the
+   unescape only drops the backslash (and a backslash-newline), so a `\u00e7` in a name reads
+   as `u00e7`, not as the character: write the character itself in a name that a flow links.
+   A regex literal with a quote or a backtick in it (/'/, /`/) reads as a string start: it can
+   miss a test, and can also read the text of a later string as code, so a test( inside that
+   string counts (a test invented). Keep such a literal out of an e2e file that a flow names;
 6. has no steps, or a step with an end outside today's model (modelo.e_hoje): the tests run today's
    code, so the flow they exercise is today's.
 

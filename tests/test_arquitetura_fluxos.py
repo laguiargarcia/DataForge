@@ -109,15 +109,26 @@ def test_a_name_outside_a_test_call_is_not_a_test(texto):
         "backtick-escapes", "test-calls", "test-call-backtick", "stars"])
 def test_a_large_unclosed_input_reads_in_linear_time(texto):
     """A token that never closes ends at the end of the text (or line): the scan does not restart
-    from every character, which took over 10 s on 100 KB before."""
-    start = time.perf_counter()
+    from every character, which took over 10 s on 100 KB before. CPU time, not wall time: a
+    scheduler stall under -n auto does not count."""
+    start = time.process_time()
     fluxos.declarados(texto, ".ts")
-    assert time.perf_counter() - start < 0.5
+    assert time.process_time() - start < 2
 
 
 def test_an_unclosed_comment_or_string_hides_what_follows():
     assert fluxos.declarados("/* sem fim\ntest('x', () => {})\n", ".ts") == set()
     assert fluxos.declarados("const s = `sem fim\ntest('x', () => {})\n", ".ts") == set()
+
+
+@pytest.mark.parametrize("texto", [
+    "const r = /`/\nconst s = `test('inventado')`\n",
+    "const r = /'/; const t = 'a test(\"inventado\") b'\n",
+], ids=["regex-with-a-backtick", "regex-with-a-quote"])
+def test_known_limit_a_regex_literal_with_a_quote_can_invent_a_test(texto):
+    """Pinned limit (docstring, rule 5): no JS parser, so the regex's quote opens a string and the
+    real string's text reads as code. If this changes, update the docstring."""
+    assert fluxos.declarados(texto, ".ts") == {"inventado"}
 
 
 def test_an_unclosed_quote_ends_at_the_line():
