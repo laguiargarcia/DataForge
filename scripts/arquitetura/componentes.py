@@ -102,7 +102,7 @@ HOJE = "Hoje"
 CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".ps1")
 TS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 OUT_FOLDERS = frozenset({"dist", "node_modules", "tests", "test", "__tests__", "e2e"})
-OUT_NAME = re.compile(r"^(test_.*\.py|.*_test\.py|conftest\.py|.*\.(test|spec)\..*|.*\.config\.(ts|js|mjs|cjs))$")
+OUT_CONFIGS = (".config.ts", ".config.js", ".config.mjs", ".config.cjs")
 SUBPROCESS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
 ASYNCIO = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
 ALWAYS = frozenset({"system", "popen"})  # os.system and os.popen run a shell command line
@@ -112,15 +112,29 @@ DYNAMIC = frozenset({"__import__", "spec_from_file_location", "run_path", "run_m
 SHELLS = frozenset({"sh", "bash", "cmd", "powershell", "pwsh"})  # a program that runs any other one
 SNIPPET = 120
 POSICAO = re.compile(r"^([^:]+):(?:(\d+):)?")
+# import/export ... from '...' is read in steps, each pattern linear: the keyword, then the run of
+# characters an import clause is made of, which must end in `from` and spaces, then the quoted
+# specifier right after the run (TS_FROM_* and _ts_from).
+TS_FROM_KEYWORD = re.compile(r"\b(?:import|export)\s")
+TS_FROM_CLAUSE = re.compile(r"[\w\s{},*$]*")
+TS_FROM_WORD = re.compile(r"\bfrom")
+TS_SPECIFIER = re.compile(r"""(['"])([^'"\n]+)\1""")
 TS_IMPORTS = (
-    re.compile(r"""\b(?:import|export)\s+[\w\s{},*$]*?\bfrom\s*(['"])([^'"\n]+)\1"""),
     re.compile(r"""\bimport\s*(['"])([^'"\n]+)\1"""),
     re.compile(r"""\bimport\s*\(\s*(['"])([^'"\n]+)\1\s*\)"""),
 )
 TS_DYNAMIC = re.compile(r"\bimport\s*\(")
 # A string (kept) or a comment (replaced by its newlines), so a quote inside a comment, or '//' in a
-# string, does not throw the patterns off.
-TS_TOKENS = re.compile(r"""('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(//[^\n]*|/\*.*?\*/)""", re.DOTALL)
+# string, does not throw the patterns off. TS_TOKEN_START finds where the next one may start, and
+# the pattern of that start reads it whole.
+TS_TOKEN_START = re.compile(r"""['"`]|//|/\*""")
+TS_TOKEN = {
+    "'": re.compile(r"'(?:\\.|[^'\\\n])*'", re.DOTALL),
+    '"': re.compile(r'"(?:\\.|[^"\\\n])*"', re.DOTALL),
+    "`": re.compile(r"`(?:\\.|[^`\\])*`", re.DOTALL),
+    "//": re.compile(r"//[^\n]*"),
+    "/*": re.compile(r"/\*.*?\*/", re.DOTALL),
+}
 
 
 @dataclass
@@ -166,10 +180,16 @@ def sistema(id_: str) -> str:
     return id_.split(".")[0]
 
 
+def _fora(nome: str) -> bool:
+    """A test or a tooling config, by its file name."""
+    return ((nome.startswith("test_") and nome.endswith(".py")) or nome.endswith("_test.py")
+            or nome == "conftest.py" or ".test." in nome or ".spec." in nome or nome.endswith(OUT_CONFIGS))
+
+
 def e_codigo(arquivo: str) -> bool:
     partes = arquivo.split("/")
     return (arquivo.endswith(CODE_SUFFIXES) and not OUT_FOLDERS.intersection(partes[:-1])
-            and not OUT_NAME.match(partes[-1]))
+            and not _fora(partes[-1]))
 
 
 def _normal(caminho: str) -> str | None:
@@ -281,17 +301,30 @@ def _caminho(no: ast.expr, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, 
     if isinstance(no, ast.Attribute) and no.attr == "parent":
         base = _caminho(no.value, arquivo, nomes)
         return base[:-1] if base else None
-    if (isinstance(no, ast.Subscript) and isinstance(no.value, ast.Attribute) and no.value.attr == "parents"
-            and isinstance(no.slice, ast.Constant) and isinstance(no.slice.value, int)):
-        base = _caminho(no.value.value, arquivo, nomes)
-        fim = len(base) - 1 - no.slice.value if base is not None else -1
-        return base[:fim] if fim >= 0 else None
-    if (isinstance(no, ast.BinOp) and isinstance(no.op, ast.Div) and isinstance(no.right, ast.Constant)
-            and isinstance(no.right.value, str)):
-        base = _caminho(no.left, arquivo, nomes)
-        junto = _normal(_juntar(*base, no.right.value)) if base is not None else None
-        return tuple(junto.split("/")) if junto else None
+    if isinstance(no, ast.Subscript):
+        return _caminho_parents(no, arquivo, nomes)
+    if isinstance(no, ast.BinOp):
+        return _caminho_barra(no, arquivo, nomes)
     return None
+
+
+def _caminho_parents(no: ast.Subscript, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """x.parents[n] is x without its last n + 1 parts."""
+    if not (isinstance(no.value, ast.Attribute) and no.value.attr == "parents"
+            and isinstance(no.slice, ast.Constant) and isinstance(no.slice.value, int)):
+        return None
+    base = _caminho(no.value.value, arquivo, nomes)
+    fim = len(base) - 1 - no.slice.value if base is not None else -1
+    return base[:fim] if fim >= 0 else None
+
+
+def _caminho_barra(no: ast.BinOp, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """x / "literal" is x joined with the literal, in normal form."""
+    if not (isinstance(no.op, ast.Div) and isinstance(no.right, ast.Constant) and isinstance(no.right.value, str)):
+        return None
+    base = _caminho(no.left, arquivo, nomes)
+    junto = _normal(_juntar(*base, no.right.value)) if base is not None else None
+    return tuple(junto.split("/")) if junto else None
 
 
 def _caminho_chamada(no: ast.Call, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
@@ -398,15 +431,12 @@ class _Leitor:
     def bases_de(self, chamadas: list[ast.Call], partes: tuple[str, ...], nomes: dict) -> list[str]:
         """The folders imports resolve from, in order (see the module docstring)."""
         inseridos, anexados = [], []
-        for no in chamadas:
-            if (isinstance(no.func, ast.Attribute) and no.func.attr in ("insert", "append")
-                    and isinstance(no.func.value, ast.Attribute) and no.func.value.attr == "path"
-                    and isinstance(no.func.value.value, ast.Name) and no.func.value.value.id == "sys"):
-                base = _caminho(no.args[-1], partes, nomes) if no.args else None
-                if base is None:
-                    self.avisar(no, "sys.path entry not resolved, imports through it are not checked")
-                else:
-                    (inseridos if no.func.attr == "insert" else anexados).append("/".join(base))
+        for no in filter(_sys_path, chamadas):
+            base = _caminho(no.args[-1], partes, nomes) if no.args else None
+            if base is None:
+                self.avisar(no, "sys.path entry not resolved, imports through it are not checked")
+            else:
+                (inseridos if no.func.attr == "insert" else anexados).append("/".join(base))
         pasta = "/".join(partes[:-1])
         proprio = [] if _juntar(pasta, "__init__.py") in self.repo.arquivos else [pasta]
         return [*reversed(inseridos), *proprio, "", *anexados]
@@ -415,14 +445,11 @@ class _Leitor:
         nome = _nome(no.func)
         primeiro = no.args[0] if no.args else None
         if nome == "exec" and isinstance(no.func, ast.Name):
-            lido = (_caminho(primeiro.func.value, partes, nomes)
-                    if isinstance(primeiro, ast.Call) and isinstance(primeiro.func, ast.Attribute)
-                    and primeiro.func.attr == "read_text" else None)
+            lido = _lido(primeiro, partes, nomes)
             alvo = "/".join(lido) if lido else None
             self.carga(no, alvo if alvo in self.repo.arquivos else None)
         elif nome == "import_module":
-            literal = (primeiro.value if isinstance(primeiro, ast.Constant) and isinstance(primeiro.value, str)
-                       and not primeiro.value.startswith(".") else None)
+            literal = _modulo_literal(primeiro)
             self.carga(no, self.import_(literal.split(".")) if literal else None)
         elif nome in DYNAMIC:
             self.carga(no, None)
@@ -438,41 +465,103 @@ class _Leitor:
     def processo(self, no: ast.Call) -> None:
         """A call that starts a process is silent only when its program is a literal that is neither
         python, dataforge nor a shell."""
-        modulos, funcoes = self.processos
-        if isinstance(no.func, ast.Attribute) and isinstance(no.func.value, ast.Name) and no.func.value.id in modulos:
-            modulo, nome = modulos[no.func.value.id], no.func.attr
-        elif isinstance(no.func, ast.Name) and no.func.id in funcoes:
-            modulo, nome = funcoes[no.func.id]
-        else:
+        chamado = self.chamado(no)
+        if chamado is None:
             return
+        modulo, nome = chamado
         if modulo == "os" and nome in ALWAYS:
             self.avisar(no, "subprocess, not checked")
             return
-        lancador = ((modulo == "subprocess" and nome in SUBPROCESS) or (modulo == "asyncio" and nome in ASYNCIO)
-                    or (modulo == "os" and nome.startswith(("exec", "spawn"))))
-        if not lancador:
+        if not _lancador(modulo, nome):
             return
-        posicao = 1 if nome.startswith("spawn") else 0  # os.spawn*(mode, path, ...)
-        comando = no.args[posicao] if len(no.args) > posicao else None
-        if isinstance(comando, (ast.List, ast.Tuple)) and comando.elts:
-            comando = comando.elts[0]
-        texto = comando.value.lower() if isinstance(comando, ast.Constant) and isinstance(comando.value, str) else None
+        texto = _programa(no, nome)
         programa = posixpath.basename(texto.split()[0]).removesuffix(".exe") if texto and texto.split() else None
         if programa is None or programa in SHELLS or re.search(r"python|dataforge", texto):
             self.avisar(no, "subprocess, not checked")
+
+    def chamado(self, no: ast.Call) -> tuple[str, str] | None:
+        """(module, function) of a call to a function of subprocess, os or asyncio, or None."""
+        modulos, funcoes = self.processos
+        if isinstance(no.func, ast.Attribute) and isinstance(no.func.value, ast.Name) and no.func.value.id in modulos:
+            return modulos[no.func.value.id], no.func.attr
+        if isinstance(no.func, ast.Name) and no.func.id in funcoes:
+            return funcoes[no.func.id]
+        return None
+
+
+def _sys_path(no: ast.Call) -> bool:
+    """A call sys.path.insert(...) or sys.path.append(...)."""
+    return (isinstance(no.func, ast.Attribute) and no.func.attr in ("insert", "append")
+            and isinstance(no.func.value, ast.Attribute) and no.func.value.attr == "path"
+            and isinstance(no.func.value.value, ast.Name) and no.func.value.value.id == "sys")
+
+
+def _lido(primeiro: ast.expr | None, partes: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """The path of the x in exec(x.read_text(...)), or None."""
+    if isinstance(primeiro, ast.Call) and isinstance(primeiro.func, ast.Attribute) and primeiro.func.attr == "read_text":
+        return _caminho(primeiro.func.value, partes, nomes)
+    return None
+
+
+def _modulo_literal(primeiro: ast.expr | None) -> str | None:
+    """The module name of import_module("<literal>"), unless relative."""
+    if isinstance(primeiro, ast.Constant) and isinstance(primeiro.value, str) and not primeiro.value.startswith("."):
+        return primeiro.value
+    return None
+
+
+def _lancador(modulo: str, nome: str) -> bool:
+    """A function that starts a process (os.system and os.popen apart)."""
+    return ((modulo == "subprocess" and nome in SUBPROCESS) or (modulo == "asyncio" and nome in ASYNCIO)
+            or (modulo == "os" and nome.startswith(("exec", "spawn"))))
+
+
+def _programa(no: ast.Call, nome: str) -> str | None:
+    """The program of a process call, lowercased, when it is a string literal (or the first item of a
+    list or tuple of them)."""
+    posicao = 1 if nome.startswith("spawn") else 0  # os.spawn*(mode, path, ...)
+    comando = no.args[posicao] if len(no.args) > posicao else None
+    if isinstance(comando, (ast.List, ast.Tuple)) and comando.elts:
+        comando = comando.elts[0]
+    return comando.value.lower() if isinstance(comando, ast.Constant) and isinstance(comando.value, str) else None
 
 
 # TS and JS
 
 
 def _sem_comentarios(fonte: str) -> str:
-    return TS_TOKENS.sub(lambda m: m[1] if m[1] is not None else "\n" * m[2].count("\n"), fonte)
+    """The source with each comment replaced by its newlines; a string, even one holding '//', is kept."""
+    partes, copiado, pos = [], 0, 0
+    while inicio := TS_TOKEN_START.search(fonte, pos):
+        token = TS_TOKEN[inicio[0]].match(fonte, inicio.start())
+        if token is None:  # an unclosed string or comment: go on from the next character
+            pos = inicio.start() + 1
+            continue
+        if inicio[0].startswith("/"):
+            partes += [fonte[copiado:token.start()], "\n" * token[0].count("\n")]
+            copiado = token.end()
+        pos = token.end()
+    return "".join([*partes, fonte[copiado:]])
+
+
+def _ts_from(fonte: str):
+    """(start, specifier) of each import/export ... from '...', left to right and not overlapping."""
+    fim = 0
+    for chave in TS_FROM_KEYWORD.finditer(fonte):
+        if chave.start() < fim:
+            continue
+        clausula = TS_FROM_CLAUSE.match(fonte, chave.end())
+        palavra = chave.end() + len(clausula[0].rstrip()) - len("from")
+        especificador = TS_SPECIFIER.match(fonte, clausula.end())
+        if palavra >= chave.end() and TS_FROM_WORD.match(fonte, palavra) and especificador:
+            fim = especificador.end()
+            yield chave.start(), especificador[2]
 
 
 def _ts(repo: Repo, arquivo: str, fonte: str, resultado: Resultado) -> None:
     fonte = _sem_comentarios(fonte)
-    achados = sorted({(m.start(), m.group(2)) for padrao in TS_IMPORTS for m in padrao.finditer(fonte)})
-    literais = {m.start() for m in TS_IMPORTS[2].finditer(fonte)}
+    achados = sorted({*_ts_from(fonte), *((m.start(), m[2]) for padrao in TS_IMPORTS for m in padrao.finditer(fonte))})
+    literais = {m.start() for m in TS_IMPORTS[1].finditer(fonte)}
     for m in TS_DYNAMIC.finditer(fonte):
         if m.start() not in literais:
             linha = fonte.count("\n", 0, m.start()) + 1
