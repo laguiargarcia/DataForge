@@ -72,7 +72,9 @@ Convenções:
 - Import conta também o de tipo: `import type` no TS e o import sob `if TYPE_CHECKING:` no Python
   pedem seta como os outros.
 
-`python3 scripts/arquitetura/componentes.py` confere, com a numeração da docstring dele:
+`uv run --no-project python scripts/arquitetura/componentes.py` (o Python do `.python-version`; um
+mais velho recusa sintaxe nova do código, e o script sai 2 dizendo isso) confere, com a numeração
+da docstring dele:
 
 1. Todo caminho de `codigo`, de elemento, seta ou item de implantação, do hoje e do alvo, está em
    forma normal (sem `./`, `..` nem `/` nas pontas) e é arquivo versionado ou pasta com arquivo

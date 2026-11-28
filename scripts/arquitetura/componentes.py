@@ -1,6 +1,6 @@
 """The component model (C4 level 3) of arquitetura/*.c4 checked against the code (df-8x0m.23.47.2).
 
-    python3 scripts/arquitetura/componentes.py     # exit 1 with one `error:` line per problem
+    uv run --no-project python scripts/arquitetura/componentes.py   # exit 1 with one `error:` line per problem
 
 It reads arquitetura/modelo.json (scripts/arquitetura/modelo.py) and the files git tracks (`git
 ls-files`, never the disk: a local .venv, __pycache__ or docs/ is not in the CI checkout). It prints
@@ -8,7 +8,8 @@ the warnings, then the errors, each sorted by file and line, then a summary line
 when there is an error. Warnings never fail: they list what a static read cannot check, for the
 reviewer of the drawing. Standard library only. It parses the code with the ast of the Python that
 runs it, so it must be the repo's (.python-version): the CI job `arquitetura` runs it with `uv run
---no-project python`, since an older python3 refuses newer syntax.
+--no-project python`, since an older python3 refuses newer syntax. Run by a Python older than the
+major.minor of .python-version, it says so and exits 2 before reading anything.
 
 Every element of kind `componente` points at its code with `metadata { codigo [...] }`, as do the
 containers with code, and an arrow may list the files where its call is. Paths are from the root of
@@ -550,7 +551,22 @@ def _n(quantos: int, palavra: str) -> str:
     return f"{quantos} {palavra}{'' if quantos == 1 else 's'}"
 
 
+def python_do_repo(raiz: Path) -> tuple[int, int]:
+    """The major.minor of raiz/.python-version ("3.15" or "3.15.2")."""
+    maior, menor = (raiz / ".python-version").read_text(encoding="utf-8").split()[0].split(".")[:2]
+    return int(maior), int(menor)
+
+
+def _python() -> tuple[int, int]:
+    return sys.version_info[:2]
+
+
 def main() -> int:
+    precisa, este = python_do_repo(REPO), _python()
+    if este < precisa:
+        print(f"componentes.py needs Python {precisa[0]}.{precisa[1]} (.python-version) to parse the repo's code, "
+              f"not {este[0]}.{este[1]}: run uv run --no-project python scripts/arquitetura/componentes.py")
+        return 2
     resultado = conferir(modelo.load(), REPO, arquivos_do_repo(REPO))
     for linha in [f"warning: {a}" for a in resultado.avisos] + [f"error: {e}" for e in resultado.erros]:
         print(linha)

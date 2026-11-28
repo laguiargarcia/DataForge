@@ -465,12 +465,36 @@ def test_the_files_are_the_ones_git_tracks(tmp_path):
     assert componentes.arquivos_do_repo(tmp_path) == ["a.py"]
 
 
+SUMMARY_OF_NOTHING = "componentes.py: 0 code files owned in the hoje, 0 imports read; 0 errors, 0 warnings"
+
+
+@pytest.mark.parametrize(("version", "expected"), [
+    ((3, 14), (2, ["componentes.py needs Python 3.15 (.python-version) to parse the repo's code, not 3.14: "
+                   "run uv run --no-project python scripts/arquitetura/componentes.py"])),
+    ((3, 15), (0, [SUMMARY_OF_NOTHING])),
+    ((3, 16), (0, [SUMMARY_OF_NOTHING])),
+])
+def test_main_refuses_a_python_older_than_the_repos(tmp_path, capsys, monkeypatch, version, expected):
+    (tmp_path / ".python-version").write_text("3.15\n", encoding="utf-8")
+    monkeypatch.setattr(componentes, "REPO", tmp_path)
+    monkeypatch.setattr(componentes, "_python", lambda: version)
+    monkeypatch.setattr(componentes.modelo, "load", lambda: {"elements": [], "relations": []})
+    monkeypatch.setattr(componentes, "arquivos_do_repo", lambda raiz: [])
+    assert (componentes.main(), capsys.readouterr().out.splitlines()) == expected
+
+
+def test_the_repos_python_version_reads_major_and_minor(tmp_path):
+    (tmp_path / ".python-version").write_text("3.15.2\n", encoding="utf-8")
+    assert componentes.python_do_repo(tmp_path) == (3, 15)
+
+
 def test_main_prints_warnings_then_errors_then_a_summary(tmp_path, capsys, monkeypatch):
     files = {"app/a/x.py": "import app.b.y\nexec(codigo)\n", "app/b/y.py": ""}
     for path, text in files.items():
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / path).write_text(text, encoding="utf-8")
     modelo = {"elements": two_components(), "relations": [], "deployment": {"nodes": [], "instances": [], "relations": []}}
+    (tmp_path / ".python-version").write_text(f"{sys.version_info[0]}.{sys.version_info[1]}\n", encoding="utf-8")
     monkeypatch.setattr(componentes, "REPO", tmp_path)
     monkeypatch.setattr(componentes.modelo, "load", lambda: modelo)
     monkeypatch.setattr(componentes, "arquivos_do_repo", lambda raiz: sorted(files))
