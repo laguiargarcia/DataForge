@@ -648,7 +648,8 @@ def test_the_checks_cover_the_steps_that_matter():
     assert {"mutation-ok / Gate each target on its shards", "mutation / Mutate",
             "app-financas / Committed dist is the build", "tests-shard / Engine tests",
             "arquitetura / Validate the model", "arquitetura / The committed modelo.json is the export of the .c4",
-            "arquitetura / Every mark of the target carries a bead"} <= steps["command"]
+            "arquitetura / Every mark of the target carries a bead",
+            "arquitetura / The component model matches the code"} <= steps["command"]
     assert steps["action"] == {"leak-scan / gitleaks", "sonar / SonarQube Cloud scan"}
     assert all(f"secrets.{secret}" in CI.read_text(encoding="utf-8") for secret in SECRETS_SET)
     downloads = {(n, s.get("with", {}).get("pattern") or s.get("with", {}).get("name"))
@@ -664,6 +665,15 @@ def test_the_arquitetura_job_validates_the_c4_folder_and_fails_on_a_warning():
     folder = re.search(r" validate --max-warnings 0 (\S+) 2>&1", run)
     assert folder, run
     assert sorted((CI.parents[2] / folder[1]).glob("*.c4"))
+
+
+def test_the_component_checker_runs_on_the_repos_python():
+    """componentes.py parses every tracked .py with ast: the runner's python3 is older than
+    .python-version and would refuse its newer syntax (df-8x0m.23.47.2)."""
+    steps = _jobs()["arquitetura"]["steps"]
+    index = next(i for i, s in enumerate(steps) if s.get("name") == "The component model matches the code")
+    assert re.search(r"(?m)^uv run --no-project python scripts/arquitetura/componentes\.py ", steps[index]["run"])
+    assert any(str(s.get("uses", "")).startswith("astral-sh/setup-uv@") for s in steps[:index])
 
 
 def _step(jobs: dict, job: str, name: str) -> dict:
@@ -742,6 +752,7 @@ LOOPHOLES = [
     ("committed-dist-exits-0", _command_checks, _replace("app-financas", "Committed dist is the build", "exit 1", "exit 0")),
     ("stale-model-passes", _command_checks, _set("arquitetura", "The committed modelo.json is the export of the .c4", {"shell": None})),
     ("unmarked-change-passes", _command_checks, _set("arquitetura", "Every mark of the target carries a bead", {"shell": None})),
+    ("components-pass-without-pipefail", _command_checks, _set("arquitetura", "The component model matches the code", {"shell": None})),
     ("validate-swallows-a-failure", _command_checks, _replace("arquitetura", "Validate the model", "arquitetura 2>&1", "arquitetura || true; true 2>&1")),
     ("tests-ignores-arquitetura", _needs_checks, _replace("tests", "Every part passed", ' && [ "$ARQUITETURA" = "success" ]', "")),
     # skipped, accepted only where SKIPPED_OK says.

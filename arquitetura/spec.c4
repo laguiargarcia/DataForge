@@ -18,6 +18,9 @@ specification {
   element conteiner {
     notation "Contêiner"
   }
+  element componente {
+    notation "Componente"
+  }
   element banco {
     notation "Banco ou armazenamento"
     style {

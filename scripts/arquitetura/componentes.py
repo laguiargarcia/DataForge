@@ -1,0 +1,564 @@
+"""The component model (C4 level 3) of arquitetura/*.c4 checked against the code (df-8x0m.23.47.2).
+
+    python3 scripts/arquitetura/componentes.py     # exit 1 with one `error:` line per problem
+
+It reads arquitetura/modelo.json (scripts/arquitetura/modelo.py) and the files git tracks (`git
+ls-files`, never the disk: a local .venv, __pycache__ or docs/ is not in the CI checkout). It prints
+the warnings, then the errors, each sorted by file and line, then a summary line, and exits 1
+when there is an error. Warnings never fail: they list what a static read cannot check, for the
+reviewer of the drawing. Standard library only. It parses the code with the ast of the Python that
+runs it, so it must be the repo's (.python-version): the CI job `arquitetura` runs it with `uv run
+--no-project python`, since an older python3 refuses newer syntax.
+
+Every element of kind `componente` points at its code with `metadata { codigo [...] }`, as do the
+containers with code, and an arrow may list the files where its call is. Paths are from the root of
+the repo, a file or a folder. LikeC4 exports a list of one item as a string; both are read.
+
+The model holds two drawings, the hoje and the alvo. The system of an element is the first part of
+its id (casaHoje, casaAlvo, donoHoje); the hoje is every system whose name ends in "Hoje" (mother
+constraint 2 of df-8x0m.23.47). Rules (2) to (5) are per system, so the same path in a box of the
+hoje and in one of the alvo is no conflict. Rules (3) and (4) run on the hoje only: the alvo draws
+code that does not exist yet.
+
+(1) Every codigo path, of any element, arrow or deployment item, in any system, is in normal form
+    (relative, '/' between parts, no '.', '..' or empty part) and is a tracked file or a folder
+    with tracked files.
+(2) The owner of a file is the element of its system whose codigo path is the longest one that is
+    the file or a folder above it. Containers nest by path but not in the model (pipeline holds
+    apps/financas, which holds its backend): a file under a nested container is that container's.
+(3) A static import from a code file to a code file of a different owner needs an arrow in the
+    model whose source is exactly the importing file's owner and whose target is exactly the
+    imported file's owner, with any title or kind. An arrow between their parents or their
+    children does not count. Not checked: a pair where one owner is an ancestor of the other by
+    id (LikeC4 refuses an arrow between parent and child; rule (4) catches a file the parent owns),
+    and a pair where neither owner is a componente (an import between two containers without
+    components). When components are added to a container later, the arrows that enter it point
+    at the container: this rule asks for them to be pointed at the component that owns the file.
+(4) An owner that is not a componente but has a componente inside it (a container with
+    components) owns no code file: one of its components (or of a nested container) does.
+(5) One path in the codigo of two elements of the same system is an error: the owner would be
+    ambiguous.
+
+Code files: suffixes .py .ts .tsx .js .jsx .mjs .cjs .sh .ps1. Out of scope, so they need no owner,
+their imports are not read and an import of them is not checked: anything under a folder named
+dist, node_modules, tests, test, __tests__ or e2e (built bundles, dependencies and tests are not
+the running system); test_*.py, *_test.py, conftest.py, *.test.*, *.spec.*; and the tooling
+configs *.config.ts, *.config.js, *.config.mjs, *.config.cjs (vite, playwright).
+
+Python imports are read with ast (import and from, anywhere in the file, inside functions too) and
+resolved to tracked files, trying these bases in order: the sys.path.insert entries of the file,
+its own folder when it holds no __init__.py (Python puts a script's folder on sys.path; a module of
+a package does not get its own, so `import logging` there is the standard library, never a sibling
+logging.py), the repo root, and the sys.path.append entries. A sys.path entry is evaluated
+statically when it is built from Path(__file__) with .parent, .parents[n], .resolve(),
+.absolute(), / "literal" and str(...), or from a module-level name assigned such an expression;
+any other entry is a warning. `import a.b.c` leads to a/b/c.py or a/b/c/__init__.py; `from a.b
+import n` to a/b/n when it is a module, else to a/b; a relative import resolves from the file's own
+package. A name no base resolves (yaml, polars) is not code of the repo.
+
+Loads: exec(<path expression above>.read_text(...)) (the workspace scripts' functions.py) and
+importlib.import_module("<literal name>") that resolves are imports, checked as in (3). Any other
+exec, import_module, __import__, spec_from_file_location, run_path or run_module is a warning.
+A call that starts a process is a warning, since an arrow for a CLI call needs a human to check it:
+subprocess.run, Popen, call, check_call and check_output, asyncio.create_subprocess_exec and
+create_subprocess_shell, os.exec* and os.spawn* (aliases of the module or the function too), except
+when the program is a literal that is neither python, dataforge nor a shell (sh, bash, cmd,
+powershell, pwsh); os.system and os.popen always. In an owned .sh or .ps1, every line that names
+dataforge or python as a word, other than a '#' comment, is a warning. Imports under `if
+TYPE_CHECKING:`, like TS `import type`, are imports: a compile-time dependency needs its arrow too.
+A Python, TS or JS file is read as UTF-8 (a BOM is fine); one that is not is an error. A shell
+script is read as UTF-8 or, with its BOM, UTF-16; one that is neither is a warning.
+
+TS and JS imports are read by pattern, with the comments taken out first: import/export ... from
+'...' (several lines and `import type` too), import '...', and import('...'); an import() of
+anything but a string literal is a warning. require() and `import x = require()` are not read: the
+front-ends use neither. Only relative specifiers ('./', '../') are code of the repo: the front-ends
+have no path aliases. A specifier resolves to the path itself, the path plus a code suffix, or its
+index file; a target that is not a code file (css, svg) is not checked; a relative specifier that
+resolves to no tracked file is a warning.
+
+An import of a tracked code file that no element owns is a warning, from Python or TS alike.
+"""
+
+from __future__ import annotations
+
+import ast
+import codecs
+import posixpath
+import re
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: arquitetura.modelo
+
+from arquitetura import modelo
+
+REPO = Path(__file__).resolve().parents[2]
+COMPONENTE = "componente"
+HOJE = "Hoje"
+CODE_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".sh", ".ps1")
+TS_SUFFIXES = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+OUT_FOLDERS = frozenset({"dist", "node_modules", "tests", "test", "__tests__", "e2e"})
+OUT_NAME = re.compile(r"^(test_.*\.py|.*_test\.py|conftest\.py|.*\.(test|spec)\..*|.*\.config\.(ts|js|mjs|cjs))$")
+SUBPROCESS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
+ASYNCIO = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
+ALWAYS = frozenset({"system", "popen"})  # os.system and os.popen run a shell command line
+PROCESS_MODULES = ("subprocess", "os", "asyncio")
+SHELL_CALL = re.compile(r"(?i)\b(?:dataforge|python)\d*(?:\.\d+)?\b")
+DYNAMIC = frozenset({"__import__", "spec_from_file_location", "run_path", "run_module"})
+SHELLS = frozenset({"sh", "bash", "cmd", "powershell", "pwsh"})  # a program that runs any other one
+SNIPPET = 120
+POSICAO = re.compile(r"^([^:]+):(?:(\d+):)?")
+TS_IMPORTS = (
+    re.compile(r"""\b(?:import|export)\s+[\w\s{},*$]*?\bfrom\s*(['"])([^'"\n]+)\1"""),
+    re.compile(r"""\bimport\s*(['"])([^'"\n]+)\1"""),
+    re.compile(r"""\bimport\s*\(\s*(['"])([^'"\n]+)\1\s*\)"""),
+)
+TS_DYNAMIC = re.compile(r"\bimport\s*\(")
+# A string (kept) or a comment (replaced by its newlines), so a quote inside a comment, or '//' in a
+# string, does not throw the patterns off.
+TS_TOKENS = re.compile(r"""('(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`)|(//[^\n]*|/\*.*?\*/)""", re.DOTALL)
+
+
+@dataclass
+class Resultado:
+    erros: list[str] = field(default_factory=list)
+    avisos: list[str] = field(default_factory=list)
+    donos: dict[str, str] = field(default_factory=dict)  # code file of the hoje -> its owner
+    imports: list[tuple[str, int, str]] = field(default_factory=list)  # (file, line, imported file)
+
+
+@dataclass
+class Repo:
+    raiz: Path
+    arquivos: frozenset[str]
+    pastas: frozenset[str]
+
+    @classmethod
+    def de(cls, raiz: Path, arquivos) -> Repo:
+        arquivos = frozenset(arquivos)
+        pastas = set()
+        for arquivo in arquivos:
+            pasta = posixpath.dirname(arquivo)
+            while pasta and pasta not in pastas:
+                pastas.add(pasta)
+                pasta = posixpath.dirname(pasta)
+        return cls(raiz, arquivos, frozenset(pastas))
+
+
+def arquivos_do_repo(raiz: Path) -> list[str]:
+    """The files git tracks under `raiz`, as posix paths, minus those deleted from the disk."""
+    saida = subprocess.run(["git", "-C", str(raiz), "ls-files", "-z"], capture_output=True, check=True).stdout
+    return sorted(f for f in saida.decode("utf-8").split("\0") if f and (raiz / f).is_file())
+
+
+def codigo(item: dict) -> list:
+    valor = (item.get("metadata") or {}).get("codigo")
+    if valor is None:
+        return []
+    return [valor] if isinstance(valor, str) else list(valor)
+
+
+def sistema(id_: str) -> str:
+    return id_.split(".")[0]
+
+
+def e_codigo(arquivo: str) -> bool:
+    partes = arquivo.split("/")
+    return (arquivo.endswith(CODE_SUFFIXES) and not OUT_FOLDERS.intersection(partes[:-1])
+            and not OUT_NAME.match(partes[-1]))
+
+
+def _normal(caminho: str) -> str | None:
+    limpo = posixpath.normpath(caminho.strip("/")) if caminho.strip("/") else "."
+    return None if limpo in (".", "..") or limpo.startswith("../") else limpo
+
+
+def _itens(modelo_: dict):
+    """(label, codigo) of every element, arrow and deployment item."""
+    implantacao = modelo_.get("deployment") or {}
+    for chave in ("elements", "relations"):
+        for item in modelo_.get(chave) or []:
+            yield item["id"], codigo(item)
+    for chave in ("nodes", "instances", "relations"):
+        for item in implantacao.get(chave) or []:
+            yield item["id"], codigo(item)
+
+
+def checar_caminhos(modelo_: dict, repo: Repo) -> list[str]:
+    """Rule (1)."""
+    erros = []
+    for label, caminhos in _itens(modelo_):
+        for caminho in caminhos:
+            normal = _normal(caminho)
+            if normal != caminho:
+                erros.append(f"{label}: codigo {caminho!r} is not a repo path in normal form "
+                             f"(normal form: {repr(normal) if normal else 'none'})")
+            elif caminho not in repo.arquivos and caminho not in repo.pastas:
+                erros.append(f"{label}: codigo {caminho!r} is not a tracked file or a folder with tracked files")
+    return erros
+
+
+def checar_repetidos(elementos: list[dict]) -> list[str]:
+    """Rule (5)."""
+    por_caminho: dict[tuple[str, str], set[str]] = {}
+    for elemento in elementos:
+        for caminho in codigo(elemento):
+            por_caminho.setdefault((sistema(elemento["id"]), caminho), set()).add(elemento["id"])
+    return [f"{caminho!r} is in the codigo of {' and '.join(sorted(ids))}: give it one owner"
+            for (_, caminho), ids in sorted(por_caminho.items()) if len(ids) > 1]
+
+
+def donos_do_hoje(elementos: list[dict], repo: Repo) -> dict[str, str]:
+    """Rule (2): each code file of the hoje -> the element of longest codigo path that holds it."""
+    caminhos = sorted((c, e["id"]) for e in elementos if sistema(e["id"]).endswith(HOJE) for c in codigo(e))
+    donos = {}
+    for arquivo in sorted(repo.arquivos):
+        if not e_codigo(arquivo):
+            continue
+        achados = [(len(c), dono) for c, dono in caminhos if arquivo == c or arquivo.startswith(c + "/")]
+        if achados:
+            donos[arquivo] = min(achados, key=lambda achado: (-achado[0], achado[1]))[1]
+    return donos
+
+
+def checar_componentes(donos: dict[str, str], elementos: list[dict]) -> list[str]:
+    """Rule (4)."""
+    tipos = {e["id"]: e["kind"] for e in elementos}
+    componentes = [id_ for id_, tipo in tipos.items() if tipo == COMPONENTE]
+    return [f"{arquivo}: its owner {dono} has components, so one of them must own it"
+            for arquivo, dono in donos.items()
+            if tipos.get(dono) != COMPONENTE and any(c.startswith(dono + ".") for c in componentes)]
+
+
+def _parente(a: str, b: str) -> bool:
+    return a.startswith(b + ".") or b.startswith(a + ".")
+
+
+def checar_setas(resultado: Resultado, elementos: list[dict], relacoes: list[dict]) -> list[str]:
+    """Rule (3); an import of a code file no element owns is a warning."""
+    tipos = {e["id"]: e["kind"] for e in elementos}
+    setas = {(r["source"], r["target"]) for r in relacoes}
+    erros = []
+    for arquivo, linha, alvo in resultado.imports:
+        de, para = resultado.donos[arquivo], resultado.donos.get(alvo)
+        if para is None and e_codigo(alvo):
+            resultado.avisos.append(f"{arquivo}:{linha}: imports {alvo}, which no element owns")
+        if para is None or de == para or _parente(de, para) or COMPONENTE not in (tipos.get(de), tipos.get(para)):
+            continue
+        if (de, para) not in setas:
+            erros.append(f"{arquivo}:{linha}: imports {alvo}, so the model needs an arrow {de} -> {para}")
+    return erros
+
+
+# Python
+
+
+def _trecho(fonte: str, no: ast.AST) -> str:
+    texto = " ".join((ast.get_source_segment(fonte, no) or "").split())
+    return texto if len(texto) <= SNIPPET else texto[:SNIPPET] + "..."
+
+
+def _juntar(*partes: str) -> str:
+    return "/".join(p for p in partes if p)
+
+
+def _nome(funcao: ast.expr) -> str | None:
+    if isinstance(funcao, ast.Name):
+        return funcao.id
+    return funcao.attr if isinstance(funcao, ast.Attribute) else None
+
+
+def _caminho(no: ast.expr, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """The repo path a Path(__file__) expression stands for (() is the root), or None."""
+    if isinstance(no, ast.Name):
+        return arquivo if no.id == "__file__" else nomes.get(no.id)
+    if isinstance(no, ast.Call) and not no.keywords:
+        return _caminho_chamada(no, arquivo, nomes)
+    if isinstance(no, ast.Attribute) and no.attr == "parent":
+        base = _caminho(no.value, arquivo, nomes)
+        return base[:-1] if base else None
+    if (isinstance(no, ast.Subscript) and isinstance(no.value, ast.Attribute) and no.value.attr == "parents"
+            and isinstance(no.slice, ast.Constant) and isinstance(no.slice.value, int)):
+        base = _caminho(no.value.value, arquivo, nomes)
+        fim = len(base) - 1 - no.slice.value if base is not None else -1
+        return base[:fim] if fim >= 0 else None
+    if (isinstance(no, ast.BinOp) and isinstance(no.op, ast.Div) and isinstance(no.right, ast.Constant)
+            and isinstance(no.right.value, str)):
+        base = _caminho(no.left, arquivo, nomes)
+        junto = _normal(_juntar(*base, no.right.value)) if base is not None else None
+        return tuple(junto.split("/")) if junto else None
+    return None
+
+
+def _caminho_chamada(no: ast.Call, arquivo: tuple[str, ...], nomes: dict) -> tuple[str, ...] | None:
+    """Path(x) and str(x) are x; x.resolve() and x.absolute() are x."""
+    nome = _nome(no.func)
+    if nome in ("Path", "str") and len(no.args) == 1:
+        return _caminho(no.args[0], arquivo, nomes)
+    if nome in ("resolve", "absolute") and not no.args and isinstance(no.func, ast.Attribute):
+        return _caminho(no.func.value, arquivo, nomes)
+    return None
+
+
+def _nomes(arvore: ast.Module, arquivo: tuple[str, ...]) -> dict:
+    nomes: dict = {}
+    for no in arvore.body:
+        if isinstance(no, ast.Assign) and len(no.targets) == 1 and isinstance(no.targets[0], ast.Name):
+            valor = _caminho(no.value, arquivo, nomes)
+            if valor is None:
+                nomes.pop(no.targets[0].id, None)
+            else:
+                nomes[no.targets[0].id] = valor
+    return nomes
+
+
+def _processos(arvore: ast.Module) -> tuple[dict[str, str], dict[str, tuple[str, str]]]:
+    """The local names of subprocess, os and asyncio ({alias: module}) and of their functions
+    ({alias: (module, function)}), aliases included."""
+    modulos = {m: m for m in PROCESS_MODULES}
+    funcoes = {}
+    for no in ast.walk(arvore):
+        if isinstance(no, ast.Import):
+            modulos |= {a.asname or a.name: a.name for a in no.names if a.name in PROCESS_MODULES}
+        elif isinstance(no, ast.ImportFrom) and no.module in PROCESS_MODULES and not no.level:
+            funcoes |= {a.asname or a.name: (no.module, a.name) for a in no.names}
+    return modulos, funcoes
+
+
+@dataclass
+class _Leitor:
+    """The imports, loads and subprocess calls of one Python file."""
+    repo: Repo
+    arquivo: str
+    fonte: str
+    resultado: Resultado
+    bases: list[str] = field(default_factory=list)
+    lidos: set = field(default_factory=set)
+    processos: tuple = ({}, {})
+
+    def modulo(self, base: str, partes: list[str]) -> str | None:
+        alvo = _juntar(base, *partes)
+        if not alvo:
+            return None
+        for candidato in (alvo + ".py", _juntar(alvo, "__init__.py")):
+            if candidato in self.repo.arquivos:
+                return candidato
+        return None
+
+    def import_(self, partes: list[str]) -> str | None:
+        return next((achado for base in self.bases if (achado := self.modulo(base, partes))), None)
+
+    def from_(self, no: ast.ImportFrom, nome: str) -> str | None:
+        partes = no.module.split(".") if no.module else []
+        bases = self.bases
+        if no.level:
+            pacote = self.arquivo.split("/")[:-1]
+            if no.level - 1 > len(pacote):
+                return None
+            bases = ["/".join(pacote[:len(pacote) - (no.level - 1)])]
+        for base in bases:
+            achado = (self.modulo(base, [*partes, nome]) if nome != "*" else None) or self.modulo(base, partes)
+            if achado:
+                return achado
+        return None
+
+    def ligar(self, linha: int, alvo: str | None) -> None:
+        if alvo is not None and (linha, alvo) not in self.lidos:
+            self.lidos.add((linha, alvo))
+            self.resultado.imports.append((self.arquivo, linha, alvo))
+
+    def avisar(self, no: ast.AST, texto: str) -> None:
+        self.resultado.avisos.append(f"{self.arquivo}:{no.lineno}: {texto}: {_trecho(self.fonte, no)}")
+
+    def ler(self) -> None:
+        try:
+            arvore = ast.parse(self.fonte)
+        except SyntaxError as erro:
+            self.resultado.erros.append(f"{self.arquivo}:{erro.lineno}: not valid Python for this checker: {erro.msg}")
+            return
+        partes = tuple(self.arquivo.split("/"))
+        nomes = _nomes(arvore, partes)
+        chamadas = [no for no in ast.walk(arvore) if isinstance(no, ast.Call)]
+        self.bases = self.bases_de(chamadas, partes, nomes)
+        self.processos = _processos(arvore)
+        for no in ast.walk(arvore):
+            if isinstance(no, ast.Import):
+                for alias in no.names:
+                    self.ligar(no.lineno, self.import_(alias.name.split(".")))
+            elif isinstance(no, ast.ImportFrom):
+                for alias in no.names:
+                    self.ligar(no.lineno, self.from_(no, alias.name))
+        for no in chamadas:
+            self.chamada(no, partes, nomes)
+
+    def bases_de(self, chamadas: list[ast.Call], partes: tuple[str, ...], nomes: dict) -> list[str]:
+        """The folders imports resolve from, in order (see the module docstring)."""
+        inseridos, anexados = [], []
+        for no in chamadas:
+            if (isinstance(no.func, ast.Attribute) and no.func.attr in ("insert", "append")
+                    and isinstance(no.func.value, ast.Attribute) and no.func.value.attr == "path"
+                    and isinstance(no.func.value.value, ast.Name) and no.func.value.value.id == "sys"):
+                base = _caminho(no.args[-1], partes, nomes) if no.args else None
+                if base is None:
+                    self.avisar(no, "sys.path entry not resolved, imports through it are not checked")
+                else:
+                    (inseridos if no.func.attr == "insert" else anexados).append("/".join(base))
+        pasta = "/".join(partes[:-1])
+        proprio = [] if _juntar(pasta, "__init__.py") in self.repo.arquivos else [pasta]
+        return [*reversed(inseridos), *proprio, "", *anexados]
+
+    def chamada(self, no: ast.Call, partes: tuple[str, ...], nomes: dict) -> None:
+        nome = _nome(no.func)
+        primeiro = no.args[0] if no.args else None
+        if nome == "exec" and isinstance(no.func, ast.Name):
+            lido = (_caminho(primeiro.func.value, partes, nomes)
+                    if isinstance(primeiro, ast.Call) and isinstance(primeiro.func, ast.Attribute)
+                    and primeiro.func.attr == "read_text" else None)
+            alvo = "/".join(lido) if lido else None
+            self.carga(no, alvo if alvo in self.repo.arquivos else None)
+        elif nome == "import_module":
+            literal = (primeiro.value if isinstance(primeiro, ast.Constant) and isinstance(primeiro.value, str)
+                       and not primeiro.value.startswith(".") else None)
+            self.carga(no, self.import_(literal.split(".")) if literal else None)
+        elif nome in DYNAMIC:
+            self.carga(no, None)
+        else:
+            self.processo(no)
+
+    def carga(self, no: ast.Call, alvo: str | None) -> None:
+        if alvo is None:
+            self.avisar(no, "dynamic load, not checked")
+        else:
+            self.ligar(no.lineno, alvo)
+
+    def processo(self, no: ast.Call) -> None:
+        """A call that starts a process is silent only when its program is a literal that is neither
+        python, dataforge nor a shell."""
+        modulos, funcoes = self.processos
+        if isinstance(no.func, ast.Attribute) and isinstance(no.func.value, ast.Name) and no.func.value.id in modulos:
+            modulo, nome = modulos[no.func.value.id], no.func.attr
+        elif isinstance(no.func, ast.Name) and no.func.id in funcoes:
+            modulo, nome = funcoes[no.func.id]
+        else:
+            return
+        if modulo == "os" and nome in ALWAYS:
+            self.avisar(no, "subprocess, not checked")
+            return
+        lancador = ((modulo == "subprocess" and nome in SUBPROCESS) or (modulo == "asyncio" and nome in ASYNCIO)
+                    or (modulo == "os" and nome.startswith(("exec", "spawn"))))
+        if not lancador:
+            return
+        posicao = 1 if nome.startswith("spawn") else 0  # os.spawn*(mode, path, ...)
+        comando = no.args[posicao] if len(no.args) > posicao else None
+        if isinstance(comando, (ast.List, ast.Tuple)) and comando.elts:
+            comando = comando.elts[0]
+        texto = comando.value.lower() if isinstance(comando, ast.Constant) and isinstance(comando.value, str) else None
+        programa = posixpath.basename(texto.split()[0]).removesuffix(".exe") if texto and texto.split() else None
+        if programa is None or programa in SHELLS or re.search(r"python|dataforge", texto):
+            self.avisar(no, "subprocess, not checked")
+
+
+# TS and JS
+
+
+def _sem_comentarios(fonte: str) -> str:
+    return TS_TOKENS.sub(lambda m: m[1] if m[1] is not None else "\n" * m[2].count("\n"), fonte)
+
+
+def _ts(repo: Repo, arquivo: str, fonte: str, resultado: Resultado) -> None:
+    fonte = _sem_comentarios(fonte)
+    achados = sorted({(m.start(), m.group(2)) for padrao in TS_IMPORTS for m in padrao.finditer(fonte)})
+    literais = {m.start() for m in TS_IMPORTS[2].finditer(fonte)}
+    for m in TS_DYNAMIC.finditer(fonte):
+        if m.start() not in literais:
+            linha = fonte.count("\n", 0, m.start()) + 1
+            resultado.avisos.append(f"{arquivo}:{linha}: dynamic import, not checked: "
+                                    f"{fonte.splitlines()[linha - 1].strip()[:SNIPPET]}")
+    for inicio, especificador in achados:
+        if not especificador.startswith(("./", "../")):
+            continue
+        linha = fonte.count("\n", 0, inicio) + 1
+        base = _normal(_juntar(posixpath.dirname(arquivo), especificador))
+        candidatos = [] if base is None else [base, *(base + s for s in TS_SUFFIXES),
+                                              *(_juntar(base, "index" + s) for s in TS_SUFFIXES)]
+        alvo = next((c for c in candidatos if c in repo.arquivos), None)
+        if alvo is None:
+            resultado.avisos.append(f"{arquivo}:{linha}: relative import not resolved to a tracked file: "
+                                    f"{especificador!r}")
+        else:
+            resultado.imports.append((arquivo, linha, alvo))
+
+
+def _shell(arquivo: str, dados: bytes, resultado: Resultado) -> None:
+    """A .sh or .ps1: one warning per line that names dataforge or python, comments aside."""
+    try:
+        texto = dados.decode("utf-16" if dados.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)) else "utf-8-sig")
+    except UnicodeDecodeError:
+        resultado.avisos.append(f"{arquivo}: not UTF-8 or UTF-16 text, its commands are not listed")
+        return
+    for numero, linha in enumerate(texto.splitlines(), 1):
+        if not linha.strip().startswith("#") and SHELL_CALL.search(linha):
+            resultado.avisos.append(f"{arquivo}:{numero}: command, not checked: {linha.strip()[:SNIPPET]}")
+
+
+def ler_imports(repo: Repo, resultado: Resultado) -> None:
+    for arquivo in resultado.donos:
+        dados = (repo.raiz / arquivo).read_bytes()
+        if arquivo.endswith((".sh", ".ps1")):
+            _shell(arquivo, dados, resultado)
+            continue
+        try:
+            fonte = dados.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            resultado.erros.append(f"{arquivo}: not UTF-8 text")
+            continue
+        if arquivo.endswith(".py"):
+            _Leitor(repo, arquivo, fonte, resultado).ler()
+        else:
+            _ts(repo, arquivo, fonte, resultado)
+
+
+def _posicao(linha: str) -> tuple[str, int]:
+    """(file, line) of a line that starts with 'file:line:' or 'file:'."""
+    achado = POSICAO.match(linha)
+    return (achado[1], int(achado[2] or 0)) if achado else (linha, 0)
+
+
+def conferir(modelo_: dict, raiz: Path, arquivos) -> Resultado:
+    repo = Repo.de(raiz, arquivos)
+    elementos = modelo_.get("elements") or []
+    resultado = Resultado(donos=donos_do_hoje(elementos, repo))
+    ler_imports(repo, resultado)
+    por_arquivo = resultado.erros + checar_setas(resultado, elementos, modelo_.get("relations") or [])
+    resultado.erros = (checar_caminhos(modelo_, repo) + checar_repetidos(elementos)
+                       + checar_componentes(resultado.donos, elementos) + sorted(por_arquivo, key=_posicao))
+    resultado.avisos.sort(key=_posicao)
+    return resultado
+
+
+def rodar(modelo_: dict, raiz: Path, arquivos) -> tuple[int, list[str]]:
+    """The exit code and the lines `main` prints before its summary."""
+    resultado = conferir(modelo_, raiz, arquivos)
+    linhas = [f"warning: {a}" for a in resultado.avisos] + [f"error: {e}" for e in resultado.erros]
+    return (1 if resultado.erros else 0), linhas
+
+
+def _n(quantos: int, palavra: str) -> str:
+    return f"{quantos} {palavra}{'' if quantos == 1 else 's'}"
+
+
+def main() -> int:
+    resultado = conferir(modelo.load(), REPO, arquivos_do_repo(REPO))
+    for linha in [f"warning: {a}" for a in resultado.avisos] + [f"error: {e}" for e in resultado.erros]:
+        print(linha)
+    print(f"componentes.py: {_n(len(resultado.donos), 'code file')} owned in the hoje, "
+          f"{_n(len(resultado.imports), 'import')} read; {_n(len(resultado.erros), 'error')}, "
+          f"{_n(len(resultado.avisos), 'warning')}")
+    return 1 if resultado.erros else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

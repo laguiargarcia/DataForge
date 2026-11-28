@@ -255,6 +255,17 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           python3 scripts/arquitetura/marcas.py 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-marcas.txt"
+      - uses: astral-sh/setup-uv@v10.3.3
+        # The next step parses every tracked .py with ast: it needs the repo's Python
+        # (.python-version), not the runner's python3, which refuses newer syntax.
+        with: { enable-cache: true, cache-python: true }
+      - name: The component model matches the code
+        # df-8x0m.23.47.2: every codigo path exists, a component owns each code file of a container
+        # with components, and each import between owners has its arrow. Standard library only.
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          uv run --no-project python scripts/arquitetura/componentes.py 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-componentes.txt"
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
