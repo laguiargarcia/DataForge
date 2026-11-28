@@ -26,13 +26,16 @@ from pathlib import Path
 
 TAGS = ("novo", "muda", "sai")
 KEY = "bead"
-BEAD_ID = re.compile(r"^df-[a-z0-9]+(?:\.\d+)*$")
+BEAD_ID = re.compile(r"df-[a-z0-9]+(?:\.\d+)*")  # used with fullmatch: no trailing newline
 MODEL = Path(__file__).resolve().parents[2] / "arquitetura" / "modelo.json"
 BD_TIMEOUT = 20
 
 
+NOT_FOUND = "no issue"  # what bd says, on stderr and in the JSON error, for an unknown id
+
+
 class BdUnavailable(RuntimeError):
-    """bd is not installed or did not answer."""
+    """bd is not installed, failed or answered something that is not its JSON."""
 
 
 def _items(model: dict) -> Iterator[tuple[str, dict]]:
@@ -64,7 +67,7 @@ def _item_problems(label: str, item: dict) -> list[str]:
         return []
     if not beads:
         return [f"{label}: #{tags[0]} sem metadata {{ {KEY} 'df-...' }} com o bead aberto da mudança"]
-    bad = [b for b in beads if not (isinstance(b, str) and BEAD_ID.match(b))]
+    bad = [b for b in beads if not (isinstance(b, str) and BEAD_ID.fullmatch(b))]
     if bad:
         return [f"{label}: id de bead malformado {', '.join(repr(b) for b in bad)} (esperado 'df-...')"]
     return []
@@ -82,7 +85,7 @@ def marked_beads(model: dict) -> dict[str, list[str]]:
         if not any(t in TAGS for t in item.get("tags") or ()):
             continue
         for bead in _beads(item) or ():
-            if isinstance(bead, str) and BEAD_ID.match(bead):
+            if isinstance(bead, str) and BEAD_ID.fullmatch(bead):
                 out.setdefault(bead, []).append(label)
     return out
 
@@ -109,9 +112,16 @@ def bd_status(bead: str) -> str | None:
     except (OSError, subprocess.SubprocessError) as exc:
         raise BdUnavailable(str(exc)) from exc
     if r.returncode != 0:
-        return None
-    data = json.loads(r.stdout or "[]")
-    return data[0].get("status") if isinstance(data, list) and data else None
+        if NOT_FOUND in r.stderr or NOT_FOUND in r.stdout:
+            return None
+        raise BdUnavailable(f"bd show {bead} saiu com {r.returncode}: {r.stderr.strip()[:200]}")
+    try:
+        data = json.loads(r.stdout)
+    except ValueError as exc:
+        raise BdUnavailable(f"bd show {bead} não devolveu JSON") from exc
+    if not (isinstance(data, list) and data and isinstance(data[0], dict)):
+        raise BdUnavailable(f"bd show {bead} devolveu um JSON inesperado")
+    return data[0].get("status")
 
 
 def main(argv: list[str]) -> int:
@@ -123,13 +133,19 @@ def main(argv: list[str]) -> int:
         try:
             found += bd_problems(model, bd_status)
         except BdUnavailable as exc:
+            _report(found)
             sys.stderr.write(f"marcas: não consegui perguntar ao bd ({exc})\n")
             return 2
-    if found:
-        sys.stdout.write("Marcas do alvo (arquitetura/alvo.c4, df-8x0m.23.37):\n- " + "\n- ".join(found) + "\n")
+    if _report(found):
         return 1
     sys.stdout.write("marcas: ok\n")
     return 0
+
+
+def _report(found: list[str]) -> bool:
+    if found:
+        sys.stdout.write("Marcas do alvo (arquitetura/alvo.c4, df-8x0m.23.37):\n- " + "\n- ".join(found) + "\n")
+    return bool(found)
 
 
 if __name__ == "__main__":

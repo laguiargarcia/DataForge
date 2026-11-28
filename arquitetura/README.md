@@ -30,7 +30,7 @@ mudança em `metadata` (um id ou uma lista):
 | --- | --- | --- |
 | `#novo` | ainda não existe | verde, borda tracejada |
 | `#muda` | existe e vai mudar | âmbar |
-| `#sai` | existe hoje e vai sumir; fica no alvo, marcado | vermelho, borda pontilhada, apagado |
+| `#sai` | existe hoje e vai sumir; fica no alvo, marcado | vermelho, borda pontilhada |
 
 ```
 servidorAlvo = conteiner 'Servidor da casa (ninho)' {
@@ -41,7 +41,7 @@ servidorAlvo = conteiner 'Servidor da casa (ninho)' {
 }
 ```
 
-Sem marca: já roda em prod como está. A tag vem primeiro no corpo do elemento ou da seta. Quando o
+Sem marca: já roda em prod como está. O que some de hoje e não fica desenhado no alvo: os bancos `edicao.db` e `ninho.db`, que viram o banco do app, e os extratos em PDF e os zips do backup, citados na descrição dele (com os beads dele); a seta do backend que grava o PDF some com o backend, até df-8x0m.23.35 dizer onde os extratos moram. A tag vem primeiro no corpo do elemento ou da seta. Quando o
 bead fecha, a marca sai, ou passa para o bead que continua a mudança (um bead de decisão a passa
 para os beads de implementação que criou). A conferência tem duas metades, porque o CI não tem bd:
 

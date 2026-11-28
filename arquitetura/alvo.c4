@@ -47,7 +47,7 @@ model {
       description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod. Muda: hoje são dois arquivos SQLite, ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas; falta a cópia fora deste disco; onde moram os extratos em PDF está a decidir'
       technology 'SQLite'
       metadata {
-        bead ['df-8x0m.23.14', 'df-8x0m.23.9', 'df-8x0m.23.35']
+        bead ['df-8x0m.23.14', 'df-8x0m.23.9', 'df-8x0m.19', 'df-8x0m.23.35']
       }
     }
     lagoAlvo = banco 'Lago' {
@@ -119,7 +119,12 @@ model {
     }
   }
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
-  casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)'
+  casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)' {
+    #muda
+    metadata {
+      bead 'df-8x0m.23.3'
+    }
+  }
   casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo 'Lê e escreve (único escritor)'
   casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada; copia no job backup'
   casaAlvo.dataforgeAlvo -> pluggyAlvo 'Busca dados'
@@ -139,6 +144,24 @@ model {
     #sai
     metadata {
       bead 'df-8x0m.23.3'
+    }
+  }
+  casaAlvo.financasAlvo -> casaAlvo.dataforgeAlvo 'Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP' {
+    #sai
+    metadata {
+      bead 'df-8x0m.23.3'
+    }
+  }
+  casaAlvo.financasAlvo -[leitura]-> casaAlvo.lagoAlvo 'Lê direto, fora das tabelas publicadas' {
+    #sai
+    metadata {
+      bead 'df-8x0m.23.3'
+    }
+  }
+  casaAlvo.servidorAlvo -> casaAlvo.financasAlvo 'Importa o código das regras de edição (edicao.py) do workspace (provisório)' {
+    #sai
+    metadata {
+      bead 'df-8x0m.23.14'
     }
   }
 }
@@ -169,7 +192,6 @@ views {
     style element.tag = #sai {
       color red
       border dotted
-      opacity 40%
     }
   }
   view alvo-conteineres of casaAlvo {
@@ -194,7 +216,6 @@ views {
     style element.tag = #sai {
       color red
       border dotted
-      opacity 40%
     }
   }
 }
