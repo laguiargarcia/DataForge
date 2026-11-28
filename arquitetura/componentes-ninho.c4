@@ -94,13 +94,7 @@ model {
       codigo ['ninho/__main__.py']
     }
   }
-  // Título igual ao de telasNinhoHoje -> ninhoHoje em hoje.c4. Uma seta só, para o núcleo: /api/lista e
-  // /api/desejos entram pelos routers que o núcleo inclui.
-  casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje.servidorHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)' {
-    metadata {
-      codigo ['ninho/telas/src/pedido.ts', 'ninho/telas/src/eu.ts']
-    }
-  }
+  // As chamadas das telas a /api saem dos componentes das telas (componentes-telas.c4, df-8x0m.23.47.5).
 
   // Para fora: telas, DataForge, regras do workspace, lago, bancos.
   casaHoje.ninhoHoje.servidorHoje -[leitura]-> casaHoje.telasNinhoHoje 'Lê o build (ninho/telas/dist) e o entrega em /' {
@@ -160,5 +154,10 @@ views {
     // Mostra a seta do aplicar na CLI do DataForge, não no contêiner do DataForge.
     include casaHoje.dataforgeHoje.cliHoje
     include casaHoje.telasNinhoHoje
+    // Três setas dos componentes das telas chegam ao núcleo (componentes-telas.c4): sem um título dado
+    // aqui, a aresta sai '[...]' (df-8x0m.23.47.12).
+    include casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje.servidorHoje with {
+      title 'Baixa a página, entra, sai, lê quem entrou e as pessoas, e chama /api/financas'
+    }
   }
 }

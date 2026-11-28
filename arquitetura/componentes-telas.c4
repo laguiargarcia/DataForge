@@ -1,0 +1,147 @@
+// Componentes do contêiner Telas do ninho no HOJE (df-8x0m.23.47.5): a casca, o que a casca e os
+// módulos usam em comum, e uma tela por módulo, que é como ninho/telas/src se divide (App.tsx: "cada
+// um com a sua tela em src/<modulo>/"; pedido.ts: "comum a todos os módulos e à casca").
+//
+// Decisões (as razões estão nas notas do bead):
+// - ninho/identidade é a marca visual (README, PNG, SVG), sem código: fica no codigo do contêiner, e
+//   nenhum componente a repete (o mesmo caminho em dois elementos deixa o dono ambíguo). O Logo, que
+//   importa o logo-ninho.svg dela, é do comum.
+// - Seta HTTP: sai do componente que escreve a rota (eu.ts da casca, api.ts de cada módulo) e cita
+//   também o pedido.ts do comum, onde está o fetch de pedir; o entrar de eu.ts faz o seu fetch. Vai
+//   para o componente do servidor cujo código atende a rota: /api/lista e /api/desejos são routers de
+//   ninho/lista/rotas.py e ninho/desejos/rotas.py, que o núcleo só inclui atrás do login; /api/eu,
+//   /api/entrar, /api/sair, /api/pessoas e /api/financas são rotas de ninho/servidor/app.py.
+// - A primeira ida a '/' é do navegador, pela seta da pessoa para a casca; os arquivos do build (ícones,
+//   script, estilo) a página, que é da casca, pede ao servidor: vão na seta da casca para o núcleo. A
+//   leitura do dist pelo servidor fica no contêiner: o build é de todas as telas juntas.
+model {
+  extend casaHoje.telasNinhoHoje {
+    cascaHoje = componente 'Casca' {
+      description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair'
+      technology 'React, TypeScript'
+      metadata {
+        codigo ['ninho/telas/index.html', 'ninho/telas/public', 'ninho/telas/src/main.tsx', 'ninho/telas/src/index.css', 'ninho/telas/src/App.tsx', 'ninho/telas/src/Entrar.tsx', 'ninho/telas/src/eu.ts']
+      }
+    }
+    comumTelasHoje = componente 'Comum às telas' {
+      description 'O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade'
+      technology 'React, TypeScript'
+      metadata {
+        codigo ['ninho/telas/src/pedido.ts', 'ninho/telas/src/dados.ts', 'ninho/telas/src/Logo.tsx']
+      }
+    }
+    listaTelasHoje = componente 'Tela da lista de compras' {
+      description 'Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer'
+      technology 'React, TypeScript'
+      metadata {
+        codigo ['ninho/telas/src/lista']
+      }
+    }
+    desejosTelasHoje = componente 'Tela dos desejos' {
+      description 'Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros'
+      technology 'React, TypeScript'
+      metadata {
+        codigo ['ninho/telas/src/desejos']
+      }
+    }
+    financasTelasHoje = componente 'Tela de finanças' {
+      description 'As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)'
+      technology 'React, TypeScript'
+      metadata {
+        codigo ['ninho/telas/src/financas']
+      }
+    }
+  }
+
+  // Imports entre os componentes.
+  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.listaTelasHoje 'Monta a tela da lista' {
+    metadata {
+      codigo ['ninho/telas/src/App.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.desejosTelasHoje 'Monta a tela dos desejos' {
+    metadata {
+      codigo ['ninho/telas/src/App.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.financasTelasHoje 'Monta a tela de finanças' {
+    metadata {
+      codigo ['ninho/telas/src/App.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar' {
+    metadata {
+      codigo ['ninho/telas/src/App.tsx', 'ninho/telas/src/eu.ts', 'ninho/telas/src/Entrar.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo' {
+    metadata {
+      codigo ['ninho/telas/src/lista/api.ts', 'ninho/telas/src/lista/Lista.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo' {
+    metadata {
+      codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/desejos/Desejos.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa o tipo de quem entrou' {
+    metadata {
+      codigo ['ninho/telas/src/desejos/Desejos.tsx']
+    }
+  }
+  casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor e trata a recusa do servidor, mostra o Logo' {
+    metadata {
+      codigo ['ninho/telas/src/financas/api.ts', 'ninho/telas/src/financas/aplicar.ts', 'ninho/telas/src/financas/Financas.tsx']
+    }
+  }
+
+  // Chamadas HTTP ao servidor ninho (HTTPS pela Tailscale, com o cookie da sessão).
+  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje 'Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)' {
+    metadata {
+      codigo ['ninho/telas/index.html', 'ninho/telas/src/eu.ts', 'ninho/telas/src/pedido.ts']
+    }
+  }
+  casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.ninhoHoje.listaHoje 'Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)' {
+    metadata {
+      codigo ['ninho/telas/src/lista/api.ts', 'ninho/telas/src/pedido.ts']
+    }
+  }
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje 'Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)' {
+    metadata {
+      codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/pedido.ts']
+    }
+  }
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'Lê as pessoas da casa (/api/pessoas)' {
+    metadata {
+      codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/pedido.ts']
+    }
+  }
+  casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'Lê as transações do mês e as edições, corrige e desfaz, pede o aplicar e o acompanha (/api/financas)' {
+    metadata {
+      codigo ['ninho/telas/src/financas/api.ts', 'ninho/telas/src/pedido.ts']
+    }
+  }
+
+  // Quem usa: cada pessoa abre a página (index.html), e a casca mostra só as telas dos módulos
+  // dela. Títulos iguais aos das setas de donoHoje e outraHoje para telasNinhoHoje em hoje.c4
+  // (df-8x0m.23.47.12).
+  donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista, os desejos e as correções pelo celular' {
+    metadata {
+      codigo ['ninho/telas/index.html']
+    }
+  }
+  outraHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista e os desejos pelo celular' {
+    metadata {
+      codigo ['ninho/telas/index.html']
+    }
+  }
+}
+
+views {
+  view hoje-componentes-telas of casaHoje.telasNinhoHoje {
+    title 'Hoje: componentes das telas do ninho'
+    include *
+    // Mostra cada chamada no componente do servidor que a atende, não no contêiner do servidor.
+    include casaHoje.ninhoHoje.servidorHoje, casaHoje.ninhoHoje.listaHoje, casaHoje.ninhoHoje.desejosHoje
+  }
+}
