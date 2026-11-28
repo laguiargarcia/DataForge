@@ -52,6 +52,10 @@ def needs_arrow(file: str, line: int, target: str, source: str = A, dest: str = 
     return f"error: {file}:{line}: imports {target}, so the model needs an arrow {source} -> {dest}"
 
 
+def needs_codigo(file: str, line: int, target: str, source: str = A, dest: str = B) -> str:
+    return f"error: {file}:{line}: imports {target}, so the codigo of an arrow {source} -> {dest} must list {file}"
+
+
 # (1) every codigo path is a tracked file or a folder with tracked files
 
 
@@ -111,6 +115,50 @@ def test_the_same_path_in_the_hoje_and_in_the_alvo_passes(tmp_path):
     assert run(tmp_path, [box(APP, ["app"]), box("casaAlvo.appAlvo", ["app"])], {"app/a.py": ""}) == (0, [])
 
 
+# (6) a component's codigo lies inside the codigo of its nearest ancestor that has one
+
+
+def test_a_component_whose_codigo_leaves_its_containers_fails(tmp_path):
+    """Without (6) a component could take files of another container and pass rule (4)."""
+    elements = [box(APP, ["app"]), el(A, ["lib/a"]), el(B, ["app/b"])]
+    assert run(tmp_path, elements, {"lib/a/x.py": "", "app/b/y.py": ""}) == (
+        1, [f"error: {A}: codigo 'lib/a' is not inside the codigo of its ancestor {APP} ('app')"])
+
+
+def test_a_component_inside_a_component_lies_inside_its_parents_codigo(tmp_path):
+    q = f"{A}.qHoje"
+    elements = two_components([el(q, ["app/q"])])
+    assert run(tmp_path, elements, {"app/a/x.py": "", "app/b/y.py": "", "app/q/z.py": ""}) == (
+        1, [f"error: {q}: codigo 'app/q' is not inside the codigo of its ancestor {A} ('app/a')"])
+
+
+def test_an_ancestor_without_codigo_is_skipped_for_the_next_one_up(tmp_path):
+    """In the alvo, where a componente may have no code yet (rule (8) is the hoje's)."""
+    app = "casaAlvo.appAlvo"
+    elements = [box(app, ["app"]), el(f"{app}.aAlvo"), el(f"{app}.aAlvo.qAlvo", ["lib/q"])]
+    assert run(tmp_path, elements, {"app/a/q/z.py": "", "lib/q/z.py": ""}) == (
+        1, [f"error: {app}.aAlvo.qAlvo: codigo 'lib/q' is not inside the codigo of its ancestor {app} ('app')"])
+
+
+# (8) every componente of the hoje has codigo
+
+
+def test_a_componente_of_the_hoje_without_codigo_fails(tmp_path):
+    assert run(tmp_path, two_components([el(f"{APP}.cHoje")]), {"app/a/x.py": "", "app/b/y.py": ""}) == (
+        1, [f"error: {APP}.cHoje: a componente of the hoje without codigo: give it the paths of its code"])
+
+
+def test_a_componente_of_the_alvo_without_codigo_passes(tmp_path):
+    """The alvo draws code that does not exist yet."""
+    elements = [box("casaAlvo.appAlvo", ["app"]), el("casaAlvo.appAlvo.novoAlvo")]
+    assert run(tmp_path, elements, {"app/a/x.py": ""}) == (0, [])
+
+
+def test_a_component_with_codigo_and_no_ancestor_with_codigo_fails(tmp_path):
+    assert run(tmp_path, [box(APP), el(A, ["app/a"])], {"app/a/x.py": ""}) == (
+        1, [f"error: {A}: has codigo but none of its ancestors has codigo, so its code lies in no container"])
+
+
 # (4) in a container with components, a component owns every code file
 
 
@@ -165,13 +213,48 @@ def test_the_alvo_is_not_checked_against_the_code(tmp_path):
 
 def test_an_import_with_its_arrow_passes(tmp_path):
     files = {"app/a/x.py": "import app.b.y\n", "app/b/y.py": ""}
-    assert run(tmp_path, two_components(), files, relations=[rel(A, B)]) == (0, [])
+    assert run(tmp_path, two_components(), files, relations=[rel(A, B, ["app/a/x.py"])]) == (0, [])
 
 
 def test_an_import_without_an_arrow_fails(tmp_path):
     files = {"app/a/x.py": "import app.b.y\n", "app/b/y.py": ""}
     assert run(tmp_path, two_components(), files, relations=[rel(B, A)]) == (
         1, [needs_arrow("app/a/x.py", 1, "app/b/y.py")])
+
+
+# (7) the arrow an import asks for lists the importing file in its codigo
+
+
+def test_an_arrow_whose_codigo_does_not_list_the_importing_file_fails(tmp_path):
+    files = {"app/a/x.py": "import app.b.y\n", "app/a/w.py": "import app.b.y\n", "app/b/y.py": ""}
+    assert run(tmp_path, two_components(), files, relations=[rel(A, B, ["app/a/w.py"])]) == (
+        1, [needs_codigo("app/a/x.py", 1, "app/b/y.py")])
+
+
+def test_an_arrow_without_codigo_fails_for_each_importing_file(tmp_path):
+    files = {"app/a/x.py": "import app.b.y\n", "app/a/w.py": "import app.b.y\n", "app/b/y.py": ""}
+    assert run(tmp_path, two_components(), files, relations=[rel(A, B)]) == (
+        1, [needs_codigo("app/a/w.py", 1, "app/b/y.py"), needs_codigo("app/a/x.py", 1, "app/b/y.py")])
+
+
+def test_a_file_that_imports_twice_is_one_error_at_its_first_import(tmp_path):
+    files = {"app/a/x.py": "def f():\n    import app.b.z\nimport app.b.y\n", "app/b/y.py": "", "app/b/z.py": ""}
+    assert run(tmp_path, two_components(), files, relations=[rel(A, B)]) == (
+        1, [needs_codigo("app/a/x.py", 2, "app/b/z.py")])
+
+
+@pytest.mark.parametrize("codigo", [["app/a"], ["app/a/w.py", "app/a/x.py"]])
+def test_the_importing_file_or_a_folder_that_holds_it_is_enough(tmp_path, codigo):
+    files = {"app/a/x.py": "import app.b.y\n", "app/a/w.py": "", "app/b/y.py": ""}
+    assert run(tmp_path, two_components(), files, relations=[rel(A, B, codigo)]) == (0, [])
+
+
+def test_the_codigo_of_every_arrow_of_the_pair_counts(tmp_path):
+    """Two arrows A -> B (an import and, say, an HTTP call) are told apart by title; either may list
+    the importing file."""
+    files = {"app/a/x.py": "import app.b.y\n", "app/a/w.py": "", "app/b/y.py": ""}
+    relations = [rel(A, B, ["app/a/w.py"]), rel(A, B, ["app/a/x.py"])]
+    assert run(tmp_path, two_components(), files, relations=relations) == (0, [])
 
 
 def test_an_arrow_at_the_container_does_not_cover_a_components_import(tmp_path):
@@ -186,6 +269,56 @@ def test_an_import_between_ancestor_and_descendant_needs_no_arrow(tmp_path):
     elements = [box(APP, ["app"]), el(A, ["app/a"]), el(f"{A}.qHoje", ["app/a/q"])]
     files = {"app/a/x.py": "import app.a.q.y\n", "app/a/q/y.py": "import app.a.x\n"}
     assert run(tmp_path, elements, files) == (0, [])
+
+
+# (c) an import runs the __init__.py of each package above the imported module first
+
+W = f"{APP}.wHoje"
+
+
+def package_owned_by_w(extra=()):
+    """two_components plus wHoje, owner of app/b/__init__.py."""
+    return two_components([el(W, ["app/b/__init__.py"]), *extra])
+
+
+@pytest.mark.parametrize("source", [
+    "import app.b.y",
+    "from app.b import y",
+    "from app.b.y import nome",
+    "from ..b import y",
+    'importlib.import_module("app.b.y")',
+])
+def test_an_import_counts_the_init_of_the_package_it_runs_first(tmp_path, source):
+    files = {"app/a/__init__.py": "", "app/a/x.py": f"{source}\n", "app/b/__init__.py": "", "app/b/y.py": ""}
+    assert run(tmp_path, package_owned_by_w(), files, relations=[rel(A, B, ["app/a/x.py"])]) == (
+        1, [f"error: app/a/x.py:1: imports app/b/y.py, whose package runs app/b/__init__.py, so the model needs an "
+            f"arrow {A} -> {W}"])
+
+
+def test_the_init_of_a_package_needs_its_arrow_listed_too(tmp_path):
+    files = {"app/a/x.py": "import app.b.y\n", "app/b/__init__.py": "", "app/b/y.py": ""}
+    assert run(tmp_path, package_owned_by_w(), files, relations=[rel(A, B, ["app/a/x.py"]), rel(A, W)]) == (
+        1, [needs_codigo("app/a/x.py", 1, "app/b/y.py, whose package runs app/b/__init__.py", dest=W)])
+
+
+def test_the_init_of_the_importing_files_own_package_is_not_counted(tmp_path):
+    """app/__init__.py ran before app/a/x.py itself, which is a module of the package app."""
+    files = {"app/__init__.py": "", "app/a/__init__.py": "", "app/a/x.py": "import app.b.y\n", "app/b/y.py": ""}
+    elements = two_components([el(W, ["app/__init__.py"])])
+    assert run(tmp_path, elements, files, relations=[rel(A, B, ["app/a/x.py"])]) == (0, [])
+
+
+def test_a_package_above_the_base_of_the_import_is_not_counted(tmp_path):
+    """With app/b on sys.path, `import y` is the top-level module y: app/b/__init__.py does not run."""
+    source = 'sys.path.insert(0, str(Path(__file__).parent.parent / "b"))\nimport y\n'
+    files = {"app/a/x.py": source, "app/b/__init__.py": "", "app/b/y.py": ""}
+    assert run(tmp_path, package_owned_by_w(), files, relations=[rel(A, B, ["app/a/x.py"])]) == (0, [])
+
+
+def test_an_exec_runs_the_file_alone(tmp_path):
+    source = 'exec((Path(__file__).parent.parent / "b" / "y.py").read_text(encoding="utf-8"))\n'
+    files = {"app/a/x.py": source, "app/b/__init__.py": "", "app/b/y.py": ""}
+    assert run(tmp_path, package_owned_by_w(), files, relations=[rel(A, B, ["app/a/x.py"])]) == (0, [])
 
 
 def test_an_import_between_containers_without_components_is_not_checked(tmp_path):
@@ -275,6 +408,11 @@ def test_bases_resolve_in_order(tmp_path, source, extra, expected):
     files = {"app/a/x.py": source, "app/a/w.py": "", "app/b/y.py": "", **extra}
     elements = two_components([el(f"{APP}.wHoje", ["app/a/w.py"])])
     assert run(tmp_path, elements, files) == (int(any(e.startswith("error:") for e in expected)), expected)
+
+
+def test_one_line_that_imports_two_files_of_one_owner_is_one_error(tmp_path):
+    files = {"app/a/x.py": "from app.b import y, z\n", "app/b/y.py": "", "app/b/z.py": ""}
+    assert run(tmp_path, two_components(), files) == (1, [needs_arrow("app/a/x.py", 1, "app/b/y.py")])
 
 
 def test_one_line_that_imports_two_names_of_one_file_is_one_error(tmp_path):

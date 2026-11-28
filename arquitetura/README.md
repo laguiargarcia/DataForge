@@ -98,14 +98,33 @@ da docstring dele:
 4. Num contêiner com pelo menos um componente, nenhum arquivo de código tem o contêiner como dono
    direto: um componente dele (ou um contêiner aninhado por caminho) é o dono.
 5. O mesmo caminho em dois elementos do mesmo sistema é erro (dono ambíguo).
+6. O `codigo` de um componente fica dentro do `codigo` do ancestral mais próximo que tem `codigo`
+   (o contêiner, ou o componente pai); componente com `codigo` sem ancestral com `codigo` é erro.
+   Sem isso, um componente do DataForge poderia tomar arquivos de `ninho/` e passar na regra 4.
+7. A seta que a regra 3 pede leva em `metadata codigo` cada arquivo que faz o import, ele mesmo ou
+   uma pasta acima dele, em qualquer das setas do par (duas setas no mesmo par, com títulos
+   distintos, valem juntas). Um caminho da seta que não faz import não é cobrado: pode ser o
+   arquivo da chamada HTTP ou de CLI da mesma seta.
+8. Todo componente do hoje tem `codigo`: sem ele o componente não é dono de nenhum arquivo, e as
+   regras 3, 4 e 6 não o enxergam.
+
+O import de um módulo roda antes o `__init__.py` de cada pacote acima dele, e isso conta como import
+para as regras 3 e 7 (df-8x0m.23.47.9): `from dataforge import delta_pool` roda
+`dataforge/__init__.py`, que registra os tipos de task, então quem importa precisa de seta para o
+dono desse `__init__.py`. Conta porque o código roda de fato no processo de quem importa; avisar
+deixaria a dependência fora do desenho, e não contar esconderia o caso que motivou a regra. Não
+contam os pacotes que contêm o próprio arquivo que importa (rodaram antes dele) nem os pacotes acima
+da base do import (com `app/b` no `sys.path`, `import y` é o `y` de topo). `exec` de um arquivo roda
+só aquele arquivo.
 
 Hoje e alvo são dois desenhos no mesmo `modelo.json`: 2 a 5 valem por sistema (primeira parte do
-id), e 3 e 4 só no hoje (sistema terminado em `Hoje`), porque o alvo desenha código que ainda não
-existe. O script sai 1 com uma linha `error:` por problema. Saem como `warning:`, sem falhar, a
-lista que o contestador confere à mão: importação dinâmica, subprocesso que pode rodar Python, o
-DataForge ou um shell, linha de `.sh`/`.ps1` que chama `dataforge` ou `python`, import de arquivo de
-código sem dono. A docstring diz como resolve imports Python e TS. O job `arquitetura` do CI roda o
-script depois do `conferir`, com o Python do `.python-version`.
+id), 6 vale nos dois, e 3, 4, 7 e 8 só no hoje (sistema terminado em `Hoje`), porque o alvo desenha
+código que ainda não existe. O script sai 1 com uma linha `error:` por problema (na regra 3, uma por
+linha e par de donos). Saem como `warning:`, sem falhar, a lista que o contestador confere à mão:
+importação dinâmica, subprocesso que pode rodar Python, o DataForge ou um shell, linha de
+`.sh`/`.ps1` que chama `dataforge` ou `python`, import de arquivo de código sem dono. A docstring
+diz como resolve imports Python e TS. O job `arquitetura` do CI roda o script depois do `conferir`,
+com o Python do `.python-version`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
