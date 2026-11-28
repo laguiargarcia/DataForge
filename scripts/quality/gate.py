@@ -37,10 +37,6 @@ from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/quality/: docs_parados
-
-import docs_parados
-
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 BASELINE = HERE / "baseline.json"
@@ -550,13 +546,27 @@ def check(paths: list[str], base_ref: str | None, full: bool, stage: bool = Fals
     if rises:
         _report_rises(rises, findings)
     raised = bool(base_ref) and _baseline_raised(base_ref)
-    print("\n".join(docs_parados.relatorio(ROOT)))  # warnings only: never changes the exit code
+    parados = _stale_docs()
     if rises or raised:
         why = [f"{len(rises)} file/rule counts above the baseline"] * bool(rises) + ["baseline raised"] * raised
         print(f"\nquality gate: failed ({', '.join(why)})")
         return 1
-    print(f"quality gate: ok ({sum(sum(c.values()) for c in current.values())} findings, none new)")
+    print(f"quality gate: ok ({sum(sum(c.values()) for c in current.values())} findings, none new{parados})")
     return 0
+
+
+def _stale_docs() -> str:
+    """Print the stale-doc report (warnings only); the suffix for the final line. Never raises."""
+    try:
+        sys.path.insert(0, str(HERE))
+        import docs_parados  # noqa: PLC0415 -- inside the try: no error of the warning may break the gate
+
+        lines = docs_parados.relatorio(ROOT)
+    except Exception as error:  # noqa: BLE001 -- the warning is advisory: any failure is printed, not raised
+        print(f"docs: stale-doc check failed: {error}")
+        return ""
+    print("\n".join(lines))
+    return f"; {sum(line.startswith('warning:') for line in lines)} stale docs"
 
 
 def update(allow_increase: bool) -> int:

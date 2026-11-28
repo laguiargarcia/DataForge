@@ -75,7 +75,7 @@ def test_no_merge_base_skips(repo):
     assert "stale-doc check skipped" in dp.relatorio(repo, "nope")[-1]
 
 
-def test_gate_check_exits_zero_with_warning(repo, monkeypatch, capsys):
+def load_gate(repo, monkeypatch):
     gate_spec = importlib.util.spec_from_file_location("quality_gate_dp", SRC.parent / "gate.py")
     gate = importlib.util.module_from_spec(gate_spec)
     sys.modules[gate_spec.name] = gate
@@ -83,9 +83,57 @@ def test_gate_check_exits_zero_with_warning(repo, monkeypatch, capsys):
     monkeypatch.setattr(gate, "ROOT", repo)
     monkeypatch.setattr(gate, "_check_tool_versions", lambda: None)
     monkeypatch.setattr(gate, "_judge", lambda paths, full: ([], {}, [], []))
-    monkeypatch.setattr(gate.docs_parados, "BASE", "main")
+    monkeypatch.setattr(dp, "BASE", "main")
+    monkeypatch.setitem(sys.modules, "docs_parados", dp)
+    return gate
+
+
+def test_gate_check_exits_zero_with_warning(repo, monkeypatch, capsys):
+    gate = load_gate(repo, monkeypatch)
     (repo / "pkg" / "motor" / "run.py").write_text("x = 2\n", encoding="utf-8")
     assert gate.check([], None, full=False) == 0
     out = capsys.readouterr().out
     assert "warning: docs/caixas/motor.md" in out
+    assert "none new; 1 stale docs)" in out
+
+
+def test_gate_check_survives_a_failing_report(repo, monkeypatch, capsys):
+    gate = load_gate(repo, monkeypatch)
+
+    def boom(root, base=None):
+        raise RuntimeError("kaput")
+
+    monkeypatch.setattr(dp, "relatorio", boom)
+    assert gate.check([], None, full=False) == 0
+    out = capsys.readouterr().out
+    assert "docs: stale-doc check failed: kaput" in out
     assert "quality gate: ok" in out
+
+
+def test_tie_warns_every_doc_of_the_longest_path(repo):
+    doc(repo, "caixas/motor2.md", ["pkg/motor"])
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "second doc")
+    git(repo, "checkout", "-q", "-B", "main")
+    git(repo, "checkout", "-qb", "feat2")
+    (repo / "pkg" / "motor" / "run.py").write_text("x = 2\n", encoding="utf-8")
+    warned = sorted(line.split()[1] for line in dp.relatorio(repo, "main") if line.startswith("warning:"))
+    assert warned == ["docs/caixas/motor.md", "docs/caixas/motor2.md"]
+
+
+def test_file_entry_in_code_is_more_specific_than_its_folder(repo):
+    doc(repo, "run.md", ["pkg/motor/run.py"])
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "file doc")
+    git(repo, "checkout", "-q", "-B", "main")
+    git(repo, "checkout", "-qb", "feat2")
+    (repo / "pkg" / "motor" / "run.py").write_text("x = 2\n", encoding="utf-8")
+    warned = [line.split()[1] for line in dp.relatorio(repo, "main") if line.startswith("warning:")]
+    assert warned == ["docs/run.md"]
+
+
+def test_file_moved_out_of_a_covered_folder_warns_its_doc(repo):
+    git(repo, "mv", "pkg/motor/run.py", "pkg/run.py")
+    git(repo, "commit", "-qm", "move")
+    warned = {line.split()[1] for line in dp.relatorio(repo, "main") if line.startswith("warning:")}
+    assert "docs/caixas/motor.md" in warned

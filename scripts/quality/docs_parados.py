@@ -23,7 +23,7 @@ DOCS = "docs"
 
 
 def _git(root: Path, *args: str) -> list[str] | None:
-    r = subprocess.run(["git", *args], cwd=root, capture_output=True, encoding="utf-8", check=False)
+    r = subprocess.run(["git", *args], cwd=root, capture_output=True, encoding="utf-8", errors="replace", check=False)
     return [p for p in r.stdout.split("\0") if p] if r.returncode == 0 else None
 
 
@@ -32,7 +32,7 @@ def mudados(root: Path, base: str = BASE) -> set[str] | None:
     mb = _git(root, "merge-base", base, "HEAD")
     if not mb:
         return None
-    diff = _git(root, "diff", "-z", "--name-only", mb[0].strip()) or []
+    diff = _git(root, "diff", "-z", "--no-renames", "--name-only", mb[0].strip()) or []
     novos = _git(root, "ls-files", "-z", "--others", "--exclude-standard") or []
     return set(diff) | set(novos)
 
@@ -43,7 +43,7 @@ def ler_docs(root: Path) -> dict[str, dict]:
     for f in sorted((root / DOCS).rglob("*.md")):
         try:
             fm = docs.ler_front_matter(f)
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, OSError):
             continue  # a broken front matter is docs.py conferir's to report
         if fm:
             out[f.relative_to(root).as_posix()] = fm
