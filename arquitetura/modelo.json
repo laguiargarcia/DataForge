@@ -308,6 +308,18 @@
     },
     {
       "description": null,
+      "id": "agendadorHoje -> casaHoje.ninhoHoje: Seta de teste descartável (df-8x0m.23.38)",
+      "kind": null,
+      "links": [],
+      "metadata": {},
+      "source": "agendadorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje",
+      "technology": null,
+      "title": "Seta de teste descartável (df-8x0m.23.38)"
+    },
+    {
+      "description": null,
       "id": "casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo: Lê e envia a fila de mudanças (HTTPS pela Tailscale)",
       "kind": null,
       "links": [],
