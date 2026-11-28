@@ -37,6 +37,10 @@ from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # scripts/quality/: docs_parados
+
+import docs_parados
+
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 BASELINE = HERE / "baseline.json"
@@ -546,6 +550,7 @@ def check(paths: list[str], base_ref: str | None, full: bool, stage: bool = Fals
     if rises:
         _report_rises(rises, findings)
     raised = bool(base_ref) and _baseline_raised(base_ref)
+    print("\n".join(docs_parados.relatorio(ROOT)))  # warnings only: never changes the exit code
     if rises or raised:
         why = [f"{len(rises)} file/rule counts above the baseline"] * bool(rises) + ["baseline raised"] * raised
         print(f"\nquality gate: failed ({', '.join(why)})")

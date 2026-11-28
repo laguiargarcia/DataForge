@@ -42,6 +42,22 @@ uv sync                                              # the pinned tools (`qualit
 | CI job `quality` | full gate, plus `--base-ref origin/<base>` on PRs | fails if the PR raised the committed baseline; the `report` job comments every job's result on the PR (`scripts/ci_report.py`) |
 | CI job `sonar` | SonarQube Cloud (`sonar-project.properties`), with the `coverage.xml` from the `tests` job | a complement, not a replacement: coverage of new code, cognitive complexity, duplication, history. Not required yet; skipped when `SONAR_TOKEN` is absent (df-ahua.1). The workflow runs one at a time per ref (`concurrency`): main runs queue so Sonar gets their analyses in commit order, since it refuses an older commit's analysis after a newer one (df-huj7) |
 
+## Stale docs (a warning, never a failure)
+
+Every `check` also prints, from `scripts/quality/docs_parados.py` (df-8x0m.23.39.3):
+
+- `docs: N of M in sketch (status esboço)`: the docs under `docs/` with a front matter, and how
+  many are still sketches.
+- `warning: <doc> was not changed, but the code it covers was: <files>` when the branch changed a
+  file that the doc's `code:` covers and did not change the doc. Changed = the diff against the
+  merge-base with `origin/main`, committed or not, plus untracked files. A file covered by several
+  docs warns only the most specific one, the doc whose matching `code:` path is the longest
+  (df-ev4u): a container doc with `code: [dataforge]` stays quiet when a component doc covers the
+  file. Without a merge-base the check says it was skipped.
+
+The warning never changes the exit code nor the baseline: read it, and update the doc when the
+change made it wrong. Tests: `tests/test_docs_parados.py`.
+
 ## The Claude Code hook
 
 `scripts/quality/hook.sh` hands each edited file to the gate **of the checkout that holds it**: a
