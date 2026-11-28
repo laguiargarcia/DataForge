@@ -157,7 +157,7 @@ views {
     // Três setas dos componentes das telas chegam ao núcleo (componentes-telas.c4): sem um título dado
     // aqui, a aresta sai '[...]' (df-8x0m.23.47.12).
     include casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje.servidorHoje with {
-      title 'Entra, sai, lê quem entrou e as pessoas, e chama /api/financas'
+      title 'Baixa a página, entra, sai, lê quem entrou e as pessoas, e chama /api/financas'
     }
   }
 }

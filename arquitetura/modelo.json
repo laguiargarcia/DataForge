@@ -867,7 +867,7 @@
       "title": "Comum às telas"
     },
     {
-      "description": "Os desejos de cada pessoa da casa, abrindo na parte de quem entrou: criar, editar, apagar, anotar e marcar presente nos desejos dos outros",
+      "description": "Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros",
       "id": "casaHoje.telasNinhoHoje.desejosTelasHoje",
       "kind": "componente",
       "links": [],
@@ -879,7 +879,7 @@
       "title": "Tela dos desejos"
     },
     {
-      "description": "As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)",
+      "description": "As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)",
       "id": "casaHoje.telasNinhoHoje.financasTelasHoje",
       "kind": "componente",
       "links": [],
@@ -891,7 +891,7 @@
       "title": "Tela de finanças"
     },
     {
-      "description": "Os itens da lista: acrescentar (vários de uma vez, separados), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer",
+      "description": "Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer",
       "id": "casaHoje.telasNinhoHoje.listaTelasHoje",
       "kind": "componente",
       "links": [],
@@ -3791,11 +3791,12 @@
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje: Entra, sai e lê quem entrou e os módulos dela (/api/entrar, /api/sair, /api/eu)",
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje: Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)",
       "kind": null,
       "links": [],
       "metadata": {
         "codigo": [
+          "ninho/telas/index.html",
           "ninho/telas/src/eu.ts",
           "ninho/telas/src/pedido.ts"
         ]
@@ -3804,7 +3805,7 @@
       "tags": [],
       "target": "casaHoje.ninhoHoje.servidorHoje",
       "technology": null,
-      "title": "Entra, sai e lê quem entrou e os módulos dela (/api/entrar, /api/sair, /api/eu)"
+      "title": "Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)"
     },
     {
       "description": null,
@@ -3868,7 +3869,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje: Lê, cria, edita e apaga desejos e anotações, marca e desmarca presente (/api/desejos)",
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje: Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3881,7 +3882,7 @@
       "tags": [],
       "target": "casaHoje.ninhoHoje.desejosHoje",
       "technology": null,
-      "title": "Lê, cria, edita e apaga desejos e anotações, marca e desmarca presente (/api/desejos)"
+      "title": "Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)"
     },
     {
       "description": null,
@@ -3902,7 +3903,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa o tipo de quem entrou (Eu)",
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa o tipo de quem entrou",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3912,11 +3913,11 @@
       "tags": [],
       "target": "casaHoje.telasNinhoHoje.cascaHoje",
       "technology": null,
-      "title": "Usa o tipo de quem entrou (Eu)"
+      "title": "Usa o tipo de quem entrou"
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os desejos (useDados), mostra o Logo",
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3929,7 +3930,7 @@
       "tags": [],
       "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
       "technology": null,
-      "title": "Pede ao servidor, lê e relê os desejos (useDados), mostra o Logo"
+      "title": "Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo"
     },
     {
       "description": null,
@@ -3950,7 +3951,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor e trata a recusa (ErroPedido), mostra o Logo",
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor e trata a recusa do servidor, mostra o Logo",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3964,7 +3965,7 @@
       "tags": [],
       "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
       "technology": null,
-      "title": "Pede ao servidor e trata a recusa (ErroPedido), mostra o Logo"
+      "title": "Pede ao servidor e trata a recusa do servidor, mostra o Logo"
     },
     {
       "description": null,
@@ -3985,7 +3986,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os itens (useDados), mostra o Logo",
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3998,7 +3999,7 @@
       "tags": [],
       "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
       "technology": null,
-      "title": "Pede ao servidor, lê e relê os itens (useDados), mostra o Logo"
+      "title": "Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo"
     },
     {
       "description": null,
@@ -4152,7 +4153,7 @@
       "kind": null,
       "links": [],
       "metadata": {
-        "codigo": "ninho/telas/src/App.tsx"
+        "codigo": "ninho/telas/index.html"
       },
       "source": "donoHoje",
       "tags": [],
@@ -4194,7 +4195,7 @@
       "kind": null,
       "links": [],
       "metadata": {
-        "codigo": "ninho/telas/src/App.tsx"
+        "codigo": "ninho/telas/index.html"
       },
       "source": "outraHoje",
       "tags": [],

@@ -11,8 +11,9 @@
 //   para o componente do servidor cujo código atende a rota: /api/lista e /api/desejos são routers de
 //   ninho/lista/rotas.py e ninho/desejos/rotas.py, que o núcleo só inclui atrás do login; /api/eu,
 //   /api/entrar, /api/sair, /api/pessoas e /api/financas são rotas de ninho/servidor/app.py.
-// - Baixar o build fica na seta do contêiner em hoje.c4: quem baixa é o navegador, ao abrir o endereço,
-//   e o build (ninho/telas/dist) é de todas as telas juntas, não de um componente.
+// - A primeira ida a '/' é do navegador, pela seta da pessoa para a casca; os arquivos do build (ícones,
+//   script, estilo) a página, que é da casca, pede ao servidor: vão na seta da casca para o núcleo. A
+//   leitura do dist pelo servidor fica no contêiner: o build é de todas as telas juntas.
 model {
   extend casaHoje.telasNinhoHoje {
     cascaHoje = componente 'Casca' {
@@ -30,21 +31,21 @@ model {
       }
     }
     listaTelasHoje = componente 'Tela da lista de compras' {
-      description 'Os itens da lista: acrescentar (vários de uma vez, separados), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer'
+      description 'Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer'
       technology 'React, TypeScript'
       metadata {
         codigo ['ninho/telas/src/lista']
       }
     }
     desejosTelasHoje = componente 'Tela dos desejos' {
-      description 'Os desejos de cada pessoa da casa, abrindo na parte de quem entrou: criar, editar, apagar, anotar e marcar presente nos desejos dos outros'
+      description 'Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros'
       technology 'React, TypeScript'
       metadata {
         codigo ['ninho/telas/src/desejos']
       }
     }
     financasTelasHoje = componente 'Tela de finanças' {
-      description 'As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)'
+      description 'As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)'
       technology 'React, TypeScript'
       metadata {
         codigo ['ninho/telas/src/financas']
@@ -73,31 +74,31 @@ model {
       codigo ['ninho/telas/src/App.tsx', 'ninho/telas/src/eu.ts', 'ninho/telas/src/Entrar.tsx']
     }
   }
-  casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, lê e relê os itens (useDados), mostra o Logo' {
+  casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, lê e relê os itens ao abrir e ao voltar, mostra o Logo' {
     metadata {
       codigo ['ninho/telas/src/lista/api.ts', 'ninho/telas/src/lista/Lista.tsx']
     }
   }
-  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, lê e relê os desejos (useDados), mostra o Logo' {
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo' {
     metadata {
       codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/desejos/Desejos.tsx']
     }
   }
-  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa o tipo de quem entrou (Eu)' {
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa o tipo de quem entrou' {
     metadata {
       codigo ['ninho/telas/src/desejos/Desejos.tsx']
     }
   }
-  casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor e trata a recusa (ErroPedido), mostra o Logo' {
+  casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje 'Pede ao servidor e trata a recusa do servidor, mostra o Logo' {
     metadata {
       codigo ['ninho/telas/src/financas/api.ts', 'ninho/telas/src/financas/aplicar.ts', 'ninho/telas/src/financas/Financas.tsx']
     }
   }
 
   // Chamadas HTTP ao servidor ninho (HTTPS pela Tailscale, com o cookie da sessão).
-  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje 'Entra, sai e lê quem entrou e os módulos dela (/api/entrar, /api/sair, /api/eu)' {
+  casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje 'Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)' {
     metadata {
-      codigo ['ninho/telas/src/eu.ts', 'ninho/telas/src/pedido.ts']
+      codigo ['ninho/telas/index.html', 'ninho/telas/src/eu.ts', 'ninho/telas/src/pedido.ts']
     }
   }
   casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.ninhoHoje.listaHoje 'Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)' {
@@ -105,7 +106,7 @@ model {
       codigo ['ninho/telas/src/lista/api.ts', 'ninho/telas/src/pedido.ts']
     }
   }
-  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje 'Lê, cria, edita e apaga desejos e anotações, marca e desmarca presente (/api/desejos)' {
+  casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje 'Lê, cria, edita e apaga desejos; anota e tira anotações; marca e desmarca presente (/api/desejos)' {
     metadata {
       codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/pedido.ts']
     }
@@ -121,16 +122,16 @@ model {
     }
   }
 
-  // Quem usa: cada pessoa abre a página, e a casca mostra só as telas dos módulos dela. Títulos iguais
+  // Quem usa: cada pessoa abre a página (index.html), e a casca mostra só as telas dos módulos dela. Títulos iguais
   // aos das setas de donoHoje e outraHoje para telasNinhoHoje em hoje.c4 (df-8x0m.23.47.12).
   donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista, os desejos e as correções pelo celular' {
     metadata {
-      codigo ['ninho/telas/src/App.tsx']
+      codigo ['ninho/telas/index.html']
     }
   }
   outraHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Usa a lista e os desejos pelo celular' {
     metadata {
-      codigo ['ninho/telas/src/App.tsx']
+      codigo ['ninho/telas/index.html']
     }
   }
 }
