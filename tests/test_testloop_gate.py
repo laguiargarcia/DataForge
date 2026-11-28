@@ -486,3 +486,52 @@ def test_a_bad_timeout_multiplier_is_a_tool_error(tmp_path, value):
     config = Config(repo=tmp_path, targets={"mod.py": {"timeout_multiplier": value}})
     with pytest.raises(ToolError, match="timeout_multiplier"):
         mutate_cmd._write_tool_config(config, "mod.py", ["tests/t.py"], tmp_path)
+
+
+def _copy_target(tmp_path: Path) -> Config:
+    """A target in scripts/ whose `copy` reaches outside its source dir: the repo's .gitignore and a
+    nested package, next to files mutmut already brings (its source dir, tests/)."""
+    for rel in ("scripts/mod.py", "scripts/helper_a.py", "tests/test_mod.py", "tests/conftest.py",
+                ".gitignore", "pkg/__init__.py", "pkg/sub/deep.py"):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x = 1\n", encoding="utf-8")
+    copy = ["pkg/**/*.py", ".gitignore", "scripts/helper*.py", "tests/conftest.py"]
+    return Config(repo=tmp_path, targets={"scripts/mod.py": {"copy": copy}})
+
+
+def test_copy_paths_outside_what_mutmut_copies_reach_its_also_copy(tmp_path):
+    """df-hlks: mutmut runs the tests from <copy>/mutants/, where it copies only the source dir, tests/
+    and the locks; a `copy` file elsewhere goes in also_copy as its top-level entry (mutmut copies a
+    listed file without making its parent dirs, a dir with copytree), sorted so the cache key holds."""
+    config = _copy_target(tmp_path)
+    text = mutate_cmd._write_tool_config(config, "scripts/mod.py", ["tests/test_mod.py"], tmp_path)
+    assert 'also_copy = [".gitignore", "pkg"]' in text.splitlines()
+
+
+def test_a_copy_inside_what_mutmut_copies_keeps_the_tool_config_and_its_cache(tmp_path):
+    config = Config(repo=tmp_path, targets={"pkg/mod.py": {"copy": ["pkg/**/*.py", "tests/conftest.py"]}})
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "mod.py").write_text("x = 1\n", encoding="utf-8")
+    text = mutate_cmd._write_tool_config(config, "pkg/mod.py", ["tests/t.py"], tmp_path)
+    assert "also_copy" not in text
+
+
+def test_mutmuts_copy_step_puts_every_copy_file_in_mutants(tmp_path, monkeypatch):
+    """The end-to-end half of df-hlks: mutmut's own copy step (no mutation) reads the config and
+    brings each `copy` file into mutants/, where its tests run."""
+    configuration = pytest.importorskip("mutmut.configuration")
+    file_utils = pytest.importorskip("mutmut.utils.file_utils")
+    config = _copy_target(tmp_path / "repo")
+    copy = tmp_path / "copy"
+    tests = ["tests/test_mod.py"]
+    mutate_cmd._copy_files(config, "scripts/mod.py", tests, copy)
+    mutate_cmd._write_tool_config(config, "scripts/mod.py", tests, copy)
+    monkeypatch.chdir(copy)
+    configuration.reset_config()
+    try:
+        file_utils.copy_src_dir()
+        file_utils.copy_also_copy_files()
+    finally:
+        configuration.reset_config()
+    for rel in (".gitignore", "pkg/__init__.py", "pkg/sub/deep.py", "scripts/helper_a.py", "tests/conftest.py"):
+        assert (copy / "mutants" / rel).is_file(), rel
