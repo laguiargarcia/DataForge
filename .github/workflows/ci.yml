@@ -239,6 +239,13 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           npx --yes likec4@1.61.1 validate arquitetura 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura.txt"
+      - name: The committed modelo.json is the export of the .c4
+        # df-8x0m.23.43: the checks that read the model read arquitetura/modelo.json; a .c4 changed
+        # without `python3 scripts/arquitetura/modelo.py gerar` fails here. Standard library only.
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          python3 scripts/arquitetura/modelo.py conferir 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-modelo.txt"
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.

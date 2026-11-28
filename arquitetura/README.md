@@ -35,7 +35,14 @@ npx likec4@1.61.1 build arquitetura --output-single-file -o /tmp/likec4-out   # 
 `arquitetura/dist/` é ignorado pelo git, se preferir gerar a saída ali.
 
 O job `arquitetura` do CI (`.github/workflows/ci.yml`) roda o mesmo `validate`, e o check obrigatório
-`tests` depende dele: um `.c4` quebrado barra o merge. Ao trocar a versão do LikeC4, troque nos dois
-lugares.
+`tests` depende dele: um `.c4` quebrado barra o merge.
+
+`modelo.json` é o modelo exportado, enxuto e ordenado, que os scripts em Python leem
+(`scripts/arquitetura/modelo.py`, cuja docstring dá a API e o formato). Mudou um `.c4`, rode
+`python3 scripts/arquitetura/modelo.py gerar` e versione o `modelo.json` junto: o mesmo job do CI
+falha quando ele não é o export dos `.c4`.
+
+Ao trocar a versão do LikeC4, troque aqui, no job do CI e em `LIKEC4` de `modelo.py` (um teste
+confere os três).
 
 Repositório público: sem nomes reais de pessoas ("Dono da casa", "Outra pessoa da casa"), sem dados.
