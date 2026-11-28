@@ -63,7 +63,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: arquitetura.modelo
 
@@ -76,9 +76,7 @@ PREFIXO = "../"  # a link's address is relative to arquitetura/
 CAIXAS = "docs/caixas"
 STATUS = ("esboço", "pronto")
 CHAVES = ("topic", "read_when", "code", "status")
-_LINHA = re.compile(r"([A-Za-z_][\w-]*):(?:\s+(.*))?")
-_ITEM = re.compile(r"\s*-\s+(.*)")
-_ITENS = re.compile(r"""(?:"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^,"'])+""")  # inline list items, commas in quotes kept
+_CHAVE = re.compile(r"[A-Za-z_][\w-]*")
 _PLANO = re.compile(r"[\w./-]+")
 _ASPAS = re.compile(r"'[^']*'|\"(?:[^\"\\]|\\.)*\"")
 _LINK = re.compile(rf"\s*link\s+\S+\s+'{TITULO}'\s*")
@@ -124,20 +122,65 @@ def _valor(text: str, where: str):
         if text == "'" or not text.endswith("'"):
             raise ValueError(f"{where}: bad single-quoted string {text!r}")
         return text[1:-1].replace("''", "'")
-    text = re.split(r"\s+#", text, maxsplit=1)[0].rstrip()  # YAML drops a trailing ` # comment`
+    text = _sem_comentario(text)
     if ": " in text or text.endswith(":"):
         raise ValueError(f"{where}: a plain value with ': ' is not valid YAML, quote it: {text!r}")
     return text
+
+
+def _sem_comentario(text: str) -> str:
+    """`text` without a trailing ` # comment`, as YAML drops it from a plain value."""
+    for i in range(1, len(text)):
+        if text[i] == "#" and text[i - 1].isspace():
+            return text[:i].rstrip()
+    return text
+
+
+def _partes(inner: str) -> list[str] | None:
+    """`inner` split on the commas outside quotes; None when a quote is left open."""
+    parts, start, quote, i = [], 0, None, 0
+    while i < len(inner):
+        ch = inner[i]
+        if quote == '"' and ch == "\\":
+            i += 1
+        elif quote and ch == quote:
+            quote = None
+        elif not quote and ch in "\"'":
+            quote = ch
+        elif not quote and ch == ",":
+            parts.append(inner[start:i])
+            start = i + 1
+        i += 1
+    return None if quote else [*parts, inner[start:]]
 
 
 def _lista(text: str, where: str) -> list[str]:
     inner = text.strip()[1:-1].strip()
     if not inner:
         return []
-    items = _ITENS.findall(inner)
-    if ",".join(items) != inner:  # an unpaired quote or an empty item: not something to split
+    items = _partes(inner)
+    if items is None or not all(item.strip() for item in items):  # an unpaired quote or an empty item
         raise ValueError(f"{where}: bad inline list {text.strip()!r}")
     return [_valor(item, where) for item in items]
+
+
+def _item(line: str) -> str | None:
+    """The value of a `- item` line, or None when the line is not one."""
+    rest = line.lstrip()
+    return rest[1:].strip() if rest[:1] == "-" and rest[1:2].isspace() else None
+
+
+def _chave_valor(line: str, where: str) -> tuple[str, str]:
+    key, colon, value = line.partition(":")
+    if not colon or not _CHAVE.fullmatch(key) or (value and not value[0].isspace()):
+        raise ValueError(f"{where}: not a flat `key: value` or `- item` line: {line!r}")
+    return key, value.strip()
+
+
+def _ler_valor(value: str, where: str):
+    if value.startswith("[") and value.endswith("]"):
+        return _lista(value, where)
+    return _valor(value, where)
 
 
 def ler_front_matter(path: Path | str) -> dict:
@@ -153,22 +196,24 @@ def ler_front_matter(path: Path | str) -> dict:
             return out
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        item = _ITEM.fullmatch(line)
-        if item and lista is not None:
-            lista.append(_valor(item.group(1), where))
+        item = _item(line)
+        if item is not None and lista is not None:
+            lista.append(_valor(item, where))
             continue
-        match = _LINHA.fullmatch(line)
-        if not match:
-            raise ValueError(f"{where}: not a flat `key: value` or `- item` line: {line!r}")
-        key, value = match.group(1), (match.group(2) or "").strip()
+        key, value = _chave_valor(line, where)
         lista = None
-        if not value:
-            out[key] = lista = []
-        elif value.startswith("[") and value.endswith("]"):
-            out[key] = _lista(value, where)
+        if value:
+            out[key] = _ler_valor(value, where)
         else:
-            out[key] = _valor(value, where)
+            out[key] = lista = []
     raise ValueError(f"{path}: the front matter opened on line 1 never closes with ---")
+
+
+def _dentro_do_repo(code: str) -> bool:
+    """A code: path is repo-relative POSIX: not empty, not absolute on POSIX or Windows, no `..`."""
+    windows = PureWindowsPath(code)
+    return bool(code.strip()) and not (code[:1] in "/\\" or windows.drive or windows.is_absolute()) \
+        and ".." not in PurePosixPath(code).parts and ".." not in windows.parts
 
 
 def _cobre(code: list[str], path: str) -> bool:
@@ -203,7 +248,7 @@ def _problemas_doc(path: str, ids: list[str], por_id: dict, raiz: Path) -> list[
     if fm.get("status") not in STATUS:
         problems.append(f"error: {quem}: the front matter of {path} has status {fm.get('status', '(none)')}, "
                         f"not one of {', '.join(STATUS)}")
-    ruins = [c for c in code if not c.strip() or Path(c).is_absolute() or ".." in Path(c).parts]
+    ruins = [c for c in code if not _dentro_do_repo(c)]
     problems += [f"error: {quem}: code: of {path} names {c!r}, not a path inside the repo" for c in ruins]
     problems += [f"error: {quem}: code: of {path} names {c}, which does not exist"
                  for c in code if c not in ruins and not (raiz / c).exists()]

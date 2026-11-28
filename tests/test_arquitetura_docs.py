@@ -121,7 +121,8 @@ def test_a_front_matter_without_a_key_fails(repo, drop, message):
     assert problems == [f"error: casaAlvo.motorAlvo, casaHoje.motorHoje: the front matter of docs/engine.md {message}"]
 
 
-@pytest.mark.parametrize("bad", ["/etc/passwd", "../fora.py", "pkg/../../fora.py", ""])
+@pytest.mark.parametrize("bad", ["/etc/passwd", "../fora.py", "pkg/../../fora.py", "", "C:/fora.py", r"\\fora.py",
+                                 r"pkg\\..\\fora.py"])
 def test_a_code_path_outside_the_repo_or_empty_fails(repo, bad):
     (repo / "docs" / "engine.md").write_text(FM.replace("  - pkg/engine.py\n", f"  - pkg/engine.py\n  - {bad}\n"),
                                             encoding="utf-8")
