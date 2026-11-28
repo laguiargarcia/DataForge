@@ -94,3 +94,11 @@ def test_an_adr_not_in_adrs_fails(repo, monkeypatch):
     raiz, model = repo
     monkeypatch.setattr(indice_docs, "ADRS", {})
     assert indice_docs.fora_do_indice(model, raiz) == ["docs/adr/0001-x.md"]
+
+
+def test_docs_sort_as_posix_strings_on_any_os(tmp_path):
+    """Windows compares Path objects without case: the order must be the strings', or gerar differs."""
+    (tmp_path / "docs" / "adr").mkdir(parents=True)
+    for name in ("adr/0001.md", "CURRENT.md", "a.md"):
+        (tmp_path / "docs" / name).write_text("# x\n", encoding="utf-8")
+    assert indice_docs._todos(tmp_path) == ["docs/CURRENT.md", "docs/a.md", "docs/adr/0001.md"]

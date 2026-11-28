@@ -32,6 +32,8 @@ INDICE = "docs/INDEX.md"
 HISTORIA = ("docs/superpowers", "docs/phases", "docs/gsd-workflow.md", "docs/workbook-handoff.md")
 COMANDO = "python3 scripts/arquitetura/indice_docs.py gerar"
 FORA = "Pessoas e sistemas externos"
+EM_VIGOR = "In force until df-cyjt"
+SEPARADOR = "| --- | --- | --- |"
 # docs/adr/ is frozen (df-883u, no edits): its read when lives here. A new file there fails conferir.
 ADRS = {
     "docs/adr/0001-adr-decision-layer-superpowers-execution-layer.md":
@@ -41,13 +43,13 @@ ADRS = {
     "docs/adr/0003-graphify-local-structure.md":
         ("History", "Background only: the local graphify structure report at SessionStart, superseded 2026-11-03"),
     "docs/adr/0004-automated-test-system.md":
-        ("In force until df-cyjt", "When designing or building automated tests (generators, mutation, branch map, "
+        (EM_VIGOR, "When designing or building automated tests (generators, mutation, branch map, "
          "test selection, data checks)"),
     "docs/adr/0005-dev-on-linux-disk-windows-is-prod.md":
-        ("In force until df-cyjt", "Where to work (clone on ext4 vs the Windows prod folder), making a worktree "
+        (EM_VIGOR, "Where to work (clone on ext4 vs the Windows prod folder), making a worktree "
          "with its venv, updating prod, migrating a session, the beads database flip"),
     "docs/adr/0006-architecture-v2-four-pieces.md":
-        ("In force until df-cyjt", "When you need the target architecture: the four pieces (house server ninho, "
+        (EM_VIGOR, "When you need the target architecture: the four pieces (house server ninho, "
          "app database, lake, DataForge as orchestrator only), who owns each piece of data, which way "
          "dependencies point, the repository layout with walls"),
 }
@@ -63,7 +65,8 @@ def _historia(path: str) -> bool:
 
 def _todos(raiz: Path) -> list[str]:
     """Every doc under docs/ but the INDEX and the history, as repo-relative paths."""
-    out = [f.relative_to(raiz).as_posix() for f in sorted((raiz / "docs").rglob("*.md"))]
+    # sorted as POSIX strings: Windows compares Path objects without case (df-8x0m.23.39.2)
+    out = sorted(f.relative_to(raiz).as_posix() for f in (raiz / "docs").rglob("*.md"))
     return [p for p in out if p != INDICE and not _historia(p)]
 
 
@@ -83,9 +86,9 @@ def _chave(eid: str) -> tuple[str, ...]:
     return tuple(docs.peca(eid).split(".")[:2])
 
 
-def _secoes(m: dict, linked: dict[str, str]) -> list[tuple[int, str, list[dict]]]:
-    """(heading level, title, elements): a heading per system, a table per container; the people
-    and external systems last, in a table of their own."""
+def _grupos(m: dict) -> tuple[dict, dict]:
+    """({(system, container) piece: elements}, {piece: heading title}); () holds the people and
+    external systems."""
     por_id = {e["id"]: e for e in m["elements"]}
     titulos: dict[tuple[str, ...], str] = {}
     grupos: dict[tuple[str, ...], list[dict]] = {}
@@ -98,6 +101,13 @@ def _secoes(m: dict, linked: dict[str, str]) -> list[tuple[int, str, list[dict]]
         if len(e["id"].split(".")) <= len(chave):  # the system or the container itself names the heading
             titulos.setdefault(chave, e["title"] or e["id"])
         grupos.setdefault(chave, []).append(e)
+    return grupos, titulos
+
+
+def _secoes(m: dict, linked: dict[str, str]) -> list[tuple[int, str, list[dict]]]:
+    """(heading level, title, elements): a heading per system, a table per container; the people
+    and external systems last, in a table of their own."""
+    grupos, titulos = _grupos(m)
     _juntar(grupos, linked)
     out = []
     for chave in sorted(k for k in grupos if k):
@@ -135,7 +145,7 @@ def _tabela_caixas(elements: list[dict], linked: dict[str, str], raiz: Path) -> 
             titulo = e["title"] or e["id"]
             if titulo not in linhas[linked[e["id"]]]:
                 linhas[linked[e["id"]]].append(titulo)
-    out = ["| Doc | Boxes | Read when |", "| --- | --- | --- |"]
+    out = ["| Doc | Boxes | Read when |", SEPARADOR]
     for path, titulos in linhas.items():
         fm = _front(raiz, path)
         status = " (esboço)" if fm.get("status") == "esboço" else ""
@@ -154,14 +164,14 @@ def gerar(m: dict, raiz: Path = REPO) -> str:
     for nivel, titulo, elements in _secoes(m, linked):
         out += ["#" * nivel + f" {titulo}", ""]
         out += [*_tabela_caixas(elements, linked, raiz), ""] if elements else []
-    out += ["## Transversal docs", "", "| Doc | Topic | Read when |", "| --- | --- | --- |"]
+    out += ["## Transversal docs", "", "| Doc | Topic | Read when |", SEPARADOR]
     for path in _todos(raiz):
         fm = _front(raiz, path)
         if _transversal(raiz, path):
             out.append(f"| {path} | {_celula(fm.get('topic', ''))} | {_celula(fm.get('read_when', ''))} |")
     out += ["", "## Frozen ADRs", "",
             "docs/adr/ is frozen (df-883u): 0001-0003 are history; 0004-0006 hold rules in force until "
-            "their content moves to the reference docs (df-cyjt).", "", "| Doc | Status | Read when |", "| --- | --- | --- |"]
+            "their content moves to the reference docs (df-cyjt).", "", "| Doc | Status | Read when |", SEPARADOR]
     out += [f"| {p} | {ADRS[p][0]} | {_celula(ADRS[p][1])} |" for p in _todos(raiz) if p in ADRS]
     out += ["", "## History (main checkout only)", "",
             "Background only, not current instructions: " + ", ".join(f"`{h}`" for h in HISTORIA)
