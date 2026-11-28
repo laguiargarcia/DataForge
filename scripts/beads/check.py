@@ -13,7 +13,9 @@ Three bd commands are checked, nothing else:
   `camada:`, `erro:`, `achado-por:` and `furo-de:` (a bead id or `nenhum`), and `etapa:` whenever `furo-de:`
   names a bead; and a reason carrying the three marks `Conferi:`, `Não conferi:` and `Assumi:`.
   When `furo-de:` is missing, the message suggests the beads cited by the recent commits of the
-  files the bug changed.
+  files the bug changed. And, for any bead, no mark of the architecture target on origin/main
+  (`arquitetura/modelo.json`) may still name it: the mark goes, or moves to the bead that carries
+  the change on, in a PR merged before the close (df-8x0m.23.37; no modelo.json, no check).
 
 Passes untouched: session beads and epics at close, a reason starting with `descartado:` or
 `duplicado:`, a bead labelled `fechamento:dispensado` (the escape hatch, counted by the
@@ -44,6 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: shellwords
 
+from arquitetura.marcas import marked_beads
 from shellwords import split_commands, strip_prefix
 
 CUTOFF = "2026-11-16"  # ISO date: beads created from this day on get every check
@@ -65,6 +68,7 @@ COMMITS_PER_FILE = 3
 MAX_FILES = 40
 BD_TIMEOUT = 20
 GIT_TIMEOUT = 10
+MODEL_ON_MAIN = "origin/main:arquitetura/modelo.json"
 
 BD_WORD = re.compile(r"(?:^|[\s;&|(`])bd(?:$|\s)")
 BEAD_ID = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:\.\d+)*$")
@@ -472,6 +476,28 @@ def furo_candidates(repo: Path, bead: str) -> list[str]:
     return [b for b, _ in counts.most_common(MAX_CANDIDATES)]
 
 
+def model_on_main(repo: Path) -> dict | None:
+    """arquitetura/modelo.json as origin/main has it; None when missing, empty, not JSON or not a dict."""
+    text = _git(repo, "show", MODEL_ON_MAIN)
+    try:
+        model = json.loads(text) if text else None
+    except ValueError:
+        return None
+    return model if isinstance(model, dict) else None
+
+
+def mark_problems(repo: Path, bead: str) -> list[str]:
+    """The marks of the architecture target on origin/main that still name this bead."""
+    model = model_on_main(repo)
+    where = marked_beads(model).get(bead) if model is not None else None
+    if not where:
+        return []
+    return [f"o alvo da arquitetura no origin/main ainda marca este bead em {'; '.join(where)}. Num PR, "
+            "tire a marca de arquitetura/alvo.c4 (ou passe-a para o bead que continua a mudança) e rode "
+            "`python3 scripts/arquitetura/modelo.py gerar`; depois do merge, `git fetch` e feche "
+            "(df-8x0m.23.37)."]
+
+
 # --------------------------------------------------------------------------- running
 
 
@@ -496,6 +522,8 @@ def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
         else:
             found = close_problems(issue, step.reason, step.labels, bd.exists,
                                    lambda b: furo_candidates(repo, b))
+            if WAIVER not in {*(issue.get("labels") or ()), *step.labels}:
+                found += mark_problems(repo, step.bead)
             what = f"bd close {step.bead}"
         out += [f"[{what}] {f}" for f in found]
     return out

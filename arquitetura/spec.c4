@@ -25,11 +25,16 @@ specification {
     }
   }
 
-  tag emProd {
+  // Marcas do alvo (df-8x0m.23.37): o que difere de hoje.c4 leva uma delas e metadata { bead }
+  // com o id de um bead aberto; scripts/arquitetura/marcas.py confere.
+  tag novo {
     color green
   }
-  tag aFazer {
+  tag muda {
     color amber
+  }
+  tag sai {
+    color red
   }
 
   relationship leitura {
