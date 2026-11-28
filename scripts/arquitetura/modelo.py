@@ -10,8 +10,8 @@ Python instead of running LikeC4: the hook cannot run npx on every `bd create`. 
 The command line takes no paths: it always reads arquitetura/ and writes arquitetura/modelo.json
 (FONTE and SAIDA), so no argument reaches the npx call or a file write. The functions take other
 paths, for the tests. Only the standard library; LikeC4 runs through npx at LIKEC4 (the same
-version as arquitetura/README.md and LIKEC4_VERSION of the CI job). The validate fails on any
-warning (--max-warnings 0), as in the CI job.
+version as arquitetura/README.md, docs/commands.md and LIKEC4_VERSION of the CI job). The validate
+fails on any warning (--max-warnings 0), as in the CI job.
 
 API, for the other scripts (put scripts/ on sys.path, as scripts/beads/check.py does):
 

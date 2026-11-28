@@ -127,7 +127,7 @@ elementos, setas e vistas novos, removidos ou alterados (`scripts/arquitetura/di
 é editado a cada push e apagado quando o PR deixa de mudar o desenho. Para ver o mesmo texto antes do
 PR: `git show origin/main:arquitetura/modelo.json | python3 scripts/arquitetura/diff.py`.
 
-Ao trocar a versão do LikeC4, troque aqui, no `LIKEC4_VERSION` do job do CI e em `LIKEC4` de
-`modelo.py` (um teste confere os três).
+Ao trocar a versão do LikeC4, troque aqui, nos comandos de `docs/commands.md`, no `LIKEC4_VERSION`
+do job do CI e em `LIKEC4` de `modelo.py` (um teste confere os quatro).
 
 Repositório público: sem nomes reais de pessoas ("Dono da casa", "Outra pessoa da casa"), sem dados.
