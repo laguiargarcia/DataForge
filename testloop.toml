@@ -342,4 +342,4 @@ copy = ["arquitetura/README.md", "arquitetura/modelo.json", "docs/commands.md", 
 #   texto ensure_ascii=None: json.dumps reads it as False.
 #   load, gerar, conferir and exportar with encoding "UTF-8": the same codec as "utf-8".
 #   sistema split(".") / split(".", 2): [0] is the text before the first dot at any maxsplit.
-min_score = 0.9834
+min_score = 0.9861

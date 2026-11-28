@@ -1,6 +1,6 @@
 ---
 topic: API
-read_when: When working on the HTTP / FastAPI surface
+read_when: "When working on the HTTP / FastAPI surface (routers, the app backend proxy, `/health`, `/api/instance` presence and shutdown)"
 subsystem: api
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-0lf, df-37a]

@@ -2,6 +2,7 @@
 topic: Session coordination (several Claude Code sessions in one repo)
 read_when: Starting work while other sessions run; asking "whose worktree is this?"; a "Session guard" warning; the session hooks or the session beads (type session) misbehave
 related_issues: [df-0dql, df-2f3j, df-oahj, df-abrb]
+transversal: true
 ---
 
 # Session coordination

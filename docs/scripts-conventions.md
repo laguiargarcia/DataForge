@@ -3,6 +3,7 @@ topic: Workspace Scripts Conventions
 read_when: When writing workspace-level scripts (functions.py, argparse params, logging)
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-762, df-t7v]
+transversal: true
 ---
 
 # Workspace Scripts Conventions

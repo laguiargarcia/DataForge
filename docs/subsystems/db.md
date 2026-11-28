@@ -1,6 +1,6 @@
 ---
 topic: DB
-read_when: When changing schema or queries (SQLAlchemy ORM over SQLite)
+read_when: "When changing schema or queries (SQLAlchemy ORM over SQLite: the execucoes, job_runs and schedules tables of dataforge.db)"
 subsystem: db
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: []

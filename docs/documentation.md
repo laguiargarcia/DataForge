@@ -3,23 +3,33 @@ topic: Documentation
 read_when: When writing, naming, or maintaining files under docs/
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: []
+transversal: true
 ---
 
 # Documentation
 
-## Structure
+## Structure and the INDEX (df-8x0m.23.39.2)
 
-All project docs live in `docs/`. Filenames are the index — Claude decides relevance from name alone, so be descriptive.
+All project docs live in `docs/`. `docs/INDEX.md` is the routing manifest, and it is generated:
+never edit it by hand. After adding, moving or changing the front matter of a doc, or changing a
+box's `doc` link in `arquitetura/`, run
 
-| File | Contains |
-|------|---------|
-| `docs/architecture.md` | Layer responsibilities, data flow, execution stack |
-| `docs/commands.md` | Build, test, lint, CLI, API server commands |
-| `docs/testing.md` | Test setup, patterns, invariants, coverage requirements |
-| `docs/workspace-layout.md` | Disk layout, YAML reference for workspace/job/task definitions |
-| `docs/scripts-conventions.md` | Script patterns, param conventions, logging |
-| `docs/gsd-workflow.md` | GSD phase workflow, planning artifact map, architecture constraints (main checkout only, not versioned) |
-| `docs/documentation.md` | This file — how docs are written and maintained |
+```bash
+python3 scripts/arquitetura/indice_docs.py gerar      # rewrite docs/INDEX.md
+python3 scripts/arquitetura/indice_docs.py conferir   # what CI job `arquitetura` runs
+```
+
+Every doc belongs to one part of the INDEX, or `conferir` fails naming it:
+
+- **A box's doc**: some element of the C4 model links it (`link ../docs/<path>.md 'doc'`). The
+  INDEX lists it under its system and container with its `read_when`, once for today's and the
+  target's box of the same piece.
+- **A transversal doc**: it covers no box (commands, test rules, the bead check, the quality gate,
+  session coordination, conventions, this file...). Its front matter says `transversal: true`, and
+  the INDEX lists its `topic` and `read_when`.
+- **A frozen ADR** (`docs/adr/`): listed from its first heading, with no front matter (no edits).
+- **History** (`docs/superpowers/`, `docs/phases/`, `docs/gsd-workflow.md`,
+  `docs/workbook-handoff.md`): gitignored, main checkout only; a fixed note in the INDEX names them.
 
 ## Decisions
 
@@ -70,10 +80,10 @@ sign, so GitHub still renders it.
 
 ## How to Update Docs
 
-- Update `docs/gsd-workflow.md` when phase status changes (main checkout only, not versioned)
 - Update `docs/architecture.md` when a new architectural constraint is locked
 - Update `docs/commands.md` when new CLI subcommands or API endpoints are added
 - After migrating content from CLAUDE.md, verify the source was removed
+- Regenerate `docs/INDEX.md` (above) in the same change
 
 ## What Stays in CLAUDE.md
 
