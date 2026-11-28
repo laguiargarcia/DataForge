@@ -4438,6 +4438,11 @@
         },
         {
           "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+          "title": "Acha o edicao.db no connections.yaml"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.financasNinhoHoje",
           "target": "casaHoje.edicaoHoje",
           "title": "Grava a correção (falta aplicar)"
         },
@@ -4460,6 +4465,16 @@
           "source": "casaHoje.dataforgeHoje.cliHoje",
           "target": "casaHoje.dataforgeHoje.motorHoje",
           "title": "Grava o pedido e pede o run destacado"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.motorHoje",
+          "target": "casaHoje.dataforgeHoje.definicaoHoje",
+          "title": "Carrega o job reclassificar"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.definicaoHoje",
+          "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+          "title": "Lê jobs/reclassificar/job.yaml"
         },
         {
           "source": "casaHoje.dataforgeHoje.motorHoje",
@@ -4677,6 +4692,11 @@
         },
         {
           "source": "casaHoje.financasHoje.rotasFinancasHoje",
+          "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+          "title": "Acha o edicao.db no connections.yaml"
+        },
+        {
+          "source": "casaHoje.financasHoje.rotasFinancasHoje",
           "target": "casaHoje.edicaoHoje",
           "title": "Grava a regra e a correção"
         },
@@ -4684,6 +4704,21 @@
           "source": "casaHoje.financasHoje.rotasFinancasHoje",
           "target": "casaHoje.dataforgeHoje.apiHoje",
           "title": "Pede o job reclassificar e acompanha a execução"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+          "title": "Confere que o workspace e o job pedidos existem"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.dataforgeHoje.definicaoHoje",
+          "title": "Carrega o job reclassificar"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.definicaoHoje",
+          "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+          "title": "Lê jobs/reclassificar/job.yaml"
         },
         {
           "source": "casaHoje.dataforgeHoje.apiHoje",
