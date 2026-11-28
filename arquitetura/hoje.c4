@@ -1,7 +1,7 @@
 // Estado de HOJE: tudo aqui roda em prod. Muda quando a prod muda.
 model {
   donoHoje = pessoa 'Dono da casa' {
-    description 'Usa o app Finanças e administra o DataForge no PC; usa o ninho (lista, desejos, correções) no celular'
+    description 'Usa o app Finanças e administra o DataForge e o ninho no PC; usa o ninho (lista, desejos, correções) no celular'
   }
   outraHoje = pessoa 'Outra pessoa da casa' {
     description 'Usa a lista de compras e os desejos pelo celular'
@@ -17,16 +17,46 @@ model {
     description 'Tudo roda no PC da casa, em prod nativa no Windows; a rede privada é a Tailscale'
 
     dataforgeHoje = conteiner 'DataForge' {
-      description 'Motor, CLI, API, GUI Qt e servidor do app Finanças; hospeda e guarda o app com token'
+      description 'Motor, CLI, API e GUI Qt; serve o build do app Finanças, inicia o backend e repassa as chamadas a ele com o token. Processos do mesmo código: segundo plano (API e bandeja), GUI admin, janela do app, CLI e o run destacado (run --detach)'
       technology 'Python, FastAPI, PySide6'
+      metadata {
+        codigo ['dataforge']
+      }
+    }
+    pipelineHoje = conteiner 'Pipeline GetFinance' {
+      description 'As tasks dos jobs (finance_daily, extrato, reclassificar, backup) e a biblioteca de regras em scripts/report (edicao, classificacao, extrato), que o backend e o ninho importam'
+      technology 'Python, polars, deltalake; um processo por task, lançado pelo DataForge'
+      metadata {
+        codigo ['workspaces/GetFinance']
+      }
     }
     financasHoje = conteiner 'Backend GetFinance' {
-      description 'Processo do backend do app Finanças (apps/financas/backend) e as regras de negócio nos scripts do workspace (scripts/report/edicao.py etc.), que o pipeline, o backend e o ninho carregam; importa internos do DataForge, que por sua vez o inicia e lhe repassa as chamadas: acoplamento nos dois sentidos, dor do ADR 0006'
-      technology 'Python'
+      description 'Processo do backend do app Finanças; importa internos do DataForge, que por sua vez o inicia e lhe repassa as chamadas: acoplamento nos dois sentidos, dor do ADR 0006'
+      technology 'Python, FastAPI'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas/backend']
+      }
     }
-    ninhoHoje = conteiner 'Servidor ninho e telas' {
-      description 'Login por pessoa, lista de compras, lista de desejos e correção de categorias, em paralelo ao app Finanças'
-      technology 'Python, FastAPI, front web'
+    frontFinancasHoje = conteiner 'Front do app Finanças' {
+      description 'As telas do app Finanças: tabelas, edição de categorias, regras e correções, conferência e extratos'
+      technology 'React, TypeScript; na janela Qt do DataForge ou no navegador do PC'
+      metadata {
+        codigo ['workspaces/GetFinance/apps/financas']
+      }
+    }
+    ninhoHoje = conteiner 'Servidor ninho' {
+      description 'Login por pessoa, lista de compras, lista de desejos e correção de categorias, em paralelo ao app Finanças; a CLI de pessoas (python -m ninho pessoas) abre o ninho.db direto'
+      technology 'Python, FastAPI'
+      metadata {
+        codigo ['ninho']
+      }
+    }
+    telasNinhoHoje = conteiner 'Telas do ninho' {
+      description 'As telas do ninho: entrar, lista de compras, desejos e correções de finanças, com a identidade visual do ninho'
+      technology 'React, TypeScript; web app no navegador do celular'
+      metadata {
+        codigo ['ninho/telas', 'ninho/identidade']
+      }
     }
     bancoNinhoHoje = banco 'ninho.db' {
       description 'Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)'
@@ -49,33 +79,44 @@ model {
       technology 'Delta Lake'
     }
     dbDataforgeHoje = banco 'dataforge.db' {
-      description 'Histórico de execuções'
+      description 'Histórico de execuções: o global (runs dos jobs) e um por workspace (cada task)'
       technology 'SQLite'
     }
   }
 
-  donoHoje -> casaHoje.dataforgeHoje 'Abre o app Finanças (janela Qt ou navegador, no PC) e administra o DataForge (GUI Qt, CLI)'
-  donoHoje -> casaHoje.ninhoHoje 'Usa a lista, os desejos e as correções pelo celular (HTTPS pela Tailscale)'
-  outraHoje -> casaHoje.ninhoHoje 'Usa a lista e os desejos pelo celular (HTTPS pela Tailscale)'
+  donoHoje -> casaHoje.frontFinancasHoje 'Usa o app Finanças no PC (janela Qt ou navegador)'
+  donoHoje -> casaHoje.dataforgeHoje 'Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)'
+  donoHoje -> casaHoje.telasNinhoHoje 'Usa a lista, os desejos e as correções pelo celular'
+  donoHoje -> casaHoje.ninhoHoje 'Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)'
+  outraHoje -> casaHoje.telasNinhoHoje 'Usa a lista e os desejos pelo celular'
   agendadorHoje -> casaHoje.dataforgeHoje 'dataforge scheduled-run'
-  casaHoje.dataforgeHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)'
+  casaHoje.pipelineHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)'
+
+  casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
+  casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê e edita os job.yaml; lança cada task como processo Python, com o .env do job'
+  casaHoje.dataforgeHoje -[leitura]-> casaHoje.lagoHoje 'Serve o curated pela rota genérica'
+  casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
+
   casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP'
+  casaHoje.financasHoje -> casaHoje.pipelineHoje 'Importa edicao, extrato e classificacao dos scripts (scripts/report)'
   casaHoje.financasHoje -[leitura]-> casaHoje.lagoHoje 'Lê direto'
   casaHoje.financasHoje -> casaHoje.edicaoHoje 'Lê e escreve: categorias, regras, correções, explicações'
   casaHoje.financasHoje -> casaHoje.extratosHoje 'Grava o PDF enviado'
-  casaHoje.dataforgeHoje -> casaHoje.lagoHoje 'Grava; serve as tabelas pela rota genérica; o job backup copia o raw'
-  casaHoje.dataforgeHoje -[leitura]-> casaHoje.edicaoHoje 'O pipeline lê (abrir_leitura); o job backup copia'
-  casaHoje.dataforgeHoje -[leitura]-> casaHoje.extratosHoje 'O job extrato relê; o job backup copia'
-  casaHoje.dataforgeHoje -> casaHoje.backupHoje 'Grava o zip semanal (job backup)'
-  casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
-  casaHoje.dataforgeHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia no job backup (semanal)'
+
+  casaHoje.pipelineHoje -> casaHoje.lagoHoje 'Grava raw, cleansed e curated; o job backup copia o raw'
+  casaHoje.pipelineHoje -[leitura]-> casaHoje.edicaoHoje 'Lê (abrir_leitura); o job backup copia'
+  casaHoje.pipelineHoje -[leitura]-> casaHoje.extratosHoje 'O job extrato relê; o job backup copia'
+  casaHoje.pipelineHoje -> casaHoje.backupHoje 'Grava o zip semanal (job backup)'
+  casaHoje.pipelineHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia no job backup (semanal)'
+
   casaHoje.ninhoHoje -[leitura]-> casaHoje.lagoHoje 'Lê tabelas'
   casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista, desejos'
   casaHoje.ninhoHoje -> casaHoje.edicaoHoje 'Lê e escreve: correções'
   casaHoje.ninhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI'
-  casaHoje.ninhoHoje -> casaHoje.financasHoje 'Importa o código das regras de edição (edicao.py) do workspace (provisório, df-8x0m.23.14)'
+  casaHoje.ninhoHoje -> casaHoje.pipelineHoje 'Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)'
 }
 
 views {
@@ -83,7 +124,7 @@ views {
     title 'Hoje: contexto'
     include casaHoje, donoHoje, outraHoje, pluggyHoje, agendadorHoje
     include donoHoje -> casaHoje with {
-      title 'Usa o app Finanças e administra o DataForge no PC; usa o ninho no celular'
+      title 'Usa o app Finanças e administra o DataForge e o ninho no PC; usa o ninho no celular'
     }
   }
   view hoje-conteineres of casaHoje {
