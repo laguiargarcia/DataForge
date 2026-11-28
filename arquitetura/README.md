@@ -36,7 +36,7 @@ API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do c
    descendentes de dois nós; com títulos diferentes ela sai `[...]`, ou com um dos títulos e sem os
    outros, e com kinds diferentes sai com um deles (a `leitura` junto de setas comuns deixa a
    aresta pontilhada). Por isso as relações juntadas têm todas o mesmo título, ou o título vem de
-   uma seta direta entre os dois nós, ou da própria vista
+   uma seta direta entre os dois nós (no hoje, a seta de contêiner da regra 5), ou da própria vista
    (`include pessoa -> sistema with { title '...' }`, como nas vistas de contexto); e têm todas o
    mesmo kind, que nem a seta direta nem o título da vista mudam: quando a diferença é de verdade,
    a vista exclui a relação que destoa (`exclude a.filho -> b`). Cobrada: `modelo.py conferir`
@@ -47,6 +47,15 @@ API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do c
    título próprio. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
+5. No hoje, um par de nós da vista `hoje-conteineres` (contêiner, banco, pessoa ou sistema de fora)
+   tem seta direta em `hoje.c4` só quando mais de uma seta de componente liga os descendentes dos
+   dois, contando as que a vista exclui (df-8x0m.23.47.13). A seta direta é o resumo que a vista
+   mostra, e o título dela diz o que todas as juntadas fazem. Com uma só seta de componente no par,
+   não há seta direta: o rótulo é o título dela, que diz também o que o contêiner faz ali. Assim
+   cada fato tem uma fonte, a seta de componente com o seu `codigo`, e não há um segundo título que
+   fica velho quando ela muda. Mudou, acrescentou ou tirou uma seta de componente entre contêineres,
+   confira o resumo do par (ou crie ou apague a seta direta). O alvo guarda as suas setas de
+   contêiner: nele o nível de contêiner é o próprio plano, e as marcas `novo`, `muda` e `sai` moram ali.
 
 ## Marcas do alvo (df-8x0m.23.37)
 
@@ -97,7 +106,9 @@ Convenções:
 - Componente é o tipo `componente` do `spec.c4`. Ids com o sufixo do modelo: `<nome>Hoje` no hoje,
   `<nome>Alvo` no alvo. No hoje, um arquivo por contêiner, `componentes-<conteiner>.c4`, com
   `extend casaHoje.<conteiner> { ... }`, e uma vista por contêiner,
-  `view hoje-componentes-<conteiner> of casaHoje.<conteiner>`.
+  `view hoje-componentes-<conteiner> of casaHoje.<conteiner>`. A seta que sai de um componente para
+  outro contêiner fica no arquivo do contêiner de origem; `hoje.c4` só tem a seta de resumo do par
+  quando a regra 5 das Regras do desenho pede.
 - No alvo, um arquivo só, `componentes-alvo.c4`, com um `extend casaAlvo.<conteiner>` e uma vista
   `alvo-componentes-<conteiner>` por contêiner que fica. Um só porque o alvo é um plano, lido e
   revisto de uma vez, e as suas setas cruzam os contêineres (o que sai de um entra noutro); cada
@@ -210,9 +221,10 @@ relação implícita do LikeC4: um passo entre contêineres vale pela seta entre
 então o modelo pode desenhar as setas só entre componentes. Não valem uma seta só entre ancestrais
 (um passo entre componentes pede a seta entre eles) nem uma seta no outro sentido: uma resposta
 precisa da própria seta, porque o `modelo.json` não distingue uma resposta (`a <- b`) de um passo
-`b -> a` (o LikeC4 exporta os dois iguais). Sem a seta, o erro nomeia a vista, o passo e a seta que
-falta; acrescente a seta ao modelo ou corrija o passo. Blocos `parallel` viram passos simples no
-`modelo.json`.
+`b -> a` (o LikeC4 exporta os dois iguais). Essa seta de resposta aparece também nas vistas estáticas
+que mostram as duas pontas (ou elementos que as contêm), a menos que a vista a exclua. Sem a seta, o
+erro nomeia a vista, o passo e a seta que falta; acrescente a seta ao modelo ou corrija o passo.
+Blocos `parallel` viram passos simples no `modelo.json`.
 
 ## Doc de cada elemento (df-8x0m.23.39.1)
 

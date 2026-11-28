@@ -167,6 +167,12 @@ model {
       codigo ['dataforge/api/routers/stream.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/triggers.py']
     }
   }
+  // A API lê a pasta dos scripts como arquivos, sem rodá-los (df-8x0m.23.47.18).
+  casaHoje.dataforgeHoje.apiHoje -[leitura]-> casaHoje.pipelineHoje.pastaScriptsHoje 'Lista os scripts do workspace para o editor de job e confere que o script de cada task existe' {
+    metadata {
+      codigo ['dataforge/api/routers/jobs.py']
+    }
+  }
   casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje 'Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)' {
     metadata {
       codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/rollback.py']
@@ -520,7 +526,8 @@ views {
     // ninho e do backend Finanças estão nas vistas deles.
     // Com um filho do pipeline na vista, o LikeC4 1.61.1 não desenha a seta do bin à CLI no contêiner:
     // o bin entra por nome.
-    include casaHoje.pipelineHoje.arquivosWorkspaceHoje, casaHoje.pipelineHoje.binHoje
+    // A pasta dos scripts, que a API lista, também.
+    include casaHoje.pipelineHoje.arquivosWorkspaceHoje, casaHoje.pipelineHoje.binHoje, casaHoje.pipelineHoje.pastaScriptsHoje
     exclude
       casaHoje.ninhoHoje.* -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
       casaHoje.financasHoje.* -> casaHoje.pipelineHoje.arquivosWorkspaceHoje

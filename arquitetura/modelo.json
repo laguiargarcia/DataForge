@@ -942,7 +942,7 @@
         "muda",
         "servidoPelaProd"
       ],
-      "technology": "Delta Lake",
+      "technology": "Parquet (raw), Delta Lake (cleansed, curated)",
       "title": "Lago"
     },
     {
@@ -1324,7 +1324,7 @@
       "title": "Zips do backup"
     },
     {
-      "description": "Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)",
+      "description": "Pessoas, sessões, lista de compras e desejos (fora do repositório; cópia semanal no job backup)",
       "id": "casaHoje.bancoNinhoHoje",
       "kind": "banco",
       "links": [
@@ -1679,7 +1679,7 @@
       "title": "edicao.db"
     },
     {
-      "description": "PDFs do banco enviados pela tela do app Finanças; não se refazem",
+      "description": "PDFs do banco, postos à mão na pasta pelo dono ou enviados pela tela do app Finanças; não se refazem",
       "id": "casaHoje.extratosHoje",
       "kind": "banco",
       "links": [
@@ -1911,7 +1911,7 @@
       "tags": [
         "servidoPelaProd"
       ],
-      "technology": "Delta Lake",
+      "technology": "Parquet (raw), Delta Lake (cleansed, curated)",
       "title": "Lago de dados"
     },
     {
@@ -2031,7 +2031,7 @@
       "title": "Núcleo do servidor"
     },
     {
-      "description": "As tasks dos jobs (finance_daily, extrato, reclassificar, backup) e a biblioteca de regras em scripts/report (edicao, classificacao, extrato), que o backend e o ninho importam",
+      "description": "As tasks dos jobs (finance_daily, extrato, reclassificar, backup), a biblioteca de regras em scripts/report (edicao, classificacao, extrato), que o backend e o ninho importam, e os arquivos que dizem o que o workspace roda: workspace.yaml, jobs, connections e config",
       "id": "casaHoje.pipelineHoje",
       "kind": "conteiner",
       "links": [
@@ -2193,6 +2193,21 @@
       "tags": [],
       "technology": "Python",
       "title": "landing"
+    },
+    {
+      "description": "workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada .py é dos componentes do pipeline",
+      "id": "casaHoje.pipelineHoje.pastaScriptsHoje",
+      "kind": "banco",
+      "links": [
+        {
+          "title": "doc",
+          "url": "../docs/caixas/casa.pipeline.pastaScripts.md"
+        }
+      ],
+      "metadata": {},
+      "tags": [],
+      "technology": "Pasta de arquivos .py",
+      "title": "Pasta dos scripts (scripts/)"
     },
     {
       "description": "Tasks transform*: limpam e deduplicam o raw de contas, faturas, investimentos e transações para o cleansed; o mapa de estabelecimentos vem de config/",
@@ -2438,7 +2453,7 @@
       "title": "Dono da casa"
     },
     {
-      "description": "Usa o app Finanças e administra o DataForge e o ninho no PC; usa o ninho (lista, desejos, correções) no celular",
+      "description": "Usa o app Finanças e administra o DataForge, o pipeline (o reprocess, à mão) e o ninho no PC; usa o ninho (lista, desejos, correções) no celular",
       "id": "donoHoje",
       "kind": "pessoa",
       "links": [
@@ -2567,18 +2582,6 @@
       "source": "agendadorHoje",
       "tags": [],
       "target": "casaHoje.dataforgeHoje.cliHoje",
-      "technology": null,
-      "title": "dataforge scheduled-run"
-    },
-    {
-      "description": null,
-      "id": "agendadorHoje -> casaHoje.dataforgeHoje: dataforge scheduled-run",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "agendadorHoje",
-      "tags": [],
-      "target": "casaHoje.dataforgeHoje",
       "technology": null,
       "title": "dataforge scheduled-run"
     },
@@ -2985,7 +2988,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job",
+      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.pipelineAlvo: Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -2993,7 +2996,7 @@
       "tags": [],
       "target": "casaAlvo.pipelineAlvo",
       "technology": null,
-      "title": "Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job"
+      "title": "Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)"
     },
     {
       "description": null,
@@ -3783,7 +3786,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.financasAlvo -> casaAlvo.lagoAlvo: Lê direto, fora das tabelas publicadas",
+      "id": "casaAlvo.financasAlvo -> casaAlvo.lagoAlvo: Lê o curated e as contas do cleansed, fora das tabelas publicadas",
       "kind": "leitura",
       "links": [],
       "metadata": {
@@ -3795,7 +3798,7 @@
       ],
       "target": "casaAlvo.lagoAlvo",
       "technology": null,
-      "title": "Lê direto, fora das tabelas publicadas"
+      "title": "Lê o curated e as contas do cleansed, fora das tabelas publicadas"
     },
     {
       "description": null,
@@ -4528,18 +4531,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> agendadorHoje: Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "agendadorHoje",
-      "technology": null,
-      "title": "Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)"
-    },
-    {
-      "description": null,
       "id": "casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje: Lê e escreve o histórico de execuções",
       "kind": null,
       "links": [],
@@ -4564,19 +4555,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.lagoHoje: Serve o curated pela rota genérica",
-      "kind": "leitura",
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.dataforgeHoje",
-      "tags": [],
-      "target": "casaHoje.lagoHoje",
-      "technology": null,
-      "title": "Serve o curated pela rota genérica"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -4584,7 +4563,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job"
+      "title": "Lê workspace.yaml, conexões e scripts; edita jobs e triggers; lança cada task como processo Python (.env do job); o deploy copia o workspace (sem uso em prod)"
     },
     {
       "description": null,
@@ -4792,6 +4771,20 @@
       "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
       "technology": null,
       "title": "Confere que o workspace, o job e o trigger pedidos existem"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.pipelineHoje.pastaScriptsHoje: Lista os scripts do workspace para o editor de job e confere que o script de cada task existe",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/api/routers/jobs.py"
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.pastaScriptsHoje",
+      "technology": null,
+      "title": "Lista os scripts do workspace para o editor de job e confere que o script de cada task existe"
     },
     {
       "description": null,
@@ -5793,42 +5786,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.edicaoHoje: Lê e escreve: categorias, regras, correções, explicações",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.edicaoHoje",
-      "technology": null,
-      "title": "Lê e escreve: categorias, regras, correções, explicações"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.extratosHoje: Grava o PDF enviado",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.extratosHoje",
-      "technology": null,
-      "title": "Grava o PDF enviado"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.lagoHoje: Lê direto",
-      "kind": "leitura",
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.financasHoje",
-      "tags": [],
-      "target": "casaHoje.lagoHoje",
-      "technology": null,
-      "title": "Lê direto"
-    },
-    {
-      "description": null,
       "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje: Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml",
       "kind": null,
       "links": [],
@@ -6262,7 +6219,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje: Lê e escreve: pessoas, lista, desejos",
+      "id": "casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje: Lê e escreve: pessoas, sessões, lista, desejos",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -6270,43 +6227,7 @@
       "tags": [],
       "target": "casaHoje.bancoNinhoHoje",
       "technology": null,
-      "title": "Lê e escreve: pessoas, lista, desejos"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.dataforgeHoje: Pede o job (run --detach) e acompanha (run-state --wait) pela CLI",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.ninhoHoje",
-      "tags": [],
-      "target": "casaHoje.dataforgeHoje",
-      "technology": null,
-      "title": "Pede o job (run --detach) e acompanha (run-state --wait) pela CLI"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.edicaoHoje: Lê e escreve: correções",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.ninhoHoje",
-      "tags": [],
-      "target": "casaHoje.edicaoHoje",
-      "technology": null,
-      "title": "Lê e escreve: correções"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.lagoHoje: Lê tabelas",
-      "kind": "leitura",
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.ninhoHoje",
-      "tags": [],
-      "target": "casaHoje.lagoHoje",
-      "technology": null,
-      "title": "Lê tabelas"
+      "title": "Lê e escreve: pessoas, sessões, lista, desejos"
     },
     {
       "description": null,
@@ -6571,31 +6492,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje -> casaHoje.backupHoje: Grava o zip semanal (job backup)",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.pipelineHoje",
-      "tags": [],
-      "target": "casaHoje.backupHoje",
-      "technology": null,
-      "title": "Grava o zip semanal (job backup)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.pipelineHoje -> casaHoje.bancoNinhoHoje: Copia no job backup (semanal)",
-      "kind": "leitura",
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.pipelineHoje",
-      "tags": [],
-      "target": "casaHoje.bancoNinhoHoje",
-      "technology": null,
-      "title": "Copia no job backup (semanal)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.pipelineHoje -> casaHoje.edicaoHoje: Lê (abrir_leitura); o job backup copia",
+      "id": "casaHoje.pipelineHoje -> casaHoje.edicaoHoje: Lê categorias, regras, correções e explicações; o job backup copia",
       "kind": "leitura",
       "links": [],
       "metadata": {},
@@ -6603,7 +6500,7 @@
       "tags": [],
       "target": "casaHoje.edicaoHoje",
       "technology": null,
-      "title": "Lê (abrir_leitura); o job backup copia"
+      "title": "Lê categorias, regras, correções e explicações; o job backup copia"
     },
     {
       "description": null,
@@ -6631,19 +6528,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje -> pluggyHoje: Busca contas, transações, faturas e investimentos (task fetch do finance_daily)",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "casaHoje.pipelineHoje",
-      "tags": [],
-      "target": "pluggyHoje",
-      "technology": null,
-      "title": "Busca contas, transações, faturas e investimentos (task fetch do finance_daily)"
-    },
-    {
-      "description": null,
-      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje: Grava o zip e apaga os mais velhos",
+      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.backupHoje: Grava o zip semanal (job backup) e apaga os mais velhos",
       "kind": null,
       "links": [],
       "metadata": {
@@ -6653,11 +6538,11 @@
       "tags": [],
       "target": "casaHoje.backupHoje",
       "technology": null,
-      "title": "Grava o zip e apaga os mais velhos"
+      "title": "Grava o zip semanal (job backup) e apaga os mais velhos"
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.bancoNinhoHoje: Copia pela API de backup do SQLite (--ninho)",
+      "id": "casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.bancoNinhoHoje: Copia no job backup (semanal), pela API de backup do SQLite",
       "kind": "leitura",
       "links": [],
       "metadata": {
@@ -6667,7 +6552,7 @@
       "tags": [],
       "target": "casaHoje.bancoNinhoHoje",
       "technology": null,
-      "title": "Copia pela API de backup do SQLite (--ninho)"
+      "title": "Copia no job backup (semanal), pela API de backup do SQLite"
     },
     {
       "description": null,
@@ -7605,7 +7490,7 @@
     },
     {
       "description": null,
-      "id": "donoHoje -> casaHoje.dataforgeHoje: Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)",
+      "id": "donoHoje -> casaHoje.dataforgeHoje: Abre o app pelo atalho e administra o DataForge (GUI Qt, bandeja, CLI)",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -7613,7 +7498,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje",
       "technology": null,
-      "title": "Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)"
+      "title": "Abre o app pelo atalho e administra o DataForge (GUI Qt, bandeja, CLI)"
     },
     {
       "description": null,
@@ -7629,18 +7514,6 @@
     },
     {
       "description": null,
-      "id": "donoHoje -> casaHoje.frontFinancasHoje: Usa o app Finanças no PC (janela Qt ou navegador)",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "donoHoje",
-      "tags": [],
-      "target": "casaHoje.frontFinancasHoje",
-      "technology": null,
-      "title": "Usa o app Finanças no PC (janela Qt ou navegador)"
-    },
-    {
-      "description": null,
       "id": "donoHoje -> casaHoje.ninhoHoje.pessoasCliHoje: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
       "kind": null,
       "links": [],
@@ -7650,18 +7523,6 @@
       "source": "donoHoje",
       "tags": [],
       "target": "casaHoje.ninhoHoje.pessoasCliHoje",
-      "technology": null,
-      "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
-    },
-    {
-      "description": null,
-      "id": "donoHoje -> casaHoje.ninhoHoje: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "donoHoje",
-      "tags": [],
-      "target": "casaHoje.ninhoHoje",
       "technology": null,
       "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
     },
@@ -7690,18 +7551,6 @@
       "source": "donoHoje",
       "tags": [],
       "target": "casaHoje.telasNinhoHoje.cascaHoje",
-      "technology": null,
-      "title": "Usa a lista, os desejos e as correções pelo celular"
-    },
-    {
-      "description": null,
-      "id": "donoHoje -> casaHoje.telasNinhoHoje: Usa a lista, os desejos e as correções pelo celular",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "donoHoje",
-      "tags": [],
-      "target": "casaHoje.telasNinhoHoje",
       "technology": null,
       "title": "Usa a lista, os desejos e as correções pelo celular"
     },
@@ -7754,18 +7603,6 @@
       "source": "outraHoje",
       "tags": [],
       "target": "casaHoje.telasNinhoHoje.cascaHoje",
-      "technology": null,
-      "title": "Usa a lista e os desejos pelo celular"
-    },
-    {
-      "description": null,
-      "id": "outraHoje -> casaHoje.telasNinhoHoje: Usa a lista e os desejos pelo celular",
-      "kind": null,
-      "links": [],
-      "metadata": {},
-      "source": "outraHoje",
-      "tags": [],
-      "target": "casaHoje.telasNinhoHoje",
       "technology": null,
       "title": "Usa a lista e os desejos pelo celular"
     }
