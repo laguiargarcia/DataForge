@@ -94,7 +94,7 @@ Convenções:
   `extend casaHoje.<conteiner> { ... }`, e uma vista por contêiner,
   `view hoje-componentes-<conteiner> of casaHoje.<conteiner>`. A seta que sai de um componente para
   outro contêiner fica no arquivo do contêiner de origem; `hoje.c4` só tem a seta de resumo do par
-  quando a regra 5 pede.
+  quando a regra 5 das Regras do desenho pede.
 - No alvo, um arquivo só, `componentes-alvo.c4`, com um `extend casaAlvo.<conteiner>` e uma vista
   `alvo-componentes-<conteiner>` por contêiner que fica. Um só porque o alvo é um plano, lido e
   revisto de uma vez, e as suas setas cruzam os contêineres (o que sai de um entra noutro); cada

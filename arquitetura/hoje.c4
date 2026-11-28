@@ -86,7 +86,7 @@ model {
 
   // Seta de contêiner só onde mais de uma seta de componente liga os dois (contando as que a vista
   // exclui): ela é o resumo que hoje-conteineres mostra. Com uma só, o rótulo é o título dela
-  // (README, regra 5; df-8x0m.23.47.13).
+  // (README, Regras do desenho, 5; df-8x0m.23.47.13).
   donoHoje -> casaHoje.dataforgeHoje 'Abre o app pelo atalho e administra o DataForge (GUI Qt, bandeja, CLI)'
 
   casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
