@@ -5,7 +5,8 @@ Python instead of running LikeC4: the hook cannot run npx on every `bd create`. 
 `arquitetura` runs `conferir`, so the committed file is always the export of the committed .c4.
 
     python3 scripts/arquitetura/modelo.py gerar      # rewrite arquitetura/modelo.json from the .c4
-    python3 scripts/arquitetura/modelo.py conferir   # exit 1, with a diff, when it is stale
+    python3 scripts/arquitetura/modelo.py conferir   # exit 1 when it is stale (with a diff) or
+                                                     # a view edge is ambiguous (arestas_ambiguas)
 
 The command line takes no paths: it always reads arquitetura/ and writes arquitetura/modelo.json
 (FONTE and SAIDA), so no argument reaches the npx call or a file write. The functions take other
@@ -157,6 +158,43 @@ def _view(raw: dict) -> dict:
             "steps": steps}
 
 
+def _aresta_ambigua(view: str, edge: dict, rels: dict) -> list[str]:
+    """What one edge of an element or deployment view hides from a reader (README rule 3). LikeC4
+    joins the relations between a node's descendants into one edge: with distinct titles it shows
+    '[...]', or one of them and none of the rest, unless the view gives a title (`with { title }`)
+    or a relation goes straight between the two nodes; with distinct kinds it takes one of them."""
+    try:
+        joined = [rels[r] for r in edge.get("relations") or []]
+    except KeyError as missing:
+        raise ValueError(f"view {view}: edge {edge.get('id')} names an unknown relation {missing}") from None
+    where = f"view {view}: {edge['source']} -> {edge['target']}"
+    label = edge.get("label") or ""
+    titles = {r.get("title") or "" for r in joined}
+    direct = {r.get("title") or "" for r in joined
+              if (_ref(r["source"]), _ref(r["target"])) == (edge["source"], edge["target"])}
+    fix = f"include {edge['source']} -> {edge['target']} with {{ title '...' }}"
+    problems = []
+    if label == "[...]":
+        problems.append(f"{where} is drawn as '[...]': give it one title in the view ({fix})")
+    elif len(titles) > 1 and label in titles and label not in direct:
+        problems.append(f"{where} joins {len(joined)} relations and shows only {label!r}: give it a title "
+                        f"in the view ({fix}) or draw an arrow straight between the two")
+    kinds = sorted({r.get("kind") or "(none)" for r in joined})
+    if len(kinds) > 1:
+        problems.append(f"{where} joins relations of kinds {', '.join(kinds)} and is drawn as "
+                        f"{edge.get('kind') or '(none)'}: give the arrows behind it one kind")
+    return problems
+
+
+def arestas_ambiguas(raw: dict) -> list[str]:
+    """Every edge of a `likec4 export json` view that a reader cannot take at its word: drawn as
+    '[...]', showing one of several joined titles, or joining relations of different kinds. The
+    steps of a dynamic view are drawn one by one, with their own titles: not checked."""
+    rels = raw.get("relations", {}) | raw.get("deployments", {}).get("relations", {})
+    return [problem for vid, view in sorted(raw.get("views", {}).items()) if view.get("_type") != "dynamic"
+            for edge in view.get("edges") or [] for problem in _aresta_ambigua(vid, edge, rels)]
+
+
 def normalizar(raw: dict) -> dict:
     """The modelo.json dict (see the module docstring) of one `likec4 export json`."""
     spec = raw.get("specification", {})
@@ -194,10 +232,15 @@ def gerar(fonte: Path = FONTE, saida: Path = SAIDA) -> None:
 
 
 def conferir(fonte: Path = FONTE, saida: Path = SAIDA) -> list[str]:
-    """The diff from the committed file to the export of the .c4; empty when it is fresh."""
-    novo = texto(normalizar(exportar(fonte)))
+    """The problems of the .c4, one line each: every ambiguous view edge (`arestas_ambiguas`), then,
+    when the committed file is stale, a line saying so and the diff to the export. Empty when fine."""
+    raw = exportar(fonte)
+    novo = texto(normalizar(raw))
     velho = saida.read_text(encoding="utf-8") if saida.exists() else ""
-    return list(difflib.unified_diff(velho.splitlines(), novo.splitlines(), str(saida), "export of the .c4", lineterm=""))
+    diff = list(difflib.unified_diff(velho.splitlines(), novo.splitlines(), str(saida), "export of the .c4",
+                                     lineterm=""))
+    stale = [f"{saida} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it"] if diff else []
+    return arestas_ambiguas(raw) + stale + diff
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -208,14 +251,13 @@ def main(argv: list[str] | None = None) -> int:
         if acao == "gerar":
             gerar(FONTE, SAIDA)
             return 0
-        diff = conferir(FONTE, SAIDA)
+        problems = conferir(FONTE, SAIDA)
     except ValueError as error:  # a model normalizar refuses: the message, not a traceback, in CI
         raise SystemExit(str(error)) from error
-    if diff:
-        print(f"{SAIDA} is stale: run python3 scripts/arquitetura/modelo.py gerar and commit it")
-        print("\n".join(diff))
+    if problems:
+        print("\n".join(problems))
         return 1
-    print(f"{SAIDA} is the export of {FONTE}")
+    print(f"{SAIDA} is the export of {FONTE}, and every view edge reads at its word")
     return 0
 
 
