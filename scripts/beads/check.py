@@ -35,6 +35,8 @@ the same command line (`bd label add ... && bd close ...`) count as present.
 
 Usage:
     check.py hook                               PreToolUse hook: the event on stdin, a deny on stdout
+    check.py contexto                           PostToolUse hook: after a claim, the docs of the bead's
+                                                c4: boxes and their neighbours as additionalContext
     check.py close <id> --reason "..."          by hand, with bd's own arguments; exit 1 lists gaps
     check.py update <id> --claim
     check.py create "Título" -l c4:<caixa>,...
@@ -52,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -61,6 +64,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: shellw
 
 from arquitetura.marcas import marked_beads
 from shellwords import split_commands, strip_prefix
+
+try:  # the main checkout may lack it until the next pull: no doc context, nothing else changes
+    from arquitetura import docs as arq_docs
+except Exception:  # noqa: BLE001 -- fail open: the claim context is optional
+    arq_docs = None
 
 CUTOFF = "2026-11-16"  # ISO date: beads created from this day on get every check
 WAIVER = "fechamento:dispensado"
@@ -727,11 +735,115 @@ def hook(event: dict, project: Path) -> dict | None:
                                    "permissionDecisionReason": render(problems)}}
 
 
+# --------------------------------------------------------------------------- context at claim (df-8x0m.23.40)
+
+MAX_CONTEXT = 12  # lines of boxes per claim
+
+
+def neighbours(model: dict, box: str) -> list[str]:
+    """`box`, its parent and the far end of every relation of `box` itself, without repeats. The
+    relations of its descendants are left out: a container's would list half the model."""
+    ids = box_ids(model) or set()
+    if box not in ids:
+        return []
+    out = [box]
+    parent = box.rpartition(".")[0]
+    if parent in ids:
+        out.append(parent)
+    ends = set()
+    for r in model.get("relations") or ():
+        if isinstance(r, dict) and box in (r.get("source"), r.get("target")):
+            ends.update(e for e in (r.get("source"), r.get("target")) if e in ids)
+    return out + sorted(ends - set(out))
+
+
+def front_on_main(repo: Path, path: str) -> dict:
+    """The front matter of `path` as origin/main has it; {} when it cannot be read."""
+    text = _git(repo, "show", f"origin/main:{path}")
+    if not text or arq_docs is None:
+        return {}
+    with tempfile.TemporaryDirectory() as tmp:  # ler_front_matter reads a path, not a text
+        file = Path(tmp) / "doc.md"
+        file.write_text(text, encoding="utf-8")
+        try:
+            return arq_docs.ler_front_matter(file)
+        except ValueError:
+            return {}
+
+
+def box_line(model: dict, box: str, docs: dict[str, str], front: Callable[[str], dict]) -> str:
+    title = next((e.get("title") for e in model["elements"] if isinstance(e, dict) and e.get("id") == box), "")
+    path = docs.get(box)
+    if not path:
+        return f"- {box} ({title}): sem doc"
+    fm = front(path)
+    parts = [f"- {box} ({title}): {path}"]
+    parts += [f"{k}: {fm[k]}" for k in ("topic", "read_when") if fm.get(k)]
+    return " · ".join(parts)
+
+
+def ordered_boxes(model: dict, values: list[str]) -> list[str]:
+    """The neighbours of every box in `values`, in a fixed order: the boxes themselves, then their
+    parents, then the far ends; so the cut at MAX_CONTEXT drops far ends first."""
+    own, parents, ends = [], [], []
+    for value in values:
+        found = neighbours(model, value)
+        if not found:
+            continue
+        own.append(found[0])
+        parent = value.rpartition(".")[0]
+        parents += [b for b in found[1:] if b == parent]
+        ends += [b for b in found[1:] if b != parent]
+    return list(dict.fromkeys(own + parents + ends))
+
+
+def context_for(issue: dict, model: dict, docs: dict[str, str], front: Callable[[str], dict]) -> str:
+    """The context for one claimed bead; empty for a transversal bead or one without a c4: box."""
+    boxes = ordered_boxes(model, sorted(label_values(set(issue.get("labels") or ()), "c4")))
+    if not boxes:
+        return ""
+    lines = [box_line(model, b, docs, front) for b in boxes[:MAX_CONTEXT]]
+    if len(boxes) > MAX_CONTEXT:
+        lines.append(f"- ... e mais {len(boxes) - MAX_CONTEXT}")
+    return (f"{issue.get('id')}: a caixa do bead e as vizinhas (arquitetura/modelo.json no origin/main); "
+            "leia o doc das que o trabalho toca:\n" + "\n".join(lines))
+
+
+def claimed(event: dict) -> list[str]:
+    """The beads a Bash command that ran to the end claimed, in order, without repeats."""
+    response = event.get("tool_response")
+    if event.get("tool_name") != "Bash" or (
+            isinstance(response, dict) and (response.get("interrupted") or response.get("error"))):
+        return []
+    command = str((event.get("tool_input") or {}).get("command") or "")
+    if not BD_WORD.search(command):
+        return []
+    return list(dict.fromkeys(s.bead for s in read_line(command) if s.kind == "claim"))
+
+
+def contexto(event: dict, project: Path) -> dict | None:
+    """The PostToolUse answer for one event: the docs of the claimed beads' boxes, or None."""
+    claims = claimed(event) if arq_docs is not None else []
+    model = model_on_main(project) if claims else None
+    if model is None:
+        return None
+    docs = arq_docs.docs_por_elemento(model)
+    front = functools.cache(lambda path: front_on_main(project, path))
+    cwd = Path(event.get("cwd") or project)
+    bd = Bd(cwd if cwd.is_dir() else project)
+    texts = [context_for(i, model, docs, front) for b in claims if (i := bd.show(b))]
+    text = "\n\n".join(t for t in texts if t)
+    if not text:
+        return None
+    return {"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}}
+
+
 def main(argv: list[str]) -> int:
     project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or ".")
-    if argv[:1] == ["hook"]:
+    if argv[:1] in (["hook"], ["contexto"]):
+        answer = hook if argv[0] == "hook" else contexto
         try:
-            out = hook(json.loads(sys.stdin.read() or "{}"), project)
+            out = answer(json.loads(sys.stdin.read() or "{}"), project)
         except Exception:  # noqa: BLE001 -- fail open: a bug here must never stall a session
             return 0
         if out:

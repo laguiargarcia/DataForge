@@ -1,7 +1,7 @@
 ---
 topic: Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, no architecture mark left on the bead, and the prod check of a box prod serves)
-read_when: "A \"Conferência do bead\" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:`"
-related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37, df-8x0m.23.36, df-8x0m.23.42]
+read_when: "A \"Conferência do bead\" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:`; the docs a claim hands the session"
+related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37, df-8x0m.23.36, df-8x0m.23.42, df-8x0m.23.40]
 ---
 
 # Bead check
@@ -150,6 +150,29 @@ on 2026-11-16, df-v06a: a subagent's `bd close` of a bug without the labels was 
 
 Fails open: an internal error, no bd, or an unknown bead lets the command through. Cost: ~30 ms
 for a command without `bd`, ~1 s for a checked close (one `bd show`, one more per `furo-de:` id).
+
+## Contexto no claim (df-8x0m.23.40)
+
+`check.py contexto` is a PostToolUse hook on Bash, so it only sees a command that ran. After a `bd
+update <id> --claim` it hands the session, as `additionalContext`, one line per box: for each `c4:`
+box of the bead, the box itself, its parent and the far end of every relation whose source or target
+is the box (the relations of its descendants are left out: a container's would list half the model),
+without repeats, at most 12 lines plus `... e mais N`. The order is fixed: the bead's own boxes,
+then their parents, then the far ends sorted by id, so the cut drops the far ends whose ids sort
+last. Each line: id, title, the doc path (`docs_por_elemento` of `scripts/arquitetura/docs.py`) and
+the `topic` / `read_when` of its front matter. The model and the doc text come from origin/main
+(`git show`), like the create check. A `c4:transversal` bead, a bead without a `c4:` box, an
+interrupted command, an unknown bead, a missing model or a missing `docs.py` give nothing. It never
+blocks: any error exits 0 silently. A line whose claim failed but that still exits 0 (`bd update x
+--claim; true`) gets the context too: the hook sees only the line's exit.
+
+In `.claude/settings.json`, under `hooks.PostToolUse`:
+
+```json
+{"matcher": "Bash", "hooks": [{"type": "command", "timeout": 30, "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/beads/check.py\"; [ -f \"$f\" ] && python3 -S \"$f\" contexto; exit 0"}]}
+```
+
+An older `check.py` without the mode reads `contexto` as a bd subcommand and prints `ok`: harmless.
 
 ## Participants hook (claudemain, df-9cq5)
 
