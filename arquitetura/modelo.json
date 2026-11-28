@@ -983,6 +983,7 @@
     "deployments": [],
     "elements": [
       "banco",
+      "componente",
       "conteiner",
       "pessoa",
       "sistema",

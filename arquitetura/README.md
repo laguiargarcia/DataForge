@@ -55,6 +55,50 @@ bd:
   `arquitetura/modelo.json` do origin/main ainda marca. Para conferir tudo de uma vez, com bd:
   `python3 scripts/arquitetura/marcas.py --bd`.
 
+## Regras do nível de componentes (C4 nível 3, df-8x0m.23.47)
+
+Convenções:
+
+- Componente é o tipo `componente` do `spec.c4`. Ids com o sufixo do modelo: `<nome>Hoje` no hoje,
+  `<nome>Alvo` no alvo. Um arquivo por contêiner, `componentes-<conteiner>.c4`, com
+  `extend casaHoje.<conteiner> { ... }`, e uma vista por contêiner,
+  `view hoje-componentes-<conteiner> of casaHoje.<conteiner>`.
+- Todo componente, e todo contêiner com código, tem `metadata { codigo [...] }`: caminhos a partir da
+  raiz do repositório, arquivo ou pasta. A seta entre componentes leva `metadata { codigo [...] }`
+  com os arquivos onde a chamada está, sem linha; o arquivo:linha vai nas notas do bead.
+- Arquivo de código: `.py .ts .tsx .js .jsx .mjs .cjs .sh .ps1`. Fora (sem dono, imports não lidos):
+  pastas `dist`, `node_modules`, `tests`, `test`, `__tests__`, `e2e`; `test_*.py`, `*_test.py`,
+  `conftest.py`, `*.test.*`, `*.spec.*`; `*.config.{ts,js,mjs,cjs}` (vite, playwright).
+- Import conta também o de tipo: `import type` no TS e o import sob `if TYPE_CHECKING:` no Python
+  pedem seta como os outros.
+
+`uv run --no-project python scripts/arquitetura/componentes.py` (o Python do `.python-version`; um
+mais velho recusa sintaxe nova do código, e o script sai 2 dizendo isso) confere, com a numeração
+da docstring dele:
+
+1. Todo caminho de `codigo`, de elemento, seta ou item de implantação, do hoje e do alvo, está em
+   forma normal (sem `./`, `..` nem `/` nas pontas) e é arquivo versionado ou pasta com arquivo
+   versionado (`git ls-files`, não o disco).
+2. O dono de um arquivo é o elemento de caminho mais longo que o contém. Contêineres se aninham por
+   caminho, não no modelo: o arquivo de `apps/financas` é do contêiner dele, não do pipeline.
+3. Cada import estático entre arquivos de donos diferentes tem seta, quando ao menos um dos donos é
+   componente: origem = dono de quem importa, destino = dono do importado, exatamente (seta entre os
+   pais ou entre os filhos não conta; título e kind livres). Não se cobra seta entre ancestral e
+   descendente pelo id (o LikeC4 recusa seta pai-filho) nem entre dois contêineres sem componente.
+   Quem acrescenta componentes a um contêiner depois re-aponta as setas que entram nele quando o
+   checker pede (import) ou o contestador acha (HTTP, CLI).
+4. Num contêiner com pelo menos um componente, nenhum arquivo de código tem o contêiner como dono
+   direto: um componente dele (ou um contêiner aninhado por caminho) é o dono.
+5. O mesmo caminho em dois elementos do mesmo sistema é erro (dono ambíguo).
+
+Hoje e alvo são dois desenhos no mesmo `modelo.json`: 2 a 5 valem por sistema (primeira parte do
+id), e 3 e 4 só no hoje (sistema terminado em `Hoje`), porque o alvo desenha código que ainda não
+existe. O script sai 1 com uma linha `error:` por problema. Saem como `warning:`, sem falhar, a
+lista que o contestador confere à mão: importação dinâmica, subprocesso que pode rodar Python, o
+DataForge ou um shell, linha de `.sh`/`.ps1` que chama `dataforge` ou `python`, import de arquivo de
+código sem dono. A docstring diz como resolve imports Python e TS. O job `arquitetura` do CI roda o
+script depois do `conferir`, com o Python do `.python-version`.
+
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
 
