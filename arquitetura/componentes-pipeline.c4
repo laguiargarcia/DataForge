@@ -18,7 +18,7 @@ model {
       }
     }
     syntheticHoje = componente 'synthetic' {
-      description 'Task fetch do finance_demo: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial'
+      description 'Task fetch do finance_demo, que roda só no dev e no CI, nunca na prod: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial'
       technology 'Python'
       metadata {
         codigo ['workspaces/GetFinance/scripts/synthetic']
@@ -39,14 +39,14 @@ model {
       }
     }
     reportHoje = componente 'report' {
-      description 'Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao do finance_demo; com as funções do relatório (cartao_listas, report_lib, saude)'
+      description 'Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao, que preenche categorias e regras do edicao.db a partir do config/edicao quando estão vazias, só no finance_demo (não na prod); com as funções do relatório (cartao_listas, report_lib, saude)'
       technology 'Python, polars, deltalake'
       metadata {
         codigo ['workspaces/GetFinance/scripts/report']
       }
     }
     conferenciasHoje = componente 'Regras de conferência e extrato' {
-      description 'Funções puras de scripts/report que as tasks de conferência carregam: leitura do extrato em PDF, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato'
+      description 'Funções puras de scripts/report que as tasks de conferência carregam: leitura do texto do extrato do banco, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato'
       technology 'Python, polars'
       metadata {
         codigo [
@@ -76,7 +76,7 @@ model {
       }
     }
     validationHoje = componente 'validation' {
-      description 'Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e falha quando há algum, para o alerta do job citar'
+      description 'Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e sai 1 quando há algum: a rodada fica failed com os dados gravados (o alert_warnings, que os citaria, está inativo)'
       technology 'Python'
       metadata {
         codigo ['workspaces/GetFinance/scripts/validation']
@@ -97,7 +97,7 @@ model {
       }
     }
     binHoje = componente 'bin' {
-      description 'Atalhos de dev, rodados à mão: ativam o .venv da raiz do repo e rodam o finance_daily (run.sh no Linux, run.ps1 no Windows)'
+      description 'Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-uv8o'
       technology 'Bash, PowerShell'
       metadata {
         codigo ['workspaces/GetFinance/bin']
@@ -115,7 +115,7 @@ model {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml']
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje 'Lança a task fetch (finance_demo)' {
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje 'Lança a task fetch do finance_demo (só dev e CI)' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_demo/job.yaml']
     }
@@ -140,7 +140,7 @@ model {
       ]
     }
   }
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify, report e a semente' {
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify e report (a semente, só no finance_demo)' {
     metadata {
       codigo [
         'dataforge/tasks/python_handler.py',
@@ -257,12 +257,17 @@ model {
   }
 
   // Processos lançados.
+  donoHoje -> casaHoje.pipelineHoje.reprocessHoje 'Roda à mão para refazer tabelas do cleansed (scripts/reprocess.py)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/reprocess.py']
+    }
+  }
   casaHoje.pipelineHoje.reprocessHoje -> casaHoje.pipelineHoje.raw2cleansedHoje 'Roda a transformação como processo Python (run_transform_subprocess)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/reprocess.py', 'workspaces/GetFinance/scripts/functions/functions.py']
     }
   }
-  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje 'dataforge jobs run finance_daily' {
+  casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje 'Sobra sem uso (df-uv8o): dataforge jobs run finance_daily' {
     metadata {
       codigo ['workspaces/GetFinance/bin/run.sh', 'workspaces/GetFinance/bin/run.ps1']
     }
@@ -286,7 +291,8 @@ model {
   }
 
   // Para fora: Pluggy, lago, bancos.
-  casaHoje.pipelineHoje.landingHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (cliente de functions)' {
+  // Título igual ao de pipelineHoje -> pluggyHoje em hoje.c4 de propósito: títulos diferentes viram '[...]' em hoje-contexto (df-8x0m.23.47.12).
+  casaHoje.pipelineHoje.landingHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py', 'workspaces/GetFinance/scripts/functions/functions.py']
     }
@@ -296,12 +302,12 @@ model {
       codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py']
     }
   }
-  casaHoje.pipelineHoje.syntheticHoje -> casaHoje.lagoHoje 'Grava o raw sintético (parquet)' {
+  casaHoje.pipelineHoje.syntheticHoje -> casaHoje.lagoHoje 'Grava o raw sintético (parquet; finance_demo, só dev e CI)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py']
     }
   }
-  casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.lagoHoje 'Lê o raw (parquet), grava o cleansed (Delta)' {
+  casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.lagoHoje 'Lê o raw (parquet) e o cleansed, grava o cleansed (Delta)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/raw2cleansed']
     }
@@ -326,7 +332,7 @@ model {
       codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/report_curated.py']
     }
   }
-  casaHoje.pipelineHoje.reportHoje -> casaHoje.edicaoHoje 'Lê categorias, regras e correções (classify); a semente grava as tabelas vazias (finance_demo)' {
+  casaHoje.pipelineHoje.reportHoje -[leitura]-> casaHoje.edicaoHoje 'Lê categorias, regras e correções (classify); só no finance_demo, a semente preenche categorias e regras do config/edicao quando vazias' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/carga_inicial_edicao.py']
     }

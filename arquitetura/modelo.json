@@ -293,7 +293,7 @@
       "title": "backup"
     },
     {
-      "description": "Atalhos de dev, rodados à mão: ativam o .venv da raiz do repo e rodam o finance_daily (run.sh no Linux, run.ps1 no Windows)",
+      "description": "Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-uv8o",
       "id": "casaHoje.pipelineHoje.binHoje",
       "kind": "componente",
       "links": [],
@@ -317,7 +317,7 @@
       "title": "cleansed2curated"
     },
     {
-      "description": "Funções puras de scripts/report que as tasks de conferência carregam: leitura do extrato em PDF, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato",
+      "description": "Funções puras de scripts/report que as tasks de conferência carregam: leitura do texto do extrato do banco, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato",
       "id": "casaHoje.pipelineHoje.conferenciasHoje",
       "kind": "componente",
       "links": [],
@@ -386,7 +386,7 @@
       "title": "Regras de edição e classificação"
     },
     {
-      "description": "Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao do finance_demo; com as funções do relatório (cartao_listas, report_lib, saude)",
+      "description": "Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao, que preenche categorias e regras do edicao.db a partir do config/edicao quando estão vazias, só no finance_demo (não na prod); com as funções do relatório (cartao_listas, report_lib, saude)",
       "id": "casaHoje.pipelineHoje.reportHoje",
       "kind": "componente",
       "links": [],
@@ -410,7 +410,7 @@
       "title": "reprocess"
     },
     {
-      "description": "Task fetch do finance_demo: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial",
+      "description": "Task fetch do finance_demo, que roda só no dev e no CI, nunca na prod: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial",
       "id": "casaHoje.pipelineHoje.syntheticHoje",
       "kind": "componente",
       "links": [],
@@ -422,7 +422,7 @@
       "title": "synthetic"
     },
     {
-      "description": "Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e falha quando há algum, para o alerta do job citar",
+      "description": "Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e sai 1 quando há algum: a rodada fica failed com os dados gravados (o alert_warnings, que os citaria, está inativo)",
       "id": "casaHoje.pipelineHoje.validationHoje",
       "kind": "componente",
       "links": [],
@@ -879,7 +879,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje: Lança as tasks classify, report e a semente",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.reportHoje: Lança as tasks classify e report (a semente, só no finance_demo)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -894,11 +894,11 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje.reportHoje",
       "technology": null,
-      "title": "Lança as tasks classify, report e a semente"
+      "title": "Lança as tasks classify e report (a semente, só no finance_demo)"
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje: Lança a task fetch (finance_demo)",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje.syntheticHoje: Lança a task fetch do finance_demo (só dev e CI)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -911,7 +911,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje.syntheticHoje",
       "technology": null,
-      "title": "Lança a task fetch (finance_demo)"
+      "title": "Lança a task fetch do finance_demo (só dev e CI)"
     },
     {
       "description": null,
@@ -1275,7 +1275,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje: dataforge jobs run finance_daily",
+      "id": "casaHoje.pipelineHoje.binHoje -> casaHoje.dataforgeHoje: Sobra sem uso (df-uv8o): dataforge jobs run finance_daily",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1288,7 +1288,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje",
       "technology": null,
-      "title": "dataforge jobs run finance_daily"
+      "title": "Sobra sem uso (df-uv8o): dataforge jobs run finance_daily"
     },
     {
       "description": null,
@@ -1444,7 +1444,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.landingHoje -> pluggyHoje: Busca contas, transações, faturas e investimentos (cliente de functions)",
+      "id": "casaHoje.pipelineHoje.landingHoje -> pluggyHoje: Busca contas, transações, faturas e investimentos (task fetch do finance_daily)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1457,11 +1457,11 @@
       "tags": [],
       "target": "pluggyHoje",
       "technology": null,
-      "title": "Busca contas, transações, faturas e investimentos (cliente de functions)"
+      "title": "Busca contas, transações, faturas e investimentos (task fetch do finance_daily)"
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.lagoHoje: Lê o raw (parquet), grava o cleansed (Delta)",
+      "id": "casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.lagoHoje: Lê o raw (parquet) e o cleansed, grava o cleansed (Delta)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1471,7 +1471,7 @@
       "tags": [],
       "target": "casaHoje.lagoHoje",
       "technology": null,
-      "title": "Lê o raw (parquet), grava o cleansed (Delta)"
+      "title": "Lê o raw (parquet) e o cleansed, grava o cleansed (Delta)"
     },
     {
       "description": null,
@@ -1517,8 +1517,8 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.reportHoje -> casaHoje.edicaoHoje: Lê categorias, regras e correções (classify); a semente grava as tabelas vazias (finance_demo)",
-      "kind": null,
+      "id": "casaHoje.pipelineHoje.reportHoje -> casaHoje.edicaoHoje: Lê categorias, regras e correções (classify); só no finance_demo, a semente preenche categorias e regras do config/edicao quando vazias",
+      "kind": "leitura",
       "links": [],
       "metadata": {
         "codigo": [
@@ -1530,7 +1530,7 @@
       "tags": [],
       "target": "casaHoje.edicaoHoje",
       "technology": null,
-      "title": "Lê categorias, regras e correções (classify); a semente grava as tabelas vazias (finance_demo)"
+      "title": "Lê categorias, regras e correções (classify); só no finance_demo, a semente preenche categorias e regras do config/edicao quando vazias"
     },
     {
       "description": null,
@@ -1648,7 +1648,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.pipelineHoje.syntheticHoje -> casaHoje.lagoHoje: Grava o raw sintético (parquet)",
+      "id": "casaHoje.pipelineHoje.syntheticHoje -> casaHoje.lagoHoje: Grava o raw sintético (parquet; finance_demo, só dev e CI)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1658,7 +1658,7 @@
       "tags": [],
       "target": "casaHoje.lagoHoje",
       "technology": null,
-      "title": "Grava o raw sintético (parquet)"
+      "title": "Grava o raw sintético (parquet; finance_demo, só dev e CI)"
     },
     {
       "description": null,
@@ -1781,6 +1781,20 @@
       "target": "casaHoje.ninhoHoje",
       "technology": null,
       "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
+    },
+    {
+      "description": null,
+      "id": "donoHoje -> casaHoje.pipelineHoje.reprocessHoje: Roda à mão para refazer tabelas do cleansed (scripts/reprocess.py)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/reprocess.py"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.reprocessHoje",
+      "technology": null,
+      "title": "Roda à mão para refazer tabelas do cleansed (scripts/reprocess.py)"
     },
     {
       "description": null,
