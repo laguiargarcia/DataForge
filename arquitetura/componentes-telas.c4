@@ -35,6 +35,7 @@ model {
       }
     }
     listaTelasHoje = componente 'Tela da lista de compras' {
+      #servidoPelaProd
       link ../docs/caixas/casa.telasNinho.listaTelas.md 'doc'
       description 'Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer'
       technology 'React, TypeScript'
@@ -43,6 +44,7 @@ model {
       }
     }
     desejosTelasHoje = componente 'Tela dos desejos' {
+      #servidoPelaProd
       link ../docs/caixas/casa.telasNinho.desejosTelas.md 'doc'
       description 'Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros'
       technology 'React, TypeScript'
@@ -51,6 +53,7 @@ model {
       }
     }
     financasTelasHoje = componente 'Tela de finanças' {
+      #servidoPelaProd
       link ../docs/caixas/casa.telasNinho.financasTelas.md 'doc'
       description 'As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)'
       technology 'React, TypeScript'

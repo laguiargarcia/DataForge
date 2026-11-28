@@ -1,6 +1,7 @@
 r"""Flows of the C4 model (df-8x0m.23.41): every dynamic view of arquitetura/*.c4 draws one flow of
-today, step by step, and names the end-to-end test that exercises it, so a flow drawn and never run
-fails here instead of going stale. Each step is an arrow of the model (df-8x0m.23.50), so a flow
+today, step by step, and names the end-to-end test that exercises it. This check only confirms that
+the linked file declares a test of that name; it does not run the test, so a flow whose test never
+runs (Playwright does not run in CI) still passes here. Each step is an arrow of the model (df-8x0m.23.50), so a flow
 cannot draw a link the model lacks.
 
 The view names its test with a link (LikeC4 1.61.1 refuses a metadata block in a view, and a link's

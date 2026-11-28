@@ -334,7 +334,8 @@
         "bead": "df-8x0m.23.21"
       },
       "tags": [
-        "novo"
+        "novo",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript",
       "title": "Tela da agenda"
@@ -427,7 +428,9 @@
       "metadata": {
         "codigo": "ninho/telas/src/desejos"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Tela dos desejos"
     },
@@ -446,7 +449,8 @@
         "codigo": "ninho/telas/src/financas"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript",
       "title": "Tela de finanças"
@@ -466,7 +470,8 @@
         "codigo": "ninho/telas/src/lista"
       },
       "tags": [
-        "muda"
+        "muda",
+        "servidoPelaProd"
       ],
       "technology": "React, TypeScript",
       "title": "Tela da lista de compras"
@@ -2399,7 +2404,9 @@
       "metadata": {
         "codigo": "ninho/telas/src/desejos"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Tela dos desejos"
     },
@@ -2416,7 +2423,9 @@
       "metadata": {
         "codigo": "ninho/telas/src/financas"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Tela de finanças"
     },
@@ -2433,7 +2442,9 @@
       "metadata": {
         "codigo": "ninho/telas/src/lista"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Tela da lista de compras"
     },
