@@ -88,7 +88,9 @@ To add a target:
   behaviour nobody promised is an open question for the owner (a bead labelled `suspeita`), not an
   assertion.
 - **Findings**: each broken invariant becomes a bead (`bd create ... -t bug --parent <sweep bead>
-  -l erro:crash`, with the step k, the state left, the mechanism and the promise) and the test
+  --no-inherit-labels -l vol:1,inc:2,origem:descoberto,erro:crash,c4:<box> --acceptance "..."`, with
+  the step k, the state left, the mechanism and the promise; the box is the one of the code under
+  test, docs/bead-check.md) and the test
   gets `xfail(strict=True, reason="df-xxxx: ...")`, so it fails loudly (XPASS) once the bug is
   fixed and the marker must go. Test agents do not fix product code found this way.
 

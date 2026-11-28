@@ -1,6 +1,7 @@
 """scripts/arquitetura/fluxos.py: every dynamic view of the C4 model (a flow, step by step) names
 the end-to-end test that exercises it, with a link `../<path> 'e2e: <test name>'`, and that test
-exists (df-8x0m.23.41). The flows are today's: their steps use only elements of the hoje model."""
+exists (df-8x0m.23.41). The flows are today's: their steps use only elements of the hoje model, and
+each step is an arrow of the model between the same two elements (df-8x0m.23.50)."""
 
 import importlib.util
 import subprocess
@@ -63,8 +64,12 @@ def view(id_="fluxo-lista", links=(), steps=None, type_="dynamic"):
     return {"id": id_, "type": type_, "title": id_, "links": list(links), "steps": steps}
 
 
-def model(*views):
-    return {"views": list(views)}
+# The arrow of the default step of view(): every test view is drawn on arrows of the model.
+SETA = {"source": "donoHoje", "target": "casaHoje.telasHoje", "title": "usa"}
+
+
+def model(*views, setas=(SETA,)):
+    return {"views": list(views), "relations": list(setas)}
 
 
 def test_declared_tests_of_a_playwright_spec_and_of_python():
@@ -216,6 +221,84 @@ def test_a_symlink_out_of_the_repo_is_refused(repo, tmp_path):
 def test_a_flow_is_of_todays_model(repo, steps, problem):
     found = fluxos.problemas(model(view(links=[link(SPEC, "abre a lista e adiciona um item")], steps=steps)), repo)
     assert found == [f"fluxo-lista: {problem}"]
+
+
+def _passos(repo, *steps, setas=(SETA,)):
+    """The problems of a fluxo-lista view with those steps, drawn on those arrows."""
+    found = fluxos.problemas(model(view(links=[link(SPEC, "abre a lista e adiciona um item")], steps=list(steps)),
+                                   setas=setas), repo)
+    return [p.removeprefix("fluxo-lista: ") for p in found]
+
+
+def _passo(source, target, title="passa"):
+    return {"source": source, "target": target, "title": title}
+
+
+TELAS, LISTA = "casaHoje.telasHoje", "casaHoje.telasHoje.listaHoje"
+NINHO, ROTA = "casaHoje.ninhoHoje", "casaHoje.ninhoHoje.listaHoje"
+
+
+def _seta(source, target):
+    return {"source": source, "target": target, "title": "usa"}
+
+
+def test_a_step_on_an_arrow_of_the_model_passes_whatever_its_title(repo):
+    assert _passos(repo, _passo("donoHoje", TELAS, "um título que a seta não tem")) == []
+
+
+def test_a_step_without_its_arrow_names_the_view_the_step_and_the_arrow(repo):
+    assert _passos(repo, _passo(TELAS, "casaHoje.bancoHoje", "grava")) == [
+        f"o passo {TELAS} -> casaHoje.bancoHoje 'grava' não é seta do modelo: falta uma seta de {TELAS} "
+        "(ou de um elemento dentro dele) para casaHoje.bancoHoje (ou um elemento dentro dele); "
+        "acrescente a seta ao modelo ou corrija o passo"]
+
+
+@pytest.mark.parametrize(("step", "arrow"), [
+    (_passo(TELAS, NINHO), _seta(TELAS, NINHO)),
+    (_passo(TELAS, NINHO), _seta(LISTA, NINHO)),
+    (_passo(TELAS, NINHO), _seta(TELAS, ROTA)),
+    (_passo(TELAS, NINHO), _seta(LISTA, ROTA)),
+    (_passo(LISTA, NINHO), _seta(LISTA, ROTA)),
+])
+def test_an_arrow_between_the_ends_or_inside_them_backs_the_step(repo, step, arrow):
+    """LikeC4's implied relation: a step between containers is backed by an arrow between their
+    components, so the model may draw its arrows only at component level."""
+    assert _passos(repo, step, setas=[arrow]) == []
+
+
+@pytest.mark.parametrize(("step", "arrow"), [
+    (_passo(NINHO, TELAS), _seta(TELAS, NINHO)),
+    (_passo(ROTA, LISTA), _seta(LISTA, ROTA)),
+    (_passo(LISTA, ROTA), _seta(TELAS, NINHO)),
+    (_passo(LISTA, NINHO), _seta(TELAS, NINHO)),
+    (_passo(TELAS, ROTA), _seta(TELAS, NINHO)),
+    (_passo(LISTA, NINHO), _seta(TELAS, ROTA)),
+    (_passo(TELAS, NINHO), _seta(f"{TELAS}Velho", NINHO)),
+    (_passo(TELAS, NINHO), _seta(LISTA, "casaHoje.bancoHoje")),
+])
+def test_an_arrow_the_other_way_only_above_or_beside_the_ends_does_not_count(repo, step, arrow):
+    """The other way round is refused (a reply needs its own arrow: the export cannot tell one from
+    a step), and so is an arrow only between ancestors: a step between components needs theirs.
+    A name that only starts like an end (telasHojeVelho) is not inside it."""
+    found = _passos(repo, step, setas=[arrow])
+    assert len(found) == 1
+    assert f"falta uma seta de {step['source']} (ou" in found[0]
+
+
+def test_a_step_out_of_todays_model_is_one_problem_not_two(repo):
+    assert _passos(repo, _passo("donoHoje", "casaAlvo.servidorAlvo")) == [
+        "o passo donoHoje -> casaAlvo.servidorAlvo usa um elemento fora do modelo de hoje"]
+
+
+def test_each_step_without_an_arrow_is_one_problem(repo):
+    assert len(_passos(repo, _passo("donoHoje", TELAS), _passo(TELAS, LISTA), _passo(LISTA, TELAS))) == 2
+
+
+def test_the_committed_flows_are_drawn_on_the_committed_arrows():
+    """Without the model's arrows every step of the versioned flows fails: they are checked against them."""
+    real = fluxos.modelo.load()
+    steps = sum(len(v["steps"]) for v in fluxos.dinamicas(real))
+    assert len([p for p in fluxos.problemas(real | {"relations": []}) if "não é seta do modelo" in p]) == steps > 0
 
 
 def test_the_committed_model_passes():
