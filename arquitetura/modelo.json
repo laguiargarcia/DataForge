@@ -69,7 +69,7 @@
     },
     {
       "description": "A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair. Muda: monta também a tela da agenda (df-8x0m.23.21); sem rede, saber quem entrou e abrir as telas, a decidir em df-8x0m.23.8",
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo",
       "kind": "componente",
       "links": [],
       "metadata": {
@@ -441,17 +441,20 @@
       "title": "Segundo plano (API e bandeja)"
     },
     {
-      "description": "O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge",
+      "description": "O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge. Muda: quem é avisado quando o pipeline falha ou o dado diverge, a decidir em df-8x0m.23.9",
       "id": "casaAlvo.dataforgeAlvo.tasksAlvo",
       "kind": "componente",
       "links": [],
       "metadata": {
+        "bead": "df-8x0m.23.9",
         "codigo": [
           "dataforge/tasks",
           "dataforge/__init__.py"
         ]
       },
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "technology": "Python",
       "title": "Tipos de task"
     },
@@ -682,8 +685,8 @@
       "title": "Lista de desejos"
     },
     {
-      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); acha o workspace e o DataForge pelo registro de pastas, não dois níveis acima do workspace (df-7cyk); a regra do que cada pessoa vê (df-8x0m.23.6)",
-      "id": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); com o registro de pastas do DataForge (df-7cyk), pede o job pelo nome e deixa de pôr o DATAFORGE_HOME dois níveis acima do workspace; a regra do que cada pessoa vê (df-8x0m.23.6)",
+      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "kind": "componente",
       "links": [],
       "metadata": {
@@ -718,14 +721,15 @@
       "title": "Lista de compras"
     },
     {
-      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21)",
+      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21); o NINHO_WORKSPACE, hoje a pasta do workspace GetFinance, muda quando o workspace vai para ninho/financas (df-8x0m.23.14)",
       "id": "casaAlvo.servidorAlvo.nucleoAlvo",
       "kind": "componente",
       "links": [],
       "metadata": {
         "bead": [
           "df-8x0m.23.19",
-          "df-8x0m.23.21"
+          "df-8x0m.23.21",
+          "df-8x0m.23.14"
         ],
         "codigo": [
           "ninho/__init__.py",
@@ -1720,13 +1724,13 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.agendaTelasAlvo: Monta a tela da agenda",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.agendaTelasAlvo: Monta a tela da agenda",
       "kind": null,
       "links": [],
       "metadata": {
         "bead": "df-8x0m.23.21"
       },
-      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "source": "casaAlvo.appCelularAlvo.cascaAlvo",
       "tags": [
         "novo"
       ],
@@ -1736,7 +1740,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo: Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1746,7 +1750,7 @@
           "ninho/telas/src/Entrar.tsx"
         ]
       },
-      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "source": "casaAlvo.appCelularAlvo.cascaAlvo",
       "tags": [],
       "target": "casaAlvo.appCelularAlvo.comumTelasAlvo",
       "technology": null,
@@ -1754,13 +1758,13 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.desejosTelasAlvo: Monta a tela dos desejos",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.desejosTelasAlvo: Monta a tela dos desejos",
       "kind": null,
       "links": [],
       "metadata": {
         "codigo": "ninho/telas/src/App.tsx"
       },
-      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "source": "casaAlvo.appCelularAlvo.cascaAlvo",
       "tags": [],
       "target": "casaAlvo.appCelularAlvo.desejosTelasAlvo",
       "technology": null,
@@ -1768,13 +1772,13 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.financasTelasAlvo: Monta a tela de finanças",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.financasTelasAlvo: Monta a tela de finanças",
       "kind": null,
       "links": [],
       "metadata": {
         "codigo": "ninho/telas/src/App.tsx"
       },
-      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "source": "casaAlvo.appCelularAlvo.cascaAlvo",
       "tags": [],
       "target": "casaAlvo.appCelularAlvo.financasTelasAlvo",
       "technology": null,
@@ -1782,13 +1786,13 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.listaTelasAlvo: Monta a tela da lista",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.listaTelasAlvo: Monta a tela da lista",
       "kind": null,
       "links": [],
       "metadata": {
         "codigo": "ninho/telas/src/App.tsx"
       },
-      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "source": "casaAlvo.appCelularAlvo.cascaAlvo",
       "tags": [],
       "target": "casaAlvo.appCelularAlvo.listaTelasAlvo",
       "technology": null,
@@ -1796,7 +1800,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)",
+      "id": "casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.servidorAlvo.nucleoAlvo: Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1806,7 +1810,7 @@
           "ninho/telas/src/pedido.ts"
         ]
       },
-      "source": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "source": "casaAlvo.appCelularAlvo.cascaAlvo",
       "tags": [],
       "target": "casaAlvo.servidorAlvo.nucleoAlvo",
       "technology": null,
@@ -1830,7 +1834,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.agendaAlvo: Envia a fila quando a rede volta (/api/lista, /api/agenda)",
+      "id": "casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.agendaAlvo: Envia a fila quando a rede volta (/api/agenda)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1842,11 +1846,11 @@
       ],
       "target": "casaAlvo.servidorAlvo.agendaAlvo",
       "technology": null,
-      "title": "Envia a fila quando a rede volta (/api/lista, /api/agenda)"
+      "title": "Envia a fila quando a rede volta (/api/agenda)"
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.listaAlvo: Envia a fila quando a rede volta (/api/lista, /api/agenda)",
+      "id": "casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.listaAlvo: Envia a fila quando a rede volta (/api/lista)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1858,7 +1862,7 @@
       ],
       "target": "casaAlvo.servidorAlvo.listaAlvo",
       "technology": null,
-      "title": "Envia a fila quando a rede volta (/api/lista, /api/agenda)"
+      "title": "Envia a fila quando a rede volta (/api/lista)"
     },
     {
       "description": null,
@@ -1931,7 +1935,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo: Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz",
+      "id": "casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.financasNinhoAlvo: Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1945,7 +1949,7 @@
       "tags": [
         "muda"
       ],
-      "target": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "target": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "technology": null,
       "title": "Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz"
     },
@@ -2149,6 +2153,25 @@
       "target": "casaAlvo.dataforgeAlvo.rotaTabelasAlvo",
       "technology": null,
       "title": "Inclui a rota de tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.historicoAlvo: Lê o histórico; grava os runs que inicia",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/__init__.py",
+          "dataforge/api/routers/executions.py",
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/workspaces.py"
+        ]
+      },
+      "source": "casaAlvo.dataforgeAlvo.apiAlvo",
+      "tags": [],
+      "target": "casaAlvo.historicoAlvo",
+      "technology": null,
+      "title": "Lê o histórico; grava os runs que inicia"
     },
     {
       "description": null,
@@ -3344,7 +3367,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve as edições (único escritor); hoje só as correções",
+      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve as edições (único escritor); hoje só as correções",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3357,7 +3380,7 @@
           "ninho/banco.py"
         ]
       },
-      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "source": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "tags": [
         "muda"
       ],
@@ -3367,13 +3390,13 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Pede o job e acompanha pela interface pública (run --detach / run-state --wait)",
+      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo: Pede o job e acompanha pela interface pública (run --detach / run-state --wait)",
       "kind": null,
       "links": [],
       "metadata": {
         "codigo": "ninho/financas/aplicar.py"
       },
-      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "source": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "tags": [],
       "target": "casaAlvo.dataforgeAlvo.cliAlvo",
       "technology": null,
@@ -3381,14 +3404,14 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.lagoAlvo: Só leitura, pelas tabelas publicadas",
+      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.lagoAlvo: Só leitura, pelas tabelas publicadas",
       "kind": "leitura",
       "links": [],
       "metadata": {
         "bead": "df-8x0m.23.45",
         "codigo": "ninho/financas/leitura.py"
       },
-      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "source": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "tags": [
         "muda"
       ],
@@ -3398,14 +3421,14 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa o pacote de regras de edição e classificação",
+      "id": "casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.pipelineAlvo.regrasAlvo: Importa o pacote de regras de edição e classificação",
       "kind": null,
       "links": [],
       "metadata": {
         "bead": "df-8x0m.23.14",
         "codigo": "ninho/financas/regras.py"
       },
-      "source": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "source": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "tags": [
         "muda"
       ],
@@ -3505,7 +3528,7 @@
     },
     {
       "description": null,
-      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo: Inclui o router /api/financas (só para quem tem o módulo financas)",
+      "id": "casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasNinhoAlvo: Inclui o router /api/financas (só para quem tem o módulo financas)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -3516,7 +3539,7 @@
       "tags": [
         "muda"
       ],
-      "target": "casaAlvo.servidorAlvo.financasServidorAlvo",
+      "target": "casaAlvo.servidorAlvo.financasNinhoAlvo",
       "technology": null,
       "title": "Inclui o router /api/financas (só para quem tem o módulo financas)"
     },
@@ -6475,7 +6498,7 @@
     },
     {
       "description": null,
-      "id": "donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo: Usa a lista, os desejos, as finanças e a agenda pelo celular",
+      "id": "donoAlvo -> casaAlvo.appCelularAlvo.cascaAlvo: Usa a lista, os desejos, as finanças e a agenda pelo celular",
       "kind": null,
       "links": [],
       "metadata": {
@@ -6488,7 +6511,7 @@
       "tags": [
         "muda"
       ],
-      "target": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "target": "casaAlvo.appCelularAlvo.cascaAlvo",
       "technology": null,
       "title": "Usa a lista, os desejos, as finanças e a agenda pelo celular"
     },
@@ -6743,7 +6766,7 @@
     },
     {
       "description": null,
-      "id": "outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo: Usa a lista, os desejos e a agenda pelo celular",
+      "id": "outraAlvo -> casaAlvo.appCelularAlvo.cascaAlvo: Usa a lista, os desejos e a agenda pelo celular",
       "kind": null,
       "links": [],
       "metadata": {
@@ -6756,7 +6779,7 @@
       "tags": [
         "muda"
       ],
-      "target": "casaAlvo.appCelularAlvo.cascaTelasAlvo",
+      "target": "casaAlvo.appCelularAlvo.cascaAlvo",
       "technology": null,
       "title": "Usa a lista, os desejos e a agenda pelo celular"
     },
@@ -6827,7 +6850,7 @@
   },
   "views": [
     {
-      "description": null,
+      "description": "Só o que muda e o que o liga; o resto segue como em hoje-componentes-telas",
       "id": "alvo-componentes-app-celular",
       "links": [],
       "steps": [],
@@ -6837,7 +6860,7 @@
       "viewOf": "casaAlvo.appCelularAlvo"
     },
     {
-      "description": null,
+      "description": "Só o que muda e o que o liga; o resto segue como em hoje-componentes-dataforge",
       "id": "alvo-componentes-dataforge",
       "links": [],
       "steps": [],
@@ -6847,7 +6870,7 @@
       "viewOf": "casaAlvo.dataforgeAlvo"
     },
     {
-      "description": null,
+      "description": "Só o que muda e o que o liga; o resto segue como em hoje-componentes-pipeline",
       "id": "alvo-componentes-pipeline",
       "links": [],
       "steps": [],
@@ -6857,7 +6880,7 @@
       "viewOf": "casaAlvo.pipelineAlvo"
     },
     {
-      "description": null,
+      "description": "Só o que muda e o que o liga; o resto segue como em hoje-componentes-ninho",
       "id": "alvo-componentes-servidor",
       "links": [],
       "steps": [],

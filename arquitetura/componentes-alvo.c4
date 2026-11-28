@@ -8,9 +8,12 @@
 //   decisão nomeia no alvo, e (c) o mínimo que liga (a) e (b). Sem caixa ou seta no alvo: segue como
 //   no hoje (vistas hoje-componentes-*). As regras 3, 4, 7 e 8 do checker não valem no alvo
 //   (README): um espelho inteiro do hoje ficaria solto do código e ficaria falso em silêncio.
-// - Um componente que existe tem o id de hoje com o sufixo Alvo (o núcleo do ninho é nucleoAlvo; o
-//   histórico do DataForge, historicoRunsAlvo, porque historicoAlvo é o banco do alvo.c4) e o mesmo
-//   codigo; uma seta que existe e não muda, o mesmo título e codigo.
+// - Um componente que existe tem o id de hoje com o sufixo Alvo e o mesmo codigo; uma seta que existe
+//   e não muda, o mesmo título e codigo. Exceções: dois ids, porque o do hoje com Alvo já é de um
+//   contêiner ou banco do alvo.c4 (servidorHoje é nucleoAlvo; historicoHoje, historicoRunsAlvo); e o
+//   re-corte da API do DataForge, para o que sai ser um componente inteiro: rotaTabelasAlvo leva
+//   dataforge/api/routers/tables.py e appsAlvo leva dataforge/api/routers/apps.py, que no hoje são
+//   do apiHoje.
 // - Os dois contêineres que saem inteiros (backend e front do app Finanças) ficam só no alvo.c4, sem
 //   componentes: as setas de um componente deles para um componente que fica partem do contêiner.
 // - Os extratos em PDF e os zips do backup não têm caixa no alvo (README): as setas de hoje para eles
@@ -129,9 +132,11 @@ model {
       }
     }
     tasksAlvo = componente 'Tipos de task' {
-      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge'
+      #muda
+      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge. Muda: quem é avisado quando o pipeline falha ou o dado diverge, a decidir em df-8x0m.23.9'
       technology 'Python'
       metadata {
+        bead 'df-8x0m.23.9'
         codigo ['dataforge/tasks', 'dataforge/__init__.py']
       }
     }
@@ -162,9 +167,9 @@ model {
         codigo ['ninho/desejos']
       }
     }
-    financasServidorAlvo = componente 'Finanças' {
+    financasNinhoAlvo = componente 'Finanças' {
       #muda
-      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); acha o workspace e o DataForge pelo registro de pastas, não dois níveis acima do workspace (df-7cyk); a regra do que cada pessoa vê (df-8x0m.23.6)'
+      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); com o registro de pastas do DataForge (df-7cyk), pede o job pelo nome e deixa de pôr o DATAFORGE_HOME dois níveis acima do workspace; a regra do que cada pessoa vê (df-8x0m.23.6)'
       technology 'Python, polars, deltalake, SQLite'
       metadata {
         bead ['df-8x0m.23.19', 'df-8x0m.23.45', 'df-8x0m.23.14', 'df-7cyk', 'df-8x0m.23.6']
@@ -187,10 +192,10 @@ model {
     }
     nucleoAlvo = componente 'Núcleo do servidor' {
       #muda
-      description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21)'
+      description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21); o NINHO_WORKSPACE, hoje a pasta do workspace GetFinance, muda quando o workspace vai para ninho/financas (df-8x0m.23.14)'
       technology 'Python, FastAPI, SQLite'
       metadata {
-        bead ['df-8x0m.23.19', 'df-8x0m.23.21']
+        bead ['df-8x0m.23.19', 'df-8x0m.23.21', 'df-8x0m.23.14']
         codigo ['ninho/__init__.py', 'ninho/servidor']
       }
     }
@@ -205,7 +210,7 @@ model {
   }
 
   extend casaAlvo.appCelularAlvo {
-    cascaTelasAlvo = componente 'Casca' {
+    cascaAlvo = componente 'Casca' {
       #muda
       description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair. Muda: monta também a tela da agenda (df-8x0m.23.21); sem rede, saber quem entrou e abrir as telas, a decidir em df-8x0m.23.8'
       technology 'React, TypeScript'
@@ -435,6 +440,11 @@ model {
       codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/rollback.py']
     }
   }
+  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.historicoAlvo 'Lê o histórico; grava os runs que inicia' {
+    metadata {
+      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/executions.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/workspaces.py']
+    }
+  }
   casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.apiAlvo 'Os painéis, a presença e a janela do app chamam a API local' {
     #muda
     metadata {
@@ -566,26 +576,26 @@ model {
       codigo ['ninho/desejos/rotas.py']
     }
   }
-  casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)' {
+  casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)' {
     metadata {
       codigo ['ninho/financas/aplicar.py']
     }
   }
-  casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.bancoAppAlvo 'Lê e escreve as edições (único escritor); hoje só as correções' {
+  casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.bancoAppAlvo 'Lê e escreve as edições (único escritor); hoje só as correções' {
     #muda
     metadata {
       bead ['df-8x0m.23.19', 'df-8x0m.23.14']
       codigo ['ninho/financas/edicoes.py', 'ninho/banco.py']
     }
   }
-  casaAlvo.servidorAlvo.financasServidorAlvo -[leitura]-> casaAlvo.lagoAlvo 'Só leitura, pelas tabelas publicadas' {
+  casaAlvo.servidorAlvo.financasNinhoAlvo -[leitura]-> casaAlvo.lagoAlvo 'Só leitura, pelas tabelas publicadas' {
     #muda
     metadata {
       bead 'df-8x0m.23.45'
       codigo ['ninho/financas/leitura.py']
     }
   }
-  casaAlvo.servidorAlvo.financasServidorAlvo -> casaAlvo.pipelineAlvo.regrasAlvo 'Importa o pacote de regras de edição e classificação' {
+  casaAlvo.servidorAlvo.financasNinhoAlvo -> casaAlvo.pipelineAlvo.regrasAlvo 'Importa o pacote de regras de edição e classificação' {
     #muda
     metadata {
       bead 'df-8x0m.23.14'
@@ -622,7 +632,7 @@ model {
       codigo ['ninho/servidor/app.py']
     }
   }
-  casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo 'Inclui o router /api/financas (só para quem tem o módulo financas)' {
+  casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasNinhoAlvo 'Inclui o router /api/financas (só para quem tem o módulo financas)' {
     #muda
     metadata {
       bead 'df-8x0m.23.19'
@@ -659,27 +669,27 @@ model {
   }
 
   // Setas que saem de: App no celular.
-  casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.servidorAlvo.nucleoAlvo 'Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)' {
+  casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.servidorAlvo.nucleoAlvo 'Baixa a página e os arquivos dela (/); entra, sai e lê quem entrou (/api/entrar, /api/sair, /api/eu)' {
     metadata {
       codigo ['ninho/telas/index.html', 'ninho/telas/src/eu.ts', 'ninho/telas/src/pedido.ts']
     }
   }
-  casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo 'Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar' {
+  casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo 'Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar' {
     metadata {
       codigo ['ninho/telas/src/App.tsx', 'ninho/telas/src/eu.ts', 'ninho/telas/src/Entrar.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.desejosTelasAlvo 'Monta a tela dos desejos' {
+  casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.desejosTelasAlvo 'Monta a tela dos desejos' {
     metadata {
       codigo ['ninho/telas/src/App.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.financasTelasAlvo 'Monta a tela de finanças' {
+  casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.financasTelasAlvo 'Monta a tela de finanças' {
     metadata {
       codigo ['ninho/telas/src/App.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.listaTelasAlvo 'Monta a tela da lista' {
+  casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.listaTelasAlvo 'Monta a tela da lista' {
     metadata {
       codigo ['ninho/telas/src/App.tsx']
     }
@@ -699,7 +709,7 @@ model {
       codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/desejos/Desejos.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo 'Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz' {
+  casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.financasNinhoAlvo 'Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz' {
     #muda
     metadata {
       bead 'df-8x0m.23.19'
@@ -721,7 +731,7 @@ model {
       codigo ['ninho/telas/src/lista/api.ts', 'ninho/telas/src/lista/Lista.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.cascaTelasAlvo -> casaAlvo.appCelularAlvo.agendaTelasAlvo 'Monta a tela da agenda' {
+  casaAlvo.appCelularAlvo.cascaAlvo -> casaAlvo.appCelularAlvo.agendaTelasAlvo 'Monta a tela da agenda' {
     #novo
     metadata {
       bead 'df-8x0m.23.21'
@@ -757,13 +767,13 @@ model {
       bead 'df-8x0m.23.8'
     }
   }
-  casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.listaAlvo 'Envia a fila quando a rede volta (/api/lista, /api/agenda)' {
+  casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.listaAlvo 'Envia a fila quando a rede volta (/api/lista)' {
     #novo
     metadata {
       bead 'df-8x0m.23.8'
     }
   }
-  casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.agendaAlvo 'Envia a fila quando a rede volta (/api/lista, /api/agenda)' {
+  casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.agendaAlvo 'Envia a fila quando a rede volta (/api/agenda)' {
     #novo
     metadata {
       bead 'df-8x0m.23.8'
@@ -921,13 +931,13 @@ model {
       codigo ['ninho/__main__.py']
     }
   }
-  donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa a lista, os desejos, as finanças e a agenda pelo celular' {
+  donoAlvo -> casaAlvo.appCelularAlvo.cascaAlvo 'Usa a lista, os desejos, as finanças e a agenda pelo celular' {
     #muda
     metadata {
       bead ['df-8x0m.23.19', 'df-8x0m.23.21']
     }
   }
-  outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa a lista, os desejos e a agenda pelo celular' {
+  outraAlvo -> casaAlvo.appCelularAlvo.cascaAlvo 'Usa a lista, os desejos e a agenda pelo celular' {
     #muda
     metadata {
       bead ['df-8x0m.23.21', 'df-8x0m.23.6']
@@ -938,6 +948,7 @@ model {
 views {
   view alvo-componentes-dataforge of casaAlvo.dataforgeAlvo {
     title 'Alvo v2: componentes do DataForge'
+    description 'Só o que muda e o que o liga; o resto segue como em hoje-componentes-dataforge'
     include *
     include casaAlvo.dataforgeAlvo.* -> * where tag is #novo with {
       color green
@@ -982,11 +993,12 @@ views {
   }
   view alvo-componentes-servidor of casaAlvo.servidorAlvo {
     title 'Alvo v2: componentes do servidor da casa'
+    description 'Só o que muda e o que o liga; o resto segue como em hoje-componentes-ninho'
     include *
     // Mostra cada chamada das telas na tela que a faz, e as setas para o pipeline e o DataForge no
     // componente que elas atingem; as setas internas desses vizinhos ficam nas vistas deles.
     include casaAlvo.pipelineAlvo.regrasAlvo, casaAlvo.dataforgeAlvo.cliAlvo
-    include casaAlvo.appCelularAlvo.cascaTelasAlvo, casaAlvo.appCelularAlvo.listaTelasAlvo, casaAlvo.appCelularAlvo.desejosTelasAlvo, casaAlvo.appCelularAlvo.financasTelasAlvo, casaAlvo.appCelularAlvo.agendaTelasAlvo, casaAlvo.appCelularAlvo.copiaLocalAlvo
+    include casaAlvo.appCelularAlvo.cascaAlvo, casaAlvo.appCelularAlvo.listaTelasAlvo, casaAlvo.appCelularAlvo.desejosTelasAlvo, casaAlvo.appCelularAlvo.financasTelasAlvo, casaAlvo.appCelularAlvo.agendaTelasAlvo, casaAlvo.appCelularAlvo.copiaLocalAlvo
     include casaAlvo.servidorAlvo.* -> * where tag is #novo with {
       color green
     }
@@ -1018,15 +1030,16 @@ views {
     }
     exclude casaAlvo.appCelularAlvo.* -> casaAlvo.appCelularAlvo.*
     exclude donoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo
-    exclude donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo
-    exclude outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo
+    exclude donoAlvo -> casaAlvo.appCelularAlvo.cascaAlvo
+    exclude outraAlvo -> casaAlvo.appCelularAlvo.cascaAlvo
   }
   view alvo-componentes-app-celular of casaAlvo.appCelularAlvo {
     title 'Alvo v2: componentes do app no celular'
+    description 'Só o que muda e o que o liga; o resto segue como em hoje-componentes-telas'
     include *
     // Mostra cada chamada no componente do servidor que a atende; as setas internas do servidor ficam
     // na vista dele.
-    include casaAlvo.servidorAlvo.nucleoAlvo, casaAlvo.servidorAlvo.listaAlvo, casaAlvo.servidorAlvo.desejosAlvo, casaAlvo.servidorAlvo.financasServidorAlvo, casaAlvo.servidorAlvo.agendaAlvo
+    include casaAlvo.servidorAlvo.nucleoAlvo, casaAlvo.servidorAlvo.listaAlvo, casaAlvo.servidorAlvo.desejosAlvo, casaAlvo.servidorAlvo.financasNinhoAlvo, casaAlvo.servidorAlvo.agendaAlvo
     include casaAlvo.appCelularAlvo.* -> * where tag is #novo with {
       color green
     }
@@ -1061,6 +1074,7 @@ views {
   }
   view alvo-componentes-pipeline of casaAlvo.pipelineAlvo {
     title 'Alvo v2: componentes do pipeline do módulo finanças'
+    description 'Só o que muda e o que o liga; o resto segue como em hoje-componentes-pipeline'
     include *
     // As regras de tag trazem as tasks do DataForge para a vista: as setas de lançar cada task saem delas.
     include casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.*
