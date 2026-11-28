@@ -34,4 +34,8 @@ npx likec4@1.61.1 build arquitetura --output-single-file -o /tmp/likec4-out   # 
 
 `arquitetura/dist/` é ignorado pelo git, se preferir gerar a saída ali.
 
+O job `arquitetura` do CI (`.github/workflows/ci.yml`) roda o mesmo `validate`, e o check obrigatório
+`tests` depende dele: um `.c4` quebrado barra o merge. Ao trocar a versão do LikeC4, troque nos dois
+lugares.
+
 Repositório público: sem nomes reais de pessoas ("Dono da casa", "Outra pessoa da casa"), sem dados.

@@ -222,6 +222,27 @@ jobs:
         if: always()
         # Read by the report job, which comments on the PR.
         with: { name: report-telas-ninho, path: report/, if-no-files-found: ignore }
+  arquitetura:
+    # The C4 model in LikeC4 (df-p8ss): a broken .c4 under arquitetura/ fails here instead of going
+    # unseen. LikeC4 runs through npx at the version arquitetura/README.md fixes; nothing is installed.
+    # Not a required check itself: the required `tests` job needs it.
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        # likec4 1.61.1 asks for Node >= 22.23 (EBADENGINE below it).
+        with: { node-version: 26 }
+      - name: Validate the model
+        shell: bash   # pipefail: the validate exit code survives the tee
+        env: { NO_COLOR: "1" }
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          npx --yes likec4@1.61.1 validate arquitetura 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura.txt"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        # Read by the report job, which comments on the PR.
+        with: { name: report-arquitetura, path: report/, if-no-files-found: ignore }
   coverage:
     # Merges every part's coverage into the coverage.xml the sonar job reads, and the shards'
     # durations into the cache the next run splits by. Waits only for the jobs that write them, so
@@ -262,9 +283,9 @@ jobs:
         with: { path: .test_durations, key: "test-durations-linux-${{ github.run_id }}" }
   tests:
     # Required check: every engine shard, the GUI job, the GetFinance tests, its web app, the ninho screen, the
-    # extra random orders (an order-dependent failure blocks the merge too, df-n8ac.29) and the
-    # coverage merge passed.
-    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, telas-ninho, orders, coverage]
+    # C4 model (arquitetura), the extra random orders (an order-dependent failure blocks the merge too,
+    # df-n8ac.29) and the coverage merge passed.
+    needs: [tests-shard, tests-gui, tests-getfinance, app-financas, telas-ninho, arquitetura, orders, coverage]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -275,11 +296,12 @@ jobs:
           GETFINANCE: "${{ needs.tests-getfinance.result }}"
           APP: "${{ needs.app-financas.result }}"
           TELAS: "${{ needs.telas-ninho.result }}"
+          ARQUITETURA: "${{ needs.arquitetura.result }}"
           ORDERS: "${{ needs.orders.result }}"
           COVERAGE: "${{ needs.coverage.result }}"
         run: |
-          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, telas-ninho: $TELAS, orders: $ORDERS, coverage: $COVERAGE"
-          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$TELAS" = "success" ] && [ "$ORDERS" = "success" ] && [ "$COVERAGE" = "success" ]
+          echo "tests-shard: $SHARDS, tests-gui: $GUI, tests-getfinance: $GETFINANCE, app-financas: $APP, telas-ninho: $TELAS, arquitetura: $ARQUITETURA, orders: $ORDERS, coverage: $COVERAGE"
+          [ "$SHARDS" = "success" ] && [ "$GUI" = "success" ] && [ "$GETFINANCE" = "success" ] && [ "$APP" = "success" ] && [ "$TELAS" = "success" ] && [ "$ARQUITETURA" = "success" ] && [ "$ORDERS" = "success" ] && [ "$COVERAGE" = "success" ]
   tests-windows-shard:
     # The engine tests on native Windows (df-ahua.24): the daily production job runs there, and 7 of
     # the 70 bugs on record existed only on Windows (NTFS path rules, quoting, cp1252). No coverage
@@ -720,7 +742,7 @@ jobs:
     if: always() && github.event_name == 'pull_request'
     # mutation-targets: a failed pick leaves mutation skipped, which alone would read as fine.
     # mutation-ok: it writes the mutation gate's report (df-n8ac.32).
-    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, telas-ninho, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, mutation-ok, testloop-tools, windows-smoke]
+    needs: [leak-scan, quality, tests, tests-getfinance, app-financas, telas-ninho, arquitetura, tests-windows, tests-getfinance-windows, orders, mutation-targets, mutation, mutation-ok, testloop-tools, windows-smoke]
     runs-on: ubuntu-latest
     permissions: { contents: read, issues: write, pull-requests: write }
     steps:
