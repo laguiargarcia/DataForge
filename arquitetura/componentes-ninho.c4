@@ -13,7 +13,7 @@
 //   de um arquivo versionado do pipeline, mas jobs/, connections/ e config/ não têm elemento no pipeline.
 //   Uma seta para o contêiner não é desenhada no LikeC4 1.61.1 ao lado da seta para regrasHoje, e sem
 //   regrasHoje na vista as duas viram uma aresta só, com o título de uma delas. Fica na descrição até o
-//   elemento da definição do workspace existir (bead a abrir (orq-componentes)).
+//   elemento da definição do workspace existir (df-8x0m.23.47.14).
 // - Quando um componente só faz o que a seta do contêiner em hoje.c4 diz, a seta leva o mesmo título:
 //   títulos diferentes no mesmo par viram '[...]' na vista de contêineres (df-8x0m.23.47.12).
 model {
@@ -47,7 +47,7 @@ model {
       }
     }
     financasNinhoHoje = componente 'Finanças' {
-      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db; nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge o job reclassificar que as aplica'
+      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge o job reclassificar que as aplica'
       technology 'Python, polars, deltalake, SQLite'
       metadata {
         codigo ['ninho/financas', 'ninho/banco.py']
