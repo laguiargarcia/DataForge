@@ -131,5 +131,8 @@ views {
   view hoje-conteineres of casaHoje {
     title 'Hoje: contêineres'
     include casaHoje.*, donoHoje, outraHoje, pluggyHoje, agendadorHoje
+    // A cópia do backup é leitura; junto das gravações, deixaria pontilhada a seta pipeline -> lago,
+    // cujo título já diz que o job backup copia o raw (df-8x0m.23.47.12).
+    exclude casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.lagoHoje
   }
 }

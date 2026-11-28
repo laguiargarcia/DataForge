@@ -15,9 +15,19 @@ arquivos de modelo:
 1. A seta vai de quem inicia a ação para quem é chamado (C4), não no sentido do dado (decisão do
    dono, 2026-11-27, df-8x0m.23.33).
 2. `-[leitura]->` marca uma relação só de leitura; ela aparece pontilhada.
-3. Duas relações no mesmo par viram `[...]` no desenho, então se juntam num rótulo só. Isso vale
-   também para pessoa -> sistema nas vistas de contexto: lá o rótulo único é dado na própria vista,
-   com `include pessoa -> sistema with { title '...' }`.
+3. Cada aresta de vista se lê pelo que mostra. A vista junta numa aresta só as relações entre os
+   descendentes de dois nós; com títulos diferentes ela sai `[...]`, ou com um dos títulos e sem os
+   outros, e com kinds diferentes sai com um deles (a `leitura` junto de setas comuns deixa a
+   aresta pontilhada). Por isso as relações juntadas têm todas o mesmo título, ou o título vem de
+   uma seta direta entre os dois nós, ou da própria vista
+   (`include pessoa -> sistema with { title '...' }`, como nas vistas de contexto); e têm todas o
+   mesmo kind, que nem a seta direta nem o título da vista mudam: quando a diferença é de verdade,
+   a vista exclui a relação que destoa (`exclude a.filho -> b`). Cobrada: `modelo.py conferir`
+   (no CI) sai 1 com a vista e o par de cada aresta que mostra `[...]`, que mostra um só de vários
+   títulos juntados ou que junta kinds diferentes (df-8x0m.23.47.12). O export não guarda as
+   regras da vista, então o título dado pela vista se reconhece por não ser o de nenhuma relação
+   juntada: um título da vista igual a um deles falha como se o LikeC4 o tivesse escolhido; dê um
+   título próprio. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
 

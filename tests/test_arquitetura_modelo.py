@@ -269,7 +269,8 @@ def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_ex
     npx.write_text(FAKE_NPX, encoding="utf-8")
     npx.chmod(0o755)
     log = tmp_path / "calls"
-    monkeypatch.setenv("PATH", f"{npx.parent}{os.pathsep}{os.environ['PATH']}")
+    # Replaces PATH: under WSL the inherited one reaches the Windows npx (bd memory wsl-which-acha-windows).
+    monkeypatch.setenv("PATH", os.pathsep.join([str(npx.parent), "/usr/bin", "/bin"]))
     monkeypatch.setenv("NPX_LOG", str(log))
     monkeypatch.setenv("NPX_VALIDATE_EXIT", str(validate_exit))
     if validate_exit:
@@ -298,3 +299,74 @@ def test_the_cli_takes_no_path(opcao):
 def test_the_model_of_an_id_is_its_top_segments_suffix(id_, top, hoje):
     assert modelo.sistema(id_) == top
     assert modelo.e_hoje(id_) is hoje
+
+
+def _vista(label, *relations, source="p", target="s", kind=None) -> dict:
+    """_raw() whose element view `index` draws one edge `source -> target` over `relations`, each
+    (id, source, target, title, kind); the export gives an edge the kind of one of its relations."""
+    raw = _raw()
+    for rid, src, tgt, title, rkind in relations:
+        raw["relations"][rid] = {"id": rid, "source": {"model": src}, "target": {"model": tgt}, "title": title,
+                                 "kind": rkind}
+    raw["views"]["index"]["edges"] = [{"id": "e1", "source": source, "target": target, "label": label,
+                                       "kind": kind, "relations": [r[0] for r in relations]}]
+    return raw
+
+
+ABRE = ("r1", "p", "s.s2", "abre", None)
+LE = ("r2", "p", "s.s2", "lê", None)
+
+
+def test_an_edge_drawn_as_dots_fails_conferir_with_its_view_and_pair(tmp_path, monkeypatch, capsys):
+    """Rule 3 of arquitetura/README.md: '[...]' tells the reader nothing (df-8x0m.23.47.12)."""
+    raw = _vista("[...]", ABRE, LE)
+    monkeypatch.setattr(modelo, "exportar", lambda fonte: raw)
+    saida = tmp_path / "modelo.json"
+    saida.write_text(modelo.texto(modelo.normalizar(raw)), encoding="utf-8")
+    monkeypatch.setattr(modelo, "SAIDA", saida)
+    assert modelo.main(["conferir"]) == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "view index: p -> s is drawn as '[...]': give it one title in the view "
+        "(include p -> s with { title '...' })"]
+
+
+@pytest.mark.parametrize(("raw", "shown"), [
+    (_vista("abre", ABRE, LE), "abre"),
+    (_vista("abre", ABRE, ("r3", "p", "s", "", None)), "abre"),  # an untitled direct arrow gives no title
+])
+def test_an_edge_showing_one_of_several_joined_titles_is_ambiguous(raw, shown):
+    """LikeC4 1.61.1 sometimes shows one joined title and hides the rest, with no '[...]'."""
+    assert modelo.arestas_ambiguas(raw) == [
+        f"view index: p -> s joins 2 relations and shows only {shown!r}: give it a title of its own in "
+        "the view, none of the joined ones (include p -> s with { title '...' }), or draw an arrow "
+        "straight between the two"]
+
+
+@pytest.mark.parametrize("raw", [
+    _vista("Título da vista", ABRE, LE),  # the view gives the title (`with { title }`)
+    _vista("junta", ABRE, ("r3", "p", "s", "junta", None)),  # a direct arrow gives it
+    _vista("abre", ABRE, ("r3", "p", "s.s3", "abre", None)),  # no direct arrow, one title for all
+    _vista("abre", ABRE),
+])
+def test_an_edge_that_reads_at_its_word_passes(raw):
+    assert modelo.arestas_ambiguas(raw) == []
+
+
+@pytest.mark.parametrize("label", ["lê", "Título da vista"])
+def test_an_edge_joining_kinds_is_ambiguous_even_with_a_title(label):
+    """A leitura joined with plain arrows comes out leitura, dotted; neither a direct arrow nor a
+    view title changes the kind."""
+    raw = _vista(label, ("r3", "p", "s", "lê", None), ("r4", "p", "s.s2", "copia", "leitura"), kind="leitura")
+    assert modelo.arestas_ambiguas(raw) == [
+        "view index: p -> s joins relations of kinds (none), leitura and is drawn as leitura: "
+        "give the arrows behind it one kind, or exclude the odd one from the view "
+        "(exclude <child> -> <target>)"]
+
+
+def test_dynamic_steps_are_not_checked_and_an_unknown_relation_fails_loudly():
+    raw = _raw()
+    raw["views"]["fluxo"]["edges"][0]["label"] = "[...]"
+    assert modelo.arestas_ambiguas(raw) == []
+    raw["views"]["index"]["edges"][0]["relations"] = ["nenhuma"]
+    with pytest.raises(ValueError, match="view index: edge e1 names an unknown relation 'nenhuma'"):
+        modelo.arestas_ambiguas(raw)
