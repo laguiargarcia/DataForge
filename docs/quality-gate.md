@@ -55,6 +55,11 @@ Every `check` also prints, from `scripts/quality/docs_parados.py` (df-8x0m.23.39
   (df-ev4u): a container doc with `code: [dataforge]` stays quiet when a component doc covers the
   file. Without a merge-base the check says it was skipped.
 
+The final gate line carries the count: `quality gate: ok (N findings, none new; K stale docs)`
+(`1 stale doc` when there is one), so the CI report and the PR comment show it. If the check itself
+errors, the gate prints `docs: stale-doc check failed: <error>`, drops the suffix and goes on: it
+does not fail the gate.
+
 The warning never changes the exit code nor the baseline: read it, and update the doc when the
 change made it wrong. Tests: `tests/test_docs_parados.py`.
 

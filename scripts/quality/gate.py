@@ -558,7 +558,8 @@ def check(paths: list[str], base_ref: str | None, full: bool, stage: bool = Fals
 def _stale_docs() -> str:
     """Print the stale-doc report (warnings only); the suffix for the final line. Never raises."""
     try:
-        sys.path.insert(0, str(HERE))
+        if str(HERE) not in sys.path:
+            sys.path.insert(0, str(HERE))
         import docs_parados  # noqa: PLC0415 -- inside the try: no error of the warning may break the gate
 
         lines = docs_parados.relatorio(ROOT)
@@ -566,7 +567,8 @@ def _stale_docs() -> str:
         print(f"docs: stale-doc check failed: {error}")
         return ""
     print("\n".join(lines))
-    return f"; {sum(line.startswith('warning:') for line in lines)} stale docs"
+    n = sum(line.startswith("warning:") for line in lines)
+    return f"; {n} stale doc{'s' * (n != 1)}"
 
 
 def update(allow_increase: bool) -> int:

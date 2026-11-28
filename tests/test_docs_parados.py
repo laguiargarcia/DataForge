@@ -94,7 +94,7 @@ def test_gate_check_exits_zero_with_warning(repo, monkeypatch, capsys):
     assert gate.check([], None, full=False) == 0
     out = capsys.readouterr().out
     assert "warning: docs/caixas/motor.md" in out
-    assert "none new; 1 stale docs)" in out
+    assert "none new; 1 stale doc)" in out
 
 
 def test_gate_check_survives_a_failing_report(repo, monkeypatch, capsys):
