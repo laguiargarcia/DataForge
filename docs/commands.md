@@ -1,6 +1,6 @@
 ---
 topic: Commands
-read_when: When invoking project CLI / scripts, running tests, or the API server
+read_when: "When invoking project CLI / scripts, running tests, or the API server; running the GetFinance workspace's demo (`finance_demo`) or its tests; opening a workspace app (`dataforge app`, `--atalho`), `dataforge stop`, the background process and its auto-shutdown"
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-3qd, df-3ul]
 transversal: true

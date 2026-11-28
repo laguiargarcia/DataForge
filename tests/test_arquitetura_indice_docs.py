@@ -21,16 +21,18 @@ def _element(id_, kind, title, doc=None):
 
 
 @pytest.fixture
-def repo(tmp_path):
+def repo(tmp_path, monkeypatch):
+    monkeypatch.setattr(indice_docs, "ADRS", {"docs/adr/0001-x.md": ("History", "Background only")})
     (tmp_path / "docs" / "adr").mkdir(parents=True)
     (tmp_path / "docs" / "engine.md").write_text(BOX, encoding="utf-8")
     (tmp_path / "docs" / "commands.md").write_text(TRANSVERSAL, encoding="utf-8")
     (tmp_path / "docs" / "adr" / "0001-x.md").write_text("# A frozen decision\n", encoding="utf-8")
     model = {"elements": [
-        _element("casaHoje", "sistema", "Casa", "docs/engine.md"),
+        _element("casaHoje", "sistema", "Casa"),
         _element("casaHoje.motorHoje", "conteiner", "Motor", "docs/engine.md"),
         _element("casaAlvo.motorAlvo", "conteiner", "Motor", "docs/engine.md"),
-        _element("casaAlvo", "sistema", "Casa", "docs/engine.md"),
+        _element("casaAlvo.maquinaAlvo", "conteiner", "Máquina", "docs/engine.md"),
+        _element("casaAlvo", "sistema", "Casa"),
         _element("lucas", "pessoa", "Pessoa", "docs/engine.md"),
     ]}
     (tmp_path / "docs" / "INDEX.md").write_text(indice_docs.gerar(model, tmp_path), encoding="utf-8")
@@ -54,9 +56,11 @@ def test_the_index_lists_each_part(repo):
     assert "### Casa" in text
     assert "#### Motor" in text
     assert f"### {indice_docs.FORA}" in text
-    assert "| docs/engine.md | Motor | When working on the engine |" in text  # today and target: one row
+    # today's and the target's boxes, even under another container id: one row, in today's table
+    assert "| docs/engine.md | Máquina, Motor | When working on the engine |" in text
+    assert "#### Máquina" not in text
     assert "| docs/commands.md | Commands | When running a command |" in text
-    assert "| docs/adr/0001-x.md | A frozen decision |" in text
+    assert "| docs/adr/0001-x.md | History | Background only |" in text
     assert indice_docs.conferir(model, raiz) == []
 
 
@@ -80,3 +84,13 @@ def test_history_is_not_a_doc_left_out(repo):
     (raiz / "docs" / "phases").mkdir()
     (raiz / "docs" / "phases" / "1.md").write_text("# old\n", encoding="utf-8")
     assert indice_docs.fora_do_indice(model, raiz) == []
+
+
+def test_every_adr_has_its_read_when():
+    assert sorted(indice_docs.ADRS) == sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "docs" / "adr").glob("*.md"))
+
+
+def test_an_adr_not_in_adrs_fails(repo, monkeypatch):
+    raiz, model = repo
+    monkeypatch.setattr(indice_docs, "ADRS", {})
+    assert indice_docs.fora_do_indice(model, raiz) == ["docs/adr/0001-x.md"]

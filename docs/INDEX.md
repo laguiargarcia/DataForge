@@ -17,25 +17,13 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
 | docs/caixas/casa.appCelular.agendaTelas.md (esboço) | Tela da agenda | Working on the C4 box casaAlvo.appCelularAlvo.agendaTelasAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.casca.md (esboço) | Casca | Working on the C4 box casaHoje.telasNinhoHoje.cascaHoje, casaAlvo.appCelularAlvo.cascaAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.comumTelas.md (esboço) | Comum às telas | Working on the C4 box casaHoje.telasNinhoHoje.comumTelasHoje, casaAlvo.appCelularAlvo.comumTelasAlvo or the code it covers |
 | docs/caixas/casa.appCelular.copiaLocal.md (esboço) | Cópia local e fila | Working on the C4 box casaAlvo.appCelularAlvo.copiaLocalAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.desejosTelas.md (esboço) | Tela dos desejos | Working on the C4 box casaHoje.telasNinhoHoje.desejosTelasHoje, casaAlvo.appCelularAlvo.desejosTelasAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.financasTelas.md (esboço) | Tela de finanças | Working on the C4 box casaHoje.telasNinhoHoje.financasTelasHoje, casaAlvo.appCelularAlvo.financasTelasAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.listaTelas.md (esboço) | Tela da lista de compras | Working on the C4 box casaHoje.telasNinhoHoje.listaTelasHoje, casaAlvo.appCelularAlvo.listaTelasAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.md (esboço) | App no celular | Working on the C4 box casaHoje.telasNinhoHoje, casaAlvo.appCelularAlvo or the code it covers |
 
 #### Zips do backup
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
 | docs/caixas/casa.backup.md (esboço) | Zips do backup | Working on the C4 box casaHoje.backupHoje or the code it covers |
-
-#### Banco do app
-
-| Doc | Boxes | Read when |
-| --- | --- | --- |
-| docs/architecture-v2/edits.md | Banco do app | Changing where finance edits are stored, how a pipeline script reads them, the "apply" flow, or where classification and editing rules are imported from |
 
 #### ninho.db
 
@@ -47,33 +35,27 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
+| docs/architecture.md | DataForge, DataForge (orquestrador) | When you need module responsibilities, key behaviors, and the cross-platform compat layer (cross-module deps/hubs: grep the code) |
 | docs/caixas/casa.dataforge.agendamento.md (esboço) | Agendamento | Working on the C4 box casaAlvo.dataforgeAlvo.agendamentoAlvo or the code it covers |
-| docs/subsystems/api.md | API HTTP, API de admin, Rota genérica de tabelas | When working on the HTTP / FastAPI surface |
+| docs/subsystems/api.md | API HTTP, API de admin, Rota genérica de tabelas | When working on the HTTP / FastAPI surface (routers, the app backend proxy, `/health`, `/api/instance` presence and shutdown) |
 | docs/caixas/casa.dataforge.apps.md (esboço) | Hospedagem de apps | Working on the C4 box casaHoje.dataforgeHoje.appsHoje, casaAlvo.dataforgeAlvo.appsAlvo or the code it covers |
 | docs/caixas/casa.dataforge.cli.md (esboço) | CLI, CLI (interface pública) | Working on the C4 box casaHoje.dataforgeHoje.cliHoje, casaAlvo.dataforgeAlvo.cliAlvo or the code it covers |
 | docs/subsystems/compat.md | Compat | Touching anything that constructs filesystem paths, reads DATAFORGE_HOME, or builds a SQLite/database URL |
-| docs/workspace-layout.md | Definição do workspace | When dealing with workspace paths, per-workspace data, or YAML reference for workspace/job/task definitions |
+| docs/workspace-layout.md | Definição do workspace | When dealing with workspace paths, per-workspace data, or YAML reference for workspace/job/task definitions; writing a workspace web app and its backend (`app.yaml`, env, lifetime, icon) |
 | docs/caixas/casa.dataforge.deltaPool.md (esboço) | Leituras Delta | Working on the C4 box casaHoje.dataforgeHoje.deltaPoolHoje, casaAlvo.dataforgeAlvo.deltaPoolAlvo or the code it covers |
 | docs/caixas/casa.dataforge.deploy.md (esboço) | Deploy | Working on the C4 box casaHoje.dataforgeHoje.deployHoje, casaAlvo.dataforgeAlvo.deployAlvo or the code it covers |
 | docs/subsystems/gui.md | GUI admin e janela do app, Tela de admin, Segundo plano (API e bandeja) | When working on the PySide6 / Qt desktop surface |
-| docs/subsystems/db.md | Histórico de execuções | When changing schema or queries (SQLAlchemy ORM over SQLite) |
+| docs/subsystems/db.md | Histórico de execuções, dataforge.db, Histórico e agendas | When changing schema or queries (SQLAlchemy ORM over SQLite: the execucoes, job_runs and schedules tables of dataforge.db) |
 | docs/caixas/casa.dataforge.instancia.md (esboço) | Instância e presença | Working on the C4 box casaHoje.dataforgeHoje.instanciaHoje, casaAlvo.dataforgeAlvo.instanciaAlvo or the code it covers |
-| docs/architecture.md | DataForge, DataForge (orquestrador) | When you need a map of the codebase modules, key behaviors, and the cross-platform compat layer |
-| docs/subsystems/engine.md | Motor de execução | When working on DAG execution, task running, or job orchestration |
+| docs/subsystems/engine.md | Motor de execução | When working on DAG execution, task running, job orchestration, or the per-workspace run queue (and its WSL/Windows limit) |
 | docs/caixas/casa.dataforge.tasks.md (esboço) | Tipos de task | Working on the C4 box casaHoje.dataforgeHoje.tasksHoje, casaAlvo.dataforgeAlvo.tasksAlvo or the code it covers |
 | docs/testing.md | Plugin de testes | When writing or debugging tests |
-
-#### dataforge.db
-
-| Doc | Boxes | Read when |
-| --- | --- | --- |
-| docs/subsystems/db.md | dataforge.db | When changing schema or queries (SQLAlchemy ORM over SQLite) |
 
 #### edicao.db
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
-| docs/architecture-v2/edits.md | edicao.db | Changing where finance edits are stored, how a pipeline script reads them, the "apply" flow, or where classification and editing rules are imported from |
+| docs/architecture-v2/edits.md | Banco do app, edicao.db | Changing where finance edits are stored, how a pipeline script reads them, the "apply" flow, or where classification and editing rules are imported from |
 
 #### Extratos em PDF
 
@@ -92,21 +74,15 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
+| docs/caixas/casa.frontFinancas.md (esboço) | Front do app Finanças | Working on the C4 box casaHoje.frontFinancasHoje, casaAlvo.frontFinancasAlvo or the code it covers |
 | docs/caixas/casa.frontFinancas.cascaFinancas.md (esboço) | Casca do app | Working on the C4 box casaHoje.frontFinancasHoje.cascaFinancasHoje or the code it covers |
 | docs/caixas/casa.frontFinancas.clienteBackendFinancas.md (esboço) | Cliente do backend e edição | Working on the C4 box casaHoje.frontFinancasHoje.clienteBackendFinancasHoje or the code it covers |
 | docs/caixas/casa.frontFinancas.conferenciaFinancas.md (esboço) | Conferência | Working on the C4 box casaHoje.frontFinancasHoje.conferenciaFinancasHoje or the code it covers |
 | docs/caixas/casa.frontFinancas.extratosFinancas.md (esboço) | Extratos | Working on the C4 box casaHoje.frontFinancasHoje.extratosFinancasHoje or the code it covers |
-| docs/caixas/casa.frontFinancas.md (esboço) | Front do app Finanças | Working on the C4 box casaHoje.frontFinancasHoje, casaAlvo.frontFinancasAlvo or the code it covers |
 | docs/caixas/casa.frontFinancas.resumoFinancas.md (esboço) | Resumo do mês | Working on the C4 box casaHoje.frontFinancasHoje.resumoFinancasHoje or the code it covers |
 | docs/caixas/casa.frontFinancas.tabelasFinancas.md (esboço) | Leitura de tabelas | Working on the C4 box casaHoje.frontFinancasHoje.tabelasFinancasHoje or the code it covers |
 | docs/caixas/casa.frontFinancas.telasFinancas.md (esboço) | Telas | Working on the C4 box casaHoje.frontFinancasHoje.telasFinancasHoje or the code it covers |
 | docs/caixas/casa.frontFinancas.transacoesFinancas.md (esboço) | Transações | Working on the C4 box casaHoje.frontFinancasHoje.transacoesFinancasHoje or the code it covers |
-
-#### Histórico e agendas
-
-| Doc | Boxes | Read when |
-| --- | --- | --- |
-| docs/subsystems/db.md | Histórico e agendas | When changing schema or queries (SQLAlchemy ORM over SQLite) |
 
 #### Lago de dados
 
@@ -118,10 +94,10 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
+| docs/architecture-v2/server-modules.md | Servidor ninho, Servidor da casa (ninho) | Adding a module to ninho (list, calendar, a fourth one), moving the finance routes, deciding where a module's tables, routes or screen go, or asking whether list and calendar are built or adopted |
 | docs/caixas/casa.ninho.desejos.md (esboço) | Lista de desejos | Working on the C4 box casaHoje.ninhoHoje.desejosHoje, casaAlvo.servidorAlvo.desejosAlvo or the code it covers |
 | docs/caixas/casa.ninho.financasNinho.md (esboço) | Finanças | Working on the C4 box casaHoje.ninhoHoje.financasNinhoHoje, casaAlvo.servidorAlvo.financasNinhoAlvo or the code it covers |
 | docs/caixas/casa.ninho.lista.md (esboço) | Lista de compras | Working on the C4 box casaHoje.ninhoHoje.listaHoje, casaAlvo.servidorAlvo.listaAlvo or the code it covers |
-| docs/architecture-v2/server-modules.md | Servidor ninho | Adding a module to ninho (list, calendar, a fourth one), moving the finance routes, deciding where a module's tables, routes or screen go, or asking whether list and calendar are built or adopted |
 | docs/architecture-v2/people-and-visibility.md | CLI de pessoas | Changing login, adding a person, deciding which module or which data a person sees, marking data as someone's or shared, or building anything that depends on who is using the app (the wishlist's three parts, the surprise gift) |
 | docs/caixas/casa.ninho.servidor.md (esboço) | Núcleo do servidor | Working on the C4 box casaHoje.ninhoHoje.servidorHoje, casaAlvo.servidorAlvo.nucleoAlvo or the code it covers |
 
@@ -129,6 +105,7 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
+| docs/caixas/casa.pipeline.md (esboço) | Pipeline GetFinance, Pipeline do módulo finanças | Working on the C4 box casaHoje.pipelineHoje, casaAlvo.pipelineAlvo or the code it covers |
 | docs/caixas/casa.pipeline.achados.md (esboço) | Achados das validações | Working on the C4 box casaHoje.pipelineHoje.achadosHoje or the code it covers |
 | docs/caixas/casa.pipeline.arquivosWorkspace.md (esboço) | Arquivos do workspace: workspace.yaml, jobs, conexões e config | Working on the C4 box casaHoje.pipelineHoje.arquivosWorkspaceHoje, casaAlvo.pipelineAlvo.arquivosWorkspaceAlvo or the code it covers |
 | docs/caixas/casa.pipeline.backupDados.md (esboço) | backup | Working on the C4 box casaHoje.pipelineHoje.backupDadosHoje, casaAlvo.pipelineAlvo.backupDadosAlvo or the code it covers |
@@ -137,7 +114,6 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 | docs/caixas/casa.pipeline.conferencias.md (esboço) | Regras de conferência e extrato | Working on the C4 box casaHoje.pipelineHoje.conferenciasHoje or the code it covers |
 | docs/caixas/casa.pipeline.functions.md (esboço) | functions | Working on the C4 box casaHoje.pipelineHoje.functionsHoje or the code it covers |
 | docs/caixas/casa.pipeline.landing.md (esboço) | landing | Working on the C4 box casaHoje.pipelineHoje.landingHoje, casaAlvo.pipelineAlvo.landingAlvo or the code it covers |
-| docs/caixas/casa.pipeline.md (esboço) | Pipeline GetFinance, Pipeline do módulo finanças | Working on the C4 box casaHoje.pipelineHoje, casaAlvo.pipelineAlvo or the code it covers |
 | docs/caixas/casa.pipeline.pastaScripts.md (esboço) | Pasta dos scripts (scripts/) | Working on the C4 box casaHoje.pipelineHoje.pastaScriptsHoje or the code it covers |
 | docs/caixas/casa.pipeline.publicadas.md (esboço) | Tabelas publicadas | Working on the C4 box casaAlvo.pipelineAlvo.publicadasAlvo or the code it covers |
 | docs/caixas/casa.pipeline.raw2cleansed.md (esboço) | raw2cleansed | Working on the C4 box casaHoje.pipelineHoje.raw2cleansedHoje or the code it covers |
@@ -152,23 +128,17 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
 | docs/caixas/casa.servidor.agenda.md (esboço) | Agenda | Working on the C4 box casaAlvo.servidorAlvo.agendaAlvo or the code it covers |
-| docs/caixas/casa.ninho.desejos.md (esboço) | Lista de desejos | Working on the C4 box casaHoje.ninhoHoje.desejosHoje, casaAlvo.servidorAlvo.desejosAlvo or the code it covers |
-| docs/caixas/casa.ninho.financasNinho.md (esboço) | Finanças | Working on the C4 box casaHoje.ninhoHoje.financasNinhoHoje, casaAlvo.servidorAlvo.financasNinhoAlvo or the code it covers |
-| docs/caixas/casa.ninho.lista.md (esboço) | Lista de compras | Working on the C4 box casaHoje.ninhoHoje.listaHoje, casaAlvo.servidorAlvo.listaAlvo or the code it covers |
-| docs/architecture-v2/server-modules.md | Servidor da casa (ninho) | Adding a module to ninho (list, calendar, a fourth one), moving the finance routes, deciding where a module's tables, routes or screen go, or asking whether list and calendar are built or adopted |
-| docs/caixas/casa.ninho.servidor.md (esboço) | Núcleo do servidor | Working on the C4 box casaHoje.ninhoHoje.servidorHoje, casaAlvo.servidorAlvo.nucleoAlvo or the code it covers |
-| docs/architecture-v2/people-and-visibility.md | CLI de pessoas | Changing login, adding a person, deciding which module or which data a person sees, marking data as someone's or shared, or building anything that depends on who is using the app (the wishlist's three parts, the surprise gift) |
 
 #### Telas do ninho
 
 | Doc | Boxes | Read when |
 | --- | --- | --- |
+| docs/caixas/casa.telasNinho.md (esboço) | App no celular, Telas do ninho | Working on the C4 box casaHoje.telasNinhoHoje, casaAlvo.appCelularAlvo or the code it covers |
 | docs/caixas/casa.telasNinho.casca.md (esboço) | Casca | Working on the C4 box casaHoje.telasNinhoHoje.cascaHoje, casaAlvo.appCelularAlvo.cascaAlvo or the code it covers |
 | docs/caixas/casa.telasNinho.comumTelas.md (esboço) | Comum às telas | Working on the C4 box casaHoje.telasNinhoHoje.comumTelasHoje, casaAlvo.appCelularAlvo.comumTelasAlvo or the code it covers |
 | docs/caixas/casa.telasNinho.desejosTelas.md (esboço) | Tela dos desejos | Working on the C4 box casaHoje.telasNinhoHoje.desejosTelasHoje, casaAlvo.appCelularAlvo.desejosTelasAlvo or the code it covers |
 | docs/caixas/casa.telasNinho.financasTelas.md (esboço) | Tela de finanças | Working on the C4 box casaHoje.telasNinhoHoje.financasTelasHoje, casaAlvo.appCelularAlvo.financasTelasAlvo or the code it covers |
 | docs/caixas/casa.telasNinho.listaTelas.md (esboço) | Tela da lista de compras | Working on the C4 box casaHoje.telasNinhoHoje.listaTelasHoje, casaAlvo.appCelularAlvo.listaTelasAlvo or the code it covers |
-| docs/caixas/casa.telasNinho.md (esboço) | Telas do ninho | Working on the C4 box casaHoje.telasNinhoHoje, casaAlvo.appCelularAlvo or the code it covers |
 
 ### Pessoas e sistemas externos
 
@@ -177,7 +147,7 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 | docs/caixas/agendador.md (esboço) | Agendador do Windows | Working on the C4 box agendadorHoje, agendadorAlvo or the code it covers |
 | docs/architecture-v2/people-and-visibility.md | Dono da casa, Outra pessoa da casa | Changing login, adding a person, deciding which module or which data a person sees, marking data as someone's or shared, or building anything that depends on who is using the app (the wishlist's three parts, the surprise gift) |
 | docs/caixas/outrasFontes.md (esboço) | Outras fontes | Working on the C4 box outrasFontesAlvo or the code it covers |
-| docs/getfinance-pluggy-integration.md | Pluggy | Onboarding a new bank/account, debugging the GetFinance fetch, or when Pluggy item/account IDs change after a reconnect |
+| docs/getfinance-pluggy-integration.md | Pluggy | When working on the GetFinance ETL or Pluggy integration; onboarding a new bank/account, debugging the GetFinance fetch, or when Pluggy item/account IDs change after a reconnect |
 
 ## Transversal docs
 
@@ -185,8 +155,8 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 | --- | --- | --- |
 | docs/CURRENT.md | Current | Quick orientation on what phase/plans/issues are active right now. |
 | docs/architecture-v2/engine-interface.md | Execution contract (how a product asks DataForge for a run, follows it, and where a project lives) | Changing `dataforge run`, the run history, the run lock or how a workspace path is resolved; building the part of ninho that asks for a job; adding a command a product may call |
-| docs/bead-check.md | Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, no architecture mark left on the bead, and the prod check of a box prod serves) | A "Conferência do bead" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:` |
-| docs/commands.md | Commands | When invoking project CLI / scripts, running tests, or the API server |
+| docs/bead-check.md | Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, no architecture mark left on the bead, and the prod check of a box prod serves) | A "Conferência do bead" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:`; a "Subagente sem bead" refusal (participants hook) |
+| docs/commands.md | Commands | When invoking project CLI / scripts, running tests, or the API server; running the GetFinance workspace's demo (`finance_demo`) or its tests; opening a workspace app (`dataforge app`, `--atalho`), `dataforge stop`, the background process and its auto-shutdown |
 | docs/conventions.md | Project-wide conventions (codebase exploration, audience principle) | Starting a new task that touches code; when deciding how to explore the codebase; when writing Obsidian-facing notes |
 | docs/documentation.md | Documentation | When writing, naming, or maintaining files under docs/ |
 | docs/qa-environment.md | QA environment (DataForge-QA) | When working on QA/validation of the GetFinance report workbook (workbook era, not maintained since df-cns), or you need the sibling DataForge-QA folder's location, purpose, workbook, and keep-clean rule |
@@ -199,14 +169,14 @@ Routing manifest of docs/, generated from the C4 model (`arquitetura/`) and the 
 
 docs/adr/ is frozen (df-883u): 0001-0003 are history; 0004-0006 hold rules in force until their content moves to the reference docs (df-cyjt).
 
-| Doc | Title |
-| --- | --- |
-| docs/adr/0001-adr-decision-layer-superpowers-execution-layer.md | Decision records live in ADRs; superpowers plans stay for execution |
-| docs/adr/0002-lean-solo-dev-environment.md | Lean solo dev-environment: minimum MCPs and SessionStart hooks |
-| docs/adr/0003-graphify-local-structure.md | Local graphify structure report at SessionStart |
-| docs/adr/0004-automated-test-system.md | Automated test system: tools generate and judge, the LLM thinks |
-| docs/adr/0005-dev-on-linux-disk-windows-is-prod.md | Develop the core on the Linux disk; the Windows folder is prod only |
-| docs/adr/0006-architecture-v2-four-pieces.md | Architecture v2: four pieces with narrow contracts; DataForge is the orchestrator, not a server |
+| Doc | Status | Read when |
+| --- | --- | --- |
+| docs/adr/0001-adr-decision-layer-superpowers-execution-layer.md | History | Background only: how the ADR layer was adopted in 2026-06 |
+| docs/adr/0002-lean-solo-dev-environment.md | History | Background only: why graph tools, GSD, claude-mem and /sync were retired |
+| docs/adr/0003-graphify-local-structure.md | History | Background only: the local graphify structure report at SessionStart, superseded 2026-11-03 |
+| docs/adr/0004-automated-test-system.md | In force until df-cyjt | When designing or building automated tests (generators, mutation, branch map, test selection, data checks) |
+| docs/adr/0005-dev-on-linux-disk-windows-is-prod.md | In force until df-cyjt | Where to work (clone on ext4 vs the Windows prod folder), making a worktree with its venv, updating prod, migrating a session, the beads database flip |
+| docs/adr/0006-architecture-v2-four-pieces.md | In force until df-cyjt | When you need the target architecture: the four pieces (house server ninho, app database, lake, DataForge as orchestrator only), who owns each piece of data, which way dependencies point, the repository layout with walls |
 
 ## History (main checkout only)
 

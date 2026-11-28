@@ -50,6 +50,7 @@ standard library:
     docs.docs_por_elemento()      # {element id: doc path relative to the repo ("docs/x.md")}, from
                                   # modelo.load(); or docs_por_elemento(m) for a model dict. Only
                                   # the elements with a `doc` link of the form ../docs/<path>.md
+    docs.peca(element_id)         # the id without Hoje/Alvo: the piece today's and the target's box share
     docs.ler_front_matter(path)   # {key: value} of a doc's front matter: topic, read_when (str),
                                   # code (list of str), status ('esboço' | 'pronto'), plus any other
                                   # key as written. {} when the file has no front matter;
@@ -294,9 +295,15 @@ def _sem_sufixo(segment: str) -> str:
     return segment
 
 
+def peca(eid: str) -> str:
+    """The element id without the Hoje/Alvo suffix of each segment: the piece today's and the
+    target's box share (casaHoje.dataforgeHoje.motorHoje -> casa.dataforge.motor)."""
+    return ".".join(_sem_sufixo(s) for s in eid.split("."))
+
+
 def _padrao(eid: str) -> str:
     """docs/caixas/<id without Hoje/Alvo>.md, the sketch of an element without a doc link."""
-    return f"{CAIXAS}/{'.'.join(_sem_sufixo(s) for s in eid.split('.'))}.md"
+    return f"{CAIXAS}/{peca(eid)}.md"
 
 
 def _sem_aspas(line: str) -> str:
@@ -397,6 +404,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(messages) if messages else "every element links a doc that exists")
         if c4_mudou(messages):
             print("the .c4 changed: run python3 scripts/arquitetura/modelo.py gerar, then conferir")
+        if messages:
+            print("then rewrite the INDEX: python3 scripts/arquitetura/indice_docs.py gerar")
         return 0
     problems = conferir(m)
     if problems:

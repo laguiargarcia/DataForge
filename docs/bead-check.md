@@ -1,6 +1,6 @@
 ---
 topic: Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, no architecture mark left on the bead, and the prod check of a box prod serves)
-read_when: "A \"Conferência do bead\" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:`"
+read_when: "A \"Conferência do bead\" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:`; a \"Subagente sem bead\" refusal (participants hook)"
 related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37, df-8x0m.23.36, df-8x0m.23.42]
 transversal: true
 ---

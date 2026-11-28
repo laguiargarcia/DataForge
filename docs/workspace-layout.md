@@ -1,6 +1,6 @@
 ---
 topic: Workspace Layout & YAML Reference
-read_when: When dealing with workspace paths, per-workspace data, or YAML reference for workspace/job/task definitions
+read_when: "When dealing with workspace paths, per-workspace data, or YAML reference for workspace/job/task definitions; writing a workspace web app and its backend (`app.yaml`, env, lifetime, icon)"
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-762, df-b95, df-oe8, df-t7v]
 code:
