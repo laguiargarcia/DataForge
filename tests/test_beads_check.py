@@ -897,7 +897,8 @@ def test_a_module_screen_of_the_real_model_needs_the_prod_check():
     assert {"casaHoje.telasNinhoHoje.listaTelasHoje", "casaHoje.telasNinhoHoje.desejosTelasHoje",
             "casaAlvo.appCelularAlvo.listaTelasAlvo", "casaAlvo.appCelularAlvo.desejosTelasAlvo",
             "casaAlvo.appCelularAlvo.financasTelasAlvo",
-            "casaAlvo.appCelularAlvo.agendaTelasAlvo"} <= check.served_boxes(model)
+            "casaAlvo.appCelularAlvo.agendaTelasAlvo", "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+            "casaHoje.frontFinancasHoje.telasFinancasHoje"} <= check.served_boxes(model)
 
 
 def test_a_close_line_without_the_prod_check_is_refused_and_with_it_passes(monkeypatch):

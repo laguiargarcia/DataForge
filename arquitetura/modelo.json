@@ -1773,7 +1773,9 @@
           "workspaces/GetFinance/apps/financas/src/App.tsx"
         ]
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript",
       "title": "Casca do app"
     },
@@ -1881,7 +1883,9 @@
       "metadata": {
         "codigo": "workspaces/GetFinance/apps/financas/src/components"
       },
-      "tags": [],
+      "tags": [
+        "servidoPelaProd"
+      ],
       "technology": "React, TypeScript, Tailwind",
       "title": "Telas"
     },
