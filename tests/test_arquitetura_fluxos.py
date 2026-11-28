@@ -1,7 +1,8 @@
 """scripts/arquitetura/fluxos.py: every dynamic view of the C4 model (a flow, step by step) names
 the end-to-end test that exercises it, with a link `../<path> 'e2e: <test name>'`, and that test
 exists (df-8x0m.23.41). The flows are today's: their steps use only elements of the hoje model, and
-each step is an arrow of the model between the same two elements (df-8x0m.23.50)."""
+each step is an arrow of the model from the source (or an element inside it) to the target (or an
+element inside it), in the same direction (df-8x0m.23.50)."""
 
 import importlib.util
 import subprocess
