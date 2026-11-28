@@ -4407,6 +4407,382 @@
       "viewOf": "casaAlvo"
     },
     {
+      "description": "Corrige a categoria de uma transação, aplica (o job reclassificar) e vê a categoria nova",
+      "id": "fluxo-corrigir-categoria-ninho",
+      "links": [
+        {
+          "title": "e2e: corrige a categoria de uma transação, aplica e vê a categoria nova",
+          "url": "../ninho/telas/e2e/tela.spec.ts"
+        }
+      ],
+      "steps": [
+        {
+          "source": "donoHoje",
+          "target": "casaHoje.telasNinhoHoje.financasTelasHoje",
+          "title": "Abre Finanças no mês e corrige a categoria"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "PUT /api/financas/correcoes/<transação>"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.servidorHoje",
+          "target": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "title": "Atende a correção"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "target": "casaHoje.edicaoHoje",
+          "title": "Grava a correção (falta aplicar)"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "POST /api/financas/aplicar"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.servidorHoje",
+          "target": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "title": "Atende o aplicar"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "target": "casaHoje.dataforgeHoje.cliHoje",
+          "title": "dataforge run --detach reclassificar"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.cliHoje",
+          "target": "casaHoje.dataforgeHoje.motorHoje",
+          "title": "Grava o pedido e pede o run destacado"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.motorHoje",
+          "target": "casaHoje.dataforgeHoje.tasksHoje",
+          "title": "Roda as tasks do reclassificar"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.tasksHoje",
+          "target": "casaHoje.pipelineHoje.reportHoje",
+          "title": "Lança as tasks classify e report"
+        },
+        {
+          "source": "casaHoje.pipelineHoje.reportHoje",
+          "target": "casaHoje.edicaoHoje",
+          "title": "Lê categorias, regras e correções"
+        },
+        {
+          "source": "casaHoje.pipelineHoje.reportHoje",
+          "target": "casaHoje.lagoHoje",
+          "title": "Regrava o curated com a categoria nova"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "GET /api/financas/aplicar/<run>, também depois de recarregar"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.servidorHoje",
+          "target": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "title": "Atende o acompanhamento"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "target": "casaHoje.dataforgeHoje.cliHoje",
+          "title": "dataforge run-state --wait"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "Relê as transações do mês (/api/financas/transacoes)"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+          "target": "casaHoje.lagoHoje",
+          "title": "Lê a categoria nova"
+        }
+      ],
+      "tags": [],
+      "title": "Fluxo: corrigir a categoria no celular e aplicar",
+      "type": "dynamic",
+      "viewOf": null
+    },
+    {
+      "description": "Cria um desejo dos dois com um texto e um link, move, marca realizado e apaga",
+      "id": "fluxo-desejos",
+      "links": [
+        {
+          "title": "e2e: nos Desejos, cria um desejo dos dois com um texto e um link, move, marca realizado e apaga",
+          "url": "../ninho/telas/e2e/tela.spec.ts"
+        }
+      ],
+      "steps": [
+        {
+          "source": "donoHoje",
+          "target": "casaHoje.telasNinhoHoje.cascaHoje",
+          "title": "Toca em Desejos na barra"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.cascaHoje",
+          "target": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+          "title": "Mostra a tela dos desejos"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "Lê as pessoas da casa (/api/pessoas)"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+          "target": "casaHoje.ninhoHoje.desejosHoje",
+          "title": "Lê, cria, anota, move, marca realizado e apaga (/api/desejos)"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.desejosHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "Pede a pessoa da sessão"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.desejosHoje",
+          "target": "casaHoje.bancoNinhoHoje",
+          "title": "Lê e grava os desejos e as anotações"
+        }
+      ],
+      "tags": [],
+      "title": "Fluxo: lista de desejos",
+      "type": "dynamic",
+      "viewOf": null
+    },
+    {
+      "description": "Nome e senha certos levam à tela da pessoa; recarregar não pede de novo, porque a sessão fica no cookie",
+      "id": "fluxo-entrar",
+      "links": [
+        {
+          "title": "e2e: nome e senha certos levam à tela da pessoa, e recarregar não pede de novo",
+          "url": "../ninho/telas/e2e/entrar.spec.ts"
+        }
+      ],
+      "steps": [
+        {
+          "source": "donoHoje",
+          "target": "casaHoje.telasNinhoHoje.cascaHoje",
+          "title": "Abre a página e preenche nome e senha"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.cascaHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "POST /api/entrar"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.servidorHoje",
+          "target": "casaHoje.bancoNinhoHoje",
+          "title": "Confere a senha e grava a sessão (cookie)"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.cascaHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "GET /api/eu: quem entrou e os módulos dela"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.cascaHoje",
+          "target": "casaHoje.telasNinhoHoje.financasTelasHoje",
+          "title": "Monta a tela do primeiro módulo (Finanças)"
+        }
+      ],
+      "tags": [],
+      "title": "Fluxo: entrar no ninho",
+      "type": "dynamic",
+      "viewOf": null
+    },
+    {
+      "description": "Adiciona um item, recarrega, marca como comprado e limpa os comprados",
+      "id": "fluxo-lista",
+      "links": [
+        {
+          "title": "e2e: na Lista, adiciona um item, recarrega, marca como comprado e limpa os comprados",
+          "url": "../ninho/telas/e2e/tela.spec.ts"
+        }
+      ],
+      "steps": [
+        {
+          "source": "donoHoje",
+          "target": "casaHoje.telasNinhoHoje.cascaHoje",
+          "title": "Toca em Compras na barra"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.cascaHoje",
+          "target": "casaHoje.telasNinhoHoje.listaTelasHoje",
+          "title": "Mostra a tela da lista"
+        },
+        {
+          "source": "casaHoje.telasNinhoHoje.listaTelasHoje",
+          "target": "casaHoje.ninhoHoje.listaHoje",
+          "title": "Lê os itens; acrescenta, marca e limpa os comprados (/api/lista)"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.listaHoje",
+          "target": "casaHoje.ninhoHoje.servidorHoje",
+          "title": "Pede a pessoa da sessão"
+        },
+        {
+          "source": "casaHoje.ninhoHoje.listaHoje",
+          "target": "casaHoje.bancoNinhoHoje",
+          "title": "Lê e grava os itens"
+        }
+      ],
+      "tags": [],
+      "title": "Fluxo: lista de compras",
+      "type": "dynamic",
+      "viewOf": null
+    },
+    {
+      "description": "Uma regra nova muda a categoria depois do Aplicar, e a correção vence a regra",
+      "id": "fluxo-regra-financas",
+      "links": [
+        {
+          "title": "e2e: regra nova muda a categoria depois do Aplicar, e a correção vence a regra",
+          "url": "../workspaces/GetFinance/apps/financas/e2e/financas.spec.ts"
+        }
+      ],
+      "steps": [
+        {
+          "source": "donoHoje",
+          "target": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "title": "Cria a regra e depois corrige uma transação"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "target": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+          "title": "Mostra Categorias e Transações"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.telasFinancasHoje",
+          "target": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+          "title": "Grava a regra e a correção, aplica e acompanha"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.clienteBackendFinancasHoje",
+          "target": "casaHoje.dataforgeHoje.apiHoje",
+          "title": "POST regras, PUT correcoes, POST aplicar pelo proxy /apps/<ws>/financas/api"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.financasHoje.rotasFinancasHoje",
+          "title": "Repassa com o token"
+        },
+        {
+          "source": "casaHoje.financasHoje.rotasFinancasHoje",
+          "target": "casaHoje.edicaoHoje",
+          "title": "Grava a regra e a correção"
+        },
+        {
+          "source": "casaHoje.financasHoje.rotasFinancasHoje",
+          "target": "casaHoje.dataforgeHoje.apiHoje",
+          "title": "Pede o job reclassificar e acompanha a execução"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.dataforgeHoje.motorHoje",
+          "title": "Roda o job pedido"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.motorHoje",
+          "target": "casaHoje.dataforgeHoje.tasksHoje",
+          "title": "Roda as tasks do reclassificar"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.tasksHoje",
+          "target": "casaHoje.pipelineHoje.reportHoje",
+          "title": "Lança as tasks classify e report"
+        },
+        {
+          "source": "casaHoje.pipelineHoje.reportHoje",
+          "target": "casaHoje.edicaoHoje",
+          "title": "Lê categorias, regras e correções; a correção vence a regra"
+        },
+        {
+          "source": "casaHoje.pipelineHoje.reportHoje",
+          "target": "casaHoje.lagoHoje",
+          "title": "Regrava o curated"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+          "title": "Relê as transações classificadas"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+          "target": "casaHoje.dataforgeHoje.apiHoje",
+          "title": "GET /api/workspaces/<ws>/tables/<tabela>"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.lagoHoje",
+          "title": "Serve o curated"
+        }
+      ],
+      "tags": [],
+      "title": "Fluxo: regra e correção no app Finanças, e aplicar",
+      "type": "dynamic",
+      "viewOf": null
+    },
+    {
+      "description": "Junho de 2026 do finance_demo mostra os valores de referência",
+      "id": "fluxo-resumo-financas",
+      "links": [
+        {
+          "title": "e2e: junho de 2026 mostra os valores de referência",
+          "url": "../workspaces/GetFinance/apps/financas/e2e/financas.spec.ts"
+        }
+      ],
+      "steps": [
+        {
+          "source": "donoHoje",
+          "target": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "title": "Abre o app Finanças"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "target": "casaHoje.dataforgeHoje.apiHoje",
+          "title": "Pede o JS e o CSS do build pela rota do app"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.dataforgeHoje.appsHoje",
+          "title": "Acha o app e o build dele"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+          "title": "Lê as tabelas do report"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
+          "target": "casaHoje.dataforgeHoje.apiHoje",
+          "title": "GET /api/workspaces/<ws>/tables/<tabela>"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.dataforgeHoje.deltaPoolHoje",
+          "title": "Lê o curated nas threads do pool"
+        },
+        {
+          "source": "casaHoje.dataforgeHoje.apiHoje",
+          "target": "casaHoje.lagoHoje",
+          "title": "Serve o curated"
+        },
+        {
+          "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
+          "target": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
+          "title": "Monta o resumo do mês"
+        }
+      ],
+      "tags": [],
+      "title": "Fluxo: resumo do mês no app Finanças",
+      "type": "dynamic",
+      "viewOf": null
+    },
+    {
       "description": null,
       "id": "hoje-componentes-app-financas-backend",
       "links": [],

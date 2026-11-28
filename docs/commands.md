@@ -552,7 +552,10 @@ npx likec4@1.61.1 validate --max-warnings 0 arquitetura   # syntax and semantics
 npx likec4@1.61.1 build arquitetura --output-single-file -o /tmp/claude-1000/likec4-out   # one HTML
 ```
 
-When prod changes shape, change `hoje.c4` in the same change.
+When prod changes shape, change `hoje.c4` in the same change. Each flow view of `fluxos.c4` links
+the e2e test that exercises it; renaming that test means changing the link's title in the same PR,
+or `python3 scripts/arquitetura/fluxos.py` (CI job `arquitetura`) fails (`arquitetura/README.md`,
+"Fluxos").
 
 ## Workspace web apps (e.g. `workspaces/GetFinance/apps/financas`)
 

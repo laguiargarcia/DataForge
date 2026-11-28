@@ -1,0 +1,104 @@
+// Fluxos de HOJE, passo a passo (df-8x0m.23.41): uma vista dinâmica por fluxo principal que já tem
+// teste de ponta a ponta. Cada vista leva um link para o teste que a exercita: o endereço é o arquivo
+// (relativo a arquitetura/) e o título é 'e2e: ' com o nome exato do teste;
+// scripts/arquitetura/fluxos.py confere que o arquivo existe e declara esse teste. Os passos usam só
+// elementos do modelo de hoje (hoje.c4 e componentes-*.c4).
+views {
+  dynamic view fluxo-entrar {
+    title 'Fluxo: entrar no ninho'
+    description 'Nome e senha certos levam à tela da pessoa; recarregar não pede de novo, porque a sessão fica no cookie'
+    link ../ninho/telas/e2e/entrar.spec.ts 'e2e: nome e senha certos levam à tela da pessoa, e recarregar não pede de novo'
+
+    donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Abre a página e preenche nome e senha'
+    casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje 'POST /api/entrar'
+    casaHoje.ninhoHoje.servidorHoje -> casaHoje.bancoNinhoHoje 'Confere a senha e grava a sessão (cookie)'
+    casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje 'GET /api/eu: quem entrou e os módulos dela'
+    casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.financasTelasHoje 'Monta a tela do primeiro módulo (Finanças)'
+  }
+
+  dynamic view fluxo-lista {
+    title 'Fluxo: lista de compras'
+    description 'Adiciona um item, recarrega, marca como comprado e limpa os comprados'
+    link ../ninho/telas/e2e/tela.spec.ts 'e2e: na Lista, adiciona um item, recarrega, marca como comprado e limpa os comprados'
+
+    donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Toca em Compras na barra'
+    casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.listaTelasHoje 'Mostra a tela da lista'
+    casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.ninhoHoje.listaHoje 'Lê os itens; acrescenta, marca e limpa os comprados (/api/lista)'
+    casaHoje.ninhoHoje.listaHoje -> casaHoje.ninhoHoje.servidorHoje 'Pede a pessoa da sessão'
+    casaHoje.ninhoHoje.listaHoje -> casaHoje.bancoNinhoHoje 'Lê e grava os itens'
+  }
+
+  dynamic view fluxo-desejos {
+    title 'Fluxo: lista de desejos'
+    description 'Cria um desejo dos dois com um texto e um link, move, marca realizado e apaga'
+    link ../ninho/telas/e2e/tela.spec.ts 'e2e: nos Desejos, cria um desejo dos dois com um texto e um link, move, marca realizado e apaga'
+
+    donoHoje -> casaHoje.telasNinhoHoje.cascaHoje 'Toca em Desejos na barra'
+    casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.desejosTelasHoje 'Mostra a tela dos desejos'
+    casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'Lê as pessoas da casa (/api/pessoas)'
+    casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje 'Lê, cria, anota, move, marca realizado e apaga (/api/desejos)'
+    casaHoje.ninhoHoje.desejosHoje -> casaHoje.ninhoHoje.servidorHoje 'Pede a pessoa da sessão'
+    casaHoje.ninhoHoje.desejosHoje -> casaHoje.bancoNinhoHoje 'Lê e grava os desejos e as anotações'
+  }
+
+  dynamic view fluxo-corrigir-categoria-ninho {
+    title 'Fluxo: corrigir a categoria no celular e aplicar'
+    description 'Corrige a categoria de uma transação, aplica (o job reclassificar) e vê a categoria nova'
+    link ../ninho/telas/e2e/tela.spec.ts 'e2e: corrige a categoria de uma transação, aplica e vê a categoria nova'
+
+    donoHoje -> casaHoje.telasNinhoHoje.financasTelasHoje 'Abre Finanças no mês e corrige a categoria'
+    casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'PUT /api/financas/correcoes/<transação>'
+    casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje 'Atende a correção'
+    casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.edicaoHoje 'Grava a correção (falta aplicar)'
+    casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'POST /api/financas/aplicar'
+    casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje 'Atende o aplicar'
+    casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje.cliHoje 'dataforge run --detach reclassificar'
+    casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.motorHoje 'Grava o pedido e pede o run destacado'
+    casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.tasksHoje 'Roda as tasks do reclassificar'
+    casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify e report'
+    casaHoje.pipelineHoje.reportHoje -> casaHoje.edicaoHoje 'Lê categorias, regras e correções'
+    casaHoje.pipelineHoje.reportHoje -> casaHoje.lagoHoje 'Regrava o curated com a categoria nova'
+    casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'GET /api/financas/aplicar/<run>, também depois de recarregar'
+    casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje 'Atende o acompanhamento'
+    casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje.cliHoje 'dataforge run-state --wait'
+    casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje 'Relê as transações do mês (/api/financas/transacoes)'
+    casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.lagoHoje 'Lê a categoria nova'
+  }
+
+  dynamic view fluxo-resumo-financas {
+    title 'Fluxo: resumo do mês no app Finanças'
+    description 'Junho de 2026 do finance_demo mostra os valores de referência'
+    link ../workspaces/GetFinance/apps/financas/e2e/financas.spec.ts 'e2e: junho de 2026 mostra os valores de referência'
+
+    donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje 'Abre o app Finanças'
+    casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede o JS e o CSS do build pela rota do app'
+    casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.appsHoje 'Acha o app e o build dele'
+    casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje 'Lê as tabelas do report'
+    casaHoje.frontFinancasHoje.tabelasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'GET /api/workspaces/<ws>/tables/<tabela>'
+    casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.deltaPoolHoje 'Lê o curated nas threads do pool'
+    casaHoje.dataforgeHoje.apiHoje -> casaHoje.lagoHoje 'Serve o curated'
+    casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.resumoFinancasHoje 'Monta o resumo do mês'
+  }
+
+  dynamic view fluxo-regra-financas {
+    title 'Fluxo: regra e correção no app Finanças, e aplicar'
+    description 'Uma regra nova muda a categoria depois do Aplicar, e a correção vence a regra'
+    link ../workspaces/GetFinance/apps/financas/e2e/financas.spec.ts 'e2e: regra nova muda a categoria depois do Aplicar, e a correção vence a regra'
+
+    donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje 'Cria a regra e depois corrige uma transação'
+    casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.telasFinancasHoje 'Mostra Categorias e Transações'
+    casaHoje.frontFinancasHoje.telasFinancasHoje -> casaHoje.frontFinancasHoje.clienteBackendFinancasHoje 'Grava a regra e a correção, aplica e acompanha'
+    casaHoje.frontFinancasHoje.clienteBackendFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'POST regras, PUT correcoes, POST aplicar pelo proxy /apps/<ws>/financas/api'
+    casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje.rotasFinancasHoje 'Repassa com o token'
+    casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.edicaoHoje 'Grava a regra e a correção'
+    casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede o job reclassificar e acompanha a execução'
+    casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.motorHoje 'Roda o job pedido'
+    casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.tasksHoje 'Roda as tasks do reclassificar'
+    casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje.reportHoje 'Lança as tasks classify e report'
+    casaHoje.pipelineHoje.reportHoje -> casaHoje.edicaoHoje 'Lê categorias, regras e correções; a correção vence a regra'
+    casaHoje.pipelineHoje.reportHoje -> casaHoje.lagoHoje 'Regrava o curated'
+    casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje 'Relê as transações classificadas'
+    casaHoje.frontFinancasHoje.tabelasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'GET /api/workspaces/<ws>/tables/<tabela>'
+    casaHoje.dataforgeHoje.apiHoje -> casaHoje.lagoHoje 'Serve o curated'
+  }
+}

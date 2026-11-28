@@ -267,6 +267,13 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           uv run --no-project python scripts/arquitetura/componentes.py 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-componentes.txt"
+      - name: Every flow names its end-to-end test
+        # df-8x0m.23.41: each dynamic view links an e2e test file that exists and declares the test
+        # named in the link's title, and its steps are today's model. Standard library only.
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          python3 scripts/arquitetura/fluxos.py 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-fluxos.txt"
       - uses: actions/upload-artifact@v7
         if: always()
         # Read by the report job, which comments on the PR.
