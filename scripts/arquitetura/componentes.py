@@ -283,7 +283,8 @@ def checar_dentro(elementos: list[dict]) -> list[str]:
             continue
         pai = _ancestral_com_codigo(elemento["id"], por_id)
         if pai is None:
-            erros.append(f"{elemento['id']}: has codigo but none of its ancestors has codigo, so its code lies in no container")
+            erros.append(f"{elemento['id']}: has codigo but none of its ancestors has codigo, "
+                         "so its code lies in no container")
             continue
         erros += [f"{elemento['id']}: codigo {caminho!r} is not inside the codigo of its ancestor {pai} "
                   f"({', '.join(map(repr, por_id[pai]))})"
