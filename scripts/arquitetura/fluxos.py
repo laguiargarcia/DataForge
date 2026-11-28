@@ -1,4 +1,4 @@
-"""Flows of the C4 model (df-8x0m.23.41): every dynamic view of arquitetura/*.c4 draws one flow of
+r"""Flows of the C4 model (df-8x0m.23.41): every dynamic view of arquitetura/*.c4 draws one flow of
 today, step by step, and names the end-to-end test that exercises it, so a flow drawn and never run
 fails here instead of going stale.
 
@@ -22,8 +22,12 @@ Fails, one `error:` line per problem, when a dynamic view:
 5. links a test name the file does not declare: in Python a `def test_...` (also async), in a
    Playwright spec a `test('...')` call (`test.only`, `.skip`, `.fixme`, `.fail`, `.slow` too;
    a `test.describe` title is not a test, nor a test( in a comment, in a string or after a dot);
-   the name is the string literal unescaped. A regex literal with a quote in it is read as a
-   string start (no JS parser), so keep such a literal out of an e2e file that a flow names;
+   a comment or a string that never closes runs to the end of the text (a quote, to the end of
+   the line). There is no JS parser, and each limit fails closed (a test is missed, never one
+   invented): a regex literal with a quote in it reads as a string start, one with `//` in it
+   (/https?:\/\//) as a comment to the end of the line; the unescape only drops the backslash
+   (and a backslash-newline), so a `ç` in a name reads as `u00e7`, not `ç`: write the
+   character itself in a name that a flow links;
 6. has no steps, or a step with an end outside today's model (modelo.e_hoje): the tests run today's
    code, so the flow they exercise is today's.
 
@@ -50,19 +54,31 @@ LEGIVEIS = (".py", ".ts", ".tsx", ".js", ".jsx", ".mjs")
 TESTE_PY = re.compile(r"^[ \t]*(?:async[ \t]+)?def[ \t]+(test_\w+)[ \t]*\(", re.MULTILINE)
 # A JS/TS string: each character is one escape or one plain character, so the branches never overlap
 # and the match is linear (no backtracking).
-_TEXTO_TS = r"'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`"
+_TEXTO_TS = r"'(?:[^'\\\n]|\\[\s\S])*'|\"(?:[^\"\\\n]|\\[\s\S])*\"|`(?:[^`\\]|\\[\s\S])*`"
+# The forms that are only skipped also close at the end of the text (a quote also before a newline):
+# a token that never closes then takes the rest at once, instead of failing and the scan starting
+# over at the next character, which made an unclosed input quadratic.
+_PULA_TS = (r"//[^\n]*|/\*(?:[^*]|\*(?!/))*(?:\*/|\Z)"
+            r"|'(?:[^'\\\n]|\\[\s\S])*(?:'|(?=\n)|\\?\Z)|\"(?:[^\"\\\n]|\\[\s\S])*(?:\"|(?=\n)|\\?\Z)"
+            r"|`(?:[^`\\]|\\[\s\S])*(?:`|\\?\Z)")
 # Read left to right, a comment or a string is consumed whole, so a test( inside one never matches;
 # the lookbehind refuses a method (/x/.test(...)) or a longer name (contest, $test).
-TOKENS_TS = re.compile(r"(?<![.\w$])test(?:\.(?:only|skip|fixme|fail|slow))?\(\s*(?P<nome>" + _TEXTO_TS + r")"
-                       r"|//[^\n]*|/\*(?:[^*]|\*(?!/))*\*/|" + _TEXTO_TS)
-ESCAPE = re.compile(r"\\(.)", re.DOTALL)
+TOKENS_TS = re.compile(r"(?<![.\w$])test(?:\.(?:only|skip|fixme|fail|slow))?\(\s*(?P<nome>" + _TEXTO_TS + r")|"
+                       + _PULA_TS)
+ESCAPE = re.compile(r"\\([\s\S])")
+
+
+def _sem_escape(literal: str) -> str:
+    """The value of a string literal's body: a backslash and newline (line continuation) go, any other
+    backslash goes and keeps the next character (so \\u00e7 reads as u00e7, not as ç)."""
+    return ESCAPE.sub(lambda m: "" if m[1] == "\n" else m[1], literal)
 
 
 def declarados(texto: str, sufixo: str) -> set[str]:
     """The test names a file of that suffix declares (rule 5 of the module docstring)."""
     if sufixo == ".py":
         return set(TESTE_PY.findall(texto))
-    return {ESCAPE.sub(r"\1", m["nome"][1:-1]) for m in TOKENS_TS.finditer(texto) if m["nome"]}
+    return {_sem_escape(m["nome"][1:-1]) for m in TOKENS_TS.finditer(texto) if m["nome"]}
 
 
 def _caminho(url: str) -> str | None:

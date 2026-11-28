@@ -5,6 +5,7 @@ exists (df-8x0m.23.41). The flows are today's: their steps use only elements of 
 import importlib.util
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -41,13 +42,15 @@ async def test_assincrono():
 
 @pytest.fixture
 def repo(tmp_path):
-    (tmp_path / "app" / "e2e").mkdir(parents=True)
-    (tmp_path / SPEC).write_text(SPEC_TEXT, encoding="utf-8")
-    (tmp_path / "app" / "e2e" / "notas.md").write_text("test('x')\n", encoding="utf-8")
-    (tmp_path / "tests").mkdir()
-    (tmp_path / PY).write_text(PY_TEXT, encoding="utf-8")
-    (tmp_path / "tests" / "test_unidade.py").write_text("def test_soma():\n    pass\n", encoding="utf-8")
-    return tmp_path
+    """A fake repository in tmp_path/repo; tmp_path itself is outside it."""
+    root = tmp_path / "repo"
+    (root / "app" / "e2e").mkdir(parents=True)
+    (root / SPEC).write_text(SPEC_TEXT, encoding="utf-8")
+    (root / "app" / "e2e" / "notas.md").write_text("test('x')\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    (root / PY).write_text(PY_TEXT, encoding="utf-8")
+    (root / "tests" / "test_unidade.py").write_text("def test_soma():\n    pass\n", encoding="utf-8")
+    return root
 
 
 def link(path, name):
@@ -90,6 +93,40 @@ def test_a_describe_is_not_a_test():
         "single-quoted-string-with-escapes", "template-string", "method-call", "longer-name", "dollar-name"])
 def test_a_name_outside_a_test_call_is_not_a_test(texto):
     assert fluxos.declarados(texto, ".ts") == set()
+
+
+@pytest.mark.parametrize("texto", [
+    "/* " * 34_000,
+    "'" + "a" * 100_000,
+    '"' + "a" * 100_000,
+    "`" + "a" * 100_000,
+    "'\\" * 50_000,
+    "`\\" * 50_000,
+    "test('" * 20_000,
+    "test(`" + "a" * 100_000,
+    "/*" + "*" * 100_000,
+], ids=["block-comments", "single-quote", "double-quote", "backtick", "single-quote-escapes",
+        "backtick-escapes", "test-calls", "test-call-backtick", "stars"])
+def test_a_large_unclosed_input_reads_in_linear_time(texto):
+    """A token that never closes ends at the end of the text (or line): the scan does not restart
+    from every character, which took over 10 s on 100 KB before."""
+    start = time.perf_counter()
+    fluxos.declarados(texto, ".ts")
+    assert time.perf_counter() - start < 0.5
+
+
+def test_an_unclosed_comment_or_string_hides_what_follows():
+    assert fluxos.declarados("/* sem fim\ntest('x', () => {})\n", ".ts") == set()
+    assert fluxos.declarados("const s = `sem fim\ntest('x', () => {})\n", ".ts") == set()
+
+
+def test_an_unclosed_quote_ends_at_the_line():
+    assert fluxos.declarados("const s = 'sem fim\ntest('x', () => {})\n", ".ts") == {"x"}
+
+
+def test_a_backslash_before_a_newline_continues_the_string():
+    assert fluxos.declarados("const s = 'linha \\\ntest(\\'x\\')'\ntest('y', () => {})\n", ".ts") == {"y"}
+    assert fluxos.declarados("test('um nome \\\nem duas linhas', () => {})\n", ".ts") == {"um nome em duas linhas"}
 
 
 def test_a_test_after_a_comment_or_a_string_still_counts():
@@ -150,8 +187,8 @@ def test_an_e2e_file_that_is_not_utf8_is_one_problem(repo):
         "fluxo-lista: app/e2e/latin1.spec.ts não é texto UTF-8"]
 
 
-def test_a_symlink_out_of_the_repo_is_refused(repo, tmp_path_factory):
-    outside = tmp_path_factory.mktemp("fora") / "x.spec.ts"
+def test_a_symlink_out_of_the_repo_is_refused(repo, tmp_path):
+    outside = tmp_path / "x.spec.ts"
     outside.write_text("test('x', () => {})\n", encoding="utf-8")
     (repo / "app" / "e2e" / "x.spec.ts").symlink_to(outside)
     assert fluxos.problemas(model(view(links=[link("app/e2e/x.spec.ts", "x")])), repo) == [
