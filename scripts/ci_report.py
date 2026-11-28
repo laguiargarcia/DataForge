@@ -8,7 +8,8 @@ The drawing comment (df-8x0m.23.38) is a second one, tagged with DRAWING_MARKER:
 scripts/arquitetura/diff.py, which the job's step `desenho` writes to report/desenho.md. It is
 created, edited, and deleted when the PR no longer changes the drawing (an empty file); when that
 step did not succeed (DESENHO, its outcome) the comment is left as it was. A PR from a fork gets a
-read-only token: both texts go to the job summary only.
+read-only token: both texts go to the job summary only. The job summary always has the drawing
+whole, since a comment over MAX_BODY is cut.
 
 Environment: RESULTS (toJSON(needs)), PR, RUN_URL, SHA, GITHUB_REPOSITORY, GH_TOKEN, DESENHO,
 HEAD_REPO (the PR head's owner/name), GITHUB_STEP_SUMMARY.
@@ -96,7 +97,11 @@ def drawing(results: dict) -> str | None:
     stale = results.get("arquitetura", {}).get("result") not in (None, "success")
     warning = ("> ⚠️ Job `arquitetura` did not pass: `arquitetura/modelo.json` may not be the export of the .c4.\n\n"
                if stale else "")
-    body = f"{DRAWING_MARKER}\n{warning}{text}\n"
+    return f"{DRAWING_MARKER}\n{warning}{text}\n"
+
+
+def cut(body: str) -> str:
+    """`body` under GitHub's limit; the job summary has it whole."""
     return body if len(body) <= MAX_BODY else body[:MAX_BODY] + "\n\n… (cut: the job summary has it whole)\n"
 
 
@@ -105,8 +110,9 @@ def gh(*args: str, payload: str | None = None) -> str:
 
 
 def sync(repo: str, pr: str, comments: list[dict], marker: str, body: str | None) -> None:
-    """Make the bot's comment tagged `marker` hold `body`: edit the last one, or post it; None deletes them."""
-    ours = [int(c["id"]) for c in comments if marker in (c.get("body") or "") and c["user"]["type"] == "Bot"]
+    """Make the bot's comment that starts with `marker` hold `body`: edit the last one, or post it; None
+    deletes them. Starts with, not holds: the CI report quotes job output, which may hold the other marker."""
+    ours = [int(c["id"]) for c in comments if (c.get("body") or "").startswith(marker) and c["user"]["type"] == "Bot"]
     if body is None:
         for comment in ours:
             gh("api", "-X", "DELETE", f"repos/{repo}/issues/comments/{comment}")
@@ -134,15 +140,17 @@ def main() -> None:
     print(body)
     if drawing_body:
         print(drawing_body)
-    if os.environ.get("HEAD_REPO") != repo:  # a fork's PR: the token cannot comment
-        with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
-            summary.write("\n\n".join(b for b in (body, drawing_body) if b))
+    fork = os.environ.get("HEAD_REPO") != repo  # a fork's PR: the token cannot comment
+    # The summary has the drawing whole (a long comment is cut), and on a fork the CI report too.
+    with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
+        summary.write("\n\n".join(b for b in (body if fork else None, drawing_body) if b))
+    if fork:
         return
     pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{repo}/issues/{pr}/comments"))
     comments = [c for page in pages for c in page]
     sync(repo, pr, comments, MARKER, body)
     if drawn:
-        sync(repo, pr, comments, DRAWING_MARKER, drawing_body)
+        sync(repo, pr, comments, DRAWING_MARKER, drawing_body and cut(drawing_body))
     else:
         print("::warning::the drawing diff did not run: its PR comment is left as it was")
 

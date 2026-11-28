@@ -204,6 +204,9 @@ CONTINUE_OK = {
 NEEDS_STEP_IFS = (None, "always()")
 # The status functions of an `if:`: a step whose earlier steps passed, and a job whose need failed.
 RUNNING = {"always": True, "cancelled": False, "success": True, "failure": False}
+# A step after a failed one, and any step of a cancelled run.
+STEP_FAILED = {"always": True, "cancelled": False, "success": False, "failure": True}
+CANCELLED = {"always": True, "cancelled": True, "success": False, "failure": False}
 NEED_FAILED = {"always": True, "cancelled": False, "success": False, "failure": True}
 EVENTS = ("pull_request", "push")
 TOKEN = re.compile(r"\s*(?:'((?:[^']|'')*)'|(&&|\|\||==|!=|!|\(|\))|([A-Za-z_][\w.-]*))")
@@ -594,12 +597,31 @@ def _drawing_checks(jobs: dict) -> list[str]:
     if not isinstance(depth, int) or depth < 2:
         problems.append(f"report checks out at depth {depth!r}: no base commit")
     comment = _step(jobs, "report", COMMENT_STEP)
-    if comment.get("if") != "always()" or comment.get("env", {}).get("DESENHO") != f"${{{{ steps.{step.get('id')}.outcome }}}}":
-        problems.append("the comment step does not run always() with the drawing step's outcome")
-    writers = {name for name, j in jobs.items() if "write" in str(j.get("permissions", ""))}
-    if writers != {"report"}:
-        problems.append(f"jobs with a write token: {sorted(writers)}")
+    if _why_skipped(comment.get("if"), {}, STEP_FAILED) or not _why_skipped(comment.get("if"), {}, CANCELLED):
+        problems.append(f"the comment step's if: {comment.get('if')!r} skips it after a failed diff or runs it on a cancelled run")
+    if comment.get("env", {}).get("DESENHO") != f"${{{{ steps.{step.get('id')}.outcome }}}}":
+        problems.append("the comment step does not get the drawing step's outcome")
     return problems
+
+
+def _write_tokens(workflow: dict) -> list[str]:
+    """Where the workflow grants a write token: "workflow" for its top-level permissions, else the jobs.
+    A job without permissions gets the top level's, or the repo's default (read-only, set on GitHub)."""
+    tops = ["workflow"] if "write" in str(workflow.get("permissions", "")) else []
+    return tops + sorted(name for name, job in workflow["jobs"].items() if "write" in str(job.get("permissions", "")))
+
+
+@pytest.mark.parametrize(("inject", "expected"), [
+    (lambda w: None, ["report"]),
+    (lambda w: w.update(permissions={"pull-requests": "write"}), ["workflow", "report"]),
+    (lambda w: w.update(permissions="write-all"), ["workflow", "report"]),
+    (lambda w: w["jobs"]["arquitetura"].update(permissions={"pull-requests": "write"}), ["arquitetura", "report"]),
+], ids=["as-is", "top-level", "top-level-write-all", "another-job"])
+def test_only_the_report_job_holds_a_write_token(inject, expected):
+    """It posts the CI report and the drawing diff (df-8x0m.23.38): a second job with a write token is more surface."""
+    workflow = yamlio.load(CI.read_text(encoding="utf-8"))
+    inject(workflow)
+    assert _write_tokens(workflow) == expected
 
 
 CHECKS = [
@@ -744,7 +766,7 @@ LOOPHOLES = [
     ("drawing-at-depth-1", _drawing_checks, lambda jobs: jobs["report"]["steps"][0].pop("with")),
     ("drawing-comment-skipped-after-a-failed-diff", _drawing_checks, _set("report", COMMENT_STEP, {"if": None})),
     ("drawing-outcome-not-passed", _drawing_checks, lambda jobs: _step(jobs, "report", COMMENT_STEP)["env"].pop("DESENHO")),
-    ("drawing-in-a-job-with-its-own-token", _drawing_checks, _set("arquitetura", None, {"permissions": {"pull-requests": "write"}})),
+    ("drawing-comment-on-a-cancelled-run", _drawing_checks, _set("report", COMMENT_STEP, {"if": "always()"})),
 ]
 
 

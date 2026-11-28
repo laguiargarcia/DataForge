@@ -11,7 +11,8 @@ scripts/ci_report.py posts the output as its own PR comment.
 Each list of records (elements, arrows, views, deployment nodes, instances and arrows) is matched by
 id: new, removed, or changed with the fields that differ. An arrow's id holds its title (modelo.py),
 so a renamed arrow is a removed and a new one with the same source and target: those are paired
-(in id order) and shown as one changed arrow.
+(in id order) and shown as one changed arrow. A model without modelo.json's shape (not JSON, a
+list that is not of records with an id, an id twice) stops it with a message and exit 1.
 """
 
 from __future__ import annotations
@@ -47,20 +48,45 @@ def _records(model: dict | None, path: tuple[str, ...]) -> dict[str, dict]:
     return {r["id"]: r for r in node.get(path[-1]) or []}
 
 
+def _one_line(value) -> str:
+    """A value as text on one line, without backticks; anything but a string as its JSON."""
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return " ".join(text.replace("`", "'").split())
+
+
+def _window(text: str, start: int) -> str:
+    """SHORT characters of `text` from `start`, in backticks, with … where it was cut."""
+    piece = text[start:start + SHORT]
+    return f"`{'…' if start else ''}{piece}{'…' if start + SHORT < len(text) else ''}`"
+
+
 def _short(value) -> str:
     """A value inline: in backticks, on one line, cut at SHORT characters; None is a dash."""
-    if value is None:
-        return "—"
-    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True)
-    text = " ".join(text.replace("`", "'").split())
-    return f"`{text[:SHORT - 1] + '…' if len(text) > SHORT else text}`"
+    return "—" if value is None else _window(_one_line(value), 0)
+
+
+def _pair(old, new) -> tuple[str, str]:
+    """Two values inline, both cut around their first difference: a change past SHORT characters still shows."""
+    if old is None or new is None:
+        return _short(old), _short(new)
+    a, b = _one_line(old), _one_line(new)
+    first = next((i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y), min(len(a), len(b)))
+    start = max(0, first - SHORT // 4) if max(len(a), len(b)) > SHORT else 0
+    return _window(a, start), _window(b, start)
 
 
 def _field_change(field: str, old, new) -> str:
-    if isinstance(old, list) and isinstance(new, list) and all(isinstance(v, str) for v in old + new):
+    """What changed in one field: per key in a dict, the items added and removed in a list, else old → new."""
+    if isinstance(old, dict) and isinstance(new, dict):
+        return "; ".join(_field_change(f"{field}.{key}", old.get(key), new.get(key))
+                         for key in sorted(set(old) | set(new)) if old.get(key) != new.get(key))
+    if isinstance(old, list) and isinstance(new, list):
         gone, came = [v for v in old if v not in new], [v for v in new if v not in old]
+        if not (gone or came):
+            return f"{field} reordered" if len(old) == len(new) else f"{field} {len(old)} → {len(new)} items"
         return f"{field} " + " ".join([f"+{_short(v)}" for v in came] + [f"−{_short(v)}" for v in gone])
-    return f"{field} {_short(old)} → {_short(new)}"
+    was, now = _pair(old, new)
+    return f"{field} {was} → {now}"
 
 
 def changes(old: dict, new: dict, skip: frozenset[str] = frozenset()) -> list[str]:
@@ -72,7 +98,7 @@ def changes(old: dict, new: dict, skip: frozenset[str] = frozenset()) -> list[st
 def _label(record: dict) -> str:
     kind = record.get("kind") or record.get("type") or record.get("element")
     title = record.get("title")
-    shown_title = title and title not in record["id"]
+    shown_title = title and not ("source" in record and record["id"].endswith(f": {title}"))  # an arrow's id holds it
     return f"`{record['id']}`" + (f" ({kind})" if kind else "") + (f" {_short(title)}" if shown_title else "")
 
 
@@ -117,8 +143,31 @@ def _spec_lines(base: dict | None, pr: dict | None) -> list[str]:
     return [f"**Specification**: {'; '.join(texts)}", ""] if texts else []
 
 
+def _checked(model, side: str) -> dict | None:
+    """`model` when it has the shape the diff reads (see the module docstring), else a ValueError."""
+    if model is None:
+        return None
+    if not isinstance(model, dict) or not isinstance(model.get("specification") or {}, dict):
+        raise ValueError(f"the {side} model is not a modelo.json object")  # noqa: TRY004 -- bad data, one error type with the JSON errors main turns into a message
+    for _, path in SECTIONS:
+        node = model
+        for key in path[:-1]:
+            node = node.get(key, {})
+            if not isinstance(node, dict):
+                raise ValueError(f"the {side} model's {key} is not an object")  # noqa: TRY004 -- bad data, as above
+        rows = node.get(path[-1], [])
+        need = ("id", "source", "target") if path in ARROWS else ("id",)
+        if not isinstance(rows, list) or not all(isinstance(r, dict) and all(isinstance(r.get(k), str) for k in need)
+                                                 for r in rows):
+            raise ValueError(f"the {side} model's {'.'.join(path)} is not a list of records with {', '.join(need)}")
+        if len({r["id"] for r in rows}) != len(rows):
+            raise ValueError(f"the {side} model's {'.'.join(path)} has an id twice")
+    return model
+
+
 def markdown(base: dict | None, pr: dict | None) -> str:
     """The comment's Markdown: what `pr` changes against `base` (None: no model); "" when nothing."""
+    base, pr = _checked(base, "base"), _checked(pr, "PR")
     lines = [line for heading, path in SECTIONS for line in section(heading, path, base, pr)]
     lines += _spec_lines(base, pr)
     if (base or {}).get("likec4") != (pr or {}).get("likec4") and base and pr:
@@ -131,9 +180,19 @@ def markdown(base: dict | None, pr: dict | None) -> str:
 
 def main() -> int:
     text = sys.stdin.read()
-    base = json.loads(text) if text.strip() else None
-    pr = modelo.load() if modelo.SAIDA.exists() else None
-    sys.stdout.write(markdown(base, pr))
+    try:  # json's errors are ValueErrors too: a message, not a traceback, in CI
+        base = json.loads(text) if text.strip() else None
+    except ValueError as error:
+        raise SystemExit(f"scripts/arquitetura/diff.py: the base model is not JSON: {error}") from error
+    try:
+        pr = modelo.load() if modelo.SAIDA.exists() else None
+    except ValueError as error:
+        raise SystemExit(f"scripts/arquitetura/diff.py: the PR model ({modelo.SAIDA}) is not JSON: {error}") from error
+    try:
+        out = markdown(base, pr)
+    except ValueError as error:
+        raise SystemExit(f"scripts/arquitetura/diff.py: {error}") from error
+    sys.stdout.write(out)
     return 0
 
 

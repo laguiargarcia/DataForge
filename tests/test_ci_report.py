@@ -141,6 +141,25 @@ def test_a_long_drawing_comment_is_cut_under_githubs_limit(tmp_path, monkeypatch
     calls = _writes(_main(tmp_path, monkeypatch, [], drawing=DRAWN + "- x\n" * 20000))
     assert len(calls[1][2]) < 65536
     assert calls[1][2].endswith("(cut: the job summary has it whole)\n")
+    summary = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert summary.endswith("- x\n" * 20000)
+    assert ci_report.MARKER not in summary
+
+
+# The CI report quotes job output: a failing test of this file shows the drawing marker in a details block.
+QUOTING = (f"{ci_report.MARKER}\n### ❌\n<details><summary>out</summary>\n\n```text\n"
+           f"assert '{ci_report.DRAWING_MARKER}'\n```\n</details>")
+
+
+def test_a_ci_report_quoting_the_drawing_marker_is_not_deleted_when_the_drawing_is_unchanged(tmp_path, monkeypatch):
+    calls = _writes(_main(tmp_path, monkeypatch, [_comment(1, QUOTING)], drawing=""))
+    assert [c[:2] for c in calls] == [("PATCH", f"repos/{REPO}/issues/comments/1")]
+
+
+def test_a_ci_report_quoting_the_drawing_marker_is_not_overwritten_by_the_drawing(tmp_path, monkeypatch):
+    calls = _writes(_main(tmp_path, monkeypatch, [_comment(1, QUOTING)], drawing=DRAWN))
+    assert [c[:2] for c in calls] == [("PATCH", f"repos/{REPO}/issues/comments/1"), ("POST", f"repos/{REPO}/issues/{PR}/comments")]
+    assert calls[0][2].startswith(ci_report.MARKER)
 
 
 def test_a_forks_pr_writes_both_texts_to_the_job_summary_and_calls_no_api(tmp_path, monkeypatch):

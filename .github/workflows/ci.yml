@@ -775,7 +775,8 @@ jobs:
           if git cat-file -e 'HEAD^1:arquitetura/modelo.json' 2> /dev/null; then git show 'HEAD^1:arquitetura/modelo.json'; fi | python3 scripts/arquitetura/diff.py > report/desenho.md
       - name: Comment the CI report on the PR
         # Also when the drawing diff failed: the CI report still goes out, the drawing comment stays as it was.
-        if: always()
+        # Not on a cancelled run, where it would only fail.
+        if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
           RESULTS: ${{ toJSON(needs) }}
