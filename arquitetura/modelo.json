@@ -831,6 +831,78 @@
       "title": "Telas do ninho"
     },
     {
+      "description": "A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair",
+      "id": "casaHoje.telasNinhoHoje.cascaHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/index.html",
+          "ninho/telas/public",
+          "ninho/telas/src/main.tsx",
+          "ninho/telas/src/index.css",
+          "ninho/telas/src/App.tsx",
+          "ninho/telas/src/Entrar.tsx",
+          "ninho/telas/src/eu.ts"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Casca"
+    },
+    {
+      "description": "O pedido ao servidor (pedir: o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo (useDados, da lista e dos desejos) e o Logo, que importa o logo-ninho.svg de ninho/identidade",
+      "id": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/pedido.ts",
+          "ninho/telas/src/dados.ts",
+          "ninho/telas/src/Logo.tsx"
+        ]
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Comum às telas"
+    },
+    {
+      "description": "Os desejos de cada pessoa da casa, abrindo na parte de quem entrou: criar, editar, apagar, anotar e marcar presente nos desejos dos outros",
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/desejos"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela dos desejos"
+    },
+    {
+      "description": "As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)",
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/financas"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela de finanças"
+    },
+    {
+      "description": "Os itens da lista: acrescentar (vários de uma vez, separados), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer",
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/lista"
+      },
+      "tags": [],
+      "technology": "React, TypeScript",
+      "title": "Tela da lista de compras"
+    },
+    {
       "description": "Finanças, lista e agenda; administra o DataForge",
       "id": "donoAlvo",
       "kind": "pessoa",
@@ -3707,23 +3779,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje.servidorHoje: Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": [
-          "ninho/telas/src/pedido.ts",
-          "ninho/telas/src/eu.ts"
-        ]
-      },
-      "source": "casaHoje.telasNinhoHoje",
-      "tags": [],
-      "target": "casaHoje.ninhoHoje.servidorHoje",
-      "technology": null,
-      "title": "Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)"
-    },
-    {
-      "description": null,
       "id": "casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje: Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)",
       "kind": null,
       "links": [],
@@ -3733,6 +3788,217 @@
       "target": "casaHoje.ninhoHoje",
       "technology": null,
       "title": "Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.ninhoHoje.servidorHoje: Entra, sai e lê quem entrou e os módulos dela (/api/entrar, /api/sair, /api/eu)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/eu.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Entra, sai e lê quem entrou e os módulos dela (/api/entrar, /api/sair, /api/eu)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/App.tsx",
+          "ninho/telas/src/eu.ts",
+          "ninho/telas/src/Entrar.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor, ouve o 401 e avisa a troca de sessão; mostra o Logo no entrar"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.desejosTelasHoje: Monta a tela dos desejos",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "technology": null,
+      "title": "Monta a tela dos desejos"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.financasTelasHoje: Monta a tela de finanças",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "technology": null,
+      "title": "Monta a tela de finanças"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.cascaHoje -> casaHoje.telasNinhoHoje.listaTelasHoje: Monta a tela da lista",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.cascaHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "technology": null,
+      "title": "Monta a tela da lista"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.desejosHoje: Lê, cria, edita e apaga desejos e anotações, marca e desmarca presente (/api/desejos)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.desejosHoje",
+      "technology": null,
+      "title": "Lê, cria, edita e apaga desejos e anotações, marca e desmarca presente (/api/desejos)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.ninhoHoje.servidorHoje: Lê as pessoas da casa (/api/pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Lê as pessoas da casa (/api/pessoas)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa o tipo de quem entrou (Eu)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/desejos/Desejos.tsx"
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.cascaHoje",
+      "technology": null,
+      "title": "Usa o tipo de quem entrou (Eu)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.desejosTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os desejos (useDados), mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/desejos/api.ts",
+          "ninho/telas/src/desejos/Desejos.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.desejosTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os desejos (useDados), mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.ninhoHoje.servidorHoje: Lê as transações do mês e as edições, corrige e desfaz, pede o aplicar e o acompanha (/api/financas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/financas/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Lê as transações do mês e as edições, corrige e desfaz, pede o aplicar e o acompanha (/api/financas)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.financasTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor e trata a recusa (ErroPedido), mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/financas/api.ts",
+          "ninho/telas/src/financas/aplicar.ts",
+          "ninho/telas/src/financas/Financas.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.financasTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor e trata a recusa (ErroPedido), mostra o Logo"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.ninhoHoje.listaHoje: Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/lista/api.ts",
+          "ninho/telas/src/pedido.ts"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.listaHoje",
+      "technology": null,
+      "title": "Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.telasNinhoHoje.listaTelasHoje -> casaHoje.telasNinhoHoje.comumTelasHoje: Pede ao servidor, lê e relê os itens (useDados), mostra o Logo",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/telas/src/lista/api.ts",
+          "ninho/telas/src/lista/Lista.tsx"
+        ]
+      },
+      "source": "casaHoje.telasNinhoHoje.listaTelasHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.comumTelasHoje",
+      "technology": null,
+      "title": "Pede ao servidor, lê e relê os itens (useDados), mostra o Logo"
     },
     {
       "description": null,
@@ -3882,6 +4148,20 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa a lista, os desejos e as correções pelo celular",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.cascaHoje",
+      "technology": null,
+      "title": "Usa a lista, os desejos e as correções pelo celular"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.telasNinhoHoje: Usa a lista, os desejos e as correções pelo celular",
       "kind": null,
       "links": [],
@@ -3907,6 +4187,20 @@
       "target": "casaAlvo.appCelularAlvo",
       "technology": null,
       "title": "Usa"
+    },
+    {
+      "description": null,
+      "id": "outraHoje -> casaHoje.telasNinhoHoje.cascaHoje: Usa a lista e os desejos pelo celular",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/telas/src/App.tsx"
+      },
+      "source": "outraHoje",
+      "tags": [],
+      "target": "casaHoje.telasNinhoHoje.cascaHoje",
+      "technology": null,
+      "title": "Usa a lista e os desejos pelo celular"
     },
     {
       "description": null,
@@ -4010,6 +4304,16 @@
       "title": "Hoje: componentes do pipeline GetFinance",
       "type": "element",
       "viewOf": "casaHoje.pipelineHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-telas",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes das telas do ninho",
+      "type": "element",
+      "viewOf": "casaHoje.telasNinhoHoje"
     },
     {
       "description": null,
