@@ -3,6 +3,7 @@ topic: Project-wide conventions (codebase exploration, audience principle)
 read_when: Starting a new task that touches code; when deciding how to explore the codebase; when writing Obsidian-facing notes
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: []
+transversal: true
 ---
 
 # Conventions

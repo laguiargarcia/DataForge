@@ -2,6 +2,7 @@
 topic: Current
 read_when: Quick orientation on what phase/plans/issues are active right now.
 last_synced_at: "2026-05-23T04:28:53Z"
+transversal: true
 ---
 
 # Current

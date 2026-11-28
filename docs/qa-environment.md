@@ -1,3 +1,9 @@
+---
+topic: QA environment (DataForge-QA)
+read_when: When working on QA/validation of the GetFinance report workbook (workbook era, not maintained since df-cns), or you need the sibling DataForge-QA folder's location, purpose, workbook, and keep-clean rule
+transversal: true
+---
+
 # QA Environment — DataForge-QA
 
 `DataForge-QA/` is a **separate QA/validation environment**, a sibling of this dev repo. It

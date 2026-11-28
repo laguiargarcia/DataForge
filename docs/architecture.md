@@ -1,6 +1,6 @@
 ---
 topic: Architecture — Layer Responsibilities
-read_when: When you need a map of the codebase modules, key behaviors, and the cross-platform compat layer
+read_when: "When you need module responsibilities, key behaviors, and the cross-platform compat layer (cross-module deps/hubs: grep the code)"
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: []
 code:

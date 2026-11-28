@@ -2,6 +2,7 @@
 topic: Quality gate (lint, dead code, import contracts, dependency drift against a baseline)
 read_when: A commit, CI run or Claude Code hook fails with "quality gate"; adding or tuning a lint rule; suppressing a finding; changing scripts/quality/
 related_issues: [df-q6oj]
+transversal: true
 ---
 
 # Quality gate

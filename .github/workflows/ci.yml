@@ -264,6 +264,13 @@ jobs:
         run: |
           mkdir -p "$GITHUB_WORKSPACE/report"
           python3 -S scripts/arquitetura/docs.py conferir 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-docs.txt"
+      - name: The committed docs/INDEX.md is the generated one
+        # df-8x0m.23.39.2: the INDEX lists each box's doc and the `transversal: true` docs; a doc in
+        # neither part, or an INDEX edited by hand, fails. Standard library only (python3 -S).
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/report"
+          python3 -S scripts/arquitetura/indice_docs.py conferir 2>&1 | tee "$GITHUB_WORKSPACE/report/arquitetura-indice.txt"
       - uses: astral-sh/setup-uv@v10.3.3
         # The next step parses every tracked .py with ast: it needs the repo's Python
         # (.python-version), not the runner's python3, which refuses newer syntax.
