@@ -18,8 +18,8 @@ the repo, a file or a folder. LikeC4 exports a list of one item as a string; bot
 The model holds two drawings, the hoje and the alvo. The system of an element is the first part of
 its id (casaHoje, casaAlvo, donoHoje); the hoje is every system whose name ends in "Hoje" (mother
 constraint 2 of df-8x0m.23.47). Rules (2) to (5) are per system, so the same path in a box of the
-hoje and in one of the alvo is no conflict. Rules (3), (4) and (7) run on the hoje only: the alvo
-draws code that does not exist yet.
+hoje and in one of the alvo is no conflict. Rules (3), (4), (7) and (8) run on the hoje only: the
+alvo draws code that does not exist yet.
 
 (1) Every codigo path, of any element, arrow or deployment item, in any system, is in normal form
     (relative, '/' between parts, no '.', '..' or empty part) and is a tracked file or a folder
@@ -35,6 +35,8 @@ draws code that does not exist yet.
     and a pair where neither owner is a componente (an import between two containers without
     components). When components are added to a container later, the arrows that enter it point
     at the container: this rule asks for them to be pointed at the component that owns the file.
+    One error per line and pair: a line that imports two files of one owner (or a module and the
+    __init__.py of its package, below) asks for one arrow.
 (4) An owner that is not a componente but has a componente inside it (a container with
     components) owns no code file: one of its components (or of a nested container) does.
 (5) One path in the codigo of two elements of the same system is an error: the owner would be
@@ -46,6 +48,8 @@ draws code that does not exist yet.
     in the codigo of an arrow of that pair (any of them, if several titles share it), as the file or
     a folder above it. One error per file and pair, at its first import. A codigo path of an arrow
     that holds no import is not checked: it may hold the HTTP or CLI call of the same arrow.
+(8) Every componente of the hoje has codigo (mother constraint 4): one without it owns no file, so
+    rules (3), (4) and (6) cannot see it.
 
 Code files: suffixes .py .ts .tsx .js .jsx .mjs .cjs .sh .ps1. Out of scope, so they need no owner,
 their imports are not read and an import of them is not checked: anything under a folder named
@@ -279,12 +283,18 @@ def checar_dentro(elementos: list[dict]) -> list[str]:
             continue
         pai = _ancestral_com_codigo(elemento["id"], por_id)
         if pai is None:
-            erros.append(f"{elemento['id']}: has codigo but no ancestor of it has, so its code is in no container's")
+            erros.append(f"{elemento['id']}: has codigo but none of its ancestors has codigo, so its code lies in no container")
             continue
         erros += [f"{elemento['id']}: codigo {caminho!r} is not inside the codigo of its ancestor {pai} "
                   f"({', '.join(map(repr, por_id[pai]))})"
                   for caminho in caminhos if not any(_dentro(caminho, p) for p in por_id[pai])]
     return erros
+
+
+def checar_sem_codigo(elementos: list[dict]) -> list[str]:
+    """Rule (8)."""
+    return [f"{e['id']}: a componente of the hoje without codigo: give it the paths of its code"
+            for e in elementos if e["kind"] == COMPONENTE and modelo.e_hoje(e["id"]) and not codigo(e)]
 
 
 def checar_componentes(donos: dict[str, str], elementos: list[dict]) -> list[str]:
@@ -485,11 +495,12 @@ class _Leitor:
 
     def pacotes(self, base: str, alvo: str) -> list[str]:
         """The __init__.py of each package between `base` and `alvo`, which Python runs before `alvo`;
-        not those of the importing file's own packages, which ran before the importing file."""
+        not those of the importing file's own packages, which ran before the importing file. When
+        `alvo` is a package's own __init__.py it comes back too, and `ligar` drops it as read."""
         pacotes, pasta = [], posixpath.dirname(alvo)
         while pasta and pasta != base:
             inicio = _juntar(pasta, "__init__.py")
-            if inicio != alvo and inicio in self.repo.arquivos and not self.arquivo.startswith(pasta + "/"):
+            if inicio in self.repo.arquivos and not self.arquivo.startswith(pasta + "/"):
                 pacotes.append(inicio)
             pasta = posixpath.dirname(pasta)
         return pacotes
@@ -715,6 +726,7 @@ def conferir(modelo_: dict, raiz: Path, arquivos) -> Resultado:
     ler_imports(repo, resultado)
     por_arquivo = resultado.erros + checar_setas(resultado, elementos, modelo_.get("relations") or [])
     resultado.erros = (checar_caminhos(modelo_, repo) + checar_repetidos(elementos) + checar_dentro(elementos)
+                       + checar_sem_codigo(elementos)
                        + checar_componentes(resultado.donos, elementos) + sorted(por_arquivo, key=_posicao))
     resultado.avisos.sort(key=_posicao)
     return resultado

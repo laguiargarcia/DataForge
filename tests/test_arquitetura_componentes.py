@@ -133,13 +133,30 @@ def test_a_component_inside_a_component_lies_inside_its_parents_codigo(tmp_path)
 
 
 def test_an_ancestor_without_codigo_is_skipped_for_the_next_one_up(tmp_path):
-    elements = [box(APP, ["app"]), el(A), el(f"{A}.qHoje", ["app/a/q"])]
-    assert run(tmp_path, elements, {"app/a/q/z.py": ""}) == (0, [])
+    """In the alvo, where a componente may have no code yet (rule (8) is the hoje's)."""
+    app = "casaAlvo.appAlvo"
+    elements = [box(app, ["app"]), el(f"{app}.aAlvo"), el(f"{app}.aAlvo.qAlvo", ["lib/q"])]
+    assert run(tmp_path, elements, {"app/a/q/z.py": "", "lib/q/z.py": ""}) == (
+        1, [f"error: {app}.aAlvo.qAlvo: codigo 'lib/q' is not inside the codigo of its ancestor {app} ('app')"])
+
+
+# (8) every componente of the hoje has codigo
+
+
+def test_a_componente_of_the_hoje_without_codigo_fails(tmp_path):
+    assert run(tmp_path, two_components([el(f"{APP}.cHoje")]), {"app/a/x.py": "", "app/b/y.py": ""}) == (
+        1, [f"error: {APP}.cHoje: a componente of the hoje without codigo: give it the paths of its code"])
+
+
+def test_a_componente_of_the_alvo_without_codigo_passes(tmp_path):
+    """The alvo draws code that does not exist yet."""
+    elements = [box("casaAlvo.appAlvo", ["app"]), el("casaAlvo.appAlvo.novoAlvo")]
+    assert run(tmp_path, elements, {"app/a/x.py": ""}) == (0, [])
 
 
 def test_a_component_with_codigo_and_no_ancestor_with_codigo_fails(tmp_path):
     assert run(tmp_path, [box(APP), el(A, ["app/a"])], {"app/a/x.py": ""}) == (
-        1, [f"error: {A}: has codigo but no ancestor of it has, so its code is in no container's"])
+        1, [f"error: {A}: has codigo but none of its ancestors has codigo, so its code lies in no container"])
 
 
 # (4) in a container with components, a component owns every code file
@@ -391,6 +408,11 @@ def test_bases_resolve_in_order(tmp_path, source, extra, expected):
     files = {"app/a/x.py": source, "app/a/w.py": "", "app/b/y.py": "", **extra}
     elements = two_components([el(f"{APP}.wHoje", ["app/a/w.py"])])
     assert run(tmp_path, elements, files) == (int(any(e.startswith("error:") for e in expected)), expected)
+
+
+def test_one_line_that_imports_two_files_of_one_owner_is_one_error(tmp_path):
+    files = {"app/a/x.py": "from app.b import y, z\n", "app/b/y.py": "", "app/b/z.py": ""}
+    assert run(tmp_path, two_components(), files) == (1, [needs_arrow("app/a/x.py", 1, "app/b/y.py")])
 
 
 def test_one_line_that_imports_two_names_of_one_file_is_one_error(tmp_path):
