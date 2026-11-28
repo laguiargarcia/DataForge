@@ -18,6 +18,7 @@ model {
   extend casaHoje.telasNinhoHoje {
     cascaHoje = componente 'Casca' {
       #servidoPelaProd
+      link ../docs/caixas/casa.telasNinho.casca.md 'doc'
       description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair'
       technology 'React, TypeScript'
       metadata {
@@ -26,6 +27,7 @@ model {
     }
     comumTelasHoje = componente 'Comum às telas' {
       #servidoPelaProd
+      link ../docs/caixas/casa.telasNinho.comumTelas.md 'doc'
       description 'O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade'
       technology 'React, TypeScript'
       metadata {
@@ -33,6 +35,7 @@ model {
       }
     }
     listaTelasHoje = componente 'Tela da lista de compras' {
+      link ../docs/caixas/casa.telasNinho.listaTelas.md 'doc'
       description 'Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer'
       technology 'React, TypeScript'
       metadata {
@@ -40,6 +43,7 @@ model {
       }
     }
     desejosTelasHoje = componente 'Tela dos desejos' {
+      link ../docs/caixas/casa.telasNinho.desejosTelas.md 'doc'
       description 'Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros'
       technology 'React, TypeScript'
       metadata {
@@ -47,6 +51,7 @@ model {
       }
     }
     financasTelasHoje = componente 'Tela de finanças' {
+      link ../docs/caixas/casa.telasNinho.financasTelas.md 'doc'
       description 'As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar)'
       technology 'React, TypeScript'
       metadata {

@@ -15,6 +15,7 @@
 model {
   extend casaHoje.pipelineHoje {
     landingHoje = componente 'landing' {
+      link ../docs/caixas/casa.pipeline.landing.md 'doc'
       description 'Task fetch do finance_daily: busca contas, transações, faturas e investimentos no Pluggy e grava a partição do dia no raw'
       technology 'Python'
       metadata {
@@ -22,6 +23,7 @@ model {
       }
     }
     syntheticHoje = componente 'synthetic' {
+      link ../docs/caixas/casa.pipeline.synthetic.md 'doc'
       description 'Task fetch do finance_demo, que roda só no dev e no CI, nunca na prod: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial'
       technology 'Python'
       metadata {
@@ -29,6 +31,7 @@ model {
       }
     }
     raw2cleansedHoje = componente 'raw2cleansed' {
+      link ../docs/caixas/casa.pipeline.raw2cleansed.md 'doc'
       description 'Tasks transform*: limpam e deduplicam o raw de contas, faturas, investimentos e transações para o cleansed; o mapa de estabelecimentos vem de config/'
       technology 'Python, polars, deltalake'
       metadata {
@@ -36,6 +39,7 @@ model {
       }
     }
     cleansed2curatedHoje = componente 'cleansed2curated' {
+      link ../docs/caixas/casa.pipeline.cleansed2curated.md 'doc'
       description 'Tasks das dimensões e fatos do curated (contas, calendário, investimentos, saldos, faturas, contrapartes) e das conferências (saldo, fatura, lançamentos suspeitos, extrato e veredito); contas e investimentos usam o config/'
       technology 'Python, polars, deltalake, pypdf'
       metadata {
@@ -43,6 +47,7 @@ model {
       }
     }
     reportHoje = componente 'report' {
+      link ../docs/caixas/casa.pipeline.report.md 'doc'
       description 'Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao, que preenche categorias e regras do edicao.db a partir do config/edicao quando estão vazias, só no finance_demo (não na prod); com as funções do relatório (cartao_listas, report_lib, saude)'
       technology 'Python, polars, deltalake'
       metadata {
@@ -51,6 +56,7 @@ model {
     }
     conferenciasHoje = componente 'Regras de conferência e extrato' {
       #servidoPelaProd
+      link ../docs/caixas/casa.pipeline.conferencias.md 'doc'
       description 'Funções puras de scripts/report que as tasks de conferência carregam: leitura do texto do extrato do banco, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato'
       technology 'Python, polars'
       metadata {
@@ -65,6 +71,7 @@ model {
     }
     regrasHoje = componente 'Regras de edição e classificação' {
       #servidoPelaProd
+      link ../docs/caixas/casa.pipeline.regras.md 'doc'
       description 'edicao (abre o edicao.db e lê e grava categorias, regras, correções e explicações) e classificacao (classifica pela regra); módulos soltos que o backend Finanças e o ninho também carregam por sys.path'
       technology 'Python, SQLite'
       metadata {
@@ -75,6 +82,7 @@ model {
       }
     }
     backupDadosHoje = componente 'backup' {
+      link ../docs/caixas/casa.pipeline.backupDados.md 'doc'
       description 'Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos'
       technology 'Python'
       metadata {
@@ -82,6 +90,7 @@ model {
       }
     }
     validationHoje = componente 'validation' {
+      link ../docs/caixas/casa.pipeline.validation.md 'doc'
       description 'Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e sai 1 quando há algum: a rodada fica failed com os dados gravados (o alert_warnings, que os citaria, está inativo)'
       technology 'Python'
       metadata {
@@ -89,6 +98,7 @@ model {
       }
     }
     functionsHoje = componente 'functions' {
+      link ../docs/caixas/casa.pipeline.functions.md 'doc'
       description 'Biblioteca que toda task carrega por exec: cliente HTTP do Pluggy (com o .env), conexões do connections.yaml, leitura e gravação do raw (parquet) e do Delta, regras de validação e o subprocesso do reprocess'
       technology 'Python, requests, polars, deltalake'
       metadata {
@@ -96,6 +106,7 @@ model {
       }
     }
     reprocessHoje = componente 'reprocess' {
+      link ../docs/caixas/casa.pipeline.reprocess.md 'doc'
       description 'Script manual, fora dos jobs: apaga uma tabela do cleansed e roda de novo a transformação dela sobre todo o raw'
       technology 'Python'
       metadata {
@@ -103,6 +114,7 @@ model {
       }
     }
     binHoje = componente 'bin' {
+      link ../docs/caixas/casa.pipeline.bin.md 'doc'
       description 'Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-o0cc'
       technology 'Bash, PowerShell'
       metadata {
@@ -110,6 +122,7 @@ model {
       }
     }
     arquivosWorkspaceHoje = banco 'Arquivos do workspace: workspace.yaml, jobs, conexões e config' {
+      link ../docs/caixas/casa.pipeline.arquivosWorkspace.md 'doc'
       description 'Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). A Definição do workspace, no DataForge, lê e escreve jobs e triggers; o Deploy copia jobs, config e triggers de um workspace a outro (sem uso em prod); o DataForge, as camadas, o ninho e o backend Finanças os leem. Os triggers/ e o config/investments.yaml existem só na prod, fora do git'
       technology 'YAML e CSV'
       metadata {
@@ -125,10 +138,12 @@ model {
     // lê a pasta como arquivos, e o LikeC4 1.61.1 apaga da vista do DataForge a seta da API ao contêiner,
     // já que a API também tem seta aos arquivos do workspace, filho dele (df-8x0m.23.47.18).
     pastaScriptsHoje = banco 'Pasta dos scripts (scripts/)' {
+      link ../docs/caixas/casa.pipeline.pastaScripts.md 'doc'
       description 'workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada .py é dos componentes do pipeline'
       technology 'Pasta de arquivos .py'
     }
     achadosHoje = banco 'Achados das validações' {
+      link ../docs/caixas/casa.pipeline.achados.md 'doc'
       description 'Um JSON por validação com os achados suspeitos (só ids e datas), regravado a cada rodada'
       technology 'Pasta de JSON (data/validation)'
     }

@@ -1,6 +1,6 @@
 ---
 topic: Message task
-read_when: When configuring an alert, notification, or any `type: message` task
+read_when: "When configuring an alert, notification, or any `type: message` task"
 subsystem: tasks
 last_synced_at: "2026-05-28T07:00:00Z"
 related_issues: [df-012, df-8or]

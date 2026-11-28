@@ -3,6 +3,9 @@ topic: Architecture — Layer Responsibilities
 read_when: When you need a map of the codebase modules, key behaviors, and the cross-platform compat layer
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: []
+code:
+  - dataforge
+status: pronto
 ---
 
 # Architecture — Layer Responsibilities

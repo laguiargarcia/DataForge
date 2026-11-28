@@ -4,6 +4,9 @@ read_when: When working on the PySide6 / Qt desktop surface
 subsystem: gui
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-0lf, df-37a, df-3qd]
+code:
+  - dataforge/gui
+status: pronto
 ---
 
 # GUI

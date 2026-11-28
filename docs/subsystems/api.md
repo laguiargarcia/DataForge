@@ -4,6 +4,9 @@ read_when: When working on the HTTP / FastAPI surface
 subsystem: api
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-0lf, df-37a]
+code:
+  - dataforge/api
+status: pronto
 ---
 
 # API

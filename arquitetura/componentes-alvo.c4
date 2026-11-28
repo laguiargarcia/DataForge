@@ -29,6 +29,7 @@ model {
   extend casaAlvo.dataforgeAlvo {
     apiAlvo = componente 'API de admin' {
       #muda #servidoPelaProd
+      link ../docs/subsystems/api.md 'doc'
       description 'O servidor FastAPI: workspaces, jobs, execuções, triggers, deploy, presença e o stream de eventos. Muda: serve só a administração, sem a rota genérica de tabelas e sem os apps; o que ela serve e quando existe, a decidir em df-8x0m.23.3'
       technology 'Python, FastAPI'
       metadata {
@@ -38,6 +39,7 @@ model {
     }
     appsAlvo = componente 'Hospedagem de apps' {
       #sai #servidoPelaProd
+      link ../docs/caixas/casa.dataforge.apps.md 'doc'
       description 'Acha os apps dos workspaces (app.yaml, dist), inicia e para o backend de cada um num processo uvicorn com um token, o middleware que o backend usa para recusar o que não veio do DataForge, o atalho do Windows e as rotas que servem o build e repassam ao backend (api/routers/apps.py). Sai: o DataForge não hospeda app (ADR 0006)'
       technology 'Python, uvicorn'
       metadata {
@@ -47,6 +49,7 @@ model {
     }
     cliAlvo = componente 'CLI (interface pública)' {
       #muda
+      link ../docs/caixas/casa.dataforge.cli.md 'doc'
       description 'O comando dataforge (Typer). A interface pública que o produto usa: run --detach e run-state --wait; scheduled-run, que o agendador do sistema chama; register-triggers; e os comandos de administração. Muda: acha o workspace pelo registro de pastas (df-7cyk); o registro no agendador vai para o Agendamento (df-2kia); saem os comandos que servem um app (app, o atalho), e o resto a decidir em df-8x0m.23.3'
       technology 'Python, Typer'
       metadata {
@@ -56,6 +59,7 @@ model {
     }
     compatAlvo = componente 'Compat' {
       #muda #servidoPelaProd
+      link ../docs/subsystems/compat.md 'doc'
       description 'Caminhos, URLs de banco, porta da API e hosts permitidos, entre Windows e Linux; lê DATAFORGE_HOME. Muda: a pasta de um workspace vem do registro de pastas, com workspaces/<nome> como padrão (df-7cyk)'
       technology 'Python'
       metadata {
@@ -64,6 +68,7 @@ model {
       }
     }
     definicaoAlvo = componente 'Definição do workspace' {
+      link ../docs/workspace-layout.md 'doc'
       description 'Os modelos (job, task, trigger, conexão), a leitura e a escrita dos YAML do workspace, o YAML do pacote e o cron entre UTC e a hora local'
       technology 'Python, pydantic, PyYAML'
       metadata {
@@ -72,6 +77,7 @@ model {
     }
     deltaPoolAlvo = componente 'Leituras Delta' {
       #sai #servidoPelaProd
+      link ../docs/caixas/casa.dataforge.deltaPool.md 'doc'
       description 'As leituras Delta de um processo longo em threads que vivem com ele (falha nativa no Windows, df-5lk8). Sai com os dois que a usam, a rota genérica de tabelas e o backend do app; o servidor do ninho lê o lago com o seu próprio pool (ninho/financas/leitura.py)'
       technology 'Python, polars, deltalake'
       metadata {
@@ -81,6 +87,7 @@ model {
     }
     deployAlvo = componente 'Deploy' {
       #muda
+      link ../docs/caixas/casa.dataforge.deploy.md 'doc'
       description 'Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só. Muda: candidato a sair ou congelar, a decidir em df-8x0m.23.3'
       technology 'Python'
       metadata {
@@ -90,6 +97,7 @@ model {
     }
     guiAlvo = componente 'Tela de admin' {
       #muda #servidoPelaProd
+      link ../docs/subsystems/gui.md 'doc'
       description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy), cliente HTTP da API local, e hoje também a janela de um app (dataforge app). Muda: fica a tela de admin, que tem de bater com o que roda atrás dela; sai a janela do app; quanto da GUI Qt fica, ou se pausa, a decidir em df-8x0m.23.3'
       technology 'Python, PySide6'
       metadata {
@@ -99,6 +107,7 @@ model {
     }
     historicoRunsAlvo = componente 'Histórico de execuções' {
       #servidoPelaProd
+      link ../docs/subsystems/db.md 'doc'
       description 'As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu'
       technology 'Python, SQLAlchemy'
       metadata {
@@ -107,6 +116,7 @@ model {
     }
     instanciaAlvo = componente 'Instância e presença' {
       #muda #servidoPelaProd
+      link ../docs/caixas/casa.dataforge.instancia.md 'doc'
       description 'Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas. Muda: o registro também conta as janelas de app, que saem; o que fica, a decidir em df-8x0m.23.3'
       technology 'Python, httpx'
       metadata {
@@ -116,6 +126,7 @@ model {
     }
     motorAlvo = componente 'Motor de execução' {
       #muda
+      link ../docs/subsystems/engine.md 'doc'
       description 'Roda um job: DAG das tasks, condições, tentativas, trava por workspace; o pedido de run destacado e o estado de um run (run --detach, run-state). Muda: com o workspace ocupado, o pedido hoje sempre espera na fila; qual pedido é recusado e qual espera decide df-8x0m.23.15'
       technology 'Python'
       metadata {
@@ -125,6 +136,7 @@ model {
     }
     segundoPlanoAlvo = componente 'Segundo plano (API e bandeja)' {
       #muda #servidoPelaProd
+      link ../docs/subsystems/gui.md 'doc'
       description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia. Muda: hoje fica ligado também por causa do app; se fica e quando, a decidir em df-8x0m.23.3'
       technology 'Python, PySide6, uvicorn'
       metadata {
@@ -134,6 +146,7 @@ model {
     }
     tasksAlvo = componente 'Tipos de task' {
       #muda
+      link ../docs/caixas/casa.dataforge.tasks.md 'doc'
       description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge. Muda: quem é avisado quando o pipeline falha ou o dado diverge, a decidir em df-8x0m.23.9'
       technology 'Python'
       metadata {
@@ -143,6 +156,7 @@ model {
     }
     agendamentoAlvo = componente 'Agendamento' {
       #novo
+      link ../docs/caixas/casa.dataforge.agendamento.md 'doc'
       description 'O registro de cada trigger como tarefa no agendador do sistema, num módulo próprio que a CLI e a API usam; hoje são funções privadas de dataforge/cli.py, que a API importa (df-2kia)'
       technology 'Python'
       metadata {
@@ -151,6 +165,7 @@ model {
     }
     rotaTabelasAlvo = componente 'Rota genérica de tabelas' {
       #sai #servidoPelaProd
+      link ../docs/subsystems/api.md 'doc'
       description '/api/workspaces/<ws>/tables/<tabela>: entrega uma tabela inteira do curated pelo nome, para as telas do app Finanças. Sai: o servidor lê as tabelas publicadas por rotas de domínio (df-8x0m.23.45), e o DataForge não serve dado de produto (ADR 0006)'
       technology 'Python, FastAPI, polars'
       metadata {
@@ -163,6 +178,7 @@ model {
   extend casaAlvo.servidorAlvo {
     desejosAlvo = componente 'Lista de desejos' {
       #servidoPelaProd
+      link ../docs/caixas/casa.ninho.desejos.md 'doc'
       description 'Rotas /api/desejos e as regras dos desejos, das anotações (um endereço http ou https inteiro é link) e do presente surpresa, que o dono do desejo nunca vê, nas tabelas desejos_* do ninho.db, criadas no primeiro uso'
       technology 'Python, FastAPI, SQLite'
       metadata {
@@ -171,6 +187,7 @@ model {
     }
     financasNinhoAlvo = componente 'Finanças' {
       #muda #servidoPelaProd
+      link ../docs/caixas/casa.ninho.financasNinho.md 'doc'
       description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); com o registro de pastas do DataForge (df-7cyk), pede o job pelo nome e deixa de pôr o DATAFORGE_HOME dois níveis acima do workspace; hoje acha o edicao.db pelo connections.yaml do workspace; muda com df-8x0m.23.14; a regra do que cada pessoa vê (df-8x0m.23.6)'
       technology 'Python, polars, deltalake, SQLite'
       metadata {
@@ -180,6 +197,7 @@ model {
     }
     listaAlvo = componente 'Lista de compras' {
       #servidoPelaProd
+      link ../docs/caixas/casa.ninho.lista.md 'doc'
       description 'Rotas /api/lista e as regras dos itens (texto, comprado, quem adicionou) na tabela lista_itens do ninho.db, criada no primeiro uso'
       technology 'Python, FastAPI, SQLite'
       metadata {
@@ -187,6 +205,7 @@ model {
       }
     }
     pessoasCliAlvo = componente 'CLI de pessoas' {
+      link ../docs/architecture-v2/people-and-visibility.md 'doc'
       description 'python -m ninho pessoas criar, senha, modulos, sair e listar, rodado no PC do servidor: a senha só é pedida no terminal, duas vezes; abre o ninho.db direto (--banco ou NINHO_BANCO), sem passar pelo servidor'
       technology 'Python, argparse'
       metadata {
@@ -195,6 +214,7 @@ model {
     }
     nucleoAlvo = componente 'Núcleo do servidor' {
       #muda #servidoPelaProd
+      link ../docs/caixas/casa.ninho.servidor.md 'doc'
       description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21); o NINHO_WORKSPACE, hoje a pasta do workspace GetFinance (hoje confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace), muda quando o workspace vai para ninho/financas (df-8x0m.23.14)'
       technology 'Python, FastAPI, SQLite'
       metadata {
@@ -204,6 +224,7 @@ model {
     }
     agendaAlvo = componente 'Agenda' {
       #novo #servidoPelaProd
+      link ../docs/caixas/casa.servidor.agenda.md 'doc'
       description 'Rotas /api/agenda e os eventos comuns aos dois, em tabelas do banco do app com o prefixo do módulo, no molde da lista; dentro do app, sem Google'
       technology 'Python, FastAPI, SQLite'
       metadata {
@@ -215,6 +236,7 @@ model {
   extend casaAlvo.appCelularAlvo {
     cascaAlvo = componente 'Casca' {
       #muda #servidoPelaProd
+      link ../docs/caixas/casa.telasNinho.casca.md 'doc'
       description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair. Muda: monta também a tela da agenda (df-8x0m.23.21); sem rede, saber quem entrou e abrir as telas, a decidir em df-8x0m.23.8'
       technology 'React, TypeScript'
       metadata {
@@ -224,6 +246,7 @@ model {
     }
     comumTelasAlvo = componente 'Comum às telas' {
       #servidoPelaProd
+      link ../docs/caixas/casa.telasNinho.comumTelas.md 'doc'
       description 'O pedido ao servidor (o fetch com o cookie da sessão, a mensagem de uma recusa e o aviso à casca num 401), a leitura e releitura dos dados de uma tela de módulo, que a lista e os desejos usam, e o Logo, que importa o logo-ninho.svg de ninho/identidade'
       technology 'React, TypeScript'
       metadata {
@@ -231,6 +254,7 @@ model {
       }
     }
     desejosTelasAlvo = componente 'Tela dos desejos' {
+      link ../docs/caixas/casa.telasNinho.desejosTelas.md 'doc'
       description 'Os desejos de cada pessoa da casa e os dos dois (Nós dois): abre na última parte usada neste aparelho, senão na de quem entrou; criar, editar, mover de parte, marcar realizado, apagar, anotar e marcar presente nos desejos dos outros'
       technology 'React, TypeScript'
       metadata {
@@ -239,6 +263,7 @@ model {
     }
     financasTelasAlvo = componente 'Tela de finanças' {
       #muda
+      link ../docs/caixas/casa.telasNinho.financasTelas.md 'doc'
       description 'As transações de um mês, com a troca de mês; corrigir e desfazer a subcategoria de uma transação; o aviso de que há correções ainda não aplicadas; e aplicar as correções, seguindo a execução até o fim (o run_id fica no navegador, para retomar depois de recarregar). Muda: passa a ter o que o app Finanças do PC tem, na ordem que o dono escolher (df-8x0m.23.19)'
       technology 'React, TypeScript'
       metadata {
@@ -248,6 +273,7 @@ model {
     }
     listaTelasAlvo = componente 'Tela da lista de compras' {
       #muda
+      link ../docs/caixas/casa.telasNinho.listaTelas.md 'doc'
       description 'Os itens da lista: acrescentar um item (o campo limpa e fica pronto para o próximo), marcar comprado, apagar e limpar os comprados; relê ao abrir e quando a página volta a aparecer. Muda: sem rede, mostra a cópia local e põe as mudanças na fila (df-8x0m.23.8)'
       technology 'React, TypeScript'
       metadata {
@@ -257,6 +283,7 @@ model {
     }
     agendaTelasAlvo = componente 'Tela da agenda' {
       #novo
+      link ../docs/caixas/casa.appCelular.agendaTelas.md 'doc'
       description 'Os eventos comuns aos dois: ver e criar; no molde da tela da lista'
       technology 'React, TypeScript'
       metadata {
@@ -265,6 +292,7 @@ model {
     }
     copiaLocalAlvo = componente 'Cópia local e fila' {
       #novo #servidoPelaProd
+      link ../docs/caixas/casa.appCelular.copiaLocal.md 'doc'
       description 'Guarda no aparelho o que as telas mostram e a fila das mudanças feitas sem rede, e envia a fila ao servidor quando a rede volta (a última escrita vence, por item). A lista e a agenda com certeza; o que mais entra (as edições de finanças, a sessão sem rede) decide df-8x0m.23.8; o aplicar exige rede'
       technology 'TypeScript'
       metadata {
@@ -276,6 +304,7 @@ model {
   extend casaAlvo.pipelineAlvo {
     arquivosWorkspaceAlvo = banco 'Arquivos do workspace: workspace.yaml, jobs, conexões e config' {
       #muda
+      link ../docs/caixas/casa.pipeline.arquivosWorkspace.md 'doc'
       description 'Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). Muda: vai para ninho/financas com o módulo; o DataForge acha a pasta pelo registro, df-7cyk'
       technology 'YAML e CSV'
       metadata {
@@ -285,6 +314,7 @@ model {
     }
     backupDadosAlvo = componente 'backup' {
       #muda
+      link ../docs/caixas/casa.pipeline.backupDados.md 'doc'
       description 'Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos. Muda: a cópia vai para fora deste disco, a decidir em df-8x0m.23.9'
       technology 'Python'
       metadata {
@@ -294,6 +324,7 @@ model {
     }
     binAlvo = componente 'bin' {
       #sai
+      link ../docs/caixas/casa.pipeline.bin.md 'doc'
       description 'Sobra do repositório antigo, sem mudança desde que o workspace entrou no repo: ativa um .venv que a prod não tem (lá é .venv-prod) e ninguém roda; apagar ou consertar é df-o0cc'
       technology 'Bash, PowerShell'
       metadata {
@@ -302,6 +333,7 @@ model {
       }
     }
     cleansed2curatedAlvo = componente 'cleansed2curated' {
+      link ../docs/caixas/casa.pipeline.cleansed2curated.md 'doc'
       description 'Tasks das dimensões e fatos do curated (contas, calendário, investimentos, saldos, faturas, contrapartes) e das conferências (saldo, fatura, lançamentos suspeitos, extrato e veredito); contas e investimentos usam o config/'
       technology 'Python, polars, deltalake, pypdf'
       metadata {
@@ -310,6 +342,7 @@ model {
     }
     landingAlvo = componente 'landing' {
       #muda
+      link ../docs/caixas/casa.pipeline.landing.md 'doc'
       description 'Task fetch do finance_daily: busca contas, transações, faturas e investimentos no Pluggy e grava a partição do dia no raw. Muda: o raw só cresce (hoje cada busca regrava a partição do dia) e uma segunda fonte entra pelo mesmo lugar (df-8x0m.23.10)'
       technology 'Python'
       metadata {
@@ -319,6 +352,7 @@ model {
     }
     regrasAlvo = componente 'Regras de edição e classificação' {
       #muda #servidoPelaProd
+      link ../docs/caixas/casa.pipeline.regras.md 'doc'
       description 'edicao (abre o edicao.db e lê e grava categorias, regras, correções e explicações) e classificacao (classifica pela regra); módulos soltos que o backend Finanças e o ninho também carregam por sys.path. Muda: viram um pacote importável do módulo finanças, que o pipeline e o servidor importam, sem sys.path (df-8x0m.23.14)'
       technology 'Python, SQLite'
       metadata {
@@ -328,6 +362,7 @@ model {
     }
     reportAlvo = componente 'report' {
       #muda
+      link ../docs/caixas/casa.pipeline.report.md 'doc'
       description 'Tasks classify e report do reclassificar e do finance_daily (classificam as transações e montam as tabelas do app no curated) e a semente carga_inicial_edicao, que preenche categorias e regras do edicao.db a partir do config/edicao quando estão vazias, só no finance_demo (não na prod); com as funções do relatório (cartao_listas, report_lib, saude). Muda: a semente das edições sai do pipeline, que só lê o banco do app (df-8x0m.23.14)'
       technology 'Python, polars, deltalake'
       metadata {
@@ -337,6 +372,7 @@ model {
     }
     publicadasAlvo = componente 'Tabelas publicadas' {
       #novo #servidoPelaProd
+      link ../docs/caixas/casa.pipeline.publicadas.md 'doc'
       description 'A lista das tabelas que o pipeline publica para o servidor, com o esquema declarado no módulo finanças, e a task que, ao fim de cada job que escreve uma delas, compara as tabelas com o esquema e falha a rodada quando diferem'
       technology 'Python'
       metadata {

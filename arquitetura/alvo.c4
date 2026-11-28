@@ -4,30 +4,37 @@
 // Quando o bead fecha, a marca sai, ou passa para o bead que continua a mudança.
 model {
   donoAlvo = pessoa 'Dono da casa' {
+    link ../docs/architecture-v2/people-and-visibility.md 'doc'
     description 'Finanças, lista e agenda; administra o DataForge'
   }
   outraAlvo = pessoa 'Outra pessoa da casa' {
+    link ../docs/architecture-v2/people-and-visibility.md 'doc'
     description 'Vê o que é compartilhado e o que é dela'
   }
   pluggyAlvo = sistemaExterno 'Pluggy' {
+    link ../docs/getfinance-pluggy-integration.md 'doc'
     description 'Provedor de dados bancários'
   }
   outrasFontesAlvo = sistemaExterno 'Outras fontes' {
     #novo
+    link ../docs/caixas/outrasFontes.md 'doc'
     description 'Segunda fonte de dados, que entra pelo mesmo lugar que o Pluggy'
     metadata {
       bead 'df-8x0m.23.10'
     }
   }
   agendadorAlvo = sistemaExterno 'Agendador do Windows' {
+    link ../docs/caixas/agendador.md 'doc'
     description 'Dispara os jobs (dataforge scheduled-run)'
   }
 
   casaAlvo = sistema 'Sistema da casa' {
+    link ../docs/architecture-v2/README.md 'doc'
     description 'Quatro peças com contratos estreitos; o servidor e o DataForge rodam no PC da casa, o app no celular'
 
     appCelularAlvo = conteiner 'App no celular' {
       #muda
+      link ../docs/caixas/casa.telasNinho.md 'doc'
       technology 'Web app instalada no celular'
       description 'As telas do ninho (ninho/telas), abertas como app na tela de início. Muda: cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta'
       metadata {
@@ -37,6 +44,7 @@ model {
     }
     servidorAlvo = conteiner 'Servidor da casa (ninho)' {
       #muda
+      link ../docs/architecture-v2/server-modules.md 'doc'
       description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda. Nunca roda pipeline nem escreve no lago. Muda: o módulo finanças faz o que o app Finanças do PC faz hoje; a agenda entra'
       technology 'Python, FastAPI'
       metadata {
@@ -46,6 +54,7 @@ model {
     }
     bancoAppAlvo = banco 'Banco do app' {
       #muda #servidoPelaProd
+      link ../docs/architecture-v2/edits.md 'doc'
       description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod. Muda: hoje são dois arquivos SQLite, ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas; falta a cópia fora deste disco; onde moram os extratos em PDF está a decidir'
       technology 'SQLite'
       metadata {
@@ -54,6 +63,7 @@ model {
     }
     lagoAlvo = banco 'Lago' {
       #muda #servidoPelaProd
+      link ../docs/architecture-v2/published-tables.md 'doc'
       description 'raw (só cresce), cleansed e publicado. Só o pipeline escreve. Muda: as tabelas publicadas viram uma lista com esquema declarado, conferida ao fim de cada job que as escreve'
       technology 'Parquet (raw), Delta Lake (cleansed, curated)'
       metadata {
@@ -62,6 +72,7 @@ model {
     }
     dataforgeAlvo = conteiner 'DataForge (orquestrador)' {
       #muda
+      link ../docs/architecture.md 'doc'
       description 'Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Muda: sai o que não é orquestrador (hospedeiro de apps, rota genérica de tabelas); paredes no repositório: pastas, pacotes e regra do gate separados, CI por parte'
       technology 'Python'
       metadata {
@@ -71,6 +82,7 @@ model {
     }
     pipelineAlvo = conteiner 'Pipeline do módulo finanças' {
       #muda
+      link ../docs/caixas/casa.pipeline.md 'doc'
       description 'As tasks dos jobs (finance_daily, extrato, reclassificar, backup), cada uma um processo lançado pelo DataForge, e o pacote de regras de edição e classificação, que o servidor também importa. Único escritor do lago. Muda: sai de workspaces/GetFinance para ninho/financas, e as regras viram um pacote importável no lugar de scripts/report carregado por sys.path'
       technology 'Python, polars, deltalake; um processo por task, lançado pelo DataForge'
       metadata {
@@ -80,11 +92,13 @@ model {
     }
     historicoAlvo = banco 'Histórico e agendas' {
       #servidoPelaProd
+      link ../docs/subsystems/db.md 'doc'
       description 'Escrito só pelo DataForge; o servidor sabe o estado de uma execução por run-state, nunca lê o arquivo'
       technology 'SQLite (dataforge.db)'
     }
     financasAlvo = conteiner 'Backend GetFinance' {
       #sai #servidoPelaProd
+      link ../docs/caixas/casa.financas.md 'doc'
       description 'O backend do app Finanças do PC, iniciado pelo DataForge: segundo escritor das edições, lê o lago direto e importa internos do DataForge e as regras do pipeline. Sai: o que ele faz passa para o módulo finanças do servidor (df-8x0m.23.19), e o DataForge deixa de hospedar apps (df-8x0m.23.3)'
       technology 'Python, FastAPI'
       metadata {
@@ -94,6 +108,7 @@ model {
     }
     frontFinancasAlvo = conteiner 'Front do app Finanças' {
       #sai #servidoPelaProd
+      link ../docs/caixas/casa.frontFinancas.md 'doc'
       description 'As telas do app Finanças no PC: tabelas, edição de categorias, regras e correções, conferência e extratos. Sai: as telas passam para a tela de finanças do app no celular (df-8x0m.23.19), e o DataForge deixa de servir o build e a rota de tabelas (df-8x0m.23.3)'
       technology 'React, TypeScript; na janela Qt do DataForge ou no navegador do PC'
       metadata {

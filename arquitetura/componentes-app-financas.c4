@@ -20,6 +20,7 @@ model {
   extend casaHoje.financasHoje {
     rotasFinancasHoje = componente 'Rotas do backend Finanças' {
       #servidoPelaProd
+      link ../docs/caixas/casa.financas.rotasFinancas.md 'doc'
       description 'O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge; acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace'
       technology 'Python, FastAPI, polars, pypdf, httpx, PyYAML'
       metadata {
@@ -33,6 +34,7 @@ model {
 
   extend casaHoje.frontFinancasHoje {
     cascaFinancasHoje = componente 'Casca do app' {
+      link ../docs/caixas/casa.frontFinancas.cascaFinancas.md 'doc'
       description 'A página (index.html, de que o vite faz a do build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report, das transações classificadas e do banco de edição, e a recarga depois do Aplicar'
       technology 'React, TypeScript'
       metadata {
@@ -45,6 +47,7 @@ model {
     }
     tabelasFinancasHoje = componente 'Leitura de tabelas' {
       #servidoPelaProd
+      link ../docs/caixas/casa.frontFinancas.tabelasFinancas.md 'doc'
       description 'lerTabela: lê uma tabela do curated pela rota genérica de tabelas do DataForge, com o workspace tirado da URL do app'
       technology 'TypeScript, fetch'
       metadata {
@@ -53,6 +56,7 @@ model {
     }
     clienteBackendFinancasHoje = componente 'Cliente do backend e edição' {
       #servidoPelaProd
+      link ../docs/caixas/casa.frontFinancas.clienteBackendFinancas.md 'doc'
       description 'pedir: o cliente HTTP do backend do app, relativo à página (api/...), e as chamadas de edição (categorias, regras, correções, explicações), do Aplicar e do andamento de uma execução; os textos do efeito de uma regra e da faixa de pendência'
       technology 'TypeScript, fetch'
       metadata {
@@ -61,6 +65,7 @@ model {
     }
     extratosFinancasHoje = componente 'Extratos' {
       #servidoPelaProd
+      link ../docs/caixas/casa.frontFinancas.extratosFinancas.md 'doc'
       description 'Envio do PDF do extrato e a lista dos guardados pelo cliente do backend; os textos do envio, do período e do job extrato'
       technology 'TypeScript'
       metadata {
@@ -68,6 +73,7 @@ model {
       }
     }
     conferenciaFinancasHoje = componente 'Conferência' {
+      link ../docs/caixas/casa.frontFinancas.conferenciaFinancas.md 'doc'
       description 'Funções puras sobre conferencia_saldo e lancamentos_suspeitos: ordena, agrupa e formata; as regras estão no pipeline'
       technology 'TypeScript'
       metadata {
@@ -75,6 +81,7 @@ model {
       }
     }
     resumoFinancasHoje = componente 'Resumo do mês' {
+      link ../docs/caixas/casa.frontFinancas.resumoFinancas.md 'doc'
       description 'Funções puras: escolhe as linhas do mês nas tabelas do report e as transações de cada categoria, e formata valores e meses; as regras estão no pipeline'
       technology 'TypeScript'
       metadata {
@@ -82,6 +89,7 @@ model {
       }
     }
     transacoesFinancasHoje = componente 'Transações' {
+      link ../docs/caixas/casa.frontFinancas.transacoesFinancas.md 'doc'
       description 'Funções puras da aba Transações: busca, filtros e o estado da correção manual de cada linha'
       technology 'TypeScript'
       metadata {
@@ -89,6 +97,7 @@ model {
       }
     }
     telasFinancasHoje = componente 'Telas' {
+      link ../docs/caixas/casa.frontFinancas.telasFinancas.md 'doc'
       description 'Os componentes React das telas: cartões do resumo e do detalhe, Conferência (lê as suas tabelas), Extratos, Categorias, Transações, a faixa de pendência com o Aplicar e a tabela editável'
       technology 'React, TypeScript, Tailwind'
       metadata {

@@ -4,6 +4,9 @@ read_when: Touching anything that constructs filesystem paths, reads DATAFORGE_H
 subsystem: compat
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: [df-3ul]
+code:
+  - dataforge/compat.py
+status: pronto
 ---
 
 # compat.py

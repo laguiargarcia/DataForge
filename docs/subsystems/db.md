@@ -4,6 +4,11 @@ read_when: When changing schema or queries (SQLAlchemy ORM over SQLite)
 subsystem: db
 last_synced_at: "2026-05-23T01:13:02Z"
 related_issues: []
+code:
+  - dataforge/db.py
+  - dataforge/liveness.py
+  - dataforge/orphans.py
+status: pronto
 ---
 
 # DB

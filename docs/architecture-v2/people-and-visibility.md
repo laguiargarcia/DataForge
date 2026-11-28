@@ -2,6 +2,9 @@
 topic: People-and-visibility contract (who logs in to ninho, how, and what each person may open)
 read_when: Changing login, adding a person, deciding which module or which data a person sees, marking data as someone's or shared, or building anything that depends on who is using the app (the wishlist's three parts, the surprise gift)
 related_issues: [df-8x0m.23.6, df-8x0m.23.31, df-8x0m.23.22, df-8x0m.23.23, df-8x0m.23]
+code:
+  - ninho/__main__.py
+status: pronto
 ---
 
 # People-and-visibility contract: house server ↔ the people who use it
