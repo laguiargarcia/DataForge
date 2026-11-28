@@ -472,7 +472,7 @@
       "title": "Lista de desejos"
     },
     {
-      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated, lê e grava as correções de categoria no edicao.db (o caminho vem do connections.yaml do workspace) pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), e pede ao DataForge o job reclassificar que as aplica",
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db; nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge o job reclassificar que as aplica",
       "id": "casaHoje.ninhoHoje.financasNinhoHoje",
       "kind": "componente",
       "links": [],
@@ -511,7 +511,7 @@
       "title": "CLI de pessoas"
     },
     {
-      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO",
+      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO",
       "id": "casaHoje.ninhoHoje.servidorHoje",
       "kind": "componente",
       "links": [],
@@ -2560,17 +2560,21 @@
     },
     {
       "description": null,
-      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.regrasHoje: Carrega edicao (que importa classificacao) por import_module, do scripts/report do workspace (provisório, df-8x0m.23.14)",
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.regrasHoje: Carrega edicao (que importa classificacao) do scripts/report do workspace e abre o edicao.db e lê e grava as correções por ele (provisório, df-8x0m.23.14)",
       "kind": null,
       "links": [],
       "metadata": {
-        "codigo": "ninho/financas/regras.py"
+        "codigo": [
+          "ninho/financas/regras.py",
+          "ninho/banco.py",
+          "ninho/financas/edicoes.py"
+        ]
       },
       "source": "casaHoje.ninhoHoje.financasNinhoHoje",
       "tags": [],
       "target": "casaHoje.pipelineHoje.regrasHoje",
       "technology": null,
-      "title": "Carrega edicao (que importa classificacao) por import_module, do scripts/report do workspace (provisório, df-8x0m.23.14)"
+      "title": "Carrega edicao (que importa classificacao) do scripts/report do workspace e abre o edicao.db e lê e grava as correções por ele (provisório, df-8x0m.23.14)"
     },
     {
       "description": null,
