@@ -389,7 +389,6 @@ def test_an_edge_drawn_as_dots_fails_conferir_with_its_view_and_pair(tmp_path, m
 @pytest.mark.parametrize(("raw", "shown"), [
     (_vista("abre", ABRE, LE), "abre"),
     (_vista("abre", ABRE, ("r3", "p", "s", "", None)), "abre"),  # an untitled direct arrow gives no title
-    (_vista(None, ABRE, ("r3", "p", "s.s3", "", None)), ""),  # no label shows the untitled one, hides abre
 ])
 def test_an_edge_showing_one_of_several_joined_titles_is_ambiguous(raw, shown):
     """LikeC4 1.61.1 sometimes shows one joined title and hides the rest, with no '[...]'."""
@@ -443,3 +442,173 @@ def test_dynamic_steps_are_not_checked_and_an_unknown_relation_fails_loudly():
     raw["views"]["index"]["edges"][0]["relations"] = ["nenhuma"]
     with pytest.raises(ValueError, match="view index: edge e1 names an unknown relation 'nenhuma'"):
         modelo.arestas_ambiguas(raw)
+
+
+def _colorida(color, *relations, source="p", target="s") -> dict:
+    """_vista whose edge is drawn `color` over `relations`, each (id, source, target, title, tags); in
+    _raw() #novo is grass and #muda tomato, and an unmarked relation is LikeC4's gray."""
+    raw = _vista("Título da vista", *((rid, src, tgt, title, None) for rid, src, tgt, title, _ in relations),
+                 source=source, target=target)
+    for rid, *_, tags in relations:
+        raw["relations"][rid]["tags"] = list(tags)
+    raw["views"]["index"]["edges"][0]["color"] = color
+    return raw
+
+
+DIRETA = ("r3", "p", "s", "junta", ())
+NOVA = ("r4", "p", "s.s2", "abre", ("novo",))
+MUDA = ("r5", "p", "s.s3", "lê", ("muda",))
+
+
+@pytest.mark.parametrize(("raw", "problem"), [
+    (_colorida("grass", DIRETA, NOVA),
+     "joins relations marked (no mark), #novo and is drawn grass, not gray, the colour of the arrow straight "
+     "between the two: give it that colour after the tag rules (include p -> s with { color gray })"),
+    (_colorida("tomato", NOVA, MUDA),
+     "joins relations marked #novo, #muda and is drawn tomato, the colour the tag rules pick from one of them: "
+     "give it the colour of the edge after the tag rules (include p -> s with { color ... }), or draw an "
+     "arrow straight between the two"),
+    (_colorida("gray", NOVA, MUDA, ("r6", "p", "s.s4", "sai", ("sai",))),  # #sai has no colour: gray
+     "joins relations marked #novo, #muda, #sai and is drawn gray, the colour the tag rules pick from one of "
+     "them: give it the colour of the edge after the tag rules (include p -> s with { color ... }), or draw "
+     "an arrow straight between the two"),
+])
+def test_an_edge_joining_marks_with_a_colour_picked_by_the_tag_rules_is_ambiguous(raw, problem):
+    """README, component rules (df-8x0m.23.47.17): the tag rules give a joined edge the colour of the
+    last mark any of its relations has, which tells the reader the wrong change."""
+    assert modelo.arestas_ambiguas(raw) == [f"view index: p -> s {problem}"]
+
+
+@pytest.mark.parametrize("raw", [
+    _colorida("gray", DIRETA, NOVA),  # the direct arrow's colour
+    _colorida("grass", ("r3", "p", "s", "junta", ("novo",)), MUDA),
+    _colorida("grass", NOVA, MUDA),  # no direct arrow: a colour the tag rules do not pick, given by the view
+    _colorida("tomato", MUDA, ("r6", "p", "s.s4", "copia", ("muda",))),  # one mark: no rule
+    _colorida("red", ("r3", "p", "s", "junta", ()), ("r6", "p", "s.s4", "copia", ())),
+])
+def test_an_edge_joining_marks_with_the_colour_of_its_level_passes(raw):
+    assert modelo.arestas_ambiguas(raw) == []
+
+
+def _conteineres(*relations, label="Título da vista", nodes=("p", "s")) -> dict:
+    """_raw() with the view hoje-conteineres over `nodes` and one edge p -> s labelled `label`;
+    `relations` are (id, source, target, title), in the model whether the view draws them or not."""
+    raw = _raw()
+    raw["relations"] = {rid: {"id": rid, "source": {"model": src}, "target": {"model": tgt}, "title": title}
+                        for rid, src, tgt, title in relations}
+    raw["views"]["hoje-conteineres"] = {"_type": "element", "id": "hoje-conteineres",
+                                        "nodes": [{"id": n} for n in nodes],
+                                        "edges": [{"id": "e", "source": "p", "target": "s", "label": label,
+                                                   "relations": [r[0] for r in relations]}]}
+    return raw
+
+
+RESUMO = ("c", "p", "s", "resume")
+UMA = ("a", "p.x", "s.y", "abre")
+OUTRA = ("b", "p.x", "s.z", "lê")
+
+
+@pytest.mark.parametrize(("raw", "problem"), [
+    (_conteineres(RESUMO, UMA, label="resume"),
+     "has a direct arrow over one component arrow ('abre'): remove the direct arrow, the view shows that "
+     "one's title (README rule 5)"),
+    (_conteineres(UMA, OUTRA, label="abre"),
+     "joins 2 component arrows with no direct arrow: draw one in hoje.c4 whose title sums them up "
+     "(README rule 5)"),
+    (_conteineres(UMA, OUTRA, label="abre", nodes=("p", "s", "s.w")),  # s.w draws none of the two
+     "joins 2 component arrows with no direct arrow: draw one in hoje.c4 whose title sums them up "
+     "(README rule 5)"),
+])
+def test_rule_5_wants_a_direct_container_arrow_exactly_over_several(raw, problem):
+    """README rule 5 (df-8x0m.23.47.21): the direct arrow is the summary of several; over one it is a
+    second title that goes stale."""
+    assert modelo.regra5(raw) == [f"view hoje-conteineres: p -> s {problem}"]
+
+
+@pytest.mark.parametrize("raw", [
+    _conteineres(RESUMO, UMA, OUTRA, label="resume"),
+    _conteineres(UMA, label="abre"),
+    _conteineres(RESUMO, label="resume"),  # a container with no components: its own arrow
+    _conteineres(UMA, OUTRA),  # several with no direct arrow, titled by the view
+    _conteineres(UMA, OUTRA, label="abre", nodes=("p", "s", "s.y")),  # s.y is its own node: one per pair
+    _conteineres(RESUMO, UMA, nodes=("p",)),  # s is not a node of the view
+    {},
+])
+def test_rule_5_passes_a_summary_over_several_and_none_over_one(raw):
+    assert modelo.regra5(raw) == []
+
+
+def test_conferir_reports_rule_5(tmp_path, monkeypatch, capsys):
+    raw = _conteineres(RESUMO, UMA, label="resume")
+    monkeypatch.setattr(modelo, "exportar", lambda fonte: raw)
+    saida = tmp_path / "modelo.json"
+    saida.write_text(modelo.texto(modelo.normalizar(raw)), encoding="utf-8")
+    monkeypatch.setattr(modelo, "SAIDA", saida)
+    assert modelo.main(["conferir"]) == 1
+    assert "README rule 5" in capsys.readouterr().out
+
+
+def test_an_edge_with_no_title_over_a_titled_relation_names_what_it_hides():
+    """df-w7nk: with no label the edge shows the untitled relation and hides 'abre' (case 2 of rule 3)."""
+    raw = _vista(None, ABRE, LE, ("r3", "p", "s.s3", "", None))
+    assert modelo.arestas_ambiguas(raw) == [
+        "view index: p -> s joins 3 relations and comes out with no title, hiding 'abre', 'lê': give it a "
+        "title of its own in the view (include p -> s with { title '...' }), or draw an arrow straight "
+        "between the two"]
+
+
+@pytest.mark.parametrize(("end", "named"), [("p.x", "p"), ("s.y", "s")])
+def test_rule_5_refuses_a_direct_arrow_alone_when_an_end_has_components(end, named):
+    """A container with components does nothing itself: the arrow goes from or to its component."""
+    raw = _conteineres(RESUMO, label="resume")
+    raw["elements"][end] = {"id": end, "kind": "componente", "title": end}
+    assert modelo.regra5(raw) == [
+        f"view hoje-conteineres: p -> s has a direct arrow and no component arrow, though {named} has "
+        "components: draw the arrow from or to the component that does it (README rule 5)"]
+
+
+@pytest.mark.parametrize(("raw", "hidden"), [
+    (_vista(None, ABRE, ("r3", "p", "s.s3", "", None)), "'abre'"),  # two titles, one of them none
+    (_vista(None, ABRE, LE), "'abre', 'lê'"),
+])
+def test_an_untitled_edge_over_two_titles_names_them(raw, hidden):
+    assert modelo.arestas_ambiguas(raw) == [
+        f"view index: p -> s joins 2 relations and comes out with no title, hiding {hidden}: give it a title "
+        "of its own in the view (include p -> s with { title '...' }), or draw an arrow straight between the two"]
+
+
+def test_an_untitled_edge_over_one_title_passes():
+    """LikeC4 shows the only title there is."""
+    assert modelo.arestas_ambiguas(_vista(None, ABRE)) == []
+
+
+def test_two_direct_arrows_of_different_marks_both_name_their_colour():
+    raw = _colorida("red", ("r3", "p", "s", "junta", ("novo",)), ("r7", "p", "s", "outra", ("muda",)), NOVA)
+    assert modelo.arestas_ambiguas(raw) == [
+        "view index: p -> s joins relations marked #novo, #muda and is drawn red, not grass or tomato, the colour "
+        "of the arrow straight between the two: give it that colour after the tag rules "
+        "(include p -> s with { color grass })"]
+
+
+def test_a_mark_with_no_colour_in_the_specification_is_gray():
+    raw = _colorida("gray", NOVA, ("r6", "p", "s.s4", "sai", ("sai",)))
+    raw["specification"]["tags"]["sai"] = {}
+    assert len(modelo.arestas_ambiguas(raw)) == 1
+
+
+def test_rule_5_names_an_untitled_component_arrow_and_reads_an_unlabelled_edge():
+    assert modelo.regra5(_conteineres(RESUMO, ("a", "p.x", "s.y", ""), label="resume")) == [
+        "view hoje-conteineres: p -> s has a direct arrow over one component arrow (''): remove the direct "
+        "arrow, the view shows that one's title (README rule 5)"]
+    assert modelo.regra5(_conteineres(("a", "p.x", "s.y", ""), OUTRA, label=None)) == [
+        "view hoje-conteineres: p -> s joins 2 component arrows with no direct arrow: draw one in hoje.c4 "
+        "whose title sums them up (README rule 5)"]
+
+
+def test_rule_5_takes_the_deepest_node_of_each_end():
+    raw = _conteineres(RESUMO, UMA, OUTRA, label="resume", nodes=("p", "s", "s.z"))
+    raw["views"]["hoje-conteineres"]["edges"].append(
+        {"id": "e2", "source": "p", "target": "s.z", "label": "lê", "relations": ["b"]})
+    assert modelo.regra5(raw) == [
+        "view hoje-conteineres: p -> s has a direct arrow over one component arrow ('abre'): remove the direct "
+        "arrow, the view shows that one's title (README rule 5)"]

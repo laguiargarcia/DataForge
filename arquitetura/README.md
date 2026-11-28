@@ -44,7 +44,14 @@ API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do c
    títulos juntados ou que junta kinds diferentes (df-8x0m.23.47.12). O export não guarda as
    regras da vista, então o título dado pela vista se reconhece por não ser o de nenhuma relação
    juntada: um título da vista igual a um deles falha como se o LikeC4 o tivesse escolhido; dê um
-   título próprio. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
+   título próprio. Uma aresta sem rótulo que junta títulos diferentes falha também: sai sem título
+   e esconde os juntados, que a mensagem cita (df-w7nk). A cor também (df-8x0m.23.47.17): uma
+   aresta que junta setas de marcas diferentes (`#novo`, `#muda`, `#sai`, sem marca) tem a cor da
+   seta direta entre os dois nós (sem marca, `gray`) ou, sem seta direta, uma dada pela vista. As
+   regras de tag da vista, na ordem `novo`, `muda`, `sai`, dão à aresta a cor da última marca que
+   alguma juntada tem; o export não guarda as regras, então a cor dada pela vista se reconhece por
+   não ser essa. A cor de cada marca vem da tag em `spec.c4`, que tem de ser a mesma das regras de
+   tag das vistas. Os passos de uma vista dinâmica ficam fora: cada um tem o próprio título.
 4. Cada caixa, seta e rótulo tem fonte conferível (código com arquivo:linha, doc ou bead); o que
    ainda falta cita o bead.
 5. No hoje, um par de nós da vista `hoje-conteineres` (contêiner, banco, pessoa ou sistema de fora)
@@ -56,6 +63,10 @@ API leem e roda no Windows põe a tag; ela vem junto das outras, no começo do c
    fica velho quando ela muda. Mudou, acrescentou ou tirou uma seta de componente entre contêineres,
    confira o resumo do par (ou crie ou apague a seta direta). O alvo guarda as suas setas de
    contêiner: nele o nível de contêiner é o próprio plano, e as marcas `novo`, `muda` e `sai` moram ali.
+   Cobrada: `modelo.py conferir` sai 1 com uma seta direta sobre uma seta de componente só, com uma
+   seta direta sem seta de componente quando uma das pontas tem componentes (a seta vai do componente
+   que age, ou para ele), e com um par de várias sem seta direta cuja aresta mostra o título de uma
+   delas (df-8x0m.23.47.21).
 
 ## Marcas do alvo (df-8x0m.23.37)
 
@@ -94,7 +105,13 @@ bd:
   diz de que arquivo vem cada item, por isso o sufixo; só o segmento de topo conta
   (`casaAlvo.velhoHoje` é do alvo). A regra mora em `scripts/arquitetura/modelo.py` (`sistema`,
   `e_hoje`), a mesma que `componentes.py` usa. Os nós e as setas de deployment ficam fora dela: o
-  id deles é do deployment, sem o sufixo de um modelo.
+  id deles é do deployment, sem o sufixo de um modelo. E falha numa seta de componente do alvo (uma
+  ponta é componente) sem marca que não tem no hoje a gêmea: a seta entre os gêmeos das pontas (o
+  último segmento do id com `Hoje` no lugar de `Alvo`, ou a exceção de `GEMEOS` em `marcas.py`),
+  com o mesmo título e o mesmo `codigo` (df-8x0m.23.47.20). Assim um rebase sobre uma mudança no
+  hoje não desencontra o espelho sem ninguém ver. As setas de contêiner ficam fora: pela regra 5 o
+  hoje só tem a de um par de várias setas de componente, como resumo, e o alvo guarda as suas como
+  o plano, com títulos que dizem o alvo.
 - `bd close <id>` (hook `scripts/beads/check.py`): recusa fechar um bead que o
   `arquitetura/modelo.json` do origin/main ainda marca. Para conferir tudo de uma vez, com bd:
   `python3 scripts/arquitetura/marcas.py --bd`.
@@ -121,7 +138,9 @@ Convenções:
   ids, quando o de hoje com `Alvo` já é de um contêiner ou banco do alvo (`servidorHoje` é
   `nucleoAlvo`; `historicoHoje`, `historicoRunsAlvo`), e o re-corte da API do DataForge, para o que
   sai ser um componente inteiro: `dataforge/api/routers/tables.py` vai para `rotaTabelasAlvo` e
-  `dataforge/api/routers/apps.py` para `appsAlvo`, que no hoje são do `apiHoje`.
+  `dataforge/api/routers/apps.py` para `appsAlvo`, que no hoje são do `apiHoje`. Os contêineres e o
+  banco que o alvo renomeia têm o gêmeo de hoje pelo nome antigo: `historicoAlvo` é
+  `dbDataforgeHoje`, `bancoAppAlvo`, `bancoNinhoHoje`, e `appCelularAlvo`, `telasNinhoHoje`.
 - Nas vistas do alvo, uma aresta que junta setas de marcas diferentes pegaria a cor da regra de tag
   de uma delas: a vista dá, depois das regras de tag, a cor da seta daquele nível (`with { color }`)
   e, quando os títulos diferem, o título.
