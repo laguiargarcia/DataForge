@@ -19,7 +19,12 @@ BLOCK_PREFIXES = (
     "tests/workspaces/",                 # pipeline tests that read real workspaces
     "tests/test_finance_daily_dag.py",   # same
     "tests/test_testloop_evals.py",      # tests of the private eval harness
-    "docs/",       # D9: docs never committed to public repo
+    # docs/ is versioned (df-azm6) but its history holds real values, and so does the owner's
+    # workbook note: the same paths as in .gitignore.
+    "docs/superpowers/",
+    "docs/phases/",
+    "docs/gsd-workflow.md",
+    "docs/workbook-handoff.md",
 )
 # Inside a workspace (workspaces/<name>/...): where its real data and its real config live.
 WORKSPACE_PRIVATE_DIRS = ("data/", "report/", "docs/archive/")

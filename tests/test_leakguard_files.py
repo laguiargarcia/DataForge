@@ -24,10 +24,50 @@ workspace = pytest.fixture(leakguard_fixtures.workspace)
 def test_a_private_surface_is_blocked_without_reading_it(repo, capsys):
     """Blocked by its path alone: it need not exist, and its content adds no second failure."""
     rel = repo("workspaces/GetFinance-Dev/x.py", f"cpf = '{CPF}'\n")
-    code, _, failures = run(capsys, rel, "docs/missing.md")
+    code, _, failures = run(capsys, rel, "docs/superpowers/missing.md")
     assert code == 1
     assert failures == ["PATH-BLOCK: workspaces/GetFinance-Dev/x.py is under a private surface",
-                        "PATH-BLOCK: docs/missing.md is under a private surface"]
+                        "PATH-BLOCK: docs/superpowers/missing.md is under a private surface"]
+
+
+@pytest.mark.parametrize("rel", ["docs/superpowers/specs/s.md", "docs/phases/1.2-x.md", "docs/gsd-workflow.md",
+                                 "docs/workbook-handoff.md", "Docs/Superpowers/plans/p.md", "DOCS/PHASES/x.md"])
+def test_the_history_docs_stay_blocked(repo, capsys, rel):
+    """df-azm6: docs/ is versioned, but its history (superpowers/, phases/, gsd-workflow.md) and the
+    owner-only workbook note hold real values and stay private, whatever the case of the path."""
+    assert run(capsys, rel)[2] == [f"PATH-BLOCK: {rel} is under a private surface"]
+
+
+@pytest.mark.parametrize("rel", ["docs/commands.md", "docs/subsystems/api.md", "docs/adr/0005-x.md",
+                                 "docs/superpowers.md", "docs/phases-of-the-moon.md"])
+def test_the_reference_docs_are_read_not_blocked(repo, capsys, rel):
+    """df-azm6: a reference doc is not refused by its path; its content is checked like any file's."""
+    assert run(capsys, repo(rel, "x = 1\n"))[:1] == (0,)
+    assert run(capsys, repo(rel, f"x = '{CPF}'\n"))[2] == [f"CPF: {rel}:1 -> '52…' (11 chars)"]
+
+
+def test_this_repos_gitignore_keeps_out_what_the_guard_blocks(tmp_path):
+    """df-azm6: the docs/ lines of the repo's own .gitignore and the docs/ entries of BLOCK_PREFIXES
+    are the same paths, so a history path added to one side only fails here; and git does ignore
+    each of them, while it lets the reference docs in. The .gitignore is judged in a scratch repo, so
+    the test runs where the tests are not inside a git repo (testloop's copy); the nearest .gitignore
+    above this file is the repo's, or the copy's above mutmut's mutants/."""
+    found = next(p / ".gitignore" for p in Path(__file__).resolve().parents if (p / ".gitignore").is_file())
+    gitignore = found.read_text(encoding="utf-8")
+    ignored = {line.strip().lstrip("/") for line in gitignore.splitlines() if line.strip().startswith("/docs/")}
+    blocked = {p for p in leakguard_files.BLOCK_PREFIXES if p.startswith("docs/")}
+    assert ignored == blocked
+    _git("init", "-q", cwd=tmp_path)
+    (tmp_path / ".gitignore").write_bytes(gitignore.encode("utf-8"))   # no CRLF on Windows
+
+    def is_ignored(rel):
+        return subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=tmp_path, check=False).returncode == 0
+
+    for prefix in blocked:
+        assert is_ignored(prefix + "x.md" if prefix.endswith("/") else prefix), prefix
+    for rel in ("docs/commands.md", "docs/subsystems/api.md"):
+        assert not is_ignored(rel), rel
+        assert not rel.startswith(leakguard_files.BLOCK_PREFIXES), rel
 
 
 @pytest.mark.parametrize("rel", ["workspaces/GetFinance/data/raw/x.csv", "workspaces/GetFinance/report/r.txt",
@@ -74,10 +114,10 @@ def test_files_skipped_on_the_way_do_not_end_the_scan(repo, capsys, tmp_path):
     unreadable = repo("locked.txt", "x\n")
     (tmp_path / unreadable).chmod(0)
     try:
-        failures = run(capsys, "docs/a.md", "gone.py", unreadable, repo("last.txt", f"{CPF}\n"))[2]
+        failures = run(capsys, "docs/phases/a.md", "gone.py", unreadable, repo("last.txt", f"{CPF}\n"))[2]
     finally:
         (tmp_path / unreadable).chmod(0o644)
-    assert failures == ["PATH-BLOCK: docs/a.md is under a private surface", "CPF: last.txt:1 -> '52…' (11 chars)"]
+    assert failures == ["PATH-BLOCK: docs/phases/a.md is under a private surface", "CPF: last.txt:1 -> '52…' (11 chars)"]
 
 
 def test_a_file_with_a_nul_byte_is_still_read(repo, capsys, tmp_path):
@@ -292,7 +332,7 @@ def test_history_finds_a_real_value_in_a_non_ascii_file_name(repo, capsys, tmp_p
 
 
 def test_a_private_surface_named_after_a_document_is_masked(repo, capsys):
-    rel = f"docs/{CPF}.md"
+    rel = f"docs/superpowers/{CPF}.md"
     assert run(capsys, rel)[2][1] == f"PATH-BLOCK: 'do…' ({len(rel)} chars) is under a private surface"
 
 

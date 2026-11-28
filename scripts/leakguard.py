@@ -6,7 +6,8 @@ pre-commit passes it the staged files, CI runs it with --all (every tracked file
 audits every version of every file, every commit message and every path ever committed.
 
 1. Private files, whatever the case of their path. Surfaces that are never published (PATH-BLOCK:
-   docs/, .beads/, ...). Inside a workspace (workspaces/<name>/): data/, report/, docs/archive/,
+   .beads/, the history under docs/ (superpowers/, phases/...), ...; the rest of docs/ is versioned
+   and read like any file, df-azm6). Inside a workspace (workspaces/<name>/): data/, report/, docs/archive/,
    docs/workbook.md, the config files that hold real values, an archive (.zip, .7z, .gz...) and any
    binary file other than a web font or an image. Anywhere: a .env other than .env.example, a data
    artifact (.db, .parquet, .xlsx...), and any file that .gitignore excludes (tracked anyway, it was
