@@ -460,6 +460,72 @@
       "title": "Servidor ninho"
     },
     {
+      "description": "Rotas /api/desejos e as regras dos desejos, das anotações (um endereço http ou https inteiro é link) e do presente surpresa, que o dono do desejo nunca vê, nas tabelas desejos_* do ninho.db, criadas no primeiro uso",
+      "id": "casaHoje.ninhoHoje.desejosHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Lista de desejos"
+    },
+    {
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated, lê e grava as correções de categoria no edicao.db (o caminho vem do connections.yaml do workspace) pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), e pede ao DataForge o job reclassificar que as aplica",
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/financas",
+          "ninho/banco.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, polars, deltalake, SQLite",
+      "title": "Finanças"
+    },
+    {
+      "description": "Rotas /api/lista e as regras dos itens (texto, comprado, quem adicionou) na tabela lista_itens do ninho.db, criada no primeiro uso",
+      "id": "casaHoje.ninhoHoje.listaHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista"
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Lista de compras"
+    },
+    {
+      "description": "python -m ninho pessoas criar, senha, modulos, sair e listar, rodado no PC do servidor: a senha só é pedida no terminal, duas vezes; abre o ninho.db direto (--banco ou NINHO_BANCO), sem passar pelo servidor",
+      "id": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "tags": [],
+      "technology": "Python, argparse",
+      "title": "CLI de pessoas"
+    },
+    {
+      "description": "O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO",
+      "id": "casaHoje.ninhoHoje.servidorHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/__init__.py",
+          "ninho/servidor"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, FastAPI, SQLite",
+      "title": "Núcleo do servidor"
+    },
+    {
       "description": "As tasks dos jobs (finance_daily, extrato, reclassificar, backup) e a biblioteca de regras em scripts/report (edicao, classificacao, extrato), que o backend e o ninho importam",
       "id": "casaHoje.pipelineHoje",
       "kind": "conteiner",
@@ -2409,20 +2475,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.pipelineHoje.regrasHoje: Carrega edicao por import_module (provisório, df-8x0m.23.14)",
-      "kind": null,
-      "links": [],
-      "metadata": {
-        "codigo": "ninho/financas/regras.py"
-      },
-      "source": "casaHoje.ninhoHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje.regrasHoje",
-      "technology": null,
-      "title": "Carrega edicao por import_module (provisório, df-8x0m.23.14)"
-    },
-    {
-      "description": null,
       "id": "casaHoje.ninhoHoje -> casaHoje.pipelineHoje: Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)",
       "kind": null,
       "links": [],
@@ -2432,6 +2484,209 @@
       "target": "casaHoje.pipelineHoje",
       "technology": null,
       "title": "Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.desejosHoje -> casaHoje.bancoNinhoHoje: Lê e escreve os desejos, as anotações e os presentes",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos/desejos.py"
+      },
+      "source": "casaHoje.ninhoHoje.desejosHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Lê e escreve os desejos, as anotações e os presentes"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.desejosHoje -> casaHoje.ninhoHoje.servidorHoje: Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/desejos/rotas.py"
+      },
+      "source": "casaHoje.ninhoHoje.desejosHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje: Pede o job (run --detach) e acompanha (run-state --wait) pela CLI",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/financas/aplicar.py"
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje",
+      "technology": null,
+      "title": "Pede o job (run --detach) e acompanha (run-state --wait) pela CLI"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.edicaoHoje: Lê e escreve: correções",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/financas/edicoes.py",
+          "ninho/banco.py"
+        ]
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.edicaoHoje",
+      "technology": null,
+      "title": "Lê e escreve: correções"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.lagoHoje: Lê tabelas",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/financas/leitura.py"
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.lagoHoje",
+      "technology": null,
+      "title": "Lê tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.regrasHoje: Carrega edicao (que importa classificacao) por import_module, do scripts/report do workspace (provisório, df-8x0m.23.14)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/financas/regras.py"
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.regrasHoje",
+      "technology": null,
+      "title": "Carrega edicao (que importa classificacao) por import_module, do scripts/report do workspace (provisório, df-8x0m.23.14)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.listaHoje -> casaHoje.bancoNinhoHoje: Lê e escreve os itens da lista",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista/itens.py"
+      },
+      "source": "casaHoje.ninhoHoje.listaHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Lê e escreve os itens da lista"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.listaHoje -> casaHoje.ninhoHoje.servidorHoje: Pede a pessoa da sessão e a conexão do ninho.db (dependencias)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/lista/rotas.py"
+      },
+      "source": "casaHoje.ninhoHoje.listaHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Pede a pessoa da sessão e a conexão do ninho.db (dependencias)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.pessoasCliHoje -> casaHoje.bancoNinhoHoje: Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.pessoasCliHoje -> casaHoje.ninhoHoje.servidorHoje: Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.servidorHoje",
+      "technology": null,
+      "title": "Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.bancoNinhoHoje: Lê e escreve pessoas e sessões",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "ninho/servidor/banco.py",
+          "ninho/servidor/pessoas.py",
+          "ninho/servidor/sessoes.py"
+        ]
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.bancoNinhoHoje",
+      "technology": null,
+      "title": "Lê e escreve pessoas e sessões"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.desejosHoje: Inclui o router /api/desejos (só para quem tem o módulo desejos)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.desejosHoje",
+      "technology": null,
+      "title": "Inclui o router /api/desejos (só para quem tem o módulo desejos)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje: Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "technology": null,
+      "title": "Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.listaHoje: Inclui o router /api/lista (só para quem tem o módulo lista)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.listaHoje",
+      "technology": null,
+      "title": "Inclui o router /api/lista (só para quem tem o módulo lista)"
     },
     {
       "description": null,
@@ -3126,6 +3381,20 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.ninhoHoje.pessoasCliHoje: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/__main__.py"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.ninhoHoje.pessoasCliHoje",
+      "technology": null,
+      "title": "Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.ninhoHoje: Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)",
       "kind": null,
       "links": [],
@@ -3240,6 +3509,16 @@
       "title": "Hoje: componentes do DataForge",
       "type": "element",
       "viewOf": "casaHoje.dataforgeHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-ninho",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do servidor ninho",
+      "type": "element",
+      "viewOf": "casaHoje.ninhoHoje"
     },
     {
       "description": null,

@@ -1,0 +1,145 @@
+// Componentes do contêiner Servidor ninho no HOJE (df-8x0m.23.47.4): o núcleo do servidor, a CLI de
+// pessoas e os três módulos (lista, desejos, finanças), que é como ninho/ se divide em pacotes.
+//
+// Decisões (as razões estão nas notas do bead):
+// - ninho/identidade é marca visual (README, PNG, SVG), sem código, e já é do contêiner Telas do ninho:
+//   não entra aqui. ninho/telas também não (df-8x0m.23.47.5).
+// - ninho/banco.py abre o edicao.db pelas regras do workspace e só finanças o usa: fica em finanças, e
+//   não num componente de banco junto com servidor/banco.py, que abre o ninho.db e fica no núcleo. Um
+//   componente de banco com os dois importaria finanças e seria importado por ela (ciclo).
+// - Seta para fora sai do componente cujo código faz a leitura, a escrita ou a chamada. A CLI de pessoas
+//   roda num processo seu e abre o ninho.db direto, sem o servidor: por isso tem a sua seta para o banco.
+//   Ler o connections.yaml do workspace (ninho/banco.py) não é chamada nem import: fica na descrição.
+// - Quando um componente só faz o que a seta do contêiner em hoje.c4 diz, a seta leva o mesmo título:
+//   títulos diferentes no mesmo par viram '[...]' na vista de contêineres (df-8x0m.23.47.12).
+model {
+  extend casaHoje.ninhoHoje {
+    servidorHoje = componente 'Núcleo do servidor' {
+      description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO'
+      technology 'Python, FastAPI, SQLite'
+      metadata {
+        codigo ['ninho/__init__.py', 'ninho/servidor']
+      }
+    }
+    pessoasCliHoje = componente 'CLI de pessoas' {
+      description 'python -m ninho pessoas criar, senha, modulos, sair e listar, rodado no PC do servidor: a senha só é pedida no terminal, duas vezes; abre o ninho.db direto (--banco ou NINHO_BANCO), sem passar pelo servidor'
+      technology 'Python, argparse'
+      metadata {
+        codigo ['ninho/__main__.py']
+      }
+    }
+    listaHoje = componente 'Lista de compras' {
+      description 'Rotas /api/lista e as regras dos itens (texto, comprado, quem adicionou) na tabela lista_itens do ninho.db, criada no primeiro uso'
+      technology 'Python, FastAPI, SQLite'
+      metadata {
+        codigo ['ninho/lista']
+      }
+    }
+    desejosHoje = componente 'Lista de desejos' {
+      description 'Rotas /api/desejos e as regras dos desejos, das anotações (um endereço http ou https inteiro é link) e do presente surpresa, que o dono do desejo nunca vê, nas tabelas desejos_* do ninho.db, criadas no primeiro uso'
+      technology 'Python, FastAPI, SQLite'
+      metadata {
+        codigo ['ninho/desejos']
+      }
+    }
+    financasNinhoHoje = componente 'Finanças' {
+      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated, lê e grava as correções de categoria no edicao.db (o caminho vem do connections.yaml do workspace) pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), e pede ao DataForge o job reclassificar que as aplica'
+      technology 'Python, polars, deltalake, SQLite'
+      metadata {
+        codigo ['ninho/financas', 'ninho/banco.py']
+      }
+    }
+  }
+
+  // Imports entre os componentes.
+  casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.listaHoje 'Inclui o router /api/lista (só para quem tem o módulo lista)' {
+    metadata {
+      codigo ['ninho/servidor/app.py']
+    }
+  }
+  casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.desejosHoje 'Inclui o router /api/desejos (só para quem tem o módulo desejos)' {
+    metadata {
+      codigo ['ninho/servidor/app.py']
+    }
+  }
+  casaHoje.ninhoHoje.servidorHoje -> casaHoje.ninhoHoje.financasNinhoHoje 'Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)' {
+    metadata {
+      codigo ['ninho/servidor/app.py']
+    }
+  }
+  casaHoje.ninhoHoje.listaHoje -> casaHoje.ninhoHoje.servidorHoje 'Pede a pessoa da sessão e a conexão do ninho.db (dependencias)' {
+    metadata {
+      codigo ['ninho/lista/rotas.py']
+    }
+  }
+  casaHoje.ninhoHoje.desejosHoje -> casaHoje.ninhoHoje.servidorHoje 'Pede a pessoa da sessão, as pessoas da casa e a conexão do ninho.db (dependencias)' {
+    metadata {
+      codigo ['ninho/desejos/rotas.py']
+    }
+  }
+  casaHoje.ninhoHoje.pessoasCliHoje -> casaHoje.ninhoHoje.servidorHoje 'Usa as regras de pessoas e a abertura do ninho.db (pessoas, banco)' {
+    metadata {
+      codigo ['ninho/__main__.py']
+    }
+  }
+
+  // Quem de fora chama.
+  // Título igual ao de donoHoje -> ninhoHoje em hoje.c4 de propósito (df-8x0m.23.47.12).
+  donoHoje -> casaHoje.ninhoHoje.pessoasCliHoje 'Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)' {
+    metadata {
+      codigo ['ninho/__main__.py']
+    }
+  }
+
+  // Para fora: DataForge, regras do workspace, lago, bancos.
+  // Títulos iguais aos das setas de ninhoHoje em hoje.c4 quando o componente faz só aquilo (df-8x0m.23.47.12).
+  casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI' {
+    metadata {
+      codigo ['ninho/financas/aplicar.py']
+    }
+  }
+  casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.regrasHoje 'Carrega edicao (que importa classificacao) por import_module, do scripts/report do workspace (provisório, df-8x0m.23.14)' {
+    metadata {
+      codigo ['ninho/financas/regras.py']
+    }
+  }
+  casaHoje.ninhoHoje.financasNinhoHoje -[leitura]-> casaHoje.lagoHoje 'Lê tabelas' {
+    metadata {
+      codigo ['ninho/financas/leitura.py']
+    }
+  }
+  casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.edicaoHoje 'Lê e escreve: correções' {
+    metadata {
+      codigo ['ninho/financas/edicoes.py', 'ninho/banco.py']
+    }
+  }
+  casaHoje.ninhoHoje.servidorHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve pessoas e sessões' {
+    metadata {
+      codigo ['ninho/servidor/banco.py', 'ninho/servidor/pessoas.py', 'ninho/servidor/sessoes.py']
+    }
+  }
+  casaHoje.ninhoHoje.pessoasCliHoje -> casaHoje.bancoNinhoHoje 'Abre direto, sem o servidor: cria pessoas, troca senhas e módulos, encerra sessões' {
+    metadata {
+      codigo ['ninho/__main__.py']
+    }
+  }
+  casaHoje.ninhoHoje.listaHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve os itens da lista' {
+    metadata {
+      codigo ['ninho/lista/itens.py']
+    }
+  }
+  casaHoje.ninhoHoje.desejosHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve os desejos, as anotações e os presentes' {
+    metadata {
+      codigo ['ninho/desejos/desejos.py']
+    }
+  }
+}
+
+views {
+  view hoje-componentes-ninho of casaHoje.ninhoHoje {
+    title 'Hoje: componentes do servidor ninho'
+    include *
+    // Mostra a seta da carga das regras no componente que ela atinge, não no contêiner do pipeline.
+    include casaHoje.pipelineHoje.regrasHoje
+  }
+}
