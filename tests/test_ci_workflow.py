@@ -537,7 +537,8 @@ def test_the_checks_cover_the_steps_that_matter():
     assert {"tests / Every part passed", "tests-windows / Every part passed", "mutation-ok / Check the mutation jobs"} <= steps["needs"]
     assert {"mutation-ok / Gate each target on its shards", "mutation / Mutate",
             "app-financas / Committed dist is the build", "tests-shard / Engine tests",
-            "arquitetura / Validate the model", "arquitetura / The committed modelo.json is the export of the .c4"} <= steps["command"]
+            "arquitetura / Validate the model", "arquitetura / The committed modelo.json is the export of the .c4",
+            "arquitetura / Every mark of the target carries a bead"} <= steps["command"]
     assert steps["action"] == {"leak-scan / gitleaks", "sonar / SonarQube Cloud scan"}
     assert all(f"secrets.{secret}" in CI.read_text(encoding="utf-8") for secret in SECRETS_SET)
     downloads = {(n, s.get("with", {}).get("pattern") or s.get("with", {}).get("name"))
@@ -630,6 +631,7 @@ LOOPHOLES = [
     ("mutate-swallows-a-failure", _command_checks, _replace("mutation", "Mutate", "|| failed=1", "|| true")),
     ("committed-dist-exits-0", _command_checks, _replace("app-financas", "Committed dist is the build", "exit 1", "exit 0")),
     ("stale-model-passes", _command_checks, _set("arquitetura", "The committed modelo.json is the export of the .c4", {"shell": None})),
+    ("unmarked-change-passes", _command_checks, _set("arquitetura", "Every mark of the target carries a bead", {"shell": None})),
     ("validate-swallows-a-failure", _command_checks, _replace("arquitetura", "Validate the model", "arquitetura 2>&1", "arquitetura || true; true 2>&1")),
     ("tests-ignores-arquitetura", _needs_checks, _replace("tests", "Every part passed", ' && [ "$ARQUITETURA" = "success" ]', "")),
     # skipped, accepted only where SKIPPED_OK says.

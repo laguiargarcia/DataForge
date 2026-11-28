@@ -20,8 +20,9 @@ Three bd commands are checked, nothing else:
 Passes untouched: session beads and epics at close, a reason starting with `descartado:` or
 `duplicado:`, a bead labelled `fechamento:dispensado` (the escape hatch, counted by the
 measurement). The architecture mark check is the exception: it still covers sessions, epics and
-`descartado:`/`duplicado:` closes (a dropped bead must not stay as a mark); only the label skips it. A bead created before CUTOFF is held only to the older rules (real difficulty,
-origem, camada and erro) and its claim is not checked. Labels and the acceptance criterion given earlier in
+`descartado:`/`duplicado:` closes (a dropped bead must not stay as a mark); only the label skips it.
+A bead created before CUTOFF is held only to the older rules (real difficulty, origem, camada and
+erro) and its claim is not checked. Labels and the acceptance criterion given earlier in
 the same command line (`bd label add ... && bd close ...`) count as present.
 
 Usage:

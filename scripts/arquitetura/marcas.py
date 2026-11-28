@@ -24,10 +24,13 @@ import sys
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # scripts/: arquitetura.modelo
+
+from arquitetura import modelo
+
 TAGS = ("novo", "muda", "sai")
 KEY = "bead"
 BEAD_ID = re.compile(r"df-[a-z0-9]+(?:\.\d+)*")  # used with fullmatch: no trailing newline
-MODEL = Path(__file__).resolve().parents[2] / "arquitetura" / "modelo.json"
 BD_TIMEOUT = 20
 
 
@@ -127,7 +130,7 @@ def bd_status(bead: str) -> str | None:
 def main(argv: list[str]) -> int:
     use_bd = "--bd" in argv
     paths = [a for a in argv if a != "--bd"]
-    model = json.loads(Path(paths[0] if paths else MODEL).read_text(encoding="utf-8"))
+    model = modelo.load(paths[0] if paths else None)
     found = problems(model)
     if use_bd:
         try:

@@ -36,40 +36,68 @@
       "title": "Sistema da casa"
     },
     {
-      "description": "As telas do ninho (ninho/telas), abertas como app na tela de início. A fazer: cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta (df-8x0m.23.8)",
+      "description": "As telas do ninho (ninho/telas), abertas como app na tela de início. Muda: cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta",
       "id": "casaAlvo.appCelularAlvo",
       "kind": "conteiner",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.8"
+      },
       "tags": [
-        "emProd"
+        "muda"
       ],
       "technology": "Web app instalada no celular",
       "title": "App no celular"
     },
     {
-      "description": "O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod; falta a cópia fora deste disco (df-8x0m.23.9, df-8x0m.19). Hoje em dois arquivos SQLite: ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas (df-8x0m.23.14). Onde moram os extratos em PDF: a decidir (df-8x0m.23.35)",
+      "description": "O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod. Muda: hoje são dois arquivos SQLite, ninho.db (pessoas, lista, desejos) e o edicao.db do workspace (edições), até o workspace ir para ninho/financas; falta a cópia fora deste disco; onde moram os extratos em PDF está a decidir",
       "id": "casaAlvo.bancoAppAlvo",
       "kind": "banco",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.14",
+          "df-8x0m.23.9",
+          "df-8x0m.19",
+          "df-8x0m.23.35"
+        ]
+      },
       "tags": [
-        "emProd"
+        "muda"
       ],
       "technology": "SQLite",
       "title": "Banco do app"
     },
     {
-      "description": "Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Paredes no repositório (df-8x0m.23.14) a fazer: pastas, pacotes e regra do gate separados, CI por parte",
+      "description": "Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Muda: sai o que não é orquestrador (hospedeiro de apps, rota genérica de tabelas); paredes no repositório: pastas, pacotes e regra do gate separados, CI por parte",
       "id": "casaAlvo.dataforgeAlvo",
       "kind": "conteiner",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.3",
+          "df-8x0m.23.14"
+        ]
+      },
       "tags": [
-        "emProd"
+        "muda"
       ],
       "technology": "Python",
       "title": "DataForge (orquestrador)"
+    },
+    {
+      "description": "O backend do app Finanças do PC, iniciado pelo DataForge, que hoje também escreve no banco de edições. Sai: as telas passam para o módulo finanças do servidor e as regras para um pacote importável",
+      "id": "casaAlvo.financasAlvo",
+      "kind": "conteiner",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "tags": [
+        "sai"
+      ],
+      "technology": "Python",
+      "title": "Backend GetFinance"
     },
     {
       "description": "Escrito só pelo DataForge; o servidor sabe o estado de uma execução por run-state, nunca lê o arquivo",
@@ -77,32 +105,37 @@
       "kind": "banco",
       "links": [],
       "metadata": {},
-      "tags": [
-        "emProd"
-      ],
+      "tags": [],
       "technology": "SQLite (dataforge.db)",
       "title": "Histórico e agendas"
     },
     {
-      "description": "raw (só cresce), cleansed e publicado. Só o pipeline escreve",
+      "description": "raw (só cresce), cleansed e publicado. Só o pipeline escreve. Muda: as tabelas publicadas viram uma lista com esquema declarado, conferida ao fim de cada job que as escreve",
       "id": "casaAlvo.lagoAlvo",
       "kind": "banco",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.45"
+      },
       "tags": [
-        "emProd"
+        "muda"
       ],
       "technology": "Delta Lake",
       "title": "Lago"
     },
     {
-      "description": "Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago",
+      "description": "Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login; serve as telas. Módulos: finanças, lista, desejos, agenda. Nunca roda pipeline nem escreve no lago. Muda: o módulo finanças faz o que o app Finanças do PC faz hoje; a agenda entra",
       "id": "casaAlvo.servidorAlvo",
       "kind": "conteiner",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": [
+          "df-8x0m.23.19",
+          "df-8x0m.23.21"
+        ]
+      },
       "tags": [
-        "emProd"
+        "muda"
       ],
       "technology": "Python, FastAPI",
       "title": "Servidor da casa (ninho)"
@@ -248,13 +281,15 @@
       "title": "Outra pessoa da casa"
     },
     {
-      "description": "Segunda fonte de dados (df-8x0m.23.10)",
+      "description": "Segunda fonte de dados, que entra pelo mesmo lugar que o Pluggy",
       "id": "outrasFontesAlvo",
       "kind": "sistemaExterno",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.10"
+      },
       "tags": [
-        "aFazer"
+        "novo"
       ],
       "technology": null,
       "title": "Outras fontes"
@@ -311,9 +346,13 @@
       "id": "casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo: Lê e envia a fila de mudanças (HTTPS pela Tailscale)",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.8"
+      },
       "source": "casaAlvo.appCelularAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.servidorAlvo",
       "technology": null,
       "title": "Lê e envia a fila de mudanças (HTTPS pela Tailscale)"
@@ -332,6 +371,22 @@
     },
     {
       "description": null,
+      "id": "casaAlvo.dataforgeAlvo -> casaAlvo.financasAlvo: Inicia e para o backend; repassa as chamadas do app Finanças",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "casaAlvo.dataforgeAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.financasAlvo",
+      "technology": null,
+      "title": "Inicia e para o backend; repassa as chamadas do app Finanças"
+    },
+    {
+      "description": null,
       "id": "casaAlvo.dataforgeAlvo -> casaAlvo.historicoAlvo: Lê e escreve (único escritor)",
       "kind": null,
       "links": [],
@@ -347,9 +402,13 @@
       "id": "casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo: Lê e escreve (único escritor)",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
       "source": "casaAlvo.dataforgeAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.lagoAlvo",
       "technology": null,
       "title": "Lê e escreve (único escritor)"
@@ -359,9 +418,13 @@
       "id": "casaAlvo.dataforgeAlvo -> outrasFontesAlvo: Busca dados",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.10"
+      },
       "source": "casaAlvo.dataforgeAlvo",
-      "tags": [],
+      "tags": [
+        "novo"
+      ],
       "target": "outrasFontesAlvo",
       "technology": null,
       "title": "Busca dados"
@@ -380,12 +443,64 @@
     },
     {
       "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve as edições (segundo escritor)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.bancoAppAlvo",
+      "technology": null,
+      "title": "Lê e escreve as edições (segundo escritor)"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.dataforgeAlvo: Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.dataforgeAlvo",
+      "technology": null,
+      "title": "Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP"
+    },
+    {
+      "description": null,
+      "id": "casaAlvo.financasAlvo -> casaAlvo.lagoAlvo: Lê direto, fora das tabelas publicadas",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
+      "source": "casaAlvo.financasAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.lagoAlvo",
+      "technology": null,
+      "title": "Lê direto, fora das tabelas publicadas"
+    },
+    {
+      "description": null,
       "id": "casaAlvo.servidorAlvo -> casaAlvo.bancoAppAlvo: Lê e escreve (único escritor)",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.14"
+      },
       "source": "casaAlvo.servidorAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.bancoAppAlvo",
       "technology": null,
       "title": "Lê e escreve (único escritor)"
@@ -404,12 +519,32 @@
     },
     {
       "description": null,
+      "id": "casaAlvo.servidorAlvo -> casaAlvo.financasAlvo: Importa o código das regras de edição (edicao.py) do workspace (provisório)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "bead": "df-8x0m.23.14"
+      },
+      "source": "casaAlvo.servidorAlvo",
+      "tags": [
+        "sai"
+      ],
+      "target": "casaAlvo.financasAlvo",
+      "technology": null,
+      "title": "Importa o código das regras de edição (edicao.py) do workspace (provisório)"
+    },
+    {
+      "description": null,
       "id": "casaAlvo.servidorAlvo -> casaAlvo.lagoAlvo: Só leitura, pelas tabelas publicadas",
       "kind": "leitura",
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.45"
+      },
       "source": "casaAlvo.servidorAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.lagoAlvo",
       "technology": null,
       "title": "Só leitura, pelas tabelas publicadas"
@@ -623,9 +758,13 @@
       "id": "donoAlvo -> casaAlvo.appCelularAlvo: Usa",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.19"
+      },
       "source": "donoAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.appCelularAlvo",
       "technology": null,
       "title": "Usa"
@@ -635,9 +774,13 @@
       "id": "donoAlvo -> casaAlvo.dataforgeAlvo: Tela de admin",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.3"
+      },
       "source": "donoAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.dataforgeAlvo",
       "technology": null,
       "title": "Tela de admin"
@@ -671,9 +814,13 @@
       "id": "outraAlvo -> casaAlvo.appCelularAlvo: Usa",
       "kind": null,
       "links": [],
-      "metadata": {},
+      "metadata": {
+        "bead": "df-8x0m.23.6"
+      },
       "source": "outraAlvo",
-      "tags": [],
+      "tags": [
+        "muda"
+      ],
       "target": "casaAlvo.appCelularAlvo",
       "technology": null,
       "title": "Usa"
@@ -704,8 +851,9 @@
       "leitura"
     ],
     "tags": [
-      "aFazer",
-      "emProd"
+      "muda",
+      "novo",
+      "sai"
     ]
   },
   "views": [

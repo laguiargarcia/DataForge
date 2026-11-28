@@ -179,7 +179,4 @@ def test_main_exits_2_when_bd_fails_and_still_prints_the_format_problems(tmp_pat
 
 def test_the_versioned_model_is_fully_marked():
     """The real model: every mark of arquitetura/ carries a well-formed bead (CI's half)."""
-    path = ROOT / "arquitetura" / "modelo.json"
-    if not path.exists():
-        pytest.skip("arquitetura/modelo.json comes with df-8x0m.23.43")
-    assert marcas.problems(json.loads(path.read_text(encoding="utf-8"))) == []
+    assert marcas.problems(marcas.modelo.load()) == []

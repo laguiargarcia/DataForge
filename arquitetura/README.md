@@ -41,9 +41,13 @@ servidorAlvo = conteiner 'Servidor da casa (ninho)' {
 }
 ```
 
-Sem marca: já roda em prod como está. O que some de hoje e não fica desenhado no alvo: os bancos `edicao.db` e `ninho.db`, que viram o banco do app, e os extratos em PDF e os zips do backup, citados na descrição dele (com os beads dele); a seta do backend que grava o PDF some com o backend, até df-8x0m.23.35 dizer onde os extratos moram. A tag vem primeiro no corpo do elemento ou da seta. Quando o
-bead fecha, a marca sai, ou passa para o bead que continua a mudança (um bead de decisão a passa
-para os beads de implementação que criou). A conferência tem duas metades, porque o CI não tem bd:
+Sem marca: já roda em prod como está. O que some de hoje e não fica desenhado no alvo: os bancos
+`edicao.db` e `ninho.db`, que viram o banco do app, e os extratos em PDF e os zips do backup,
+citados na descrição dele (com os beads dele); a seta do backend que grava o PDF some com o backend,
+até df-8x0m.23.35 dizer onde os extratos moram. A tag vem primeiro no corpo do elemento ou da seta.
+Quando o bead fecha, a marca sai, ou passa para o bead que continua a mudança (um bead de decisão a
+passa para os beads de implementação que criou). A conferência tem duas metades, porque o CI não tem
+bd:
 
 - `python3 scripts/arquitetura/marcas.py` (no CI): falha num item marcado sem bead, com id
   malformado ou com duas das três marcas, e num `bead` sem marca.
