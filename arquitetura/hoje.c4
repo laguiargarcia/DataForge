@@ -97,12 +97,12 @@ model {
   casaHoje.telasNinhoHoje -> casaHoje.ninhoHoje 'Baixa o build (ninho/telas/dist) e chama /api (HTTPS pela Tailscale)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend; repassa /apps/<ws>/financas/api com o token'
-  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job'
+  casaHoje.dataforgeHoje -> casaHoje.pipelineHoje 'Lê o workspace.yaml e as conexões e edita jobs e triggers; lança cada task como processo Python, com o .env do job'
   casaHoje.dataforgeHoje -[leitura]-> casaHoje.lagoHoje 'Serve o curated pela rota genérica'
   casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Lê e escreve o histórico de execuções'
 
   casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos (delta_pool, app_guard); pede e acompanha jobs pela API HTTP'
-  casaHoje.financasHoje -> casaHoje.pipelineHoje 'Importa edicao, extrato e classificacao dos scripts (scripts/report)'
+  casaHoje.financasHoje -> casaHoje.pipelineHoje 'Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml'
   casaHoje.financasHoje -[leitura]-> casaHoje.lagoHoje 'Lê direto'
   casaHoje.financasHoje -> casaHoje.edicaoHoje 'Lê e escreve: categorias, regras, correções, explicações'
   casaHoje.financasHoje -> casaHoje.extratosHoje 'Grava o PDF enviado'
@@ -117,7 +117,7 @@ model {
   casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista, desejos'
   casaHoje.ninhoHoje -> casaHoje.edicaoHoje 'Lê e escreve: correções'
   casaHoje.ninhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI'
-  casaHoje.ninhoHoje -> casaHoje.pipelineHoje 'Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)'
+  casaHoje.ninhoHoje -> casaHoje.pipelineHoje 'Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14); lê o connections.yaml e confere o workspace.yaml'
 }
 
 views {
@@ -134,5 +134,12 @@ views {
     // A cópia do backup é leitura; junto das gravações, deixaria pontilhada a seta pipeline -> lago,
     // cujo título já diz que o job backup copia o raw (df-8x0m.23.47.12).
     exclude casaHoje.pipelineHoje.backupDadosHoje -> casaHoje.lagoHoje
+    // As leituras dos arquivos do workspace também: o título de cada seta de contêiner já as diz (df-8x0m.23.47.14).
+    exclude
+      casaHoje.dataforgeHoje.compatHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
+      casaHoje.dataforgeHoje.apiHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
+      casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
+      casaHoje.ninhoHoje.servidorHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
+      casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje
   }
 }

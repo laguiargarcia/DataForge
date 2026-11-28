@@ -14,8 +14,8 @@
 //   componentes-dataforge.c4).
 // - Importar dataforge.delta_pool e dataforge.app_guard roda antes dataforge/__init__.py, que registra
 //   os tipos de task: esse efeito do import tem seta própria, para Tipos de task.
-// - A leitura do connections.yaml pelo backend está na descrição dele e ganha seta em df-8x0m.23.47.14,
-//   que dá um elemento à definição do workspace.
+// - O backend acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace: a seta vai ao
+//   banco dos arquivos do workspace, dentro do pipeline (df-8x0m.23.47.14).
 model {
   extend casaHoje.financasHoje {
     rotasFinancasHoje = componente 'Rotas do backend Finanças' {
@@ -242,6 +242,11 @@ model {
   }
 
   // Do backend para os dados.
+  casaHoje.financasHoje.rotasFinancasHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Lê no connections.yaml onde estão o lago, o edicao.db e os extratos' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
   casaHoje.financasHoje.rotasFinancasHoje -[leitura]-> casaHoje.lagoHoje 'Lê o curated e as contas do cleansed' {
     metadata {
       codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
@@ -269,7 +274,8 @@ views {
       casaHoje.dataforgeHoje.deltaPoolHoje,
       casaHoje.dataforgeHoje.tasksHoje,
       casaHoje.pipelineHoje.regrasHoje,
-      casaHoje.pipelineHoje.conferenciasHoje
+      casaHoje.pipelineHoje.conferenciasHoje,
+      casaHoje.pipelineHoje.arquivosWorkspaceHoje
     // Só as setas do backend: as que ligam os de fora entre si estão nas vistas deles.
     exclude
       casaHoje.dataforgeHoje.* -> casaHoje.dataforgeHoje.*,

@@ -5,7 +5,9 @@
 // Decisões (as razões estão nas notas do bead):
 // - Cada script de camada é uma task de job (jobs/<job>/job.yaml, campo script) que o DataForge lança
 //   como processo Python; reprocess.py roda à mão, fora dos jobs, e bin/ é sobra sem uso (df-o0cc).
-//   jobs/, connections/ e config/ são YAML e CSV, não código: não são componentes.
+//   jobs/, connections/, config/ e o workspace.yaml são YAML e CSV, não código: não são componentes, são
+//   um banco (arquivosWorkspaceHoje) que o DataForge, as camadas, o ninho e o backend Finanças leem. Os
+//   triggers/ e o config/investments.yaml existem só na prod, fora do git: ficam na descrição.
 // - A ordem do DAG (depends_on) e a dependência de dado pelo lago não são setas entre componentes: uma
 //   camada não chama a outra, cada uma lê o que a anterior gravou. Elas aparecem como setas para o lago.
 // - Seta para fora (Pluggy, lago, bancos) sai do componente cuja task faz a ação no seu processo; as
@@ -103,6 +105,18 @@ model {
       technology 'Bash, PowerShell'
       metadata {
         codigo ['workspaces/GetFinance/bin']
+      }
+    }
+    arquivosWorkspaceHoje = banco 'Arquivos do workspace: workspace.yaml, jobs, conexões e config' {
+      description 'Os arquivos que dizem o que o workspace roda e onde estão os dados: workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam raw, cleansed e curated do lago, o edicao.db, os achados das validações e os extratos) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). A Definição do workspace, no DataForge, lê e escreve jobs e triggers; o Deploy copia jobs, config e triggers de um workspace a outro (sem uso em prod); o DataForge, as camadas, o ninho e o backend Finanças os leem. Os triggers/ e o config/investments.yaml existem só na prod, fora do git'
+      technology 'YAML e CSV'
+      metadata {
+        codigo [
+          'workspaces/GetFinance/workspace.yaml',
+          'workspaces/GetFinance/jobs',
+          'workspaces/GetFinance/connections',
+          'workspaces/GetFinance/config'
+        ]
       }
     }
     achadosHoje = banco 'Achados das validações' {
@@ -375,11 +389,46 @@ model {
       codigo ['workspaces/GetFinance/scripts/validation/data_warnings.py']
     }
   }
+
+  // Quem lê os arquivos do workspace dentro do pipeline: o connections.yaml por functions (toda task acha
+  // os dados por ele), o config/ pelas camadas que o usam. Quem lê de fora tem a seta no arquivo dele.
+  casaHoje.pipelineHoje.functionsHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Lê as conexões do connections.yaml e acha por ele a raiz do workspace' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/functions/functions.py']
+    }
+  }
+  casaHoje.pipelineHoje.raw2cleansedHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Lê o mapa de estabelecimentos (config/merchant_normalization.yaml)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/raw2cleansed/raw2cleansed.py']
+    }
+  }
+  casaHoje.pipelineHoje.cleansed2curatedHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Lê as instituições e o mapa de investimentos do config/' {
+    metadata {
+      codigo [
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_accounts.py',
+        'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_investments.py'
+      ]
+    }
+  }
+  casaHoje.pipelineHoje.reportHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'A semente lê os CSV do config/edicao (só no finance_demo)' {
+    metadata {
+      codigo ['workspaces/GetFinance/scripts/report/carga_inicial_edicao.py']
+    }
+  }
 }
 
 views {
   view hoje-componentes-pipeline of casaHoje.pipelineHoje {
     title 'Hoje: componentes do pipeline GetFinance'
     include *
+    // Quem de fora lê os arquivos do workspace aparece como o seu contêiner, e as setas dele se juntam
+    // numa aresta (df-8x0m.23.47.12). Do DataForge fica a da Definição, que lê e escreve; as leituras de
+    // Compat e API são de outro kind e estão na vista do DataForge. As duas do ninho ganham um título.
+    exclude
+      casaHoje.dataforgeHoje.compatHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
+      casaHoje.dataforgeHoje.apiHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje
+    include casaHoje.ninhoHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje with {
+      title 'Lê no connections.yaml onde está o edicao.db e confere o workspace.yaml'
+    }
   }
 }
