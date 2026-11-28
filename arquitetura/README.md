@@ -196,9 +196,10 @@ relação implícita do LikeC4: um passo entre contêineres vale pela seta entre
 então o modelo pode desenhar as setas só entre componentes. Não valem uma seta só entre ancestrais
 (um passo entre componentes pede a seta entre eles) nem uma seta no outro sentido: uma resposta
 precisa da própria seta, porque o `modelo.json` não distingue uma resposta (`a <- b`) de um passo
-`b -> a` (o LikeC4 exporta os dois iguais). Essa seta de resposta aparece também em toda vista estática que inclui as duas pontas. Sem a seta, o erro nomeia a vista, o passo e a seta que
-falta; acrescente a seta ao modelo ou corrija o passo. Blocos `parallel` viram passos simples no
-`modelo.json`.
+`b -> a` (o LikeC4 exporta os dois iguais). Essa seta de resposta aparece também nas vistas estáticas
+que mostram as duas pontas (ou elementos que as contêm), a menos que a vista a exclua. Sem a seta, o
+erro nomeia a vista, o passo e a seta que falta; acrescente a seta ao modelo ou corrija o passo.
+Blocos `parallel` viram passos simples no `modelo.json`.
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.
