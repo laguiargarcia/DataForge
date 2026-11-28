@@ -25,11 +25,11 @@ model {
       technology 'Python'
     }
     ninhoHoje = conteiner 'Servidor ninho e telas' {
-      description 'Login por pessoa, lista de compras e correção de categorias, em paralelo ao app Finanças'
+      description 'Login por pessoa, lista de compras, lista de desejos e correção de categorias, em paralelo ao app Finanças'
       technology 'Python, FastAPI, front web'
     }
     bancoNinhoHoje = banco 'ninho.db' {
-      description 'Pessoas e lista de compras (fora do repositório, sem backup ainda)'
+      description 'Pessoas, lista de compras e desejos (fora do repositório; cópia semanal no job backup)'
       technology 'SQLite'
     }
     edicaoHoje = banco 'edicao.db' {
@@ -57,12 +57,14 @@ model {
   casaHoje.financasHoje -[leitura]-> casaHoje.lagoHoje 'Lê direto'
   casaHoje.financasHoje -> casaHoje.edicaoHoje 'Lê e escreve'
   casaHoje.dataforgeHoje -> casaHoje.lagoHoje 'Grava; serve as tabelas pela rota genérica'
-  casaHoje.dataforgeHoje -> casaHoje.edicaoHoje 'O pipeline lê e semeia (carga_inicial_edicao)'
+  casaHoje.dataforgeHoje -> casaHoje.edicaoHoje 'O pipeline lê e semeia (carga_inicial_edicao); o job backup copia'
   casaHoje.dataforgeHoje -> casaHoje.dbDataforgeHoje 'Histórico'
+  casaHoje.dataforgeHoje -[leitura]-> casaHoje.bancoNinhoHoje 'Copia no job backup (semanal)'
   casaHoje.ninhoHoje -[leitura]-> casaHoje.lagoHoje 'Lê tabelas'
   casaHoje.ninhoHoje -> casaHoje.bancoNinhoHoje 'Lê e escreve: pessoas, lista'
   casaHoje.ninhoHoje -> casaHoje.edicaoHoje 'Lê e escreve: correções'
   casaHoje.ninhoHoje -> casaHoje.dataforgeHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI'
+  casaHoje.ninhoHoje -> casaHoje.financasHoje 'Carrega as regras de edição dos scripts do workspace (provisório, df-8x0m.23.14)'
 }
 
 views {

@@ -28,12 +28,12 @@ model {
     }
     servidorAlvo = conteiner 'Servidor da casa (ninho) e telas' {
       #emProd
-      description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
+      description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, desejos, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
       technology 'Python, FastAPI, front web'
     }
     bancoAppAlvo = banco 'Banco do app' {
       #emProd
-      description 'O que a pessoa digitou: usuários, lista, agenda, edições. Não se reconstrói: precisa de backup real (a fazer)'
+      description 'O que a pessoa digitou: usuários, lista, desejos, agenda, edições. Não se reconstrói: cópia semanal pelo job backup já em prod; falta a cópia fora deste disco (df-8x0m.23.9, df-8x0m.19)'
       technology 'SQLite'
     }
     lagoAlvo = banco 'Lago' {
@@ -58,7 +58,7 @@ model {
   casaAlvo.servidorAlvo -[leitura]-> casaAlvo.lagoAlvo 'Só leitura, pelas tabelas publicadas'
   casaAlvo.servidorAlvo -> casaAlvo.dataforgeAlvo 'Pede o job e acompanha pela interface pública (run --detach / run-state --wait)'
   casaAlvo.dataforgeAlvo -> casaAlvo.lagoAlvo 'Lê e escreve (único escritor)'
-  casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada'
+  casaAlvo.dataforgeAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê as edições como entrada; copia no job backup'
   casaAlvo.dataforgeAlvo -> pluggyAlvo 'Busca dados'
   casaAlvo.dataforgeAlvo -> outrasFontesAlvo 'Busca dados'
 }
