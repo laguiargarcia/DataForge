@@ -12,8 +12,8 @@
 // - Finanças lê no connections.yaml do workspace onde está o edicao.db (ninho/banco.py), e o núcleo
 //   confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace: as duas setas vão ao banco
 //   dos arquivos do workspace, dentro do pipeline (df-8x0m.23.47.14).
-// - Quando um componente só faz o que a seta do contêiner em hoje.c4 diz, a seta leva o mesmo título:
-//   títulos diferentes no mesmo par viram '[...]' na vista de contêineres (df-8x0m.23.47.12).
+// - A seta que é a única entre o ninho e um contêiner, banco ou pessoa de fora dá o rótulo da aresta da
+//   vista de contêineres: o título diz também o que o contêiner faz ali (README, regra 5; df-8x0m.23.47.13).
 model {
   extend casaHoje.ninhoHoje {
     servidorHoje = componente 'Núcleo do servidor' {
@@ -90,7 +90,7 @@ model {
   }
 
   // Quem de fora chama.
-  // Título igual ao de donoHoje -> ninhoHoje em hoje.c4 de propósito (df-8x0m.23.47.12).
+  // Seta única do par dono -> ninho: o título dela é o rótulo da vista de contêineres (README, regra 5).
   donoHoje -> casaHoje.ninhoHoje.pessoasCliHoje 'Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)' {
     metadata {
       codigo ['ninho/__main__.py']
@@ -104,7 +104,8 @@ model {
       codigo ['ninho/servidor/app.py']
     }
   }
-  // Títulos iguais aos das setas de ninhoHoje em hoje.c4 quando o componente faz só aquilo (df-8x0m.23.47.12).
+  // As setas para a CLI do DataForge, o lago e o edicao.db são as únicas dos seus pares: o título de cada
+  // uma é o rótulo da vista de contêineres (README, regra 5).
   casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.dataforgeHoje.cliHoje 'Pede o job (run --detach) e acompanha (run-state --wait) pela CLI' {
     metadata {
       codigo ['ninho/financas/aplicar.py']

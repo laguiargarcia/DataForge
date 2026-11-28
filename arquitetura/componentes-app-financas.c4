@@ -97,7 +97,8 @@ model {
     }
   }
 
-  // Quem usa o front. Título igual ao de donoHoje -> frontFinancasHoje em hoje.c4.
+  // Quem usa o front. Seta única do par dono -> front: o título dela é o rótulo da vista de contêineres
+  // (README, regra 5).
   donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje 'Usa o app Finanças no PC (janela Qt ou navegador)'
 
   // Do front para o DataForge (HTTP).

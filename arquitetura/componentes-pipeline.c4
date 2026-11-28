@@ -121,6 +121,13 @@ model {
         ]
       }
     }
+    // Sem codigo: os arquivos da pasta são dos componentes acima. A caixa existe porque a API do DataForge
+    // lê a pasta como arquivos, e o LikeC4 1.61.1 apaga da vista do DataForge a seta da API ao contêiner,
+    // já que a API também tem seta aos arquivos do workspace, filho dele (df-8x0m.23.47.18).
+    pastaScriptsHoje = banco 'Pasta dos scripts (scripts/)' {
+      description 'workspaces/GetFinance/scripts vista como arquivos, não como código que roda: a API do DataForge lista os .py dela para o editor de job e confere que o script de cada task existe. O código de cada script é das camadas, de functions e do reprocess'
+      technology 'Pasta de arquivos .py'
+    }
     achadosHoje = banco 'Achados das validações' {
       description 'Um JSON por validação com os achados suspeitos (só ids e datas), regravado a cada rodada'
       technology 'Pasta de JSON (data/validation)'
@@ -295,7 +302,7 @@ model {
   // seta sai do componente Finanças dele (componentes-ninho.c4).
 
   // Para fora: Pluggy, lago, bancos.
-  // Título igual ao de pipelineHoje -> pluggyHoje em hoje.c4 de propósito: títulos diferentes viram '[...]' em hoje-contexto (df-8x0m.23.47.12).
+  // Seta única do par pipeline -> Pluggy: o título dela é o rótulo das vistas de contexto e de contêineres (README, regra 5).
   casaHoje.pipelineHoje.landingHoje -> pluggyHoje 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py', 'workspaces/GetFinance/scripts/functions/functions.py']
