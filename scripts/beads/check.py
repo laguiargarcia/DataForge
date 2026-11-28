@@ -49,6 +49,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -582,6 +583,16 @@ def check_line(command: str, bd: Bd, repo: Path) -> list[str]:
     return check_steps(read_line(command), bd, repo)
 
 
+def create_problems(step: Step, boxes: Callable[[], set[str] | None]) -> list[str]:
+    """The C4 gaps of one create, prefixed with it; `boxes` gives the model's ids, None without a
+    model on origin/main, and then the rule does not run."""
+    ids = boxes()
+    if ids is None:
+        return []
+    what = f"bd create {step.title}".rstrip()
+    return [f"[{what}] {f}" for f in c4_problems(step, ids)]
+
+
 def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
     """Every gap of these steps, each prefixed with the command and bead it belongs to."""
     out = []
@@ -591,10 +602,7 @@ def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
             out.append(step.message)
             continue
         if step.kind == "create":
-            ids = boxes()
-            if ids is not None:  # no model on origin/main: the rule does not run
-                what = f"bd create {step.title}".rstrip()
-                out += [f"[{what}] {f}" for f in c4_problems(step, ids)]
+            out += create_problems(step, boxes)
             continue
         issue = bd.show(step.bead)
         if issue is None:
