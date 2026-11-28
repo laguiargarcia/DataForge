@@ -587,7 +587,7 @@
       "title": "Lista de desejos"
     },
     {
-      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica",
+      "description": "O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db; nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica",
       "id": "casaHoje.ninhoHoje.financasNinhoHoje",
       "kind": "componente",
       "links": [],
@@ -661,6 +661,23 @@
       "tags": [],
       "technology": "Pasta de JSON (data/validation)",
       "title": "Achados das validações"
+    },
+    {
+      "description": "Os arquivos que dizem o que o workspace roda e onde estão os dados (o código que os lê e escreve é a Definição do workspace, no DataForge): workspace.yaml (nome e engine), jobs/<job>/job.yaml (as tasks, com script, argumentos e depends_on), connections/connections.yaml (onde ficam o lago, o edicao.db, os extratos e os backups) e config/ (instituições, estabelecimentos, investimentos sintéticos e os CSV da semente do edicao.db). Os triggers/, o .env e o config/investments.yaml existem só na prod, fora do git",
+      "id": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "kind": "banco",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/workspace.yaml",
+          "workspaces/GetFinance/jobs",
+          "workspaces/GetFinance/connections",
+          "workspaces/GetFinance/config"
+        ]
+      },
+      "tags": [],
+      "technology": "YAML e CSV",
+      "title": "Arquivos do workspace: jobs, conexões e config"
     },
     {
       "description": "Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos",
@@ -1273,7 +1290,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
+      "id": "casaHoje.dataforgeHoje -> casaHoje.pipelineHoje: Lê e edita a definição do workspace (workspace.yaml, jobs, triggers, conexões); lança cada task como processo Python, com o .env do job",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -1281,7 +1298,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Lê e edita a definição do workspace (jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
+      "title": "Lê e edita a definição do workspace (workspace.yaml, jobs, triggers, conexões); lança cada task como processo Python, com o .env do job"
     },
     {
       "description": null,
@@ -1471,6 +1488,24 @@
       "target": "casaHoje.lagoHoje",
       "technology": null,
       "title": "Serve o curated pela rota genérica"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Confere que o workspace, o job e o trigger pedidos existem",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/api/routers/stream.py",
+          "dataforge/api/routers/jobs.py",
+          "dataforge/api/routers/triggers.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.apiHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Confere que o workspace, o job e o trigger pedidos existem"
     },
     {
       "description": null,
@@ -1718,7 +1753,21 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.definicaoHoje -> casaHoje.pipelineHoje: Lê e escreve a definição do workspace (jobs, triggers, conexões)",
+      "id": "casaHoje.dataforgeHoje.compatHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Acha e lista os workspaces pelo workspace.yaml",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/compat.py"
+      },
+      "source": "casaHoje.dataforgeHoje.compatHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Acha e lista os workspaces pelo workspace.yaml"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.definicaoHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Lê workspace.yaml e conexões; lê e escreve jobs e triggers",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1726,9 +1775,9 @@
       },
       "source": "casaHoje.dataforgeHoje.definicaoHoje",
       "tags": [],
-      "target": "casaHoje.pipelineHoje",
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
       "technology": null,
-      "title": "Lê e escreve a definição do workspace (jobs, triggers, conexões)"
+      "title": "Lê workspace.yaml e conexões; lê e escreve jobs e triggers"
     },
     {
       "description": null,
@@ -2494,7 +2543,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje: Importa edicao, extrato e classificacao dos scripts (scripts/report)",
+      "id": "casaHoje.financasHoje -> casaHoje.pipelineHoje: Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -2502,7 +2551,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Importa edicao, extrato e classificacao dos scripts (scripts/report)"
+      "title": "Importa edicao, extrato e classificacao dos scripts (scripts/report); lê o connections.yaml"
     },
     {
       "description": null,
@@ -2601,6 +2650,20 @@
       "target": "casaHoje.lagoHoje",
       "technology": null,
       "title": "Lê o curated e as contas do cleansed"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Lê no connections.yaml onde estão o lago, o edicao.db e os extratos",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
+      },
+      "source": "casaHoje.financasHoje.rotasFinancasHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Lê no connections.yaml onde estão o lago, o edicao.db e os extratos"
     },
     {
       "description": null,
@@ -2961,7 +3024,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.ninhoHoje -> casaHoje.pipelineHoje: Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)",
+      "id": "casaHoje.ninhoHoje -> casaHoje.pipelineHoje: Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14); lê o connections.yaml e o workspace.yaml",
       "kind": null,
       "links": [],
       "metadata": {},
@@ -2969,7 +3032,7 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14)"
+      "title": "Importa edicao e classificacao dos scripts (provisório, df-8x0m.23.14); lê o connections.yaml e o workspace.yaml"
     },
     {
       "description": null,
@@ -3043,6 +3106,20 @@
       "target": "casaHoje.lagoHoje",
       "technology": null,
       "title": "Lê tabelas"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.financasNinhoHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Lê no connections.yaml onde está o edicao.db",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/banco.py"
+      },
+      "source": "casaHoje.ninhoHoje.financasNinhoHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Lê no connections.yaml onde está o edicao.db"
     },
     {
       "description": null,
@@ -3177,6 +3254,20 @@
       "target": "casaHoje.ninhoHoje.listaHoje",
       "technology": null,
       "title": "Inclui o router /api/lista (só para quem tem o módulo lista)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.ninhoHoje.servidorHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "ninho/servidor/app.py"
+      },
+      "source": "casaHoje.ninhoHoje.servidorHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace"
     },
     {
       "description": null,
@@ -3423,6 +3514,23 @@
     },
     {
       "description": null,
+      "id": "casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Lê as instituições e o mapa de investimentos do config/",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_accounts.py",
+          "workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_investments.py"
+        ]
+      },
+      "source": "casaHoje.pipelineHoje.cleansed2curatedHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Lê as instituições e o mapa de investimentos do config/"
+    },
+    {
+      "description": null,
       "id": "casaHoje.pipelineHoje.cleansed2curatedHoje -> casaHoje.pipelineHoje.conferenciasHoje: Importa extrato e as conferências",
       "kind": null,
       "links": [],
@@ -3488,6 +3596,20 @@
       "target": "casaHoje.pipelineHoje.regrasHoje",
       "technology": null,
       "title": "Importa classificacao"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.pipelineHoje.functionsHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Lê as conexões do connections.yaml e acha por ele a raiz do workspace",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/functions/functions.py"
+      },
+      "source": "casaHoje.pipelineHoje.functionsHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Lê as conexões do connections.yaml e acha por ele a raiz do workspace"
     },
     {
       "description": null,
@@ -3564,6 +3686,20 @@
     },
     {
       "description": null,
+      "id": "casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: Lê o mapa de estabelecimentos (config/merchant_normalization.yaml)",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/raw2cleansed/raw2cleansed.py"
+      },
+      "source": "casaHoje.pipelineHoje.raw2cleansedHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "Lê o mapa de estabelecimentos (config/merchant_normalization.yaml)"
+    },
+    {
+      "description": null,
       "id": "casaHoje.pipelineHoje.raw2cleansedHoje -> casaHoje.pipelineHoje.conferenciasHoje: Importa conferencia_fatura",
       "kind": null,
       "links": [],
@@ -3637,6 +3773,20 @@
       "target": "casaHoje.pipelineHoje.achadosHoje",
       "technology": null,
       "title": "Grava os achados (validate)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.pipelineHoje.reportHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje: A semente lê os CSV do config/edicao (só no finance_demo)",
+      "kind": "leitura",
+      "links": [],
+      "metadata": {
+        "codigo": "workspaces/GetFinance/scripts/report/carga_inicial_edicao.py"
+      },
+      "source": "casaHoje.pipelineHoje.reportHoje",
+      "tags": [],
+      "target": "casaHoje.pipelineHoje.arquivosWorkspaceHoje",
+      "technology": null,
+      "title": "A semente lê os CSV do config/edicao (só no finance_demo)"
     },
     {
       "description": null,

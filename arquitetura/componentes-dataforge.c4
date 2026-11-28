@@ -128,9 +128,21 @@ model {
       codigo ['dataforge/tasks/python_handler.py']
     }
   }
-  casaHoje.dataforgeHoje.definicaoHoje -> casaHoje.pipelineHoje 'Lê e escreve a definição do workspace (jobs, triggers, conexões)' {
+  // Os arquivos do workspace (workspace.yaml, jobs, conexões, config) são um banco do pipeline
+  // (componentes-pipeline.c4); os triggers/ só existem na prod, fora do git.
+  casaHoje.dataforgeHoje.definicaoHoje -> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Lê workspace.yaml e conexões; lê e escreve jobs e triggers' {
     metadata {
       codigo ['dataforge/parser.py']
+    }
+  }
+  casaHoje.dataforgeHoje.compatHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Acha e lista os workspaces pelo workspace.yaml' {
+    metadata {
+      codigo ['dataforge/compat.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Confere que o workspace, o job e o trigger pedidos existem' {
+    metadata {
+      codigo ['dataforge/api/routers/stream.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/triggers.py']
     }
   }
   casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje 'Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)' {
@@ -482,5 +494,13 @@ views {
       title 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
     }
     exclude * -> casaHoje.dataforgeHoje.compatHoje
+    // Os arquivos do workspace que Definição, Compat e API leem (componentes-pipeline.c4); as leituras do
+    // ninho e do backend Finanças estão nas vistas deles.
+    // Com um filho do pipeline na vista, o LikeC4 1.61.1 não desenha a seta do bin à CLI no contêiner:
+    // o bin entra por nome.
+    include casaHoje.pipelineHoje.arquivosWorkspaceHoje, casaHoje.pipelineHoje.binHoje
+    exclude
+      casaHoje.ninhoHoje.* -> casaHoje.pipelineHoje.arquivosWorkspaceHoje,
+      casaHoje.financasHoje.* -> casaHoje.pipelineHoje.arquivosWorkspaceHoje
   }
 }

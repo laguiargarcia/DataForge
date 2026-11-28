@@ -9,11 +9,9 @@
 //   componente de banco com os dois importaria finanças e seria importado por ela (ciclo).
 // - Seta para fora sai do componente cujo código faz a leitura, a escrita ou a chamada. A CLI de pessoas
 //   roda num processo seu e abre o ninho.db direto, sem o servidor: por isso tem a sua seta para o banco.
-// - Finanças lê no connections.yaml do workspace onde está o edicao.db (ninho/banco.py): dependência real
-//   de um arquivo versionado do pipeline, mas jobs/, connections/ e config/ não têm elemento no pipeline.
-//   Uma seta para o contêiner não é desenhada no LikeC4 1.61.1 ao lado da seta para regrasHoje, e sem
-//   regrasHoje na vista as duas viram uma aresta só, com o título de uma delas. Fica na descrição até o
-//   elemento da definição do workspace existir (df-8x0m.23.47.14).
+// - Finanças lê no connections.yaml do workspace onde está o edicao.db (ninho/banco.py), e o núcleo
+//   confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace: as duas setas vão ao banco
+//   dos arquivos do workspace, dentro do pipeline (df-8x0m.23.47.14).
 // - Quando um componente só faz o que a seta do contêiner em hoje.c4 diz, a seta leva o mesmo título:
 //   títulos diferentes no mesmo par viram '[...]' na vista de contêineres (df-8x0m.23.47.12).
 model {
@@ -47,7 +45,7 @@ model {
       }
     }
     financasNinhoHoje = componente 'Finanças' {
-      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db (sem seta até df-8x0m.23.47.14); nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica'
+      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê no connections.yaml do workspace onde está o edicao.db; nele, pelas regras do workspace, que carrega do scripts/report dele (provisório, df-8x0m.23.14), lê as categorias, as correções e a versão das edições e grava as correções (cada gravação sobe a versão); compara essa versão com a aplicada no curated para dizer se há edição pendente; e pede ao DataForge (NINHO_DATAFORGE, senão o dataforge do mesmo Python, com o DATAFORGE_HOME dois níveis acima do workspace) o job reclassificar que as aplica'
       technology 'Python, polars, deltalake, SQLite'
       metadata {
         codigo ['ninho/financas', 'ninho/banco.py']
@@ -113,6 +111,16 @@ model {
       codigo ['ninho/financas/regras.py', 'ninho/banco.py', 'ninho/financas/edicoes.py']
     }
   }
+  casaHoje.ninhoHoje.financasNinhoHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Lê no connections.yaml onde está o edicao.db' {
+    metadata {
+      codigo ['ninho/banco.py']
+    }
+  }
+  casaHoje.ninhoHoje.servidorHoje -[leitura]-> casaHoje.pipelineHoje.arquivosWorkspaceHoje 'Confere pelo workspace.yaml que a pasta do NINHO_WORKSPACE é um workspace' {
+    metadata {
+      codigo ['ninho/servidor/app.py']
+    }
+  }
   casaHoje.ninhoHoje.financasNinhoHoje -[leitura]-> casaHoje.lagoHoje 'Lê tabelas' {
     metadata {
       codigo ['ninho/financas/leitura.py']
@@ -151,6 +159,8 @@ views {
     include *
     // Mostra a seta da carga das regras no componente que ela atinge, não no contêiner do pipeline.
     include casaHoje.pipelineHoje.regrasHoje
+    // E a dos arquivos do workspace (connections.yaml, workspace.yaml), também no banco que elas atingem.
+    include casaHoje.pipelineHoje.arquivosWorkspaceHoje
     // Mostra a seta do aplicar na CLI do DataForge, não no contêiner do DataForge.
     include casaHoje.dataforgeHoje.cliHoje
     include casaHoje.telasNinhoHoje
