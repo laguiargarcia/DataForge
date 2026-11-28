@@ -4,7 +4,7 @@
 model {
   extend casaHoje.dataforgeHoje {
     cliHoje = componente 'CLI' {
-      description 'O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, deploy, register-triggers; registra cada trigger no agendador do sistema'
+      description 'O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, app (o que o atalho roda), stop, deploy, register-triggers, entre outros (jobs, execucoes, validate, init, schedule-sync); registra cada trigger no agendador do sistema'
       technology 'Python, Typer'
       metadata {
         codigo ['dataforge/cli.py', 'dataforge/__main__.py']
@@ -17,11 +17,18 @@ model {
         codigo ['dataforge/api']
       }
     }
-    guiHoje = componente 'GUI Qt' {
-      description 'O processo em segundo plano (API numa thread e bandeja), a janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app; cliente HTTP da API local'
+    guiHoje = componente 'GUI admin e janela do app' {
+      description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (o atalho roda dataforge app, que acha ou inicia o segundo plano); cliente HTTP da API local'
       technology 'Python, PySide6'
       metadata {
         codigo ['dataforge/gui']
+      }
+    }
+    segundoPlanoHoje = componente 'Segundo plano (API e bandeja)' {
+      description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela do app o inicia quando a porta está livre'
+      technology 'Python, PySide6, uvicorn'
+      metadata {
+        codigo ['dataforge/gui/background.py', 'dataforge/gui/daemon.py']
       }
     }
     motorHoje = componente 'Motor de execução' {
@@ -32,7 +39,7 @@ model {
       }
     }
     tasksHoje = componente 'Tipos de task' {
-      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp)'
+      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive'
       technology 'Python'
       metadata {
         codigo ['dataforge/tasks', 'dataforge/__init__.py']
@@ -60,7 +67,7 @@ model {
       }
     }
     deployHoje = componente 'Deploy' {
-      description 'Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI'
+      description 'Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só'
       technology 'Python'
       metadata {
         codigo ['dataforge/deploy']
@@ -140,7 +147,7 @@ model {
       codigo ['dataforge/parser.py']
     }
   }
-  casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje 'Copia jobs e scripts entre workspaces, com ledger e rollback' {
+  casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje 'Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)' {
     metadata {
       codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/rollback.py']
     }
@@ -192,9 +199,9 @@ model {
   }
 
   // Entre componentes do DataForge: HTTP e processos.
-  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.apiHoje 'Hospeda a API numa thread (segundo plano); os painéis, a presença e a janela do app chamam a porta local' {
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.apiHoje 'Os painéis, a presença e a janela do app chamam a API local' {
     metadata {
-      codigo ['dataforge/gui/daemon.py', 'dataforge/gui/main_window.py', 'dataforge/gui/panels/jobs.py', 'dataforge/gui/panels/job_editor.py', 'dataforge/gui/panels/scheduler.py', 'dataforge/gui/panels/deploy.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/app_window.py']
+      codigo ['dataforge/gui/main_window.py', 'dataforge/gui/panels/jobs.py', 'dataforge/gui/panels/job_editor.py', 'dataforge/gui/panels/scheduler.py', 'dataforge/gui/panels/deploy.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/app_window.py']
     }
   }
   casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.apiHoje 'Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run' {
@@ -207,9 +214,24 @@ model {
       codigo ['dataforge/instance.py']
     }
   }
-  casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.cliHoje 'Lança destacados: dataforge background e run-requested' {
+  casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.cliHoje 'Inicia o segundo plano destacado (dataforge background)' {
     metadata {
       codigo ['dataforge/instance.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.cliHoje 'Lança o run pedido destacado (dataforge run-requested)' {
+    metadata {
+      codigo ['dataforge/run_request.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.cliHoje 'Abre a janela admin destacada (dataforge gui)' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.apiHoje 'Hospeda a API numa thread (uvicorn dataforge.api:app)' {
+    metadata {
+      codigo ['dataforge/gui/daemon.py']
     }
   }
   casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.apiHoje 'Reconcilia os triggers do destino pela API (deploy na CLI)' {
@@ -234,7 +256,12 @@ model {
       codigo ['dataforge/cli.py']
     }
   }
-  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.guiHoje 'Abre a GUI, a janela do app e o segundo plano' {
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.guiHoje 'Abre a janela admin e a janela do app' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje 'Roda o segundo plano (background)' {
     metadata {
       codigo ['dataforge/cli.py']
     }
@@ -295,7 +322,7 @@ model {
       codigo ['dataforge/api/routers/tables.py']
     }
   }
-  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Impressão digital do /health e registro das janelas' {
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.instanciaHoje 'O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento' {
     metadata {
       codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/instance.py', 'dataforge/api/routers/jobs.py']
     }
@@ -308,12 +335,12 @@ model {
 
   casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Acha ou inicia o servidor; batimento de presença' {
     metadata {
-      codigo ['dataforge/gui/__init__.py', 'dataforge/gui/app_window.py', 'dataforge/gui/background.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/server_lost_banner.py']
+      codigo ['dataforge/gui/__init__.py', 'dataforge/gui/app_window.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/server_lost_banner.py']
     }
   }
-  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.appsHoje 'Acha o app da janela; para os backends ao sair' {
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.appsHoje 'Acha o app da janela' {
     metadata {
-      codigo ['dataforge/gui/app_window.py', 'dataforge/gui/background.py']
+      codigo ['dataforge/gui/app_window.py']
     }
   }
   casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Converte o cron na agenda' {
@@ -321,7 +348,7 @@ model {
       codigo ['dataforge/gui/panels/scheduler.py']
     }
   }
-  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.historicoHoje 'Hora UTC (utcnow) na agenda' {
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.historicoHoje 'Hora UTC da próxima execução na agenda' {
     metadata {
       codigo ['dataforge/gui/panels/scheduler.py']
     }
@@ -333,7 +360,28 @@ model {
   }
   casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.compatHoje 'Porta da API e pasta do perfil web' {
     metadata {
-      codigo ['dataforge/gui']
+      codigo ['dataforge/gui/app_window.py', 'dataforge/gui/main_window.py', 'dataforge/gui/panels']
+    }
+  }
+
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.appsHoje 'Para os backends ao sair' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Usa o lançador de processo destacado, a regra de saída e o registro das janelas' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.guiHoje 'Guarda do coletor e ícone da bandeja' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.compatHoje 'Porta da API e pasta de logs' {
+    metadata {
+      codigo ['dataforge/gui/background.py', 'dataforge/gui/daemon.py']
     }
   }
 
@@ -352,7 +400,7 @@ model {
       codigo ['dataforge/engine.py', 'dataforge/run_request.py']
     }
   }
-  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Lança o run pedido como processo destacado' {
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Usa o lançador de processo destacado' {
     metadata {
       codigo ['dataforge/run_request.py']
     }
@@ -441,6 +489,8 @@ model {
 views {
   view hoje-componentes-dataforge of casaHoje.dataforgeHoje {
     title 'Hoje: componentes do DataForge'
+    description 'Todo componente usa o Compat (caminhos, banco, porta); essas setas estão no modelo e ficam fora desta vista'
     include *
+    exclude * -> casaHoje.dataforgeHoje.compatHoje
   }
 }

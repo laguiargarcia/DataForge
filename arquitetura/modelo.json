@@ -213,7 +213,7 @@
       "title": "Hospedagem de apps"
     },
     {
-      "description": "O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, deploy, register-triggers; registra cada trigger no agendador do sistema",
+      "description": "O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, app (o que o atalho roda), stop, deploy, register-triggers, entre outros (jobs, execucoes, validate, init, schedule-sync); registra cada trigger no agendador do sistema",
       "id": "casaHoje.dataforgeHoje.cliHoje",
       "kind": "componente",
       "links": [],
@@ -269,7 +269,7 @@
       "title": "Leituras Delta"
     },
     {
-      "description": "Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI",
+      "description": "Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só",
       "id": "casaHoje.dataforgeHoje.deployHoje",
       "kind": "componente",
       "links": [],
@@ -281,7 +281,7 @@
       "title": "Deploy"
     },
     {
-      "description": "O processo em segundo plano (API numa thread e bandeja), a janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app; cliente HTTP da API local",
+      "description": "A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (o atalho roda dataforge app, que acha ou inicia o segundo plano); cliente HTTP da API local",
       "id": "casaHoje.dataforgeHoje.guiHoje",
       "kind": "componente",
       "links": [],
@@ -290,7 +290,7 @@
       },
       "tags": [],
       "technology": "Python, PySide6",
-      "title": "GUI Qt"
+      "title": "GUI admin e janela do app"
     },
     {
       "description": "As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu",
@@ -342,7 +342,22 @@
       "title": "Motor de execução"
     },
     {
-      "description": "O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp)",
+      "description": "O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela do app o inicia quando a porta está livre",
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "kind": "componente",
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/background.py",
+          "dataforge/gui/daemon.py"
+        ]
+      },
+      "tags": [],
+      "technology": "Python, PySide6, uvicorn",
+      "title": "Segundo plano (API e bandeja)"
+    },
+    {
+      "description": "O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive",
       "id": "casaHoje.dataforgeHoje.tasksHoje",
       "kind": "componente",
       "links": [],
@@ -1253,7 +1268,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.instanciaHoje: Impressão digital do /health e registro das janelas",
+      "id": "casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.instanciaHoje: O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1267,7 +1282,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje.instanciaHoje",
       "technology": null,
-      "title": "Impressão digital do /health e registro das janelas"
+      "title": "O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento"
     },
     {
       "description": null,
@@ -1492,7 +1507,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.guiHoje: Abre a GUI, a janela do app e o segundo plano",
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.guiHoje: Abre a janela admin e a janela do app",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1502,7 +1517,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje.guiHoje",
       "technology": null,
-      "title": "Abre a GUI, a janela do app e o segundo plano"
+      "title": "Abre a janela admin e a janela do app"
     },
     {
       "description": null,
@@ -1545,6 +1560,20 @@
       "target": "casaHoje.dataforgeHoje.motorHoje",
       "technology": null,
       "title": "Roda o job, pede o run destacado, lê o estado"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje: Roda o segundo plano (background)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/cli.py"
+      },
+      "source": "casaHoje.dataforgeHoje.cliHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "technology": null,
+      "title": "Roda o segundo plano (background)"
     },
     {
       "description": null,
@@ -1625,7 +1654,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje: Copia jobs e scripts entre workspaces, com ledger e rollback",
+      "id": "casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje: Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1638,16 +1667,15 @@
       "tags": [],
       "target": "casaHoje.pipelineHoje",
       "technology": null,
-      "title": "Copia jobs e scripts entre workspaces, com ledger e rollback"
+      "title": "Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)"
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.apiHoje: Hospeda a API numa thread (segundo plano); os painéis, a presença e a janela do app chamam a porta local",
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.apiHoje: Os painéis, a presença e a janela do app chamam a API local",
       "kind": null,
       "links": [],
       "metadata": {
         "codigo": [
-          "dataforge/gui/daemon.py",
           "dataforge/gui/main_window.py",
           "dataforge/gui/panels/jobs.py",
           "dataforge/gui/panels/job_editor.py",
@@ -1661,24 +1689,21 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje.apiHoje",
       "technology": null,
-      "title": "Hospeda a API numa thread (segundo plano); os painéis, a presença e a janela do app chamam a porta local"
+      "title": "Os painéis, a presença e a janela do app chamam a API local"
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.appsHoje: Acha o app da janela; para os backends ao sair",
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.appsHoje: Acha o app da janela",
       "kind": null,
       "links": [],
       "metadata": {
-        "codigo": [
-          "dataforge/gui/app_window.py",
-          "dataforge/gui/background.py"
-        ]
+        "codigo": "dataforge/gui/app_window.py"
       },
       "source": "casaHoje.dataforgeHoje.guiHoje",
       "tags": [],
       "target": "casaHoje.dataforgeHoje.appsHoje",
       "technology": null,
-      "title": "Acha o app da janela; para os backends ao sair"
+      "title": "Acha o app da janela"
     },
     {
       "description": null,
@@ -1686,7 +1711,11 @@
       "kind": null,
       "links": [],
       "metadata": {
-        "codigo": "dataforge/gui"
+        "codigo": [
+          "dataforge/gui/app_window.py",
+          "dataforge/gui/main_window.py",
+          "dataforge/gui/panels"
+        ]
       },
       "source": "casaHoje.dataforgeHoje.guiHoje",
       "tags": [],
@@ -1724,7 +1753,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.historicoHoje: Hora UTC (utcnow) na agenda",
+      "id": "casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.historicoHoje: Hora UTC da próxima execução na agenda",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1734,7 +1763,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje.historicoHoje",
       "technology": null,
-      "title": "Hora UTC (utcnow) na agenda"
+      "title": "Hora UTC da próxima execução na agenda"
     },
     {
       "description": null,
@@ -1745,7 +1774,6 @@
         "codigo": [
           "dataforge/gui/__init__.py",
           "dataforge/gui/app_window.py",
-          "dataforge/gui/background.py",
           "dataforge/gui/presence_client.py",
           "dataforge/gui/server_lost_banner.py"
         ]
@@ -1803,7 +1831,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.cliHoje: Lança destacados: dataforge background e run-requested",
+      "id": "casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.cliHoje: Inicia o segundo plano destacado (dataforge background)",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1813,7 +1841,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje.cliHoje",
       "technology": null,
-      "title": "Lança destacados: dataforge background e run-requested"
+      "title": "Inicia o segundo plano destacado (dataforge background)"
     },
     {
       "description": null,
@@ -1842,6 +1870,20 @@
       "target": "casaHoje.dataforgeHoje.motorHoje",
       "technology": null,
       "title": "Trava de arquivo (runlock) ao iniciar o segundo plano"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.cliHoje: Lança o run pedido destacado (dataforge run-requested)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/run_request.py"
+      },
+      "source": "casaHoje.dataforgeHoje.motorHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Lança o run pedido destacado (dataforge run-requested)"
     },
     {
       "description": null,
@@ -1899,7 +1941,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.instanciaHoje: Lança o run pedido como processo destacado",
+      "id": "casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.instanciaHoje: Usa o lançador de processo destacado",
       "kind": null,
       "links": [],
       "metadata": {
@@ -1909,7 +1951,7 @@
       "tags": [],
       "target": "casaHoje.dataforgeHoje.instanciaHoje",
       "technology": null,
-      "title": "Lança o run pedido como processo destacado"
+      "title": "Usa o lançador de processo destacado"
     },
     {
       "description": null,
@@ -1941,6 +1983,93 @@
       "target": "casaHoje.dbDataforgeHoje",
       "technology": null,
       "title": "Grava cada run e cada task"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.apiHoje: Hospeda a API numa thread (uvicorn dataforge.api:app)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/daemon.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.apiHoje",
+      "technology": null,
+      "title": "Hospeda a API numa thread (uvicorn dataforge.api:app)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.appsHoje: Para os backends ao sair",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.appsHoje",
+      "technology": null,
+      "title": "Para os backends ao sair"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.cliHoje: Abre a janela admin destacada (dataforge gui)",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.cliHoje",
+      "technology": null,
+      "title": "Abre a janela admin destacada (dataforge gui)"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.compatHoje: Porta da API e pasta de logs",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": [
+          "dataforge/gui/background.py",
+          "dataforge/gui/daemon.py"
+        ]
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.compatHoje",
+      "technology": null,
+      "title": "Porta da API e pasta de logs"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.guiHoje: Guarda do coletor e ícone da bandeja",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.guiHoje",
+      "technology": null,
+      "title": "Guarda do coletor e ícone da bandeja"
+    },
+    {
+      "description": null,
+      "id": "casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.instanciaHoje: Usa o lançador de processo destacado, a regra de saída e o registro das janelas",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.instanciaHoje",
+      "technology": null,
+      "title": "Usa o lançador de processo destacado, a regra de saída e o registro das janelas"
     },
     {
       "description": null,
@@ -3089,7 +3218,7 @@
       "viewOf": "casaAlvo"
     },
     {
-      "description": null,
+      "description": "Todo componente usa o Compat (caminhos, banco, porta); essas setas estão no modelo e ficam fora desta vista",
       "id": "hoje-componentes-dataforge",
       "links": [],
       "steps": [],
