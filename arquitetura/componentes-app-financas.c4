@@ -6,18 +6,21 @@
 //   componentes (regra 5 do checker); separar as rotas por grupo seria descer ao nível 4. Ele lista os
 //   arquivos, não a pasta, porque a pasta já é o codigo do contêiner (hoje.c4).
 // - O front tem um componente por módulo de src/ e um para src/components (as telas). A casca leva o
-//   index.html, que pede o JS e o CSS do build: é dela a seta de baixar o build.
+//   index.html; a página do build, dist/index.html, que o vite faz dele, pede o JS e o CSS: é da casca
+//   a seta de baixar o build.
 // - Cada chamada HTTP sai do módulo que faz o fetch (api.ts, edicao.ts); quem só usa o pedir() de
 //   edicao.ts tem a seta de import para ele. O front fala só com a API do DataForge: a rota genérica de
 //   tabelas e o proxy /apps/<ws>/financas/api, que repassa ao backend (seta da API para o backend, em
 //   componentes-dataforge.c4).
 // - Importar dataforge roda dataforge/__init__.py (registra os tipos de task): é efeito do import, não
 //   chamada do backend; está na descrição de Tipos de task, sem seta.
+// - A leitura do connections.yaml pelo backend está na descrição dele e ganha seta em df-8x0m.23.47.14,
+//   que dá um elemento à definição do workspace.
 model {
   extend casaHoje.financasHoje {
     rotasFinancasHoje = componente 'Rotas do backend Finanças' {
-      description 'O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge'
-      technology 'Python, FastAPI, polars, pypdf'
+      description 'O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge; acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace'
+      technology 'Python, FastAPI, polars, pypdf, httpx, PyYAML'
       metadata {
         codigo [
           'workspaces/GetFinance/apps/financas/backend/main.py',
@@ -29,7 +32,7 @@ model {
 
   extend casaHoje.frontFinancasHoje {
     cascaFinancasHoje = componente 'Casca do app' {
-      description 'A página (index.html, que carrega o build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report e do banco de edição, e a recarga depois do Aplicar'
+      description 'A página (index.html, de que o vite faz a do build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report, das transações classificadas e do banco de edição, e a recarga depois do Aplicar'
       technology 'React, TypeScript'
       metadata {
         codigo [
@@ -68,7 +71,7 @@ model {
       }
     }
     resumoFinancasHoje = componente 'Resumo do mês' {
-      description 'Funções puras: escolhe as linhas do mês nas tabelas do report e formata valores e meses; as regras estão no pipeline'
+      description 'Funções puras: escolhe as linhas do mês nas tabelas do report e as transações de cada categoria, e formata valores e meses; as regras estão no pipeline'
       technology 'TypeScript'
       metadata {
         codigo ['workspaces/GetFinance/apps/financas/src/resumo.ts']
@@ -94,9 +97,9 @@ model {
   donoHoje -> casaHoje.frontFinancasHoje.cascaFinancasHoje 'Usa o app Finanças no PC (janela Qt ou navegador)'
 
   // Do front para o DataForge (HTTP).
-  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Baixa o build (dist) pela rota do app' {
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede o JS e o CSS do build (dist/assets) pela rota do app' {
     metadata {
-      codigo ['workspaces/GetFinance/apps/financas/index.html']
+      codigo ['workspaces/GetFinance/apps/financas/dist/index.html']
     }
   }
   casaHoje.frontFinancasHoje.tabelasFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Lê tabelas do curated pela rota genérica (/api/workspaces/<ws>/tables)' {
@@ -111,7 +114,7 @@ model {
   }
 
   // Entre componentes do front: imports.
-  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje 'Lê as tabelas do report' {
+  casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje 'Lê as tabelas do report e as transações classificadas' {
     metadata {
       codigo ['workspaces/GetFinance/apps/financas/src/App.tsx']
     }
@@ -221,18 +224,13 @@ model {
     }
   }
 
-  // Do backend para o pipeline: as regras de scripts/report, por sys.path, e a definição do workspace.
+  // Do backend para o pipeline: as regras de scripts/report, por sys.path.
   casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.regrasHoje 'Importa edicao e classificacao' {
     metadata {
       codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
     }
   }
   casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje.conferenciasHoje 'Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados' {
-    metadata {
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
-  casaHoje.financasHoje.rotasFinancasHoje -[leitura]-> casaHoje.pipelineHoje 'Lê connections.yaml: onde estão o lago, o edicao.db e os extratos' {
     metadata {
       codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
     }
@@ -257,9 +255,8 @@ model {
 }
 
 views {
-  view hoje-componentes-backend-financas of casaHoje.financasHoje {
+  view hoje-componentes-app-financas-backend of casaHoje.financasHoje {
     title 'Hoje: componentes do backend Finanças'
-    description 'O backend também lê o connections.yaml do workspace (onde estão o lago, o edicao.db e os extratos); essa seta, para o contêiner do pipeline, está no modelo e fica fora desta vista, que mostra os componentes do pipeline (df-8x0m.23.47.14)'
     // Os componentes de fora por nome: no contêiner, as setas do mesmo par se juntam em '[...]'.
     include *,
       casaHoje.dataforgeHoje.apiHoje,
@@ -273,7 +270,7 @@ views {
       casaHoje.dataforgeHoje.* -> casaHoje.lagoHoje,
       casaHoje.pipelineHoje.* -> casaHoje.pipelineHoje.*
   }
-  view hoje-componentes-front-financas of casaHoje.frontFinancasHoje {
+  view hoje-componentes-app-financas-front of casaHoje.frontFinancasHoje {
     title 'Hoje: componentes do front do app Finanças'
     include *, casaHoje.dataforgeHoje.apiHoje
   }

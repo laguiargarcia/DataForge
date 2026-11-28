@@ -426,7 +426,7 @@
       "title": "Backend GetFinance"
     },
     {
-      "description": "O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge",
+      "description": "O app FastAPI (main.py) atrás do middleware do token: lê e grava categorias, regras, correções e explicações do edicao.db com as validações de edicao, mostra o efeito de uma regra nos dados de agora, recebe o extrato do banco em PDF (confere, guarda em data/extratos, lista os guardados) e pede os jobs reclassificar e extrato à API do DataForge; acha o lago, o edicao.db e os extratos pelo connections.yaml do workspace",
       "id": "casaHoje.financasHoje.rotasFinancasHoje",
       "kind": "componente",
       "links": [],
@@ -437,7 +437,7 @@
         ]
       },
       "tags": [],
-      "technology": "Python, FastAPI, polars, pypdf",
+      "technology": "Python, FastAPI, polars, pypdf, httpx, PyYAML",
       "title": "Rotas do backend Finanças"
     },
     {
@@ -453,7 +453,7 @@
       "title": "Front do app Finanças"
     },
     {
-      "description": "A página (index.html, que carrega o build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report e do banco de edição, e a recarga depois do Aplicar",
+      "description": "A página (index.html, de que o vite faz a do build), o ponto de entrada (main.tsx) e o App: as abas, a tela Resumo com o mês escolhido, a carga das tabelas do report, das transações classificadas e do banco de edição, e a recarga depois do Aplicar",
       "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
       "kind": "componente",
       "links": [],
@@ -505,7 +505,7 @@
       "title": "Extratos"
     },
     {
-      "description": "Funções puras: escolhe as linhas do mês nas tabelas do report e formata valores e meses; as regras estão no pipeline",
+      "description": "Funções puras: escolhe as linhas do mês nas tabelas do report e as transações de cada categoria, e formata valores e meses; as regras estão no pipeline",
       "id": "casaHoje.frontFinancasHoje.resumoFinancasHoje",
       "kind": "componente",
       "links": [],
@@ -2546,20 +2546,6 @@
     },
     {
       "description": null,
-      "id": "casaHoje.financasHoje.rotasFinancasHoje -> casaHoje.pipelineHoje: Lê connections.yaml: onde estão o lago, o edicao.db e os extratos",
-      "kind": "leitura",
-      "links": [],
-      "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/backend/main.py"
-      },
-      "source": "casaHoje.financasHoje.rotasFinancasHoje",
-      "tags": [],
-      "target": "casaHoje.pipelineHoje",
-      "technology": null,
-      "title": "Lê connections.yaml: onde estão o lago, o edicao.db e os extratos"
-    },
-    {
-      "description": null,
       "id": "casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje: Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api",
       "kind": null,
       "links": [],
@@ -2572,17 +2558,17 @@
     },
     {
       "description": null,
-      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Baixa o build (dist) pela rota do app",
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.dataforgeHoje.apiHoje: Pede o JS e o CSS do build (dist/assets) pela rota do app",
       "kind": null,
       "links": [],
       "metadata": {
-        "codigo": "workspaces/GetFinance/apps/financas/index.html"
+        "codigo": "workspaces/GetFinance/apps/financas/dist/index.html"
       },
       "source": "casaHoje.frontFinancasHoje.cascaFinancasHoje",
       "tags": [],
       "target": "casaHoje.dataforgeHoje.apiHoje",
       "technology": null,
-      "title": "Baixa o build (dist) pela rota do app"
+      "title": "Pede o JS e o CSS do build (dist/assets) pela rota do app"
     },
     {
       "description": null,
@@ -2614,7 +2600,7 @@
     },
     {
       "description": null,
-      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje: Lê as tabelas do report",
+      "id": "casaHoje.frontFinancasHoje.cascaFinancasHoje -> casaHoje.frontFinancasHoje.tabelasFinancasHoje: Lê as tabelas do report e as transações classificadas",
       "kind": null,
       "links": [],
       "metadata": {
@@ -2624,7 +2610,7 @@
       "tags": [],
       "target": "casaHoje.frontFinancasHoje.tabelasFinancasHoje",
       "technology": null,
-      "title": "Lê as tabelas do report"
+      "title": "Lê as tabelas do report e as transações classificadas"
     },
     {
       "description": null,
@@ -3962,14 +3948,24 @@
       "viewOf": "casaAlvo"
     },
     {
-      "description": "O backend também lê o connections.yaml do workspace (onde estão o lago, o edicao.db e os extratos); essa seta, para o contêiner do pipeline, está no modelo e fica fora desta vista, que mostra os componentes do pipeline (df-8x0m.23.47.14)",
-      "id": "hoje-componentes-backend-financas",
+      "description": null,
+      "id": "hoje-componentes-app-financas-backend",
       "links": [],
       "steps": [],
       "tags": [],
       "title": "Hoje: componentes do backend Finanças",
       "type": "element",
       "viewOf": "casaHoje.financasHoje"
+    },
+    {
+      "description": null,
+      "id": "hoje-componentes-app-financas-front",
+      "links": [],
+      "steps": [],
+      "tags": [],
+      "title": "Hoje: componentes do front do app Finanças",
+      "type": "element",
+      "viewOf": "casaHoje.frontFinancasHoje"
     },
     {
       "description": "Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista",
@@ -3980,16 +3976,6 @@
       "title": "Hoje: componentes do DataForge",
       "type": "element",
       "viewOf": "casaHoje.dataforgeHoje"
-    },
-    {
-      "description": null,
-      "id": "hoje-componentes-front-financas",
-      "links": [],
-      "steps": [],
-      "tags": [],
-      "title": "Hoje: componentes do front do app Finanças",
-      "type": "element",
-      "viewOf": "casaHoje.frontFinancasHoje"
     },
     {
       "description": null,
