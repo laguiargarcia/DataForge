@@ -1,0 +1,501 @@
+// Componentes do contêiner DataForge (hoje), df-8x0m.23.47.3. Cada componente aponta para o seu
+// código; cada seta entre componentes é um import, uma chamada HTTP ou um subprocesso, com os
+// arquivos em metadata codigo (o arquivo:linha está nas notas do bead).
+model {
+  extend casaHoje.dataforgeHoje {
+    cliHoje = componente 'CLI' {
+      description 'O comando dataforge (Typer): run, run --detach, run-state, scheduled-run, serve, background, gui, app (o que o atalho roda), stop, deploy, register-triggers, entre outros (jobs, execucoes, validate, init, schedule-sync); registra cada trigger no agendador do sistema'
+      technology 'Python, Typer'
+      metadata {
+        codigo ['dataforge/cli.py', 'dataforge/__main__.py']
+      }
+    }
+    apiHoje = componente 'API HTTP' {
+      description 'O servidor FastAPI: workspaces, jobs, execuções, triggers, deploy, tabelas do curated, presença e o stream de eventos; serve o build dos apps e repassa as chamadas ao backend deles'
+      technology 'Python, FastAPI'
+      metadata {
+        codigo ['dataforge/api']
+      }
+    }
+    guiHoje = componente 'GUI admin e janela do app' {
+      description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (dataforge gui ou dataforge app, que acham ou iniciam o segundo plano); cliente HTTP da API local'
+      technology 'Python, PySide6'
+      metadata {
+        codigo ['dataforge/gui']
+      }
+    }
+    segundoPlanoHoje = componente 'Segundo plano (API e bandeja)' {
+      description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia'
+      technology 'Python, PySide6, uvicorn'
+      metadata {
+        codigo ['dataforge/gui/background.py', 'dataforge/gui/daemon.py']
+      }
+    }
+    motorHoje = componente 'Motor de execução' {
+      description 'Roda um job: DAG das tasks, condições, tentativas, trava por workspace; o pedido de run destacado e o estado de um run (run --detach, run-state)'
+      technology 'Python'
+      metadata {
+        codigo ['dataforge/engine.py', 'dataforge/dag.py', 'dataforge/conditions.py', 'dataforge/runlock.py', 'dataforge/run_request.py']
+      }
+    }
+    tasksHoje = componente 'Tipos de task' {
+      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive'
+      technology 'Python'
+      metadata {
+        codigo ['dataforge/tasks', 'dataforge/__init__.py']
+      }
+    }
+    definicaoHoje = componente 'Definição do workspace' {
+      description 'Os modelos (job, task, trigger, conexão), a leitura e a escrita dos YAML do workspace, o YAML do pacote e o cron entre UTC e a hora local'
+      technology 'Python, pydantic, PyYAML'
+      metadata {
+        codigo ['dataforge/models.py', 'dataforge/parser.py', 'dataforge/yamlio.py', 'dataforge/cron.py']
+      }
+    }
+    historicoHoje = componente 'Histórico de execuções' {
+      description 'As tabelas do dataforge.db (runs, tasks, agendas), o dono de cada linha e a correção dos runs cujo processo morreu'
+      technology 'Python, SQLAlchemy'
+      metadata {
+        codigo ['dataforge/db.py', 'dataforge/liveness.py', 'dataforge/orphans.py']
+      }
+    }
+    compatHoje = componente 'Compat' {
+      description 'Caminhos, URLs de banco, porta da API e hosts permitidos, entre Windows e Linux; lê DATAFORGE_HOME'
+      technology 'Python'
+      metadata {
+        codigo ['dataforge/compat.py']
+      }
+    }
+    deployHoje = componente 'Deploy' {
+      description 'Plano, aplicação e rollback do deploy de um workspace para outro, com o ledger; o subcomando deploy da CLI; sem uso em prod hoje: um workspace só'
+      technology 'Python'
+      metadata {
+        codigo ['dataforge/deploy']
+      }
+    }
+    appsHoje = componente 'Hospedagem de apps' {
+      description 'Acha os apps dos workspaces (app.yaml, dist), inicia e para o backend de cada um num processo uvicorn com um token, o middleware que o backend usa para recusar o que não veio do DataForge e o atalho do Windows'
+      technology 'Python, uvicorn'
+      metadata {
+        codigo ['dataforge/apps.py', 'dataforge/app_backends.py', 'dataforge/app_backend_host.py', 'dataforge/app_guard.py', 'dataforge/shortcut.py']
+      }
+    }
+    deltaPoolHoje = componente 'Leituras Delta' {
+      description 'As leituras Delta de um processo longo em threads que vivem com ele (falha nativa no Windows, df-5lk8)'
+      technology 'Python, polars, deltalake'
+      metadata {
+        codigo ['dataforge/delta_pool.py']
+      }
+    }
+    instanciaHoje = componente 'Instância e presença' {
+      description 'Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas'
+      technology 'Python, httpx'
+      metadata {
+        codigo ['dataforge/instance.py', 'dataforge/presence.py']
+      }
+    }
+    testesHoje = componente 'Plugin de testes' {
+      description 'Plugin do pytest que os testes do motor e os de um workspace carregam; não roda em prod'
+      technology 'Python, pytest, Hypothesis'
+      metadata {
+        codigo ['dataforge/testing.py']
+      }
+    }
+  }
+
+  // Pessoas e sistemas de fora que chamam um componente do DataForge.
+  donoHoje -> casaHoje.dataforgeHoje.guiHoje 'Usa a janela do app e administra pela janela admin'
+  donoHoje -> casaHoje.dataforgeHoje.cliHoje 'Abre o app pelo atalho (dataforge app) e administra pela CLI'
+  agendadorHoje -> casaHoje.dataforgeHoje.cliHoje 'dataforge scheduled-run'
+  donoHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje 'Abre a janela admin e encerra o DataForge pela bandeja' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+
+  // De outros contêineres para um componente do DataForge.
+  casaHoje.ninhoHoje -> casaHoje.dataforgeHoje.cliHoje 'Pede o job (run --detach) e acompanha (run-state --wait)' {
+    metadata {
+      codigo ['ninho/financas/aplicar.py']
+    }
+  }
+  casaHoje.frontFinancasHoje -> casaHoje.dataforgeHoje.apiHoje 'Baixa o build (dist); lê tabelas pela rota genérica e chama o backend pelo proxy /apps/<ws>/financas/api'
+  casaHoje.financasHoje -> casaHoje.dataforgeHoje.apiHoje 'Pede e acompanha jobs (HTTP, DATAFORGE_API)' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje -> casaHoje.dataforgeHoje.appsHoje 'Importa o middleware do token (app_guard)' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+  casaHoje.financasHoje -> casaHoje.dataforgeHoje.deltaPoolHoje 'Lê o lago pelas threads do delta_pool' {
+    metadata {
+      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
+    }
+  }
+
+  // Do DataForge para fora.
+  casaHoje.dataforgeHoje.cliHoje -> agendadorHoje 'Registra e remove cada trigger como tarefa (register-triggers, pelo PowerShell)' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.pipelineHoje 'Lança o script de cada task python como processo, com o .env do job' {
+    metadata {
+      codigo ['dataforge/tasks/python_handler.py']
+    }
+  }
+  casaHoje.dataforgeHoje.definicaoHoje -> casaHoje.pipelineHoje 'Lê e escreve a definição do workspace (jobs, triggers, conexões)' {
+    metadata {
+      codigo ['dataforge/parser.py']
+    }
+  }
+  casaHoje.dataforgeHoje.deployHoje -> casaHoje.pipelineHoje 'Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)' {
+    metadata {
+      codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/rollback.py']
+    }
+  }
+  casaHoje.dataforgeHoje.appsHoje -> casaHoje.financasHoje 'Inicia e para o backend (processo uvicorn com token)' {
+    metadata {
+      codigo ['dataforge/app_backends.py', 'dataforge/app_backend_host.py']
+    }
+  }
+  casaHoje.dataforgeHoje.appsHoje -[leitura]-> casaHoje.frontFinancasHoje 'Lê app.yaml e acha o build (dist)' {
+    metadata {
+      codigo ['dataforge/apps.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.financasHoje 'Repassa /apps/<ws>/financas/api com o token' {
+    metadata {
+      codigo ['dataforge/api/routers/apps.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -[leitura]-> casaHoje.lagoHoje 'Serve o curated pela rota genérica' {
+    metadata {
+      codigo ['dataforge/api/routers/tables.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dbDataforgeHoje 'Lê o histórico; grava os runs que inicia' {
+    metadata {
+      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/executions.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/workspaces.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dbDataforgeHoje 'Lê e grava runs, tasks e agendas' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dbDataforgeHoje 'Grava cada run e cada task' {
+    metadata {
+      codigo ['dataforge/engine.py', 'dataforge/run_request.py']
+    }
+  }
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dbDataforgeHoje 'Grava a linha da task' {
+    metadata {
+      codigo ['dataforge/tasks/python_handler.py', 'dataforge/tasks/error_handler.py', 'dataforge/tasks/message/handler.py']
+    }
+  }
+  casaHoje.dataforgeHoje.historicoHoje -> casaHoje.dbDataforgeHoje 'Cria o esquema; corrige runs órfãos' {
+    metadata {
+      codigo ['dataforge/db.py', 'dataforge/orphans.py']
+    }
+  }
+
+  // Entre componentes do DataForge: HTTP e processos.
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.apiHoje 'Os painéis, a presença e a janela do app chamam a API local' {
+    metadata {
+      codigo ['dataforge/gui/main_window.py', 'dataforge/gui/panels/jobs.py', 'dataforge/gui/panels/job_editor.py', 'dataforge/gui/panels/scheduler.py', 'dataforge/gui/panels/deploy.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/app_window.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.apiHoje 'Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.apiHoje 'Pergunta quem tem a porta (GET /health)' {
+    metadata {
+      codigo ['dataforge/instance.py']
+    }
+  }
+  casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.cliHoje 'Inicia o segundo plano destacado (dataforge background)' {
+    metadata {
+      codigo ['dataforge/instance.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.cliHoje 'Lança o run pedido destacado (dataforge run-requested)' {
+    metadata {
+      codigo ['dataforge/run_request.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.cliHoje 'Abre a janela admin destacada (dataforge gui)' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.apiHoje 'Hospeda a API numa thread (uvicorn dataforge.api:app)' {
+    metadata {
+      codigo ['dataforge/gui/daemon.py']
+    }
+  }
+  casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.apiHoje 'Reconcilia os triggers do destino pela API (deploy na CLI)' {
+    metadata {
+      codigo ['dataforge/deploy/cli.py']
+    }
+  }
+
+  // Entre componentes do DataForge: imports.
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.motorHoje 'Roda o job, pede o run destacado, lê o estado' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Carrega workspace, jobs, triggers e conexões; converte o cron' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.historicoHoje 'Usa as tabelas e corrige órfãos' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.guiHoje 'Abre a janela admin e a janela do app' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje 'Roda o segundo plano (background)' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.appsHoje 'Acha os apps e cria o atalho' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.deployHoje 'Monta o subcomando deploy' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Acha ou inicia o DataForge da porta' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+  casaHoje.dataforgeHoje.cliHoje -> casaHoje.dataforgeHoje.compatHoje 'Caminhos, banco e porta' {
+    metadata {
+      codigo ['dataforge/cli.py']
+    }
+  }
+
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.motorHoje 'Roda o job pedido pela rota' {
+    metadata {
+      codigo ['dataforge/api/routers/jobs.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Lê e grava jobs e triggers' {
+    metadata {
+      codigo ['dataforge/api/routers/jobs.py', 'dataforge/api/routers/triggers.py', 'dataforge/api/routers/workspaces.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.historicoHoje 'Usa as tabelas e corrige órfãos' {
+    metadata {
+      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/executions.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/workspaces.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.cliHoje 'Registra o trigger no agendador pela função da CLI' {
+    metadata {
+      codigo ['dataforge/api/routers/triggers.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.appsHoje 'Acha os apps, inicia o backend e põe o token' {
+    metadata {
+      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/apps.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.deployHoje 'Plano, aplicação e rollback pelo serviço' {
+    metadata {
+      codigo ['dataforge/api/routers/deploy.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.deltaPoolHoje 'Lê o curated nas threads do pool' {
+    metadata {
+      codigo ['dataforge/api/routers/tables.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.instanciaHoje 'O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento' {
+    metadata {
+      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/instance.py', 'dataforge/api/routers/jobs.py']
+    }
+  }
+  casaHoje.dataforgeHoje.apiHoje -> casaHoje.dataforgeHoje.compatHoje 'Caminhos, banco e hosts permitidos' {
+    metadata {
+      codigo ['dataforge/api']
+    }
+  }
+
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Acha ou inicia o servidor; batimento de presença' {
+    metadata {
+      codigo ['dataforge/gui/__init__.py', 'dataforge/gui/app_window.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/server_lost_banner.py']
+    }
+  }
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.appsHoje 'Acha o app da janela' {
+    metadata {
+      codigo ['dataforge/gui/app_window.py']
+    }
+  }
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Converte o cron na agenda' {
+    metadata {
+      codigo ['dataforge/gui/panels/scheduler.py']
+    }
+  }
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.historicoHoje 'Hora UTC da próxima execução na agenda' {
+    metadata {
+      codigo ['dataforge/gui/panels/scheduler.py']
+    }
+  }
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.deployHoje 'Tipos do plano no painel de deploy' {
+    metadata {
+      codigo ['dataforge/gui/panels/deploy.py']
+    }
+  }
+  casaHoje.dataforgeHoje.guiHoje -> casaHoje.dataforgeHoje.compatHoje 'Porta da API e pasta do perfil web' {
+    metadata {
+      codigo ['dataforge/gui/app_window.py', 'dataforge/gui/main_window.py', 'dataforge/gui/panels']
+    }
+  }
+
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.appsHoje 'Para os backends ao sair' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Usa o lançador de processo destacado, a regra de saída e o registro das janelas' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.guiHoje 'Guarda do coletor e ícone da bandeja' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
+  casaHoje.dataforgeHoje.segundoPlanoHoje -> casaHoje.dataforgeHoje.compatHoje 'Porta da API e pasta de logs' {
+    metadata {
+      codigo ['dataforge/gui/background.py', 'dataforge/gui/daemon.py']
+    }
+  }
+
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.tasksHoje 'Acha o handler de cada task' {
+    metadata {
+      codigo ['dataforge/engine.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Modelos de job e task; carrega o job pedido' {
+    metadata {
+      codigo ['dataforge/engine.py', 'dataforge/dag.py', 'dataforge/conditions.py', 'dataforge/run_request.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.historicoHoje 'Tabelas, dono da linha e correção de órfãos' {
+    metadata {
+      codigo ['dataforge/engine.py', 'dataforge/run_request.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Usa o lançador de processo destacado' {
+    metadata {
+      codigo ['dataforge/run_request.py']
+    }
+  }
+  casaHoje.dataforgeHoje.motorHoje -> casaHoje.dataforgeHoje.compatHoje 'Banco, logs e caminho da trava' {
+    metadata {
+      codigo ['dataforge/engine.py', 'dataforge/run_request.py', 'dataforge/runlock.py']
+    }
+  }
+
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.motorHoje 'A task job roda outro job' {
+    metadata {
+      codigo ['dataforge/tasks/job_handler.py']
+    }
+  }
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Modelos de job e task; carrega o job filho' {
+    metadata {
+      codigo ['dataforge/tasks']
+    }
+  }
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.historicoHoje 'Tabelas do histórico' {
+    metadata {
+      codigo ['dataforge/tasks/python_handler.py', 'dataforge/tasks/error_handler.py', 'dataforge/tasks/message/handler.py']
+    }
+  }
+  casaHoje.dataforgeHoje.tasksHoje -> casaHoje.dataforgeHoje.compatHoje 'URL do banco global' {
+    metadata {
+      codigo ['dataforge/tasks/message/handler.py']
+    }
+  }
+
+  casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.definicaoHoje 'YAML pelo yamlio' {
+    metadata {
+      codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/pairing.py', 'dataforge/deploy/plan.py']
+    }
+  }
+  casaHoje.dataforgeHoje.deployHoje -> casaHoje.dataforgeHoje.compatHoje 'Pasta do workspace e porta da API' {
+    metadata {
+      codigo ['dataforge/deploy/cli.py', 'dataforge/deploy/service.py']
+    }
+  }
+
+  casaHoje.dataforgeHoje.appsHoje -> casaHoje.dataforgeHoje.instanciaHoje 'Para o backend quando a janela do app fecha (presença)' {
+    metadata {
+      codigo ['dataforge/app_backends.py']
+    }
+  }
+  casaHoje.dataforgeHoje.appsHoje -> casaHoje.dataforgeHoje.definicaoHoje 'Lê app.yaml pelo yamlio' {
+    metadata {
+      codigo ['dataforge/apps.py']
+    }
+  }
+  casaHoje.dataforgeHoje.appsHoje -> casaHoje.dataforgeHoje.compatHoje 'Pasta dos apps e porta da API' {
+    metadata {
+      codigo ['dataforge/apps.py', 'dataforge/app_backends.py']
+    }
+  }
+
+  casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.motorHoje 'Trava de arquivo (runlock) ao iniciar o segundo plano' {
+    metadata {
+      codigo ['dataforge/instance.py']
+    }
+  }
+  casaHoje.dataforgeHoje.instanciaHoje -> casaHoje.dataforgeHoje.compatHoje 'Porta, home e pasta de logs' {
+    metadata {
+      codigo ['dataforge/instance.py']
+    }
+  }
+  casaHoje.dataforgeHoje.historicoHoje -> casaHoje.dataforgeHoje.compatHoje 'Workspaces e URLs dos bancos' {
+    metadata {
+      codigo ['dataforge/orphans.py']
+    }
+  }
+  casaHoje.dataforgeHoje.testesHoje -> casaHoje.dataforgeHoje.historicoHoje 'Banco de teste com o esquema' {
+    metadata {
+      codigo ['dataforge/testing.py']
+    }
+  }
+  casaHoje.dataforgeHoje.testesHoje -> casaHoje.dataforgeHoje.compatHoje 'URL do banco' {
+    metadata {
+      codigo ['dataforge/testing.py']
+    }
+  }
+}
+
+views {
+  view hoje-componentes-dataforge of casaHoje.dataforgeHoje {
+    title 'Hoje: componentes do DataForge'
+    description 'Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista'
+    include *
+    exclude * -> casaHoje.dataforgeHoje.compatHoje
+  }
+}
