@@ -168,25 +168,34 @@ def _spec_lines(base: dict | None, pr: dict | None) -> list[str]:
     return [f"**Specification**: {'; '.join(texts)}", ""] if texts else []
 
 
+def _rows(model: dict, path: tuple[str, ...], side: str):
+    """The list at `path`, each object on the way checked."""
+    node = model
+    for key in path[:-1]:
+        node = node.get(key, {})
+        if not isinstance(node, dict):
+            raise ValueError(f"the {side} model's {key} is not an object")  # noqa: TRY004 -- bad data is a ValueError like the JSON errors main turns into a message
+    return node.get(path[-1], [])
+
+
+def _check_rows(rows, path: tuple[str, ...], side: str) -> None:
+    """A list of records with a string id (and source and target, for arrows), each id once."""
+    need = ("id", "source", "target") if path in ARROWS else ("id",)
+    if not isinstance(rows, list) or not all(isinstance(r, dict) and all(isinstance(r.get(k), str) for k in need)
+                                             for r in rows):
+        raise ValueError(f"the {side} model's {'.'.join(path)} is not a list of records with {', '.join(need)}")
+    if len({r["id"] for r in rows}) != len(rows):
+        raise ValueError(f"the {side} model's {'.'.join(path)} has an id twice")
+
+
 def _checked(model, side: str) -> dict | None:
     """`model` when it has the shape the diff reads (see the module docstring), else a ValueError."""
     if model is None:
         return None
     if not isinstance(model, dict) or not isinstance(model.get("specification") or {}, dict):
-        raise ValueError(f"the {side} model is not a modelo.json object")  # noqa: TRY004 -- bad data, one error type with the JSON errors main turns into a message
+        raise ValueError(f"the {side} model is not a modelo.json object")  # noqa: TRY004 -- bad data is a ValueError like the JSON errors main turns into a message
     for _, path in SECTIONS:
-        node = model
-        for key in path[:-1]:
-            node = node.get(key, {})
-            if not isinstance(node, dict):
-                raise ValueError(f"the {side} model's {key} is not an object")  # noqa: TRY004 -- bad data, as above
-        rows = node.get(path[-1], [])
-        need = ("id", "source", "target") if path in ARROWS else ("id",)
-        if not isinstance(rows, list) or not all(isinstance(r, dict) and all(isinstance(r.get(k), str) for k in need)
-                                                 for r in rows):
-            raise ValueError(f"the {side} model's {'.'.join(path)} is not a list of records with {', '.join(need)}")
-        if len({r["id"] for r in rows}) != len(rows):
-            raise ValueError(f"the {side} model's {'.'.join(path)} has an id twice")
+        _check_rows(_rows(model, path, side), path, side)
     return model
 
 

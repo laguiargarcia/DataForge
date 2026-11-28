@@ -258,8 +258,9 @@ MALFORMED = {
 @pytest.mark.parametrize("bad", MALFORMED.values(), ids=MALFORMED.keys())
 @pytest.mark.parametrize("side", ["base", "PR"])
 def test_a_malformed_model_on_either_side_is_refused_naming_the_side(bad, side):
+    base, pr = (bad, _model()) if side == "base" else (_model(), bad)
     with pytest.raises(ValueError, match=f"the {side} model"):
-        diff.markdown(bad, _model()) if side == "base" else diff.markdown(_model(), bad)
+        diff.markdown(base, pr)
 
 
 def _cli_failure(stdin: str) -> str:
