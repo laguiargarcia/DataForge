@@ -43,7 +43,7 @@ def ler_docs(root: Path) -> dict[str, dict]:
     for f in sorted((root / DOCS).rglob("*.md")):
         try:
             fm = docs.ler_front_matter(f)
-        except (ValueError, UnicodeDecodeError, OSError):
+        except (ValueError, OSError):
             continue  # a broken front matter is docs.py conferir's to report
         if fm:
             out[f.relative_to(root).as_posix()] = fm

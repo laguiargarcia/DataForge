@@ -560,10 +560,10 @@ def _stale_docs() -> str:
     try:
         if str(HERE) not in sys.path:
             sys.path.insert(0, str(HERE))
-        import docs_parados  # noqa: PLC0415 -- inside the try: no error of the warning may break the gate
+        import docs_parados  # noqa: PLC0415 -- inside the try, so no error of the warning breaks the gate
 
         lines = docs_parados.relatorio(ROOT)
-    except Exception as error:  # noqa: BLE001 -- the warning is advisory: any failure is printed, not raised
+    except Exception as error:  # noqa: BLE001 -- the warning is advisory, any failure is printed and not raised
         print(f"docs: stale-doc check failed: {error}")
         return ""
     print("\n".join(lines))
