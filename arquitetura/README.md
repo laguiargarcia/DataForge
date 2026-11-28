@@ -50,7 +50,12 @@ passa para os beads de implementação que criou). A conferência tem duas metad
 bd:
 
 - `python3 scripts/arquitetura/marcas.py` (no CI): falha num item marcado sem bead, com id
-  malformado ou com duas das três marcas, e num `bead` sem marca.
+  malformado ou com duas das três marcas, e num `bead` sem marca. Falha também numa marca no modelo
+  de hoje (df-8x0m.23.46): todo elemento de topo tem id terminado em `Hoje` (o que descreve hoje, em
+  `hoje.c4` ou em qualquer arquivo que estende seus elementos) ou em `Alvo`; um elemento marcado sob
+  um topo `...Hoje`, ou uma seta marcada com uma ponta lá, falha, e um elemento de topo com outro
+  sufixo também. O export do LikeC4 não diz de que arquivo vem cada item, por isso o sufixo; só o
+  segmento de topo conta (`casaAlvo.velhoHoje` é do alvo).
 - `bd close <id>` (hook `scripts/beads/check.py`): recusa fechar um bead que o
   `arquitetura/modelo.json` do origin/main ainda marca. Para conferir tudo de uma vez, com bd:
   `python3 scripts/arquitetura/marcas.py --bd`.

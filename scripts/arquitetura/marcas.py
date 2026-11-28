@@ -7,7 +7,10 @@ the change on (a decision bead hands it to its implementation beads).
 Two halves, because CI has no bd (beads are local):
 
 - `marcas.py` (CI): fails when a marked item has no bead, a malformed id or two of the
-  three tags, or when an item carries a bead and no mark.
+  three tags, or when an item carries a bead and no mark. Also when a mark is on today's model:
+  an element whose top-level id ends in `Hoje`, or a relation with an end there (df-8x0m.23.46;
+  the export keeps no source file, so the suffix says the model), and when a top-level element
+  ends in neither `Hoje` nor `Alvo`.
 - `marcas.py --bd` (local, with bd): also fails when a marked bead is closed or does
   not exist. The close hook (scripts/beads/check.py) refuses `bd close` of a bead origin/main still
   marks, with `marked_beads`.
@@ -31,6 +34,7 @@ from arquitetura import modelo
 
 TAGS = ("novo", "muda", "sai")
 KEY = "bead"
+TODAY, TARGET = "Hoje", "Alvo"  # suffix of every top-level element id: which model it belongs to
 BEAD_ID = re.compile(r"df-[a-z0-9]+(?:\.\d+)*")  # used with fullmatch: no trailing newline
 BD_TIMEOUT = 20
 
@@ -77,9 +81,29 @@ def _item_problems(label: str, item: dict) -> list[str]:
     return []
 
 
+def _top(fqn) -> str:
+    return str(fqn).split(".", 1)[0]
+
+
+def _today_problems(model: dict) -> list[str]:
+    """Marks on today's model, and top-level elements that belong to neither model (df-8x0m.23.46).
+    The export keeps no source file, so the model an item belongs to is its top-level id's suffix."""
+    tops = dict.fromkeys(_top(e.get("id")) for e in model.get("elements") or ())
+    found = [f"elemento de topo {top!r}: o id termina em {TODAY} (hoje.c4) ou {TARGET} (alvo.c4), para a "
+             "conferência saber de qual modelo ele é" for top in tops if not top.endswith((TODAY, TARGET))]
+    for group, ends in (("elements", ("id",)), ("relations", ("source", "target"))):
+        for item in model.get(group) or ():
+            tags = [t for t in item.get("tags") or () if t in TAGS]
+            if tags and any(_top(item.get(end)).endswith(TODAY) for end in ends):
+                found.append(f"{item.get('id')}: #{tags[0]} no modelo de hoje; as marcas ficam só no alvo "
+                             f"(ids sob um elemento de topo ...{TARGET})")
+    return found
+
+
 def problems(model: dict) -> list[str]:
-    """What CI checks: each mark has exactly one tag and well-formed bead ids."""
-    return [p for label, item in _items(model) for p in _item_problems(label, item)]
+    """What CI checks: each mark has exactly one tag and well-formed bead ids, and only the target
+    carries marks."""
+    return [p for label, item in _items(model) for p in _item_problems(label, item)] + _today_problems(model)
 
 
 def marked_beads(model: dict) -> dict[str, list[str]]:
