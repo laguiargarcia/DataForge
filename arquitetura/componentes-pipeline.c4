@@ -50,6 +50,7 @@ model {
       }
     }
     conferenciasHoje = componente 'Regras de conferência e extrato' {
+      #servidoPelaProd
       description 'Funções puras de scripts/report que as tasks de conferência carregam: leitura do texto do extrato do banco, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato'
       technology 'Python, polars'
       metadata {
@@ -63,6 +64,7 @@ model {
       }
     }
     regrasHoje = componente 'Regras de edição e classificação' {
+      #servidoPelaProd
       description 'edicao (abre o edicao.db e lê e grava categorias, regras, correções e explicações) e classificacao (classifica pela regra); módulos soltos que o backend Finanças e o ninho também carregam por sys.path'
       technology 'Python, SQLite'
       metadata {

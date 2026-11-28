@@ -774,6 +774,92 @@ def test_model_on_main_reads_the_model_of_origin_main(marked_main):
     assert check.model_on_main(marked_main) == json.loads(marked_model("df-t"))
 
 
+# --------------------------------------------------------------------------- served by prod
+
+
+SERVED_MODEL = {"elements": [
+    {"id": "casaHoje", "tags": []},
+    {"id": "casaHoje.ninhoHoje", "tags": ["servidoPelaProd"]},
+    {"id": "casaHoje.ninhoHoje.listaHoje", "tags": []},
+    {"id": "casaHoje.ninhoHojeVelho", "tags": []},
+    {"id": "casaHoje.pipelineHoje", "tags": []},
+    {"id": "casaAlvo.servidorAlvo", "tags": ["muda", "servidoPelaProd"]},
+], "relations": []}
+SERVED_PROOF = "Servido pela prod: Invoke-WebRequest .../tables/transacoes 200."
+
+
+def served_task(*c4, labels=TASK_DONE, kind="task", created=NEW):
+    return issue("df-t", kind, [*labels, *(f"c4:{v}" for v in c4)], created)
+
+
+def prod(issue_, reason=NOTE, model=SERVED_MODEL, extra=()):
+    return check.prod_problems(model, issue_, reason, frozenset(extra))
+
+
+@pytest.mark.parametrize("box", ["casaHoje.ninhoHoje", "casaHoje.ninhoHoje.listaHoje", "casaAlvo.servidorAlvo"])
+def test_a_box_served_by_prod_or_its_child_needs_the_prod_check(box):
+    found = prod(served_task(box))
+    assert len(found) == 1
+    assert f"`c4:{box}`" in found[0]
+    assert "Invoke-WebRequest" in found[0]
+    assert "Servido pela prod:" in found[0]
+
+
+@pytest.mark.parametrize("reason", [f"{NOTE} {SERVED_PROOF}", f"{SERVED_PROOF} {NOTE}",
+                                    "Conferi: x. servido  PELA prod : app aberto, 200. Não conferi: y. Assumi: z."])
+def test_the_prod_check_in_the_reason_with_text_passes(reason):
+    assert prod(served_task("casaHoje.ninhoHoje"), reason) == []
+
+
+@pytest.mark.parametrize("reason", [f"{NOTE} Servido pela prod:", f"Servido pela prod: {NOTE}",
+                                    f"{NOTE} Servido pela prod: ... ;"])
+def test_the_prod_mark_without_text_is_refused(reason):
+    found = prod(served_task("casaHoje.ninhoHoje"), reason)
+    assert len(found) == 1
+    assert "sem texto" in found[0]
+
+
+@pytest.mark.parametrize("boxes", [("casaHoje.pipelineHoje",), ("transversal",), ("casaHoje",),
+                                   ("casaHoje.ninhoHojeVelho",), ()])
+def test_a_box_outside_what_prod_serves_passes(boxes):
+    assert prod(served_task(*boxes)) == []
+
+
+def test_a_label_added_in_the_same_line_counts():
+    assert prod(served_task(), extra={"c4:casaHoje.ninhoHoje"}) != []
+
+
+@pytest.mark.parametrize("passes", [
+    {"reason": "descartado: virou df-x"}, {"reason": "Duplicado: df-y"},
+    {"issue_": served_task("casaHoje.ninhoHoje", labels=[*TASK_DONE, check.WAIVER])},
+    {"issue_": served_task("casaHoje.ninhoHoje", kind="epic")},
+    {"issue_": served_task("casaHoje.ninhoHoje", kind="session")},
+    {"issue_": served_task("casaHoje.ninhoHoje", created=OLD)},
+    {"model": None}, {"model": {"elements": "x"}},
+    {"model": {"elements": [{"id": "casaHoje.ninhoHoje", "tags": "servidoPelaProd"}, {"tags": ["servidoPelaProd"]}]}},
+])
+def test_dropped_waived_session_epic_old_beads_and_no_model_pass(passes):
+    args = {"issue_": served_task("casaHoje.ninhoHoje"), **passes}
+    assert prod(**args) == []
+
+
+def test_the_tag_is_the_one_the_model_declares_and_carries():
+    model = json.loads((SCRIPT.parents[2] / "arquitetura" / "modelo.json").read_text(encoding="utf-8"))
+    assert check.SERVED_TAG in model["specification"]["tags"]
+    assert {"casaHoje.dataforgeHoje", "casaHoje.ninhoHoje", "casaAlvo.servidorAlvo"} <= check.served_boxes(model)
+
+
+def test_a_close_line_without_the_prod_check_is_refused_and_with_it_passes(monkeypatch):
+    monkeypatch.setattr(check, "model_on_main", lambda _repo: SERVED_MODEL)
+    bd = FakeBd(served_task("casaHoje.ninhoHoje"))
+    found = check.check_steps(check.read_line(f'bd close df-t --reason "{NOTE}"'), bd, Path("."))
+    assert len(found) == 1
+    assert found[0].startswith("[bd close df-t] ")
+    assert "Invoke-WebRequest" in found[0]
+    proof = f'bd close df-t --reason "{NOTE} {SERVED_PROOF}"'
+    assert check.check_steps(check.read_line(proof), bd, Path(".")) == []
+
+
 # --------------------------------------------------------------------------- with a real bd
 
 

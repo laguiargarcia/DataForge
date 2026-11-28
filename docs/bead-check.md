@@ -1,7 +1,7 @@
 ---
-topic: Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, and no architecture mark left on the bead)
-read_when: A "Conferência do bead" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead
-related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37, df-8x0m.23.36]
+topic: Bead check (a create names its C4 box; a child is created without the parent's labels; claim needs an acceptance criterion; close needs the outcome labels and the note, no architecture mark left on the bead, and the prod check of a box prod serves)
+read_when: A "Conferência do bead" refusal on bd create/new/q, bd update --claim or bd close; which c4: box a new bead gets; changing which labels a close needs; the cutoff date; the escape hatch; a close refused because arquitetura/ still marks the bead; a close refused for a missing `Servido pela prod:`
+related_issues: [df-m60c, df-b89w, df-081f, df-ugnz, df-8x0m.23.37, df-8x0m.23.36, df-8x0m.23.42]
 ---
 
 # Bead check
@@ -23,6 +23,7 @@ they run, from a PreToolUse hook on Bash. Every other command passes in ~30 ms, 
 | | the note: `Conferi:`, `Não conferi:`, `Assumi:` in the reason, each with text | beads created on or after the cutoff |
 | claim and close | at most one value of each of `vol:`, `inc:`, `origem:`, `vol-real:`, `inc-real:` | every bead; not session beads at claim |
 | `bd close <id>` | no `#novo`/`#muda`/`#sai` mark of `arquitetura/modelo.json` on `origin/main` still names the bead | every bead, `descartado:`/`duplicado:` closes too |
+| `bd close <id> --reason "..."` | `Servido pela prod:` with text in the reason (the command used and its status) | a bead with a `c4:` box tagged `servidoPelaProd` on `origin/main`, or a child of one; beads created on or after the cutoff |
 
 **Every bead points at a C4 box (df-8x0m.23.36):** the architecture model
 (`arquitetura/*.c4`, exported to `arquitetura/modelo.json`; `arquitetura/README.md`) is the map of the
@@ -82,6 +83,20 @@ closed bead. With no `modelo.json` on `origin/main`, or one that is not a JSON o
 checked (fail open). CI has no bd, so this is the half of the rule that knows open from closed; the
 CI job `arquitetura` checks only the marks' format (`scripts/arquitetura/marcas.py`), and
 `marcas.py --bd` checks every mark against bd at once.
+
+**Served by prod (df-8x0m.23.42):** what a screen or the API reads is done only after the prod
+server on Windows served it (CLAUDE.md, df-p0pu): dev, CI and reviewers run on Linux, and prod's
+Windows Python lacks things Linux has. The elements that a screen or the API reads and that run on
+Windows carry the tag `servidoPelaProd` in `arquitetura/*.c4` (`arquitetura/README.md`). At `bd close`
+the hook reads `origin/main:arquitetura/modelo.json` and, when a `c4:` label of the bead is a tagged
+element or a descendant of one (`c4:casaHoje.ninhoHoje.listaHoje` under `casaHoje.ninhoHoje`), asks
+for `Servido pela prod:` in the `--reason`, followed by text up to the next mark of the note: the
+command used and the status, e.g. `Servido pela prod: Invoke-WebRequest .../tables/<table> 200`, or
+the screen opened in the app. The refusal gives the `Invoke-WebRequest` command of CLAUDE.md and the
+app shortcut. A mark in the reason, not a label, because it carries the proof. Passes: the
+exemptions above (epics, sessions, `descartado:`/`duplicado:`, the escape hatch), beads created
+before the cutoff, and beads with no tagged box (`c4:transversal` included). With no readable
+model, or no element tagged, nothing is checked (fail open).
 
 **Cutoff:** `CUTOFF` in the script, 2026-11-16. Older beads are held only to the rules that predate
 it (real difficulty, origem, camada, erro), and their claims are not checked.

@@ -1,0 +1,69 @@
+// Implantação de HOJE (df-8x0m.23.42): onde roda cada contêiner de hoje.c4. Fonte: CLAUDE.md
+// ("Where to work", a parte de GetFinance) e ADR 0005. Rótulos genéricos: nenhum caminho real.
+deployment {
+  pcCasa = pc 'PC da casa' {
+    description 'Um PC só, com Windows; a prod roda nativa no Windows e o desenvolvimento no WSL do mesmo PC'
+
+    prod = ambiente 'Prod: Windows nativo' {
+      description 'A pasta de prod no disco do Windows: os workspaces com os dados reais, o dataforge.db e o venv de prod. Muda só pelo deploy (scripts/prod/deploy.sh, que o pull no main do clone roda); ninguém roda testes nem edita código ali'
+      technology 'Windows, Python do venv de prod'
+
+      instanceOf agendadorHoje
+      instanceOf casaHoje.dataforgeHoje
+      instanceOf casaHoje.pipelineHoje
+      instanceOf casaHoje.financasHoje
+      instanceOf casaHoje.frontFinancasHoje
+      instanceOf casaHoje.ninhoHoje
+      instanceOf casaHoje.lagoHoje
+      instanceOf casaHoje.edicaoHoje
+      instanceOf casaHoje.bancoNinhoHoje
+      instanceOf casaHoje.dbDataforgeHoje
+      instanceOf casaHoje.extratosHoje
+      instanceOf casaHoje.backupHoje
+    }
+
+    dev = wsl 'Dev: WSL' {
+      description 'Linux no mesmo PC: o clone do repositório no disco ext4, um worktree por bead com o próprio venv, os testes locais e o job finance_demo em dados sintéticos. Lê os dados reais só para a guarda de vazamento; não escreve na prod'
+      technology 'Ubuntu no WSL, Python do uv'
+
+      devDataforge = instanceOf casaHoje.dataforgeHoje
+      devPipeline = instanceOf casaHoje.pipelineHoje
+    }
+  }
+
+  ci = ci 'CI: GitHub Actions' {
+    description 'Cada PR e cada push no main (.github/workflows/ci.yml), com dados falsos; o merge espera o check tests'
+    technology 'GitHub Actions'
+
+    ciUbuntu = ambiente 'Ubuntu' {
+      description 'Os testes do motor, da GUI, do GetFinance, do app Finanças e das telas do ninho; o job arquitetura, o portão de qualidade, a guarda de vazamento, a mutação e o Sonar'
+      technology 'ubuntu-latest'
+    }
+    ciWindows = ambiente 'Windows' {
+      description 'Os testes do motor e do GetFinance no Python do Windows, e o windows-smoke: o mais perto da prod que o CI chega'
+      technology 'windows-latest'
+    }
+  }
+
+  celular = celular 'Celular' {
+    description 'As telas do ninho, instaladas como web app na tela de início; chamam o servidor ninho por HTTPS pela Tailscale'
+
+    instanceOf casaHoje.telasNinhoHoje
+  }
+
+  pcCasa.dev -> pcCasa.prod 'Deploy: o pull no main do clone roda scripts/prod/deploy.sh'
+  pcCasa.dev -> ci 'Push do branch do bead; o PR roda os jobs'
+}
+
+views {
+  deployment view implantacao {
+    title 'Hoje: implantação'
+    include *, prod.*, dev.*, celular.*
+    exclude * -> *
+    include pcCasa.dev -> pcCasa.prod, pcCasa.dev -> ci
+    // Junta as setas das telas do ninho para o servidor; o título dela é o da vista.
+    include celular -> pcCasa.prod with {
+      title 'As telas chamam o servidor ninho por HTTPS pela Tailscale'
+    }
+  }
+}

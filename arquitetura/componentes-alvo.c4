@@ -314,7 +314,7 @@ model {
       }
     }
     regrasAlvo = componente 'Regras de edição e classificação' {
-      #muda
+      #muda #servidoPelaProd
       description 'edicao (abre o edicao.db e lê e grava categorias, regras, correções e explicações) e classificacao (classifica pela regra); módulos soltos que o backend Finanças e o ninho também carregam por sys.path. Muda: viram um pacote importável do módulo finanças, que o pipeline e o servidor importam, sem sys.path (df-8x0m.23.14)'
       technology 'Python, SQLite'
       metadata {
@@ -332,7 +332,7 @@ model {
       }
     }
     publicadasAlvo = componente 'Tabelas publicadas' {
-      #novo
+      #novo #servidoPelaProd
       description 'A lista das tabelas que o pipeline publica para o servidor, com o esquema declarado no módulo finanças, e a task que, ao fim de cada job que escreve uma delas, compara as tabelas com o esquema e falha a rodada quando diferem'
       technology 'Python'
       metadata {

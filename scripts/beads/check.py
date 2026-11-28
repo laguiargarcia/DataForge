@@ -20,6 +20,9 @@ Three bd commands are checked, nothing else:
   files the bug changed. And, for any bead, no mark of the architecture target on origin/main
   (`arquitetura/modelo.json`) may still name it: the mark goes, or moves to the bead that carries
   the change on, in a PR merged before the close (df-8x0m.23.37; no modelo.json, no check).
+  A bead whose `c4:` box, or an ancestor of it, is tagged `servidoPelaProd` in that model (a screen
+  or the API reads it and it runs on Windows) needs `Servido pela prod:` with text in the reason:
+  the command used and its status (CLAUDE.md, df-p0pu; df-8x0m.23.42).
 
 Passes untouched: session beads and epics at close, a reason starting with `descartado:` or
 `duplicado:`, a bead labelled `fechamento:dispensado` (the escape hatch, counted by the
@@ -98,6 +101,10 @@ CREATE_SHORT_FLAGS = {"-f": "--file", "-l": "--labels", "-t": "--type"}  # `-f` 
 BATCH_FLAGS = ("--file", "--graph")  # beads come from a file: their labels cannot be read here
 C4 = "c4"
 C4_ANYWHERE = "transversal"  # the box of work that is not in one part: how we work, several parts
+SERVED_TAG = "servidoPelaProd"  # arquitetura/spec.c4: a screen or the API reads it, and it runs on Windows
+SERVED_MARK = re.compile(r"\bservido\s+pela\s+prod\s*:", re.IGNORECASE)
+PROD_CHECK = ("powershell.exe -NoProfile -Command \"(Invoke-WebRequest -UseBasicParsing "
+              "'http://127.0.0.1:8000/api/workspaces/<ws>/tables/<tabela>').StatusCode\"")
 LABEL_FLAGS = ("--add-label", "--set-labels")
 SAME_LINE_STEPS = ("[bd update ", "[bd close ")  # gaps that labels set earlier in the line can fill
 LABEL_ADD_WORDS = 3  # `label add <id> <label>`: add, at least one id, the label
@@ -360,12 +367,16 @@ def furo_problems(labels, bead: str, exists, candidates) -> list[str]:
     return [need(labels, "etapa", ETAPAS, bead, f"a etapa de {target} que deveria ter pego o problema")]
 
 
+def close_exempt(issue: dict, labels, reason: str) -> bool:
+    """A close that passes untouched: a session or epic, the waiver, or a close without work."""
+    return (issue.get("issue_type") in CLOSE_SKIPPED_TYPES or WAIVER in labels
+            or reason.strip().lower().startswith(NO_WORK_PREFIXES))
+
+
 def close_problems(issue: dict, reason: str, extra_labels, exists, candidates) -> list[str]:
     """Gaps that keep `bd close` of this bead from going ahead (empty: it may close)."""
     labels = set(issue.get("labels") or ()) | set(extra_labels)
-    if issue.get("issue_type") in CLOSE_SKIPPED_TYPES or WAIVER in labels:
-        return []
-    if reason.strip().lower().startswith(NO_WORK_PREFIXES):
+    if close_exempt(issue, labels, reason):
         return []
     bead = issue["id"]
     bug = issue.get("issue_type") == "bug"
@@ -456,6 +467,49 @@ def c4_problems(step: Step, ids: set[str]) -> list[str]:
             + "\n  ".join(box_listing(ids))
             + "\n  Uma caixa criada no seu branch só vale depois do merge: até lá use a mãe dela ou "
             f"`{C4}:{C4_ANYWHERE}`."]
+
+
+def served_boxes(model: dict | None) -> set[str]:
+    """The element ids of the architecture model tagged `servidoPelaProd`."""
+    elements = (model or {}).get("elements")
+    return {e["id"] for e in elements if isinstance(e, dict) and isinstance(e.get("id"), str)
+            and isinstance(e.get("tags"), list) and SERVED_TAG in e["tags"]} if isinstance(elements, list) else set()
+
+
+def served_proof(reason: str) -> bool | None:
+    """None without `Servido pela prod:` in the reason; else whether text follows it, up to the next
+    mark of the closing note or the end."""
+    mark = SERVED_MARK.search(reason)
+    if mark is None:
+        return None
+    after = reason[mark.end():]
+    nxt = NOTE_MARK.search(after)
+    return bool(re.search(r"\w", after[:nxt.start()] if nxt else after))
+
+
+def prod_problems(model: dict | None, issue: dict, reason: str, extra_labels=()) -> list[str]:
+    """A close of a bead whose `c4:` box, or an ancestor of it, is tagged `servidoPelaProd` needs
+    `Servido pela prod:` with text in the reason: what a screen or the API reads is done only after
+    the prod server on Windows served it (CLAUDE.md, df-p0pu; df-8x0m.23.42). No model, no check."""
+    labels = set(issue.get("labels") or ()) | set(extra_labels)
+    if close_exempt(issue, labels, reason) or str(issue.get("created_at") or "")[:10] < CUTOFF:
+        return []
+    served = served_boxes(model)
+    hits = sorted(v for v in set(label_values(labels, C4))
+                  if any(v == s or v.startswith(s + ".") for s in served))
+    proof = served_proof(reason)
+    if not hits or proof:
+        return []
+    boxes = ", ".join(f"`{C4}:{v}`" for v in hits)
+    what = ("`Servido pela prod:` sem texto no `--reason`" if proof is False
+            else "falta `Servido pela prod:` no `--reason`")
+    return [f"{what}. {boxes} é caixa que uma tela ou a API leem e que roda na prod do Windows (tag "
+            f"`{SERVED_TAG}` no arquitetura/modelo.json do origin/main): só está pronto depois que o "
+            "servidor da prod serviu (CLAUDE.md, df-p0pu). Depois do run na prod, peça pela rota cada "
+            f"tabela que a tela lê e espere 200: `{PROD_CHECK}` (o servidor de pé: abra o app pelo atalho "
+            "\"Finanças (GetFinance)\" da área de trabalho, ou `dataforge serve` do `.venv-prod`), ou abra a "
+            "tela no app. Escreva no `--reason` `Servido pela prod:` com o comando e o status (ex.: "
+            "`Servido pela prod: Invoke-WebRequest .../tables/<tabela> 200`)."]
 
 
 # --------------------------------------------------------------------------- bd and git
@@ -596,13 +650,13 @@ def create_problems(step: Step, boxes: Callable[[], set[str] | None]) -> list[st
 def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
     """Every gap of these steps, each prefixed with the command and bead it belongs to."""
     out = []
-    boxes = functools.cache(lambda: box_ids(model_on_main(repo)))  # read at the first create, once
+    model = functools.cache(lambda: model_on_main(repo))  # read at the first create or close, once
     for step in steps:
         if step.kind == "refuse":
             out.append(step.message)
             continue
         if step.kind == "create":
-            out += create_problems(step, boxes)
+            out += create_problems(step, lambda: box_ids(model()))
             continue
         issue = bd.show(step.bead)
         if issue is None:
@@ -615,6 +669,7 @@ def check_steps(steps: list[Step], bd: Bd, repo: Path) -> list[str]:
                                    lambda b: furo_candidates(repo, b))
             if WAIVER not in {*(issue.get("labels") or ()), *step.labels}:
                 found += mark_problems(repo, step.bead)
+            found += prod_problems(model(), issue, step.reason, step.labels)
             what = f"bd close {step.bead}"
         out += [f"[{what}] {f}" for f in found]
     return out
