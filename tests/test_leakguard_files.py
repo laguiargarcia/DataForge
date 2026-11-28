@@ -24,10 +24,38 @@ workspace = pytest.fixture(leakguard_fixtures.workspace)
 def test_a_private_surface_is_blocked_without_reading_it(repo, capsys):
     """Blocked by its path alone: it need not exist, and its content adds no second failure."""
     rel = repo("workspaces/GetFinance-Dev/x.py", f"cpf = '{CPF}'\n")
-    code, _, failures = run(capsys, rel, "docs/missing.md")
+    code, _, failures = run(capsys, rel, "docs/superpowers/missing.md")
     assert code == 1
     assert failures == ["PATH-BLOCK: workspaces/GetFinance-Dev/x.py is under a private surface",
-                        "PATH-BLOCK: docs/missing.md is under a private surface"]
+                        "PATH-BLOCK: docs/superpowers/missing.md is under a private surface"]
+
+
+@pytest.mark.parametrize("rel", ["docs/superpowers/specs/s.md", "docs/phases/1.2-x.md", "docs/gsd-workflow.md",
+                                 "docs/workbook-handoff.md", "Docs/Superpowers/plans/p.md", "DOCS/PHASES/x.md"])
+def test_the_history_docs_stay_blocked(repo, capsys, rel):
+    """df-azm6: docs/ is versioned, but its history (superpowers/, phases/, gsd-workflow.md) and the
+    owner-only workbook note hold real values and stay private, whatever the case of the path."""
+    assert run(capsys, rel)[2] == [f"PATH-BLOCK: {rel} is under a private surface"]
+
+
+@pytest.mark.parametrize("rel", ["docs/commands.md", "docs/subsystems/api.md", "docs/adr/0005-x.md",
+                                 "docs/superpowers.md", "docs/phases-of-the-moon.md"])
+def test_the_reference_docs_are_read_not_blocked(repo, capsys, rel):
+    """df-azm6: a reference doc is not refused by its path; its content is checked like any file's."""
+    assert run(capsys, repo(rel, "x = 1\n"))[:1] == (0,)
+    assert run(capsys, repo(rel, f"x = '{CPF}'\n"))[2] == [f"CPF: {rel}:1 -> '52…' (11 chars)"]
+
+
+@pytest.mark.parametrize(("rel", "ignored"), [("docs/superpowers/plans/p.md", True), ("docs/phases/x.md", True),
+                                               ("docs/gsd-workflow.md", True), ("docs/workbook-handoff.md", True),
+                                               ("docs/commands.md", False), ("docs/subsystems/api.md", False)])
+def test_this_repos_gitignore_keeps_out_what_the_guard_blocks(rel, ignored):
+    """df-azm6: the repo's own .gitignore and BLOCK_PREFIXES agree on docs/: git keeps out the history
+    the guard refuses, and lets the reference docs in."""
+    root = Path(__file__).resolve().parent.parent
+    answer = subprocess.run(["git", "check-ignore", "-q", "--no-index", rel], cwd=root, check=False)
+    assert (answer.returncode == 0) is ignored
+    assert rel.startswith(leakguard_files.BLOCK_PREFIXES) is ignored
 
 
 @pytest.mark.parametrize("rel", ["workspaces/GetFinance/data/raw/x.csv", "workspaces/GetFinance/report/r.txt",
@@ -74,10 +102,10 @@ def test_files_skipped_on_the_way_do_not_end_the_scan(repo, capsys, tmp_path):
     unreadable = repo("locked.txt", "x\n")
     (tmp_path / unreadable).chmod(0)
     try:
-        failures = run(capsys, "docs/a.md", "gone.py", unreadable, repo("last.txt", f"{CPF}\n"))[2]
+        failures = run(capsys, "docs/phases/a.md", "gone.py", unreadable, repo("last.txt", f"{CPF}\n"))[2]
     finally:
         (tmp_path / unreadable).chmod(0o644)
-    assert failures == ["PATH-BLOCK: docs/a.md is under a private surface", "CPF: last.txt:1 -> '52…' (11 chars)"]
+    assert failures == ["PATH-BLOCK: docs/phases/a.md is under a private surface", "CPF: last.txt:1 -> '52…' (11 chars)"]
 
 
 def test_a_file_with_a_nul_byte_is_still_read(repo, capsys, tmp_path):
@@ -292,7 +320,7 @@ def test_history_finds_a_real_value_in_a_non_ascii_file_name(repo, capsys, tmp_p
 
 
 def test_a_private_surface_named_after_a_document_is_masked(repo, capsys):
-    rel = f"docs/{CPF}.md"
+    rel = f"docs/superpowers/{CPF}.md"
     assert run(capsys, rel)[2][1] == f"PATH-BLOCK: 'do…' ({len(rel)} chars) is under a private surface"
 
 

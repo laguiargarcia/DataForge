@@ -12,7 +12,7 @@ call and reports two kinds of trespass:
 
 Not reported: `git pull --ff-only` in the main checkout, which keeps it equal to origin/main and
 fires the post-merge hook that deploys to prod (df-n8ac.15); anything outside the repository (scratchpad, temp dirs, the memory directory, other
-repos), gitignored files of the main checkout (docs/, CLAUDE.md, .claude/, .beads/...), a separate
+repos), gitignored files of the main checkout (CLAUDE.md, .claude/, .beads/, docs/superpowers/...), a separate
 git checkout nested in it (a private workspace with its own rules), the repo's git dir, and the
 session's own worktrees. A worktree nobody alive holds becomes the session's on first use, and so
 does the path of a `git worktree add`.
