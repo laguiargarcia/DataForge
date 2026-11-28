@@ -1,17 +1,18 @@
 // Componentes do ALVO v2 (df-8x0m.23.47.8), dos contêineres que ficam: DataForge (orquestrador),
-// Servidor da casa, App no celular e Pipeline do módulo finanças. Cada componente que difere do de
-// hoje leva uma marca só (#novo, #muda ou #sai) e o bead aberto da mudança (README, "Marcas do
+// Servidor da casa, App no celular e Pipeline do módulo finanças. Cada componente ou seta que difere
+// do de hoje leva uma marca só (#novo, #muda ou #sai) e o bead aberto da mudança (README, "Marcas do
 // alvo"); sem marca, roda em prod como está.
 //
-// Decisões (as razões estão nas notas do bead):
-// - Espelho do hoje: cada componente de hoje desses contêineres tem par aqui, com o id de hoje e o
-//   sufixo Alvo (o núcleo do ninho é nucleoAlvo; o histórico do DataForge, historicoRunsAlvo, porque
-//   historicoAlvo é o banco do alvo.c4), o mesmo codigo e, sem marca, a mesma descrição. Cada seta de
-//   hoje entre componentes tem par aqui, com o mesmo título e codigo quando não muda. Assim o alvo
-//   diz, para o que existe, o que fica, o que muda e o que sai.
+// O que entra (as razões estão nas notas do bead, lote A do revisor):
+// - Só (a) o que tem marca, (b) o que a ADR 0006, um contrato de docs/architecture-v2 ou um bead de
+//   decisão nomeia no alvo, e (c) o mínimo que liga (a) e (b). Sem caixa ou seta no alvo: segue como
+//   no hoje (vistas hoje-componentes-*). As regras 3, 4, 7 e 8 do checker não valem no alvo
+//   (README): um espelho inteiro do hoje ficaria solto do código e ficaria falso em silêncio.
+// - Um componente que existe tem o id de hoje com o sufixo Alvo (o núcleo do ninho é nucleoAlvo; o
+//   histórico do DataForge, historicoRunsAlvo, porque historicoAlvo é o banco do alvo.c4) e o mesmo
+//   codigo; uma seta que existe e não muda, o mesmo título e codigo.
 // - Os dois contêineres que saem inteiros (backend e front do app Finanças) ficam só no alvo.c4, sem
 //   componentes: as setas de um componente deles para um componente que fica partem do contêiner.
-//   Setas de hoje que viram setas entre contêineres já estão no alvo.c4.
 // - Os extratos em PDF e os zips do backup não têm caixa no alvo (README): as setas de hoje para eles
 //   ficam fora até df-8x0m.23.35 dizer onde os extratos moram. O ninho.db e o edicao.db são o banco
 //   do app: as duas cópias do backup viram uma seta só.
@@ -19,8 +20,8 @@
 //   proxy, api/routers/apps.py), a rota genérica de tabelas (api/routers/tables.py) e as leituras
 //   Delta, que saem com os dois que as usam. O que a ADR 0006 só aponta como candidato (deploy, GUI,
 //   presença, segundo plano) fica #muda com df-8x0m.23.3, que decide.
-// - As regras 3, 4, 7 e 8 do checker não valem no alvo (README): o alvo muda quando o plano muda, e o
-//   hoje é o que o checker prende ao código. O espelho foi conferido uma vez com elas, à mão.
+// - Uma aresta de vista que junta relações com marcas diferentes pegaria a cor da regra de tag: cada
+//   vista dá, depois das regras de tag, a cor (e o título, quando falta) da marca da seta daquele nível.
 model {
   extend casaAlvo.dataforgeAlvo {
     apiAlvo = componente 'API de admin' {
@@ -102,7 +103,7 @@ model {
     }
     instanciaAlvo = componente 'Instância e presença' {
       #muda
-      description 'Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas. Muda: o registro das janelas existe pela janela do app; o que fica, a decidir em df-8x0m.23.3'
+      description 'Qual DataForge tem a porta da API (/health), o início do processo em segundo plano ou de um processo destacado, e o registro das janelas abertas. Muda: o registro também conta as janelas de app, que saem; o que fica, a decidir em df-8x0m.23.3'
       technology 'Python, httpx'
       metadata {
         bead 'df-8x0m.23.3'
@@ -128,17 +129,10 @@ model {
       }
     }
     tasksAlvo = componente 'Tipos de task' {
-      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge, o backend do app inclusive'
+      description 'O registro dos tipos de task e os embutidos: python (o script do workspace num processo), job, erro e mensagem (e-mail, SMS, WhatsApp; desligada nos jobs de hoje: finance_daily/job.yaml active false). O __init__ do pacote registra os embutidos em todo processo que importa dataforge'
       technology 'Python'
       metadata {
         codigo ['dataforge/tasks', 'dataforge/__init__.py']
-      }
-    }
-    testesAlvo = componente 'Plugin de testes' {
-      description 'Plugin do pytest que os testes do motor e os de um workspace carregam; não roda em prod'
-      technology 'Python, pytest, Hypothesis'
-      metadata {
-        codigo ['dataforge/testing.py']
       }
     }
     agendamentoAlvo = componente 'Agendamento' {
@@ -170,10 +164,10 @@ model {
     }
     financasServidorAlvo = componente 'Finanças' {
       #muda
-      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14); a regra do que cada pessoa vê (df-8x0m.23.6)'
+      description 'O que as rotas /api/financas fazem: lê as transações do mês e a versão aplicada no curated; lê e grava as correções no banco de edições, pelas regras do workspace; compara a versão das edições com a aplicada para dizer se há edição pendente; e pede ao DataForge, pela CLI, o job reclassificar que as aplica. Muda: faz o que o app Finanças do PC faz (categorias, regras, explicações, conferência, extratos; df-8x0m.23.19), e passa a ser o único escritor das edições; lê só as tabelas publicadas, por rotas de domínio (df-8x0m.23.45); importa as regras como pacote, sem sys.path (df-8x0m.23.14), e cria as tabelas das edições e a semente de categorias e regras, que hoje o pipeline grava (edits.md); acha o workspace e o DataForge pelo registro de pastas, não dois níveis acima do workspace (df-7cyk); a regra do que cada pessoa vê (df-8x0m.23.6)'
       technology 'Python, polars, deltalake, SQLite'
       metadata {
-        bead ['df-8x0m.23.19', 'df-8x0m.23.45', 'df-8x0m.23.14', 'df-8x0m.23.6']
+        bead ['df-8x0m.23.19', 'df-8x0m.23.45', 'df-8x0m.23.14', 'df-7cyk', 'df-8x0m.23.6']
         codigo ['ninho/financas', 'ninho/banco.py']
       }
     }
@@ -192,9 +186,11 @@ model {
       }
     }
     nucleoAlvo = componente 'Núcleo do servidor' {
-      description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO'
+      #muda
+      description 'O app FastAPI (uvicorn ninho.servidor.app:app): entrar e sair por sessão com cookie, a pessoa da sessão e a checagem do módulo em cada rota, as rotas /api/financas, /api/eu e /api/pessoas, os routers da lista e dos desejos e o build das telas (ninho/telas/dist) em /; lê o NINHO_WORKSPACE, conferido pelo workspace.yaml da pasta, e passa a pasta às rotas de finanças; as tabelas pessoas (senha em scrypt) e sessoes do ninho.db, aberto pelo NINHO_BANCO. Muda: as rotas /api/financas saem deste arquivo para um router do módulo finanças, como os outros módulos (server-modules.md; df-8x0m.23.19), e o router da agenda entra (df-8x0m.23.21)'
       technology 'Python, FastAPI, SQLite'
       metadata {
+        bead ['df-8x0m.23.19', 'df-8x0m.23.21']
         codigo ['ninho/__init__.py', 'ninho/servidor']
       }
     }
@@ -210,9 +206,11 @@ model {
 
   extend casaAlvo.appCelularAlvo {
     cascaTelasAlvo = componente 'Casca' {
-      description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair'
+      #muda
+      description 'A página (index.html, main.tsx, a folha de estilo com as cores da identidade) e o App: pergunta quem entrou antes de montar qualquer tela, mostra o formulário de entrar sem sessão, monta só as telas dos módulos da pessoa e troca entre elas pela barra de baixo, com o Sair. Muda: monta também a tela da agenda (df-8x0m.23.21); sem rede, saber quem entrou e abrir as telas, a decidir em df-8x0m.23.8'
       technology 'React, TypeScript'
       metadata {
+        bead ['df-8x0m.23.21', 'df-8x0m.23.8']
         codigo ['ninho/telas/index.html', 'ninho/telas/public', 'ninho/telas/src/main.tsx', 'ninho/telas/src/index.css', 'ninho/telas/src/App.tsx', 'ninho/telas/src/Entrar.tsx', 'ninho/telas/src/eu.ts']
       }
     }
@@ -267,14 +265,12 @@ model {
   }
 
   extend casaAlvo.pipelineAlvo {
-    achadosAlvo = banco 'Achados das validações' {
-      description 'Um JSON por validação com os achados suspeitos (só ids e datas), regravado a cada rodada'
-      technology 'Pasta de JSON (data/validation)'
-    }
     backupDadosAlvo = componente 'backup' {
-      description 'Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos'
+      #muda
+      description 'Task backup do job backup: zip datado de raw, edicao.db, ninho.db e extratos, guarda os mais novos. Muda: a cópia vai para fora deste disco, a decidir em df-8x0m.23.9'
       technology 'Python'
       metadata {
+        bead ['df-8x0m.23.9', 'df-8x0m.19']
         codigo ['workspaces/GetFinance/scripts/backup']
       }
     }
@@ -294,20 +290,6 @@ model {
         codigo ['workspaces/GetFinance/scripts/cleansed2curated']
       }
     }
-    conferenciasAlvo = componente 'Regras de conferência e extrato' {
-      description 'Funções puras de scripts/report que as tasks de conferência carregam: leitura do texto do extrato do banco, conferência de saldo e de fatura, lançamentos suspeitos e veredito do extrato'
-      technology 'Python, polars'
-      metadata {
-        codigo ['workspaces/GetFinance/scripts/report/extrato.py', 'workspaces/GetFinance/scripts/report/conferencia_fatura.py', 'workspaces/GetFinance/scripts/report/conferencia_saldo.py', 'workspaces/GetFinance/scripts/report/lancamentos_suspeitos.py', 'workspaces/GetFinance/scripts/report/veredito_extrato.py']
-      }
-    }
-    functionsAlvo = componente 'functions' {
-      description 'Biblioteca que toda task carrega por exec: cliente HTTP do Pluggy (com o .env), conexões do connections.yaml, leitura e gravação do raw (parquet) e do Delta, regras de validação e o subprocesso do reprocess'
-      technology 'Python, requests, polars, deltalake'
-      metadata {
-        codigo ['workspaces/GetFinance/scripts/functions']
-      }
-    }
     landingAlvo = componente 'landing' {
       #muda
       description 'Task fetch do finance_daily: busca contas, transações, faturas e investimentos no Pluggy e grava a partição do dia no raw. Muda: o raw só cresce (hoje cada busca regrava a partição do dia) e uma segunda fonte entra pelo mesmo lugar (df-8x0m.23.10)'
@@ -315,13 +297,6 @@ model {
       metadata {
         bead 'df-8x0m.23.10'
         codigo ['workspaces/GetFinance/scripts/landing']
-      }
-    }
-    raw2cleansedAlvo = componente 'raw2cleansed' {
-      description 'Tasks transform*: limpam e deduplicam o raw de contas, faturas, investimentos e transações para o cleansed; o mapa de estabelecimentos vem de config/'
-      technology 'Python, polars, deltalake'
-      metadata {
-        codigo ['workspaces/GetFinance/scripts/raw2cleansed']
       }
     }
     regrasAlvo = componente 'Regras de edição e classificação' {
@@ -340,27 +315,6 @@ model {
       metadata {
         bead 'df-8x0m.23.14'
         codigo ['workspaces/GetFinance/scripts/report']
-      }
-    }
-    reprocessAlvo = componente 'reprocess' {
-      description 'Script manual, fora dos jobs: apaga uma tabela do cleansed e roda de novo a transformação dela sobre todo o raw'
-      technology 'Python'
-      metadata {
-        codigo ['workspaces/GetFinance/scripts/reprocess.py']
-      }
-    }
-    syntheticAlvo = componente 'synthetic' {
-      description 'Task fetch do finance_demo, que roda só no dev e no CI, nunca na prod: gera dados sintéticos no formato do Pluggy e grava no raw, sem credencial'
-      technology 'Python'
-      metadata {
-        codigo ['workspaces/GetFinance/scripts/synthetic']
-      }
-    }
-    validationAlvo = componente 'validation' {
-      description 'Task data_warnings: lê os achados suspeitos que as validações da rodada gravaram e sai 1 quando há algum: a rodada fica failed com os dados gravados (o alert_warnings, que os citaria, está inativo)'
-      technology 'Python'
-      metadata {
-        codigo ['workspaces/GetFinance/scripts/validation']
       }
     }
     publicadasAlvo = componente 'Tabelas publicadas' {
@@ -388,46 +342,11 @@ model {
       codigo ['dataforge/api/routers/triggers.py']
     }
   }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Caminhos, banco e hosts permitidos' {
-    metadata {
-      codigo ['dataforge/api']
-    }
-  }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo 'Lê e grava jobs e triggers' {
-    metadata {
-      codigo ['dataforge/api/routers/jobs.py', 'dataforge/api/routers/triggers.py', 'dataforge/api/routers/workspaces.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.rotaTabelasAlvo -> casaAlvo.dataforgeAlvo.deltaPoolAlvo 'Lê o curated nas threads do pool' {
     #sai
     metadata {
       bead 'df-8x0m.23.3'
       codigo ['dataforge/api/routers/tables.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.deployAlvo 'Plano, aplicação e rollback pelo serviço' {
-    metadata {
-      codigo ['dataforge/api/routers/deploy.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo 'Usa as tabelas e corrige órfãos' {
-    metadata {
-      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/executions.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/workspaces.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo 'O /health, o registro das janelas, a conta dos jobs do servidor e o pedido de desligamento' {
-    metadata {
-      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/instance.py', 'dataforge/api/routers/jobs.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.dataforgeAlvo.motorAlvo 'Roda o job pedido pela rota' {
-    metadata {
-      codigo ['dataforge/api/routers/jobs.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.apiAlvo -> casaAlvo.historicoAlvo 'Lê o histórico; grava os runs que inicia' {
-    metadata {
-      codigo ['dataforge/api/__init__.py', 'dataforge/api/routers/executions.py', 'dataforge/api/routers/jobs.py', 'dataforge/api/routers/workspaces.py']
     }
   }
   casaAlvo.dataforgeAlvo.rotaTabelasAlvo -[leitura]-> casaAlvo.lagoAlvo 'Serve o curated pela rota genérica' {
@@ -479,11 +398,6 @@ model {
       codigo ['dataforge/cli.py']
     }
   }
-  casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.apiAlvo 'Sobe a API (serve); por HTTP pede o desligamento (stop) e avisa o fim de um scheduled-run' {
-    metadata {
-      codigo ['dataforge/cli.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.appsAlvo 'Acha os apps e cria o atalho' {
     #sai
     metadata {
@@ -496,37 +410,12 @@ model {
       codigo ['dataforge/cli.py']
     }
   }
-  casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo 'Carrega workspace, jobs, triggers e conexões; converte o cron' {
-    metadata {
-      codigo ['dataforge/cli.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.deployAlvo 'Monta o subcomando deploy' {
     metadata {
       codigo ['dataforge/cli.py']
     }
   }
-  casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.guiAlvo 'Abre a janela admin e a janela do app' {
-    metadata {
-      codigo ['dataforge/cli.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo 'Usa as tabelas e corrige órfãos' {
-    metadata {
-      codigo ['dataforge/cli.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo 'Acha ou inicia o DataForge da porta' {
-    metadata {
-      codigo ['dataforge/cli.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.motorAlvo 'Roda o job, pede o run destacado, lê o estado' {
-    metadata {
-      codigo ['dataforge/cli.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.segundoPlanoAlvo 'Roda o segundo plano (background)' {
     metadata {
       codigo ['dataforge/cli.py']
     }
@@ -541,28 +430,15 @@ model {
       codigo ['dataforge/parser.py']
     }
   }
-  casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.dataforgeAlvo.apiAlvo 'Reconcilia os triggers do destino pela API (deploy na CLI)' {
-    metadata {
-      codigo ['dataforge/deploy/cli.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Pasta do workspace e porta da API' {
-    metadata {
-      codigo ['dataforge/deploy/cli.py', 'dataforge/deploy/service.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo 'YAML pelo yamlio' {
-    metadata {
-      codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/pairing.py', 'dataforge/deploy/plan.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.deployAlvo -> casaAlvo.pipelineAlvo 'Copia jobs, scripts, config, triggers e apps de um workspace para outro (sem uso em prod)' {
     metadata {
       codigo ['dataforge/deploy/apply.py', 'dataforge/deploy/rollback.py']
     }
   }
   casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.apiAlvo 'Os painéis, a presença e a janela do app chamam a API local' {
+    #muda
     metadata {
+      bead 'df-8x0m.23.3'
       codigo ['dataforge/gui/main_window.py', 'dataforge/gui/panels/jobs.py', 'dataforge/gui/panels/job_editor.py', 'dataforge/gui/panels/scheduler.py', 'dataforge/gui/panels/deploy.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/app_window.py']
     }
   }
@@ -573,69 +449,9 @@ model {
       codigo ['dataforge/gui/app_window.py']
     }
   }
-  casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Porta da API e pasta do perfil web' {
-    metadata {
-      codigo ['dataforge/gui/app_window.py', 'dataforge/gui/main_window.py', 'dataforge/gui/panels']
-    }
-  }
-  casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo 'Converte o cron na agenda' {
-    metadata {
-      codigo ['dataforge/gui/panels/scheduler.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.deployAlvo 'Tipos do plano no painel de deploy' {
-    metadata {
-      codigo ['dataforge/gui/panels/deploy.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo 'Hora UTC da próxima execução na agenda' {
-    metadata {
-      codigo ['dataforge/gui/panels/scheduler.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.guiAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo 'Acha ou inicia o servidor; batimento de presença' {
-    metadata {
-      codigo ['dataforge/gui/__init__.py', 'dataforge/gui/app_window.py', 'dataforge/gui/presence_client.py', 'dataforge/gui/server_lost_banner.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.historicoRunsAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Workspaces e URLs dos bancos' {
-    metadata {
-      codigo ['dataforge/orphans.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.historicoRunsAlvo -> casaAlvo.historicoAlvo 'Cria o esquema; corrige runs órfãos' {
     metadata {
       codigo ['dataforge/db.py', 'dataforge/orphans.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.apiAlvo 'Pergunta quem tem a porta (GET /health)' {
-    metadata {
-      codigo ['dataforge/instance.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Inicia o segundo plano destacado (dataforge background)' {
-    metadata {
-      codigo ['dataforge/instance.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Porta, home e pasta de logs' {
-    metadata {
-      codigo ['dataforge/instance.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.instanciaAlvo -> casaAlvo.dataforgeAlvo.motorAlvo 'Trava de arquivo (runlock) ao iniciar o segundo plano' {
-    metadata {
-      codigo ['dataforge/instance.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Lança o run pedido destacado (dataforge run-requested)' {
-    metadata {
-      codigo ['dataforge/run_request.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Banco, logs e caminho da trava' {
-    metadata {
-      codigo ['dataforge/engine.py', 'dataforge/run_request.py', 'dataforge/runlock.py']
     }
   }
   casaAlvo.dataforgeAlvo.motorAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo 'Modelos de job e task; carrega o job pedido' {
@@ -675,51 +491,6 @@ model {
       codigo ['dataforge/gui/background.py']
     }
   }
-  casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo 'Abre a janela admin destacada (dataforge gui)' {
-    metadata {
-      codigo ['dataforge/gui/background.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'Porta da API e pasta de logs' {
-    metadata {
-      codigo ['dataforge/gui/background.py', 'dataforge/gui/daemon.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.guiAlvo 'Guarda do coletor e ícone da bandeja' {
-    metadata {
-      codigo ['dataforge/gui/background.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.segundoPlanoAlvo -> casaAlvo.dataforgeAlvo.instanciaAlvo 'Usa o lançador de processo destacado, a regra de saída e o registro das janelas' {
-    metadata {
-      codigo ['dataforge/gui/background.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'URL do banco global' {
-    metadata {
-      codigo ['dataforge/tasks/message/handler.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.definicaoAlvo 'Modelos de job e task; carrega o job filho' {
-    metadata {
-      codigo ['dataforge/tasks']
-    }
-  }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo 'Tabelas do histórico' {
-    metadata {
-      codigo ['dataforge/tasks/python_handler.py', 'dataforge/tasks/error_handler.py', 'dataforge/tasks/message/handler.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.dataforgeAlvo.motorAlvo 'A task job roda outro job' {
-    metadata {
-      codigo ['dataforge/tasks/job_handler.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.historicoAlvo 'Grava a linha da task' {
-    metadata {
-      codigo ['dataforge/tasks/python_handler.py', 'dataforge/tasks/error_handler.py', 'dataforge/tasks/message/handler.py']
-    }
-  }
   casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.backupDadosAlvo 'Lança a task backup' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/backup/job.yaml']
@@ -735,39 +506,14 @@ model {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml']
     }
   }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.raw2cleansedAlvo 'Lança as tasks transform*' {
-    metadata {
-      codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml', 'workspaces/GetFinance/jobs/finance_demo/job.yaml']
-    }
-  }
   casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.reportAlvo 'Lança as tasks classify e report (a semente, só no finance_demo)' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml', 'workspaces/GetFinance/jobs/finance_demo/job.yaml', 'workspaces/GetFinance/jobs/reclassificar/job.yaml']
     }
   }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.syntheticAlvo 'Lança a task fetch do finance_demo (só dev e CI)' {
-    metadata {
-      codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_demo/job.yaml']
-    }
-  }
-  casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.validationAlvo 'Lança a task data_warnings' {
-    metadata {
-      codigo ['dataforge/tasks/python_handler.py', 'workspaces/GetFinance/jobs/finance_daily/job.yaml', 'workspaces/GetFinance/jobs/finance_demo/job.yaml']
-    }
-  }
   casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo 'Lança o script de cada task python como processo, com o .env do job' {
     metadata {
       codigo ['dataforge/tasks/python_handler.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.testesAlvo -> casaAlvo.dataforgeAlvo.compatAlvo 'URL do banco' {
-    metadata {
-      codigo ['dataforge/testing.py']
-    }
-  }
-  casaAlvo.dataforgeAlvo.testesAlvo -> casaAlvo.dataforgeAlvo.historicoRunsAlvo 'Banco de teste com o esquema' {
-    metadata {
-      codigo ['dataforge/testing.py']
     }
   }
   casaAlvo.dataforgeAlvo.cliAlvo -> casaAlvo.dataforgeAlvo.agendamentoAlvo 'Registra e remove cada trigger (register-triggers)' {
@@ -876,8 +622,10 @@ model {
       codigo ['ninho/servidor/app.py']
     }
   }
-  casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo 'Atende /api/financas com a leitura, as edições e o aplicar (só para quem tem o módulo financas)' {
+  casaAlvo.servidorAlvo.nucleoAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo 'Inclui o router /api/financas (só para quem tem o módulo financas)' {
+    #muda
     metadata {
+      bead 'df-8x0m.23.19'
       codigo ['ninho/servidor/app.py']
     }
   }
@@ -946,17 +694,12 @@ model {
       codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/pedido.ts']
     }
   }
-  casaAlvo.appCelularAlvo.desejosTelasAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa o tipo de quem entrou' {
-    metadata {
-      codigo ['ninho/telas/src/desejos/Desejos.tsx']
-    }
-  }
   casaAlvo.appCelularAlvo.desejosTelasAlvo -> casaAlvo.appCelularAlvo.comumTelasAlvo 'Pede ao servidor, lê e relê os desejos ao abrir e ao voltar, mostra o Logo' {
     metadata {
       codigo ['ninho/telas/src/desejos/api.ts', 'ninho/telas/src/desejos/Desejos.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.nucleoAlvo 'Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz' {
+  casaAlvo.appCelularAlvo.financasTelasAlvo -> casaAlvo.servidorAlvo.financasServidorAlvo 'Lê e edita as finanças (/api/financas): hoje as transações do mês, as correções e o aplicar; muda: o que o app Finanças do PC faz' {
     #muda
     metadata {
       bead 'df-8x0m.23.19'
@@ -968,10 +711,8 @@ model {
       codigo ['ninho/telas/src/financas/api.ts', 'ninho/telas/src/financas/aplicar.ts', 'ninho/telas/src/financas/Financas.tsx']
     }
   }
-  casaAlvo.appCelularAlvo.listaTelasAlvo -> casaAlvo.servidorAlvo.listaAlvo 'Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista); sem rede, pela fila' {
-    #muda
+  casaAlvo.appCelularAlvo.listaTelasAlvo -> casaAlvo.servidorAlvo.listaAlvo 'Lê, acrescenta, marca e apaga itens e limpa os comprados (/api/lista)' {
     metadata {
-      bead 'df-8x0m.23.8'
       codigo ['ninho/telas/src/lista/api.ts', 'ninho/telas/src/pedido.ts']
     }
   }
@@ -992,7 +733,7 @@ model {
       bead 'df-8x0m.23.21'
     }
   }
-  casaAlvo.appCelularAlvo.agendaTelasAlvo -> casaAlvo.servidorAlvo.agendaAlvo 'Lê e cria eventos (/api/agenda); sem rede, pela fila' {
+  casaAlvo.appCelularAlvo.agendaTelasAlvo -> casaAlvo.servidorAlvo.agendaAlvo 'Lê e cria eventos (/api/agenda)' {
     #novo
     metadata {
       bead 'df-8x0m.23.21'
@@ -1016,6 +757,18 @@ model {
       bead 'df-8x0m.23.8'
     }
   }
+  casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.listaAlvo 'Envia a fila quando a rede volta (/api/lista, /api/agenda)' {
+    #novo
+    metadata {
+      bead 'df-8x0m.23.8'
+    }
+  }
+  casaAlvo.appCelularAlvo.copiaLocalAlvo -> casaAlvo.servidorAlvo.agendaAlvo 'Envia a fila quando a rede volta (/api/lista, /api/agenda)' {
+    #novo
+    metadata {
+      bead 'df-8x0m.23.8'
+    }
+  }
 
   // Setas que saem de: Pipeline do módulo finanças.
   casaAlvo.pipelineAlvo.backupDadosAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Copia pela API de backup do SQLite' {
@@ -1026,11 +779,6 @@ model {
     }
   }
   casaAlvo.pipelineAlvo.backupDadosAlvo -[leitura]-> casaAlvo.lagoAlvo 'Copia o raw' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: conexões' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/backup/backup_dados.py']
     }
@@ -1054,29 +802,11 @@ model {
       codigo ['workspaces/GetFinance/scripts/cleansed2curated']
     }
   }
-  casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.achadosAlvo 'Grava os achados (validate)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/cleansed2curated']
-    }
-  }
-  casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.conferenciasAlvo 'Importa extrato e as conferências' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_fatura.py', 'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py', 'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_extrato.py', 'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_lancamentos_suspeitos.py', 'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_veredito_suspeitos.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: leitura do raw, Delta, validação' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/cleansed2curated']
-    }
-  }
   casaAlvo.pipelineAlvo.cleansed2curatedAlvo -> casaAlvo.pipelineAlvo.regrasAlvo 'Importa classificacao e edicao' {
+    #muda
     metadata {
+      bead 'df-8x0m.23.14'
       codigo ['workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated.py', 'workspaces/GetFinance/scripts/cleansed2curated/cleansed2curated_conferencia_saldo.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.conferenciasAlvo -> casaAlvo.pipelineAlvo.regrasAlvo 'Importa classificacao' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/report/conferencia_saldo.py', 'workspaces/GetFinance/scripts/report/lancamentos_suspeitos.py']
     }
   }
   casaAlvo.pipelineAlvo.landingAlvo -> casaAlvo.lagoAlvo 'Grava a partição do dia no raw (parquet), que passa a só crescer' {
@@ -1086,34 +816,9 @@ model {
       codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py']
     }
   }
-  casaAlvo.pipelineAlvo.landingAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: cliente Pluggy, gravação do raw' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py']
-    }
-  }
   casaAlvo.pipelineAlvo.landingAlvo -> pluggyAlvo 'Busca contas, transações, faturas e investimentos (task fetch do finance_daily)' {
     metadata {
       codigo ['workspaces/GetFinance/scripts/landing/landing2raw.py', 'workspaces/GetFinance/scripts/functions/functions.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.lagoAlvo 'Lê o raw (parquet) e o cleansed, grava o cleansed (Delta)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/raw2cleansed']
-    }
-  }
-  casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.pipelineAlvo.achadosAlvo 'Grava os achados (validate)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/raw2cleansed']
-    }
-  }
-  casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.pipelineAlvo.conferenciasAlvo 'Importa conferencia_fatura' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/raw2cleansed/raw2cleansed.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.raw2cleansedAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: leitura do raw, Delta, validação' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/raw2cleansed']
     }
   }
   casaAlvo.pipelineAlvo.reportAlvo -[leitura]-> casaAlvo.bancoAppAlvo 'Lê categorias, regras e correções (classify); a semente das edições sai do pipeline' {
@@ -1128,54 +833,11 @@ model {
       codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/report_curated.py']
     }
   }
-  casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.pipelineAlvo.achadosAlvo 'Grava os achados (validate)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/report/classify.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: Delta, validação, conexões' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/report_curated.py', 'workspaces/GetFinance/scripts/report/carga_inicial_edicao.py']
-    }
-  }
   casaAlvo.pipelineAlvo.reportAlvo -> casaAlvo.pipelineAlvo.regrasAlvo 'Importa classificacao e edicao' {
+    #muda
     metadata {
+      bead 'df-8x0m.23.14'
       codigo ['workspaces/GetFinance/scripts/report/classify.py', 'workspaces/GetFinance/scripts/report/carga_inicial_edicao.py', 'workspaces/GetFinance/scripts/report/report_lib.py', 'workspaces/GetFinance/scripts/report/cartao_listas.py', 'workspaces/GetFinance/scripts/report/saude.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.reprocessAlvo -> casaAlvo.lagoAlvo 'Conta e apaga a tabela do cleansed (Delta)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/reprocess.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.reprocessAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: Delta e o subprocesso da transformação' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/reprocess.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.reprocessAlvo -> casaAlvo.pipelineAlvo.raw2cleansedAlvo 'Roda a transformação como processo Python (run_transform_subprocess)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/reprocess.py', 'workspaces/GetFinance/scripts/functions/functions.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.syntheticAlvo -> casaAlvo.lagoAlvo 'Grava o raw sintético (parquet; finance_demo, só dev e CI)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.syntheticAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: gravação do raw' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/synthetic/generate_synthetic_data.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.validationAlvo -[leitura]-> casaAlvo.pipelineAlvo.achadosAlvo 'Lê os achados (read_findings)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/validation/data_warnings.py']
-    }
-  }
-  casaAlvo.pipelineAlvo.validationAlvo -> casaAlvo.pipelineAlvo.functionsAlvo 'Carrega por exec: leitura dos achados' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/validation/data_warnings.py']
     }
   }
   casaAlvo.pipelineAlvo.publicadasAlvo -[leitura]-> casaAlvo.lagoAlvo 'Compara as tabelas publicadas com o esquema declarado' {
@@ -1221,13 +883,6 @@ model {
       codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
     }
   }
-  casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo.conferenciasAlvo 'Importa extrato: lê e confere o PDF enviado, dá o nome guardado e lista os guardados' {
-    #sai
-    metadata {
-      bead ['df-8x0m.23.3', 'df-8x0m.23.19']
-      codigo ['workspaces/GetFinance/apps/financas/backend/main.py']
-    }
-  }
   casaAlvo.financasAlvo -> casaAlvo.pipelineAlvo.regrasAlvo 'Importa edicao e classificacao' {
     #sai
     metadata {
@@ -1261,31 +916,21 @@ model {
       bead 'df-8x0m.23.3'
     }
   }
-  donoAlvo -> casaAlvo.dataforgeAlvo.segundoPlanoAlvo 'Abre a janela admin e encerra o DataForge pela bandeja' {
-    metadata {
-      codigo ['dataforge/gui/background.py']
-    }
-  }
   donoAlvo -> casaAlvo.servidorAlvo.pessoasCliAlvo 'Cria pessoas, troca senhas e módulos pela CLI no PC (python -m ninho pessoas)' {
     metadata {
       codigo ['ninho/__main__.py']
     }
   }
-  donoAlvo -> casaAlvo.pipelineAlvo.reprocessAlvo 'Roda à mão para refazer tabelas do cleansed (scripts/reprocess.py)' {
-    metadata {
-      codigo ['workspaces/GetFinance/scripts/reprocess.py']
-    }
-  }
-  donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa' {
+  donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa a lista, os desejos, as finanças e a agenda pelo celular' {
     #muda
     metadata {
-      bead 'df-8x0m.23.19'
+      bead ['df-8x0m.23.19', 'df-8x0m.23.21']
     }
   }
-  outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa' {
+  outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo 'Usa a lista, os desejos e a agenda pelo celular' {
     #muda
     metadata {
-      bead 'df-8x0m.23.6'
+      bead ['df-8x0m.23.21', 'df-8x0m.23.6']
     }
   }
 }
@@ -1293,15 +938,23 @@ model {
 views {
   view alvo-componentes-dataforge of casaAlvo.dataforgeAlvo {
     title 'Alvo v2: componentes do DataForge'
-    description 'Quase todo componente usa o Compat (caminhos, banco, porta); essas setas estão no modelo e ficam fora desta vista'
     include *
-    include * -> * where tag is #novo with {
+    include casaAlvo.dataforgeAlvo.* -> * where tag is #novo with {
       color green
     }
-    include * -> * where tag is #muda with {
+    include * -> casaAlvo.dataforgeAlvo.* where tag is #novo with {
+      color green
+    }
+    include casaAlvo.dataforgeAlvo.* -> * where tag is #muda with {
       color amber
     }
-    include * -> * where tag is #sai with {
+    include * -> casaAlvo.dataforgeAlvo.* where tag is #muda with {
+      color amber
+    }
+    include casaAlvo.dataforgeAlvo.* -> * where tag is #sai with {
+      color red
+    }
+    include * -> casaAlvo.dataforgeAlvo.* where tag is #sai with {
       color red
     }
     style element.tag = #novo {
@@ -1315,24 +968,41 @@ views {
       color red
       border dotted
     }
-    exclude * -> casaAlvo.dataforgeAlvo.compatAlvo
     // A cópia do backup e a conferência das publicadas são leitura; junto das gravações, deixariam
     // pontilhada a seta pipeline -> lago (df-8x0m.23.47.12).
     exclude casaAlvo.pipelineAlvo.backupDadosAlvo -> casaAlvo.lagoAlvo
     exclude casaAlvo.pipelineAlvo.publicadasAlvo -> casaAlvo.lagoAlvo
+    // As regras de tag trariam componentes do pipeline para dentro dele, e o LikeC4 deixaria de
+    // desenhar as setas para o contêiner: o pipeline fica uma caixa só, e a seta direta das tasks
+    // para ele, sem marca, leva a cor de sem marca.
+    exclude casaAlvo.pipelineAlvo.*
+    include casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo with {
+      color gray
+    }
   }
   view alvo-componentes-servidor of casaAlvo.servidorAlvo {
     title 'Alvo v2: componentes do servidor da casa'
     include *
+    // Mostra cada chamada das telas na tela que a faz, e as setas para o pipeline e o DataForge no
+    // componente que elas atingem; as setas internas desses vizinhos ficam nas vistas deles.
     include casaAlvo.pipelineAlvo.regrasAlvo, casaAlvo.dataforgeAlvo.cliAlvo
-    include casaAlvo.appCelularAlvo.cascaTelasAlvo, casaAlvo.appCelularAlvo.listaTelasAlvo, casaAlvo.appCelularAlvo.desejosTelasAlvo, casaAlvo.appCelularAlvo.financasTelasAlvo, casaAlvo.appCelularAlvo.agendaTelasAlvo
-    include * -> * where tag is #novo with {
+    include casaAlvo.appCelularAlvo.cascaTelasAlvo, casaAlvo.appCelularAlvo.listaTelasAlvo, casaAlvo.appCelularAlvo.desejosTelasAlvo, casaAlvo.appCelularAlvo.financasTelasAlvo, casaAlvo.appCelularAlvo.agendaTelasAlvo, casaAlvo.appCelularAlvo.copiaLocalAlvo
+    include casaAlvo.servidorAlvo.* -> * where tag is #novo with {
       color green
     }
-    include * -> * where tag is #muda with {
+    include * -> casaAlvo.servidorAlvo.* where tag is #novo with {
+      color green
+    }
+    include casaAlvo.servidorAlvo.* -> * where tag is #muda with {
       color amber
     }
-    include * -> * where tag is #sai with {
+    include * -> casaAlvo.servidorAlvo.* where tag is #muda with {
+      color amber
+    }
+    include casaAlvo.servidorAlvo.* -> * where tag is #sai with {
+      color red
+    }
+    include * -> casaAlvo.servidorAlvo.* where tag is #sai with {
       color red
     }
     style element.tag = #novo {
@@ -1346,18 +1016,33 @@ views {
       color red
       border dotted
     }
+    exclude casaAlvo.appCelularAlvo.* -> casaAlvo.appCelularAlvo.*
+    exclude donoAlvo -> casaAlvo.dataforgeAlvo.cliAlvo
+    exclude donoAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo
+    exclude outraAlvo -> casaAlvo.appCelularAlvo.cascaTelasAlvo
   }
   view alvo-componentes-app-celular of casaAlvo.appCelularAlvo {
     title 'Alvo v2: componentes do app no celular'
     include *
-    include casaAlvo.servidorAlvo.nucleoAlvo, casaAlvo.servidorAlvo.listaAlvo, casaAlvo.servidorAlvo.desejosAlvo, casaAlvo.servidorAlvo.agendaAlvo
-    include * -> * where tag is #novo with {
+    // Mostra cada chamada no componente do servidor que a atende; as setas internas do servidor ficam
+    // na vista dele.
+    include casaAlvo.servidorAlvo.nucleoAlvo, casaAlvo.servidorAlvo.listaAlvo, casaAlvo.servidorAlvo.desejosAlvo, casaAlvo.servidorAlvo.financasServidorAlvo, casaAlvo.servidorAlvo.agendaAlvo
+    include casaAlvo.appCelularAlvo.* -> * where tag is #novo with {
       color green
     }
-    include * -> * where tag is #muda with {
+    include * -> casaAlvo.appCelularAlvo.* where tag is #novo with {
+      color green
+    }
+    include casaAlvo.appCelularAlvo.* -> * where tag is #muda with {
       color amber
     }
-    include * -> * where tag is #sai with {
+    include * -> casaAlvo.appCelularAlvo.* where tag is #muda with {
+      color amber
+    }
+    include casaAlvo.appCelularAlvo.* -> * where tag is #sai with {
+      color red
+    }
+    include * -> casaAlvo.appCelularAlvo.* where tag is #sai with {
       color red
     }
     style element.tag = #novo {
@@ -1371,17 +1056,30 @@ views {
       color red
       border dotted
     }
+    exclude casaAlvo.servidorAlvo.* -> casaAlvo.servidorAlvo.*
+    exclude casaAlvo.servidorAlvo.* -> casaAlvo.appCelularAlvo
   }
   view alvo-componentes-pipeline of casaAlvo.pipelineAlvo {
     title 'Alvo v2: componentes do pipeline do módulo finanças'
     include *
-    include * -> * where tag is #novo with {
+    // As regras de tag trazem as tasks do DataForge para a vista: as setas de lançar cada task saem delas.
+    include casaAlvo.dataforgeAlvo.tasksAlvo -> casaAlvo.pipelineAlvo.*
+    include casaAlvo.pipelineAlvo.* -> * where tag is #novo with {
       color green
     }
-    include * -> * where tag is #muda with {
+    include * -> casaAlvo.pipelineAlvo.* where tag is #novo with {
+      color green
+    }
+    include casaAlvo.pipelineAlvo.* -> * where tag is #muda with {
       color amber
     }
-    include * -> * where tag is #sai with {
+    include * -> casaAlvo.pipelineAlvo.* where tag is #muda with {
+      color amber
+    }
+    include casaAlvo.pipelineAlvo.* -> * where tag is #sai with {
+      color red
+    }
+    include * -> casaAlvo.pipelineAlvo.* where tag is #sai with {
       color red
     }
     style element.tag = #novo {

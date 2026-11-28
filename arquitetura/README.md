@@ -1,13 +1,15 @@
 # Arquitetura (C4 em LikeC4)
 
 Desenhos C4 do sistema, em texto, versionados aqui. Fonte do conteúdo: a ADR 0006 e os contratos de
-`docs/architecture-v2/` (locais, fora do git), o código citado e os beads. As vistas de entrada
-(as de componentes estão abaixo):
+`docs/architecture-v2/` (locais, fora do git), o código citado e os beads. As vistas, por arquivo
+de modelo:
 
 | Vista | Arquivo | O que mostra |
 | --- | --- | --- |
 | `hoje-contexto`, `hoje-conteineres` | `hoje.c4` | O que roda em prod hoje. Muda quando a prod muda. |
+| `hoje-componentes-dataforge`, `-ninho`, `-telas`, `-pipeline`, `-app-financas-backend`, `-app-financas-front` | `componentes-<conteiner>.c4` | Os componentes de cada contêiner de hoje (nível 3), com as setas conferidas no código (abaixo). |
 | `alvo-contexto`, `alvo-conteineres` | `alvo.c4` | O alvo v2 (quatro peças). As marcas `novo`, `muda` e `sai` dizem o que difere de hoje (abaixo). |
+| `alvo-componentes-dataforge`, `-servidor`, `-app-celular`, `-pipeline` | `componentes-alvo.c4` | Os componentes do alvo nos contêineres que ficam: o que tem marca, o que as fontes do alvo nomeiam e o mínimo que os liga (abaixo). |
 | `index` | `alvo.c4` | Só os dois sistemas, hoje e alvo, como entrada. |
 | `fluxo-*` | `fluxos.c4` | Os fluxos principais de hoje, passo a passo, cada um ligado ao seu teste de ponta a ponta (abaixo). |
 
@@ -79,9 +81,21 @@ bd:
 Convenções:
 
 - Componente é o tipo `componente` do `spec.c4`. Ids com o sufixo do modelo: `<nome>Hoje` no hoje,
-  `<nome>Alvo` no alvo. Um arquivo por contêiner, `componentes-<conteiner>.c4`, com
+  `<nome>Alvo` no alvo. No hoje, um arquivo por contêiner, `componentes-<conteiner>.c4`, com
   `extend casaHoje.<conteiner> { ... }`, e uma vista por contêiner,
   `view hoje-componentes-<conteiner> of casaHoje.<conteiner>`.
+- No alvo, um arquivo só, `componentes-alvo.c4`, com um `extend casaAlvo.<conteiner>` e uma vista
+  `alvo-componentes-<conteiner>` por contêiner que fica. Um só porque o alvo é um plano, lido e
+  revisto de uma vez, e as suas setas cruzam os contêineres (o que sai de um entra noutro); cada
+  arquivo do hoje é dono do código de um contêiner, o do alvo não é dono de código (regras 3, 4, 7
+  e 8 só no hoje). O alvo desenha só (a) o que tem marca, (b) o que a ADR 0006, um contrato de
+  `docs/architecture-v2/` ou um bead de decisão nomeia no alvo, e (c) o mínimo que liga (a) e (b).
+  Sem caixa ou seta no alvo: segue como no hoje (vistas `hoje-componentes-*`). Os contêineres que
+  saem inteiros ficam só no `alvo.c4`, sem componentes. Um componente que existe tem o id de hoje
+  com o sufixo `Alvo` e o mesmo `codigo`; um componente `#novo` não tem `codigo`.
+- Nas vistas do alvo, uma aresta que junta setas de marcas diferentes pegaria a cor da regra de tag
+  de uma delas: a vista dá, depois das regras de tag, a cor da seta daquele nível (`with { color }`)
+  e, quando os títulos diferem, o título.
 - Todo componente, e todo contêiner com código, tem `metadata { codigo [...] }`: caminhos a partir da
   raiz do repositório, arquivo ou pasta. A seta entre componentes leva `metadata { codigo [...] }`
   com os arquivos onde a chamada está, sem linha; o arquivo:linha vai nas notas do bead.
