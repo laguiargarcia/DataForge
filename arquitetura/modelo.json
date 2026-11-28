@@ -281,7 +281,7 @@
       "title": "Deploy"
     },
     {
-      "description": "A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (o atalho roda dataforge app, que acha ou inicia o segundo plano); cliente HTTP da API local",
+      "description": "A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (dataforge gui ou dataforge app, que acham ou iniciam o segundo plano); cliente HTTP da API local",
       "id": "casaHoje.dataforgeHoje.guiHoje",
       "kind": "componente",
       "links": [],
@@ -342,7 +342,7 @@
       "title": "Motor de execução"
     },
     {
-      "description": "O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela do app o inicia quando a porta está livre",
+      "description": "O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia",
       "id": "casaHoje.dataforgeHoje.segundoPlanoHoje",
       "kind": "componente",
       "links": [],
@@ -3088,6 +3088,20 @@
     },
     {
       "description": null,
+      "id": "donoHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje: Abre a janela admin e encerra o DataForge pela bandeja",
+      "kind": null,
+      "links": [],
+      "metadata": {
+        "codigo": "dataforge/gui/background.py"
+      },
+      "source": "donoHoje",
+      "tags": [],
+      "target": "casaHoje.dataforgeHoje.segundoPlanoHoje",
+      "technology": null,
+      "title": "Abre a janela admin e encerra o DataForge pela bandeja"
+    },
+    {
+      "description": null,
       "id": "donoHoje -> casaHoje.dataforgeHoje: Abre o app pelo atalho e administra o DataForge (GUI Qt, CLI)",
       "kind": null,
       "links": [],
@@ -3218,7 +3232,7 @@
       "viewOf": "casaAlvo"
     },
     {
-      "description": "Todo componente usa o Compat (caminhos, banco, porta); essas setas estão no modelo e ficam fora desta vista",
+      "description": "Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista",
       "id": "hoje-componentes-dataforge",
       "links": [],
       "steps": [],

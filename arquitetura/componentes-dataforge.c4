@@ -18,14 +18,14 @@ model {
       }
     }
     guiHoje = componente 'GUI admin e janela do app' {
-      description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (o atalho roda dataforge app, que acha ou inicia o segundo plano); cliente HTTP da API local'
+      description 'A janela admin com os painéis (jobs, editor de job, agenda, deploy) e a janela de um app (dataforge gui ou dataforge app, que acham ou iniciam o segundo plano); cliente HTTP da API local'
       technology 'Python, PySide6'
       metadata {
         codigo ['dataforge/gui']
       }
     }
     segundoPlanoHoje = componente 'Segundo plano (API e bandeja)' {
-      description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela do app o inicia quando a porta está livre'
+      description 'O processo longo da prod: hospeda a API numa thread, mostra a bandeja e sai sozinho quando não há janela nem job; a janela admin ou a do app o inicia quando não acha o servidor na porta, e o aviso de servidor perdido o reinicia'
       technology 'Python, PySide6, uvicorn'
       metadata {
         codigo ['dataforge/gui/background.py', 'dataforge/gui/daemon.py']
@@ -107,6 +107,11 @@ model {
   donoHoje -> casaHoje.dataforgeHoje.guiHoje 'Usa a janela do app e administra pela janela admin'
   donoHoje -> casaHoje.dataforgeHoje.cliHoje 'Abre o app pelo atalho (dataforge app) e administra pela CLI'
   agendadorHoje -> casaHoje.dataforgeHoje.cliHoje 'dataforge scheduled-run'
+  donoHoje -> casaHoje.dataforgeHoje.segundoPlanoHoje 'Abre a janela admin e encerra o DataForge pela bandeja' {
+    metadata {
+      codigo ['dataforge/gui/background.py']
+    }
+  }
 
   // De outros contêineres para um componente do DataForge.
   casaHoje.ninhoHoje -> casaHoje.dataforgeHoje.cliHoje 'Pede o job (run --detach) e acompanha (run-state --wait)' {
@@ -489,7 +494,7 @@ model {
 views {
   view hoje-componentes-dataforge of casaHoje.dataforgeHoje {
     title 'Hoje: componentes do DataForge'
-    description 'Todo componente usa o Compat (caminhos, banco, porta); essas setas estão no modelo e ficam fora desta vista'
+    description 'Quase todo componente usa o Compat (caminhos, banco, porta), menos Definição do workspace e Leituras Delta; essas setas estão no modelo e ficam fora desta vista'
     include *
     exclude * -> casaHoje.dataforgeHoje.compatHoje
   }
