@@ -9,15 +9,12 @@ model {
   pluggyHoje = sistemaExterno 'Pluggy' {
     description 'Provedor de dados bancários'
   }
-  tailscaleHoje = sistemaExterno 'Tailscale' {
-    description 'Rede privada; aponta só para o servidor ninho (porta 8100)'
-  }
   agendadorHoje = sistemaExterno 'Agendador do Windows' {
     description 'Dispara o job diário e o backup (dataforge scheduled-run)'
   }
 
-  casaHoje = sistema 'Casa (PC com Windows)' {
-    description 'Tudo roda neste PC, em prod nativa no Windows'
+  casaHoje = sistema 'Sistema da casa' {
+    description 'Tudo roda no PC da casa, em prod nativa no Windows; a rede privada é a Tailscale'
 
     dataforgeHoje = conteiner 'DataForge' {
       description 'Motor, CLI, API, GUI Qt e servidor do app Finanças; hospeda e guarda o app com token'
@@ -50,14 +47,13 @@ model {
   }
 
   donoHoje -> casaHoje.dataforgeHoje 'Abre o app Finanças (janela Qt ou navegador, no PC)'
-  donoHoje -> tailscaleHoje 'Celular'
-  outraHoje -> tailscaleHoje 'Celular'
-  tailscaleHoje -> casaHoje.ninhoHoje 'HTTPS na rede privada'
+  donoHoje -> casaHoje.ninhoHoje 'Celular, HTTPS pela Tailscale'
+  outraHoje -> casaHoje.ninhoHoje 'Celular, HTTPS pela Tailscale'
   agendadorHoje -> casaHoje.dataforgeHoje 'dataforge scheduled-run'
   casaHoje.dataforgeHoje -> pluggyHoje 'Busca transações (pelo job)'
 
   casaHoje.dataforgeHoje -> casaHoje.financasHoje 'Inicia e para o backend'
-  casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos (acoplamento)'
+  casaHoje.financasHoje -> casaHoje.dataforgeHoje 'Importa internos do DataForge (acoplamento nos dois sentidos, dor do ADR 0006)'
   casaHoje.financasHoje -[leitura]-> casaHoje.lagoHoje 'Lê direto'
   casaHoje.financasHoje -> casaHoje.edicaoHoje 'Lê e escreve'
   casaHoje.dataforgeHoje -> casaHoje.lagoHoje 'Grava; serve as tabelas pela rota genérica'
@@ -72,10 +68,10 @@ model {
 views {
   view hoje-contexto of casaHoje {
     title 'Hoje: contexto'
-    include casaHoje, donoHoje, outraHoje, pluggyHoje, tailscaleHoje, agendadorHoje
+    include casaHoje, donoHoje, outraHoje, pluggyHoje, agendadorHoje
   }
   view hoje-conteineres of casaHoje {
     title 'Hoje: contêineres'
-    include casaHoje.*, donoHoje, outraHoje, pluggyHoje, tailscaleHoje, agendadorHoje
+    include casaHoje.*, donoHoje, outraHoje, pluggyHoje, agendadorHoje
   }
 }

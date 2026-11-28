@@ -6,7 +6,7 @@ Desenhos C4 do sistema, em texto, versionados aqui. Fonte do conteúdo: ADR 0006
 | Vista | Arquivo | O que mostra |
 | --- | --- | --- |
 | `hoje-contexto`, `hoje-conteineres` | `hoje.c4` | O que roda em prod hoje. Muda quando a prod muda. |
-| `alvo-contexto`, `alvo-conteineres` | `alvo.c4` | O alvo v2 (quatro peças). Tags `aFazer` e `aDecidir` marcam o que falta. |
+| `alvo-contexto`, `alvo-conteineres` | `alvo.c4` | O alvo v2 (quatro peças). A tag `aFazer` marca o que falta, `emProd` o que já roda. |
 
 `spec.c4` define os tipos de elemento e as tags. Nada é instalado no repositório: o LikeC4 roda por
 `npx` com a versão fixa.

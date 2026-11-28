@@ -31,9 +31,6 @@ specification {
   tag aFazer {
     color amber
   }
-  tag aDecidir {
-    color red
-  }
 
   relationship leitura
   relationship escrita

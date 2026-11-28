@@ -1,5 +1,5 @@
 // ALVO v2 (ADR 0006). Já em prod (tag emProd): servidor com login por pessoa, lista de compras,
-// run --detach / run-state, rota de leitura. A fazer (aFazer) ou a decidir (aDecidir): marcado nos elementos.
+// run --detach / run-state, rota de leitura. A fazer (aFazer): marcado nos elementos.
 model {
   donoAlvo = pessoa 'Dono da casa' {
     description 'Finanças, lista e agenda; administra o DataForge'
@@ -14,23 +14,21 @@ model {
     #aFazer
     description 'Segunda fonte de dados (df-8x0m.23.10)'
   }
-  tailscaleAlvo = sistemaExterno 'Tailscale' {
-    description 'Rede privada até o celular'
-  }
   agendadorAlvo = sistemaExterno 'Agendador do Windows' {
     description 'Dispara os jobs (dataforge scheduled-run)'
   }
 
-  casaAlvo = sistema 'Casa (PC com Windows)' {
-    description 'Quatro peças com contratos estreitos'
+  casaAlvo = sistema 'Sistema da casa' {
+    description 'Quatro peças com contratos estreitos; o servidor e o DataForge rodam no PC da casa, o app no celular'
 
     appCelularAlvo = conteiner 'App no celular' {
       #aFazer
+      technology 'Web app instalada no celular'
       description 'Cópia local do que mostra e fila de mudanças enviada ao servidor quando a rede volta (df-8x0m.23.8)'
     }
     servidorAlvo = conteiner 'Servidor da casa (ninho) e telas' {
       #emProd
-      description 'Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
+      description 'Roda no PC da casa. Único processo sempre ligado; conhece pessoas e login. Módulos: finanças, lista, agenda (agenda a fazer). Nunca roda pipeline nem escreve no lago'
       technology 'Python, FastAPI, front web'
     }
     bancoAppAlvo = banco 'Banco do app' {
@@ -45,15 +43,14 @@ model {
     }
     dataforgeAlvo = conteiner 'DataForge (orquestrador)' {
       #emProd
-      description 'Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Paredes no repositório (df-8x0m.23.14) a fazer: pastas, pacotes e regra do gate separados, CI por parte'
+      description 'Roda no PC da casa. Motor, agendador, histórico, CLI e tela de admin. Roda e termina; não serve dados nem conhece usuário. Paredes no repositório (df-8x0m.23.14) a fazer: pastas, pacotes e regra do gate separados, CI por parte'
       technology 'Python'
     }
   }
 
-  donoAlvo -> tailscaleAlvo 'Celular'
-  outraAlvo -> tailscaleAlvo 'Celular'
-  tailscaleAlvo -> casaAlvo.appCelularAlvo 'Rede privada'
-  casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo 'Lê e envia a fila de mudanças (HTTPS)'
+  donoAlvo -> casaAlvo.appCelularAlvo 'Usa'
+  outraAlvo -> casaAlvo.appCelularAlvo 'Usa'
+  casaAlvo.appCelularAlvo -> casaAlvo.servidorAlvo 'Lê e envia a fila de mudanças (HTTPS pela Tailscale)'
   donoAlvo -> casaAlvo.dataforgeAlvo 'Tela de admin'
   agendadorAlvo -> casaAlvo.dataforgeAlvo 'dataforge scheduled-run'
 
@@ -69,14 +66,10 @@ model {
 views {
   view alvo-contexto of casaAlvo {
     title 'Alvo v2: contexto'
-    include casaAlvo, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, tailscaleAlvo, agendadorAlvo
+    include casaAlvo, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, agendadorAlvo
     style element.tag = #aFazer {
       color amber
       border dashed
-    }
-    style element.tag = #aDecidir {
-      color red
-      border dotted
     }
     style element.tag = #emProd {
       color green
@@ -84,14 +77,10 @@ views {
   }
   view alvo-conteineres of casaAlvo {
     title 'Alvo v2: contêineres'
-    include casaAlvo.*, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, tailscaleAlvo, agendadorAlvo
+    include casaAlvo.*, donoAlvo, outraAlvo, pluggyAlvo, outrasFontesAlvo, agendadorAlvo
     style element.tag = #aFazer {
       color amber
       border dashed
-    }
-    style element.tag = #aDecidir {
-      color red
-      border dotted
     }
     style element.tag = #emProd {
       color green
