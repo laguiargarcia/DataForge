@@ -332,14 +332,12 @@ shards = 2
 [targets."scripts/arquitetura/modelo.py"]
 # The bead hook and the CI checks read arquitetura/modelo.json through it (df-r3kf). Its tests read the
 # committed model, the LikeC4 pins of the README, docs/commands.md and ci.yml (yamlio), relative to the
-# repo; no test runs the real npx (exportar runs a fake one on PATH).
+# repo; no test runs the real npx (exportar runs a fake one, alone on PATH).
 tests = ["tests/test_arquitetura_modelo.py"]
 copy = ["arquitetura/README.md", "arquitetura/modelo.json", "docs/commands.md", ".github/workflows/ci.yml", "dataforge/**/*.py", "tests/__init__.py", "tests/conftest.py"]
-# 524 mutants, 514 killed on a laptop (59 s). The 9 survivors are Equivalent:
+# 524 mutants, 515 killed on a laptop (14 s). The 9 survivors are Equivalent:
 #   _likec4 check=None / dropped: check=False is subprocess.run's default.
 #   exportar "XXlikec4.jsonXX" / "LIKEC4.JSON": the export's name inside a temporary folder of its own.
 #   texto ensure_ascii=None: json.dumps reads it as False.
 #   load, gerar, conferir and exportar with encoding "UTF-8": the same codec as "utf-8".
-# And under WSL x__likec4__mutmut_4 (which("NPX")) times out: NTFS ignores case, so it finds the Windows
-# npx on /mnt/c and runs it. On the CI runner it finds none and dies; a timeout counts on neither side.
-min_score = 0.9827
+min_score = 0.9828

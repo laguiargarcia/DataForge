@@ -4,7 +4,6 @@ the CI job `arquitetura` runs the real export (`conferir`)."""
 
 import copy
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -299,7 +298,7 @@ def test_exportar_validates_before_it_exports(tmp_path, monkeypatch, validate_ex
     npx.write_text(FAKE_NPX, encoding="utf-8")
     npx.chmod(0o755)
     log = tmp_path / "calls"
-    monkeypatch.setenv("PATH", f"{npx.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(npx.parent))  # only the fake: a mutant must never find a real npx
     monkeypatch.setenv("NPX_LOG", str(log))
     monkeypatch.setenv("NPX_VALIDATE_EXIT", str(validate_exit))
     monkeypatch.delenv("NO_COLOR", raising=False)
